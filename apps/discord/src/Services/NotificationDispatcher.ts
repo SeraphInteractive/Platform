@@ -30,7 +30,7 @@ export class NotificationDispatcher {
     private async applySideEffects(notification: PlatformNotification): Promise<void> {
         switch (notification.type) {
             case NotificationType.ShotCreated:
-                await this.forum.ensureThread(notification.shot, null, ShotStatus.Available);
+                await this.forum.ensureThreadFor(notification.shot.id);
                 return;
             case NotificationType.ShotUpdated:
                 await this.forum.rename(notification.shot);

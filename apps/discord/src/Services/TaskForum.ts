@@ -26,6 +26,7 @@ export function referenceOf(shot: Pick<ShotDto, "id" | "shotCode" | "title" | "s
 export class TaskForum {
     private readonly threadsByShot = new Map<string, string>();
     private readonly shotsByThread = new Map<string, string>();
+    private readonly pendingThreads = new Map<string, Promise<string | null>>();
 
     public constructor(
         private readonly client: Client,
@@ -58,7 +59,22 @@ export class TaskForum {
         return channel !== null && channel.type === ChannelType.GuildForum && channel.guildId === this.guildId ? channel : null;
     }
 
-    public async ensureThread(shot: ShotReference, description: string | null, status: ShotStatus): Promise<string | null> {
+    public ensureThread(shot: ShotReference, description: string | null, status: ShotStatus): Promise<string | null> {
+        const inFlight = this.pendingThreads.get(shot.id);
+        if (inFlight !== undefined) {
+            return inFlight;
+        }
+        const creation = this.createThread(shot, description, status).finally(() => this.pendingThreads.delete(shot.id));
+        this.pendingThreads.set(shot.id, creation);
+        return creation;
+    }
+
+    public async ensureThreadFor(shotId: string): Promise<string | null> {
+        const shot = await this.api.getShot(shotId);
+        return this.ensureThread(referenceOf(shot), shot.description, shot.status);
+    }
+
+    private async createThread(shot: ShotReference, description: string | null, status: ShotStatus): Promise<string | null> {
         const existing = await this.thread(shot.id);
         if (existing !== null) {
             return existing.id;

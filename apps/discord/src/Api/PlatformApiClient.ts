@@ -130,6 +130,10 @@ export class PlatformApiClient {
         return shots;
     }
 
+    public async getShot(shotId: string): Promise<ShotDetailDto> {
+        return (await this.send(`/shots/${shotId}`, dataEnvelope(shotDetailSchema))).data;
+    }
+
     public async isHealthy(): Promise<{ healthy: boolean; latencyMs: number }> {
         const started = performance.now();
         try {
