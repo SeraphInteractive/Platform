@@ -35,7 +35,7 @@ const tierDays: Readonly<Record<DifficultyTier, number>> = {
 };
 
 export function threadStarter(shot: ShotReference, description: string | null): V2Message {
-    const details = `${capitalize(shot.difficulty)} · scene ${shot.sceneNumber} · ${tierDays[shot.difficulty]} days once claimed`;
+    const details = `${capitalize(shot.difficulty)}, scene ${shot.sceneNumber}, ${tierDays[shot.difficulty]} days once claimed`;
     return message(
         panel(
             null,

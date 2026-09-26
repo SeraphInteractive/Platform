@@ -6,13 +6,13 @@ import { requireManageGuild, type BotContext, type SlashCommand } from "./Comman
 const helpText = [
     "## Commands",
     "**Voting**",
-    "/rounds · /round · /entries · /leaderboard · /results",
+    "/rounds, /round, /entries, /leaderboard, /results",
     "**Tasks** (run inside a task post)",
-    "/take-task · /release-task · /submit-task",
+    "/take-task, /release-task, /submit-task",
     "**Staff**",
-    "/create-task · /sync-task · /telemetry · /blacklist · /assign-role",
+    "/create-task, /sync-task, /telemetry, /blacklist, /assign-role",
     "**Server setup** (Manage Server)",
-    "/bot-setup · /setup-forum · /set-announcement-channel · /bot-status"
+    "/bot-setup, /setup-forum, /set-announcement-channel, /bot-status"
 ].join("\n");
 
 const docsText = [

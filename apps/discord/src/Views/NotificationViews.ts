@@ -30,7 +30,7 @@ function reason(value: string | null): string | null {
 }
 
 function shotName(shot: ShotReference): string {
-    return `${plain(shot.code, 50)} · ${plain(shot.title, 120)}`;
+    return `${plain(shot.code, 50)} - ${plain(shot.title, 120)}`;
 }
 
 function shotLink(shot: ShotReference, context: NotificationContext): string {

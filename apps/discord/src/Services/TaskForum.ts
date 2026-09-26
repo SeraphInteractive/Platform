@@ -218,6 +218,6 @@ export class TaskForum {
     }
 
     private threadName(shot: ShotReference): string {
-        return `${shot.code} · ${shot.title}`.slice(0, 100);
+        return `${shot.code} - ${shot.title}`.slice(0, 100);
     }
 }
