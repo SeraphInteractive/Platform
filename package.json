@@ -1,0 +1,42 @@
+{
+    "name": "platform-backend",
+    "private": true,
+    "license": "AGPL-3.0-only",
+    "type": "module",
+    "workspaces": [
+        "packages/*",
+        "apps/*"
+    ],
+    "engines": {
+        "node": ">=24.0.0"
+    },
+    "scripts": {
+        "build": "tsc -b",
+        "clean": "tsc -b --clean",
+        "typecheck": "tsc -b && tsc -p tsconfig.eslint.json",
+        "lint": "eslint .",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "test": "tsc -b packages/scoring packages/contracts && vitest run",
+        "verify": "npm run format:check && npm run lint && npm run typecheck && npm test",
+        "dev": "tsc -b packages/scoring packages/contracts && npm run dev -w @platform/api",
+        "db:generate": "npm run db:generate -w @platform/api",
+        "db:migrate": "npm run db:migrate -w @platform/api",
+        "token:issue": "npm run token:issue -w @platform/api --",
+        "dev:discord": "tsc -b packages/scoring packages/contracts && npm run dev -w @platform/discord"
+    },
+    "devDependencies": {
+        "@eslint/js": "^10.0.1",
+        "@types/node": "^24.19.0",
+        "eslint": "^10.11.0",
+        "prettier": "^3.9.9",
+        "typescript": "~6.0",
+        "typescript-eslint": "^8.70.1",
+        "vitest": "^5.0.2"
+    },
+    "overrides": {
+        "@esbuild-kit/core-utils": {
+            "esbuild": ">=0.25.0"
+        }
+    }
+}

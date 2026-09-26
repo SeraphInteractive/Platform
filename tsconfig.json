@@ -1,0 +1,17 @@
+{
+    "files": [],
+    "references": [
+        {
+            "path": "./packages/scoring"
+        },
+        {
+            "path": "./packages/contracts"
+        },
+        {
+            "path": "./apps/api"
+        },
+        {
+            "path": "./apps/discord"
+        }
+    ]
+}

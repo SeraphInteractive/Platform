@@ -1,0 +1,204 @@
+name: platform
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-api-build: &api-build
+  context: .
+  target: api
+
+x-api-hardening: &api-hardening
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:size=16m,mode=1777,noexec,nosuid,nodev
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  pids_limit: 256
+  logging: *logging
+
+x-database-environment: &database-environment
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_DATABASE: ${DB_DATABASE:-platform}
+  DB_SSL: disable
+
+services:
+  postgres:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-platform}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_DATABASE:-platform}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      APP_DB_USER: ${APP_DB_USER:-platform_app}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres:/docker-entrypoint-initdb.d:ro
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    shm_size: 128m
+    logging: *logging
+
+  redis:
+    image: redis:7.4-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - >-
+        umask 077 &&
+        echo "requirepass $$REDIS_PASSWORD" > /data/redis.conf &&
+        exec redis-server /data/redis.conf
+        --maxmemory "$$REDIS_MAXMEMORY"
+        --maxmemory-policy volatile-lru
+        --save ""
+        --appendonly no
+        --protected-mode yes
+        --rename-command FLUSHALL ""
+        --rename-command FLUSHDB ""
+        --rename-command CONFIG ""
+        --rename-command DEBUG ""
+        --rename-command SHUTDOWN ""
+        --rename-command KEYS ""
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      REDIS_MAXMEMORY: ${REDIS_MAXMEMORY:-128mb}
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    user: "999:999"
+    read_only: true
+    tmpfs:
+      - /data:size=16m,uid=999,gid=999,mode=0700
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+
+  migrate:
+    <<: *api-hardening
+    image: platform-api
+    build: *api-build
+    restart: "no"
+    command: ["node", "apps/api/dist/Migrate.js"]
+    environment:
+      <<: *database-environment
+      DB_USER: ${DB_USER:-platform}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      NODE_ENV: production
+    healthcheck:
+      disable: true
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *api-hardening
+    image: platform-api
+    build: *api-build
+    restart: unless-stopped
+    expose:
+      - "3333"
+    environment:
+      <<: *database-environment
+      DB_USER: ${APP_DB_USER:-platform_app}
+      DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3333"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+      APP_URL: ${APP_URL:?APP_URL is required}
+      APP_KEY: ${APP_KEY:?APP_KEY is required}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
+      WEB_AUTH_CALLBACK_PATH: ${WEB_AUTH_CALLBACK_PATH:-/auth/callback}
+      SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+      SERVICE_TOKEN: ${SERVICE_TOKEN:?SERVICE_TOKEN is required}
+      DB_POOL_MAX: ${DB_POOL_MAX:-20}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?DISCORD_CLIENT_ID is required}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:?DISCORD_CLIENT_SECRET is required}
+      DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI:?DISCORD_REDIRECT_URI is required}
+      ADMIN_DISCORD_IDS: ${ADMIN_DISCORD_IDS:-}
+      SUPERVISOR_DISCORD_IDS: ${SUPERVISOR_DISCORD_IDS:-}
+      MODERATOR_DISCORD_IDS: ${MODERATOR_DISCORD_IDS:-}
+      SENIOR_DISCORD_IDS: ${SENIOR_DISCORD_IDS:-}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-auto}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      S3_DELIVERABLES_BUCKET: ${S3_DELIVERABLES_BUCKET:-}
+      S3_MEDIA_BUCKET: ${S3_MEDIA_BUCKET:-}
+      S3_MEDIA_PUBLIC_URL: ${S3_MEDIA_PUBLIC_URL:-}
+      MEDIA_MAX_BYTES: ${MEDIA_MAX_BYTES:-5242880}
+      DELIVERABLE_MAX_BYTES: ${DELIVERABLE_MAX_BYTES:-2147483648}
+    networks:
+      - backend
+      - edge
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  discord:
+    <<: *api-hardening
+    image: platform-discord
+    build:
+      context: .
+      target: discord
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:?DISCORD_BOT_TOKEN is required}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?DISCORD_CLIENT_ID is required}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:?DISCORD_GUILD_ID is required}
+      API_BASE_URL: http://api:3333/api/v1
+      SERVICE_TOKEN: ${SERVICE_TOKEN:?SERVICE_TOKEN is required}
+      WEB_APP_URL: ${WEB_APP_URL:?WEB_APP_URL is required}
+    volumes:
+      - discord_data:/app/data
+    healthcheck:
+      disable: true
+    networks:
+      - edge
+    depends_on:
+      api:
+        condition: service_healthy
+
+networks:
+  backend:
+    internal: true
+  edge: {}
+
+volumes:
+  postgres_data:
+  discord_data:

@@ -1,0 +1,16 @@
+**/node_modules
+**/dist
+**/coverage
+**/*.tsbuildinfo
+**/test
+.env
+.env.*
+!.env.example
+.git
+.github
+.idea
+.vscode
+.fleet
+.DS_Store
+docker-compose*.yml
+*.md

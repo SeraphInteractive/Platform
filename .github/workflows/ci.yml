@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint, typecheck & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Migrations are in sync with the schema
+        run: |
+          npm run db:generate -- --name drift-check
+          git status --porcelain apps/api/drizzle | grep . && { echo "::error::Schema changes without a migration. Run npm run db:generate."; exit 1; } || true
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=low
+
+  postgres:
+    name: Integration tests on PostgreSQL
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+        env:
+          POSTGRES_USER: platform
+          POSTGRES_PASSWORD: platform
+          POSTGRES_DB: platform_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U platform -d platform_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+      - run: npx tsc -b packages/scoring packages/contracts
+      - run: npx vitest run --project api --no-file-parallelism
+        env:
+          TEST_DATABASE_URL: postgres://platform:platform@127.0.0.1:5432/platform_test
+
+  compose:
+    name: Validate compose files and images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Placeholder env
+        run: sed -E 's/^([A-Z0-9_]+)=$/\1=placeholder/' .env.example > .env
+
+      - run: docker compose -f docker-compose.yml config --quiet
+      - run: docker compose -f docker-compose.yml -f docker-compose.local.yml config --quiet
+
+      - name: Every referenced variable is documented in .env.example
+        run: |
+          status=0
+          for var in $(grep -hv '^[[:space:]]*#' docker-compose*.yml | grep -oE '\$\{[A-Z0-9_]+' | tr -d '${' | sort -u); do
+            grep -qE "^${var}=" .env.example || { echo "::error::${var} missing from .env.example"; status=1; }
+          done
+          exit "$status"
+
+      - name: Build images
+        run: docker compose -f docker-compose.yml build
+
+      - name: Scan images for vulnerabilities
+        run: |
+          for image in platform-api platform-discord; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.66.0 image --exit-code 1 --ignore-unfixed --severity CRITICAL,HIGH,MEDIUM "$image"
+          done
