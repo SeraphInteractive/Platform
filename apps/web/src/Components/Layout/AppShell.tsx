@@ -4,7 +4,7 @@ import { LogIn, LogOut, Moon, Sun, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/Components/Ui/avatar";
 import { Button } from "@/Components/Ui/button";
 import {
@@ -24,6 +24,7 @@ import { safeHttpUrl } from "@/Lib/SafeUrl";
 import { AppSidebar } from "./AppSidebar";
 import { BreadcrumbProvider, Breadcrumbs } from "./Breadcrumbs";
 import { CommandMenu } from "./CommandMenu";
+import { TopProgress } from "./TopProgress";
 
 function ThemeToggle(): ReactNode {
     const { resolvedTheme, setTheme } = useTheme();
@@ -101,6 +102,9 @@ export function AppShell({ defaultOpen, children }: { readonly defaultOpen: bool
     return (
         <SidebarProvider defaultOpen={defaultOpen}>
             <BreadcrumbProvider>
+                <Suspense fallback={null}>
+                    <TopProgress />
+                </Suspense>
                 <a
                     href="#main"
                     className="bg-primary text-primary-foreground sr-only z-50 px-3 py-2 focus:not-sr-only focus:fixed focus:top-2 focus:left-2"

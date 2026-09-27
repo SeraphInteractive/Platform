@@ -9,14 +9,39 @@ import { Alert, AlertDescription, AlertTitle } from "@/Components/Ui/alert";
 import { Button } from "@/Components/Ui/button";
 import { Skeleton } from "@/Components/Ui/skeleton";
 import { loginHref, useSession } from "@/Hooks/UseSession";
+import { cn } from "@/Lib/Utils";
 import { hasAtLeast, roleLabels } from "@/Lib/Roles";
 
-export function LoadingRows({ rows = 3 }: { readonly rows?: number }): ReactNode {
+const titleWidths = ["w-2/5", "w-3/5", "w-1/3", "w-1/2", "w-2/3", "w-1/4"];
+const metaWidths = ["w-1/5", "w-1/4", "w-1/6", "w-1/5", "w-1/3", "w-1/4"];
+
+export function LoadingRows({ rows = 5 }: { readonly rows?: number }): ReactNode {
     return (
-        <div className="space-y-2" aria-busy="true" aria-live="polite">
+        <div className="bg-card divide-y overflow-hidden rounded-md border" aria-busy="true" aria-label="Loading">
             {Array.from({ length: rows }, (_, index) => (
-                <Skeleton key={index} className="h-12 w-full" />
+                <div key={index} className="flex h-[49px] items-center gap-3 px-3">
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                        <Skeleton className={cn("h-3", titleWidths[index % titleWidths.length])} />
+                        <Skeleton className={cn("h-2.5", metaWidths[index % metaWidths.length])} />
+                    </div>
+                    <Skeleton className="hidden h-5 w-16 sm:block" />
+                </div>
             ))}
+        </div>
+    );
+}
+
+export function PageSkeleton(): ReactNode {
+    return (
+        <div aria-busy="true" aria-label="Loading">
+            <div className="mb-4 flex h-8 items-center">
+                <Skeleton className="h-5 w-40" />
+            </div>
+            <div className="bg-card mb-4 flex h-12 items-center gap-2 rounded-md border px-2">
+                <Skeleton className="h-8 w-36" />
+                <Skeleton className="h-8 w-36" />
+            </div>
+            <LoadingRows rows={8} />
         </div>
     );
 }
