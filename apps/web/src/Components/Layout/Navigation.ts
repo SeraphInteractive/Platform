@@ -1,5 +1,6 @@
 import { Role } from "@platform/contracts";
 import {
+    Activity,
     BookOpen,
     ClipboardCheck,
     FileText,
@@ -65,6 +66,13 @@ export const navigationGroups: readonly NavigationGroup[] = [
                 minimumRole: Role.Moderator
             },
             {
+                href: "/studio/telemetry" as Route,
+                label: "Telemetry",
+                description: "Raid detection, invariance, and ballot network",
+                icon: Activity,
+                minimumRole: Role.Moderator
+            },
+            {
                 href: "/studio/reviews",
                 label: "Reviews",
                 description: "Approve delivered work",
@@ -105,6 +113,7 @@ export const segmentLabels: Readonly<Record<string, string>> = {
     guidelines: "Guidelines",
     studio: "Studio",
     rounds: "Rounds",
+    telemetry: "Telemetry",
     reviews: "Reviews",
     tasks: "Tasks",
     people: "People",

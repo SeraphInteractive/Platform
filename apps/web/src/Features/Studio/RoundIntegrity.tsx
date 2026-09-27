@@ -2,6 +2,7 @@
 
 import { RaidFlag, RaidSeverity, type RaidTelemetryDto } from "@platform/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Network, Scale, ShieldAlert } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
@@ -11,11 +12,12 @@ import { EmptyState, ErrorState, LoadingRows } from "@/Components/Common/States"
 import { Tone, ToneBadge } from "@/Components/Common/StatusBadge";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/Components/Ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/Ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/Components/Ui/tabs";
 import { useApprovedEntries } from "@/Features/Voting/UseApprovedEntries";
 import { StreamState, useRoundEvents, type RoundEvent } from "@/Hooks/UseRoundEvents";
 import { formatDateTime, formatNumber, formatPercent } from "@/Lib/Format";
 import { cn } from "@/Lib/Utils";
-import { ScatterChart, ShrinkageChart } from "./TelemetryCharts";
+import { InvarianceSummary, NetworkChart, ScatterChart } from "./TelemetryCharts";
 
 const severityTones: Readonly<Record<RaidSeverity, Tone>> = {
     [RaidSeverity.Normal]: Tone.Neutral,
@@ -123,24 +125,18 @@ function describeEvent(event: RoundEvent, titleOf: (entryId: string) => string):
     return "Round finalized";
 }
 
-function LiveFeed({ roundId, titleOf }: { readonly roundId: string; readonly titleOf: (entryId: string) => string }): ReactNode {
-    const queryClient = useQueryClient();
-    const { events, state } = useRoundEvents(roundId, true);
-    const lastRefresh = useRef(0);
-    const latest = events[0];
-
-    useEffect(() => {
-        if (latest === undefined || Date.now() - lastRefresh.current < 5_000) {
-            return;
-        }
-        lastRefresh.current = Date.now();
-        void queryClient.invalidateQueries({ queryKey: queryKeys.telemetry(roundId) });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.leaderboard(roundId) });
-    }, [latest, queryClient, roundId]);
-
+function LiveFeed({
+    events,
+    state,
+    titleOf
+}: {
+    readonly events: readonly RoundEvent[];
+    readonly state: StreamState;
+    readonly titleOf: (entryId: string) => string;
+}): ReactNode {
     return (
         <Section
-            title="Live"
+            title="Live Stream"
             actions={
                 <span className="text-muted-foreground flex items-center gap-2 text-xs">
                     <span
@@ -175,8 +171,28 @@ function LiveFeed({ roundId, titleOf }: { readonly roundId: string; readonly tit
     );
 }
 
-export function RoundIntegrity({ roundId, live }: { readonly roundId: string; readonly live: boolean }): ReactNode {
+export interface RoundIntegrityProps {
+    readonly roundId: string;
+    readonly live: boolean;
+    readonly defaultTab?: "raid" | "invariance" | "network";
+}
+
+export function RoundIntegrity({ roundId, live, defaultTab = "raid" }: RoundIntegrityProps): ReactNode {
     const [selected, setSelected] = useState<RaidTelemetryDto | null>(null);
+    const queryClient = useQueryClient();
+    const roundEvents = useRoundEvents(roundId, live);
+    const lastRefresh = useRef(0);
+    const latestEvent = roundEvents.events[0];
+
+    useEffect(() => {
+        if (latestEvent === undefined || Date.now() - lastRefresh.current < 5_000) {
+            return;
+        }
+        lastRefresh.current = Date.now();
+        void queryClient.invalidateQueries({ queryKey: queryKeys.telemetry(roundId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.leaderboard(roundId) });
+    }, [latestEvent, queryClient, roundId]);
+
     const telemetry = useQuery({
         queryKey: queryKeys.telemetry(roundId),
         queryFn: () => platformApi.telemetry(roundId),
@@ -191,73 +207,127 @@ export function RoundIntegrity({ roundId, live }: { readonly roundId: string; re
     const titleOf = (entryId: string): string => titles.get(entryId) ?? "Unknown entry";
 
     return (
-        <div className="space-y-8">
-            {live && <LiveFeed roundId={roundId} titleOf={titleOf} />}
-            <Section title="Raid Defense">
-                <ScatterChart
-                    telemetryList={telemetry.data ?? []}
-                    leaderboardItems={leaderboard.data?.items ?? []}
-                    onHover={setSelected}
-                    hovered={selected}
-                />
-            </Section>
-            {leaderboard.data !== undefined && leaderboard.data.items.length > 0 && (
-                <Section title="Standings Regularization">
-                    <ShrinkageChart items={leaderboard.data.items} />
-                </Section>
-            )}
-            <Section title="Checks">
-                {telemetry.isPending ? (
-                    <LoadingRows rows={4} />
-                ) : telemetry.isError ? (
-                    <ErrorState error={telemetry.error} onRetry={() => void telemetry.refetch()} />
-                ) : telemetry.data.length === 0 ? (
-                    <EmptyState title="No checks yet" />
-                ) : (
-                    <div className="overflow-x-auto border">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Entry</TableHead>
-                                    <TableHead>Severity</TableHead>
-                                    <TableHead className="text-right">Score</TableHead>
-                                    <TableHead className="text-right">Rank-1 share</TableHead>
-                                    <TableHead>Flags</TableHead>
-                                    <TableHead className="text-right">Checked</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {[...telemetry.data]
-                                    .sort((left, right) => right.compositeScore - left.compositeScore)
-                                    .map((row) => (
-                                        <TableRow
-                                            key={row.id}
-                                            className="cursor-pointer"
-                                            onClick={() => {
-                                                setSelected(row);
-                                            }}
-                                        >
-                                            <TableCell className="max-w-56 truncate">{titleOf(row.entryId)}</TableCell>
-                                            <TableCell>
-                                                <SeverityBadge severity={row.severity} />
-                                            </TableCell>
-                                            <TableCell className="text-right tabular-nums">{formatNumber(row.compositeScore)}</TableCell>
-                                            <TableCell className="text-right tabular-nums">
-                                                {formatPercent(row.breakdown.topRankShare * 100)}
-                                            </TableCell>
-                                            <TableCell className="text-muted-foreground text-xs">
-                                                {row.flags.map((flag) => flagLabels[flag]).join(", ") || "–"}
-                                            </TableCell>
-                                            <TableCell className="text-muted-foreground text-right text-xs whitespace-nowrap">
-                                                <RelativeTime value={row.createdAt} />
-                                            </TableCell>
+        <div className="space-y-6">
+            <Tabs defaultValue={defaultTab} className="space-y-6">
+                <TabsList>
+                    <TabsTrigger value="raid" className="flex items-center gap-1.5">
+                        <ShieldAlert className="size-3.5" />
+                        <span>Raid Detection</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="invariance" className="flex items-center gap-1.5">
+                        <Scale className="size-3.5" />
+                        <span>Invariance</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="network" className="flex items-center gap-1.5">
+                        <Network className="size-3.5" />
+                        <span>Network</span>
+                    </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="raid" className="space-y-6">
+                    {live && <LiveFeed events={roundEvents.events} state={roundEvents.state} titleOf={titleOf} />}
+                    <Section title="Raid Defense">
+                        <ScatterChart
+                            telemetryList={telemetry.data ?? []}
+                            leaderboardItems={leaderboard.data?.items ?? []}
+                            onHover={setSelected}
+                            hovered={selected}
+                        />
+                    </Section>
+                    <Section title="Anomaly Checks">
+                        {telemetry.isPending ? (
+                            <LoadingRows rows={4} />
+                        ) : telemetry.isError ? (
+                            <ErrorState error={telemetry.error} onRetry={() => void telemetry.refetch()} />
+                        ) : telemetry.data.length === 0 ? (
+                            <EmptyState title="No checks yet" />
+                        ) : (
+                            <div className="overflow-x-auto border">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Entry</TableHead>
+                                            <TableHead>Severity</TableHead>
+                                            <TableHead className="text-right">Score</TableHead>
+                                            <TableHead className="text-right">Rank-1 share</TableHead>
+                                            <TableHead>Flags</TableHead>
+                                            <TableHead className="text-right">Checked</TableHead>
                                         </TableRow>
-                                    ))}
-                            </TableBody>
-                        </Table>
-                    </div>
-                )}
-            </Section>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {[...telemetry.data]
+                                            .sort((left, right) => right.compositeScore - left.compositeScore)
+                                            .map((row) => (
+                                                <TableRow
+                                                    key={row.id}
+                                                    className="cursor-pointer"
+                                                    onClick={() => {
+                                                        setSelected(row);
+                                                    }}
+                                                >
+                                                    <TableCell className="max-w-56 truncate">{titleOf(row.entryId)}</TableCell>
+                                                    <TableCell>
+                                                        <SeverityBadge severity={row.severity} />
+                                                    </TableCell>
+                                                    <TableCell className="text-right tabular-nums">{formatNumber(row.compositeScore)}</TableCell>
+                                                    <TableCell className="text-right tabular-nums">
+                                                        {formatPercent(row.breakdown.topRankShare * 100)}
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground text-xs">
+                                                        {row.flags.map((flag) => flagLabels[flag]).join(", ") || "–"}
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground text-right text-xs whitespace-nowrap">
+                                                        <RelativeTime value={row.createdAt} />
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
+                    </Section>
+                </TabsContent>
+
+                <TabsContent value="invariance" className="space-y-6">
+                    <Section title="Bayesian Regularization & Invariance">
+                        {leaderboard.isPending ? (
+                            <LoadingRows rows={4} />
+                        ) : leaderboard.isError ? (
+                            <ErrorState error={leaderboard.error} onRetry={() => void leaderboard.refetch()} />
+                        ) : leaderboard.data === undefined || leaderboard.data.items.length === 0 ? (
+                            <EmptyState title="No entries to evaluate" />
+                        ) : (
+                            <InvarianceSummary
+                                items={leaderboard.data.items}
+                                totalBallots={leaderboard.data.totalBallots}
+                                totalPoints={leaderboard.data.totalPoints}
+                                isConserved={leaderboard.data.isConserved}
+                            />
+                        )}
+                    </Section>
+                </TabsContent>
+
+                <TabsContent value="network" className="space-y-6">
+                    <Section title="Ballot Co-Occurrence & Flow Network">
+                        {leaderboard.isPending ? (
+                            <LoadingRows rows={4} />
+                        ) : leaderboard.isError ? (
+                            <ErrorState error={leaderboard.error} onRetry={() => void leaderboard.refetch()} />
+                        ) : (
+                            <NetworkChart
+                                items={leaderboard.data?.items ?? []}
+                                telemetryList={telemetry.data ?? []}
+                                events={roundEvents.events}
+                                onSelectEntry={(entryId) => {
+                                    const match = (telemetry.data ?? []).find((t) => t.entryId === entryId);
+                                    if (match) setSelected(match);
+                                }}
+                            />
+                        )}
+                    </Section>
+                </TabsContent>
+            </Tabs>
+
             <EntryHistory
                 roundId={roundId}
                 entryId={selected?.entryId ?? null}

@@ -157,14 +157,18 @@ function Dashboard(): ReactNode {
                             <ShieldAlert className="text-muted-foreground size-4" />
                             <span className="text-sm font-semibold">Raid Telemetry</span>
                         </div>
-                        {monitoredRound !== undefined && (
-                            <Button asChild variant="outline" size="xs">
-                                <Link href={`/studio/rounds/${monitoredRound.id}` as Route}>
-                                    <span>Inspect</span>
-                                    <ChevronRight className="size-3" />
-                                </Link>
-                            </Button>
-                        )}
+                        <Button asChild variant="outline" size="xs">
+                            <Link
+                                href={
+                                    monitoredRound !== undefined
+                                        ? (`/studio/telemetry?roundId=${monitoredRound.id}` as Route)
+                                        : ("/studio/telemetry" as Route)
+                                }
+                            >
+                                <span>Inspect</span>
+                                <ChevronRight className="size-3" />
+                            </Link>
+                        </Button>
                     </div>
                     {active.isPending || telemetry.isPending ? (
                         <div className="bg-muted/40 h-10 animate-pulse rounded" />
