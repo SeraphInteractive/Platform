@@ -2,7 +2,7 @@
 
 import { EntryStatus, RaidSeverity, Role, RoundStatus, ShotStatus, type RoundDto } from "@platform/contracts";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { Map as MapIcon, ShieldAlert } from "lucide-react";
+import { ChevronRight, Map as MapIcon, ShieldAlert } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -15,6 +15,7 @@ import { Section } from "@/Components/Common/Section";
 import { StatTile } from "@/Components/Common/StatTile";
 import { LoadingRows, RequireRole } from "@/Components/Common/States";
 import { RoundStatusBadge, Tone, ToneBadge } from "@/Components/Common/StatusBadge";
+import { Button } from "@/Components/Ui/button";
 import { Card } from "@/Components/Ui/card";
 import { Progress } from "@/Components/Ui/progress";
 import { useNow } from "@/Hooks/UseNow";
@@ -125,9 +126,12 @@ function Dashboard(): ReactNode {
                             <MapIcon className="text-muted-foreground size-4" />
                             <span className="text-sm font-semibold">Production Pipeline</span>
                         </div>
-                        <Link href="/roadmap" className="text-primary text-xs hover:underline">
-                            Roadmap &rarr;
-                        </Link>
+                        <Button asChild variant="outline" size="xs">
+                            <Link href="/roadmap">
+                                <span>Roadmap</span>
+                                <ChevronRight className="size-3" />
+                            </Link>
+                        </Button>
                     </div>
                     {pipeline.isPending ? (
                         <div className="bg-muted/40 h-10 animate-pulse rounded" />
@@ -154,9 +158,12 @@ function Dashboard(): ReactNode {
                             <span className="text-sm font-semibold">Raid Telemetry</span>
                         </div>
                         {monitoredRound !== undefined && (
-                            <Link href={`/studio/rounds/${monitoredRound.id}` as Route} className="text-primary text-xs hover:underline">
-                                Inspect &rarr;
-                            </Link>
+                            <Button asChild variant="outline" size="xs">
+                                <Link href={`/studio/rounds/${monitoredRound.id}` as Route}>
+                                    <span>Inspect</span>
+                                    <ChevronRight className="size-3" />
+                                </Link>
+                            </Button>
                         )}
                     </div>
                     {active.isPending || telemetry.isPending ? (
