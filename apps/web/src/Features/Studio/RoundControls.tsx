@@ -1,6 +1,16 @@
 "use client";
 
-import { fieldRules, PollType, problemOf, Role, RoundStatus, textLimits, type RoundDto } from "@platform/contracts";
+import {
+    fieldRules,
+    PollType,
+    problemOf,
+    Role,
+    RoundStatus,
+    scheduleLimits,
+    textLimits,
+    validateRoundWindow,
+    type RoundDto
+} from "@platform/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
@@ -38,7 +48,8 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
 
     const opens = fromLocalInputValue(opensAt);
     const closes = fromLocalInputValue(closesAt);
-    const scheduleProblem = opens !== null && closes !== null && closes <= opens ? "The round has to close after it opens." : null;
+    const isDraft = round === undefined || round.status === RoundStatus.Draft;
+    const scheduleProblem = validateRoundWindow(opens, closes, { isDraft });
     const problem = problemOf(fieldRules.roundTitle, title) ?? scheduleProblem;
 
     const save = useMutation({
@@ -127,10 +138,14 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
                                 id={`${formId}-opens`}
                                 type="datetime-local"
                                 value={opensAt}
+                                disabled={!isDraft}
                                 onChange={(event) => {
                                     setOpensAt(event.target.value);
                                 }}
                             />
+                            {!isDraft && (
+                                <p className="text-muted-foreground text-xs">Start date is locked once a round leaves draft.</p>
+                            )}
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor={`${formId}-closes`}>Closes (optional)</Label>

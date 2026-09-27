@@ -2,7 +2,7 @@ import { fieldRules, reviewQueueItemSchema, shotDetailSchema, shotSchema, submis
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { dataEnvelope, errorResponses, pageEnvelope, paginationQuerySchema, toIso, uuidSchema } from "../../Common/Http/Schemas.js";
-import { currentUser, optionalUser, requireRole, userActorOf } from "../../Common/Security/Authorization.js";
+import { currentUser, optionalUser, requireRole, requireUser, userActorOf } from "../../Common/Security/Authorization.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
 import { DeliverableKind, DifficultyTier, ReviewDecision, ShotStatus } from "../../Domain/Enums.js";
 import { Role } from "../../Domain/Roles.js";
@@ -74,7 +74,6 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
     const { shotsService, reviewsService, configuration } = services;
     const security = [{ bearer: [] }];
     const supervisor = requireRole(Role.Supervisor);
-    const contributor = requireRole(Role.Contributor);
 
     application.get(
         "/shots",
@@ -188,10 +187,10 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
     application.post(
         "/shots/:shotId/claim",
         {
-            preHandler: contributor,
+            preHandler: requireUser(),
             schema: {
                 tags: ["Shots"],
-                summary: "Claim an available shot. Contributors may hold one active claim at a time.",
+                summary: "Claim an available shot. Users may hold one active claim at a time.",
                 security,
                 params: shotParams,
                 response: { 200: dataEnvelope(shotSchema), ...errorResponses }
@@ -207,7 +206,7 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
     application.post(
         "/shots/:shotId/release",
         {
-            preHandler: contributor,
+            preHandler: requireUser(),
             schema: {
                 tags: ["Shots"],
                 summary: "Return a claimed shot to the pool.",
@@ -227,7 +226,7 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
     application.post(
         "/shots/:shotId/uploads",
         {
-            preHandler: contributor,
+            preHandler: requireUser(),
             config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
             schema: {
                 tags: ["Shots"],
@@ -254,10 +253,10 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
     application.post(
         "/shots/:shotId/submissions",
         {
-            preHandler: contributor,
+            preHandler: requireUser(),
             schema: {
                 tags: ["Shots"],
-                summary: "Submit uploaded deliverables for review.",
+                summary: "Submit uploaded deliverables for review. Submitting grants the contributor role.",
                 security,
                 params: shotParams,
                 body: z.object({

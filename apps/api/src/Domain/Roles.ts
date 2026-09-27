@@ -20,7 +20,8 @@ const specialtyRoles: ReadonlySet<Role> = new Set([
     Role.Moderator,
     Role.SeniorContributor,
     Role.Contributor,
-    Role.Voter
+    Role.Voter,
+    Role.Member
 ]);
 
 export const maximumSuperAdmins = 2;

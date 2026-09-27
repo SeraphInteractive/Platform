@@ -2,7 +2,6 @@
 
 import {
     fieldRules,
-    maximumSpecialties,
     type ModeratedUserDto,
     problemOf,
     Role,
@@ -27,11 +26,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/Components/Ui/avatar";
 import { RichTextInputField } from "@/Components/Common/FormField";
 import { MarkdownText } from "@/Components/Common/MarkdownText";
 import { Button } from "@/Components/Ui/button";
-import { Checkbox } from "@/Components/Ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/Components/Ui/dialog";
 import { Input } from "@/Components/Ui/input";
 import { Label } from "@/Components/Ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/Components/Ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/Ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/Ui/table";
 import { useSession } from "@/Hooks/UseSession";
@@ -101,71 +98,6 @@ function BlacklistDialog({ target, onDone }: { readonly target: ModeratedUserDto
     );
 }
 
-function SpecialtiesEditor({ target, disabled }: { readonly target: ModeratedUserDto; readonly disabled: boolean }): ReactNode {
-    const queryClient = useQueryClient();
-    const [selected, setSelected] = useState<Specialty[]>(target.specialties);
-    const save = useMutation({
-        mutationFn: () => platformApi.setRole(target.id, target.role, selected),
-        onSuccess: () => {
-            void queryClient.invalidateQueries({ queryKey: queryKeys.usersAll });
-            toast.success(`Updated ${target.username}'s specialties.`);
-        }
-    });
-    const changed = selected.length !== target.specialties.length || selected.some((item) => !target.specialties.includes(item));
-    return (
-        <Popover
-            onOpenChange={(open) => {
-                if (!open) {
-                    setSelected(target.specialties);
-                }
-            }}
-        >
-            <PopoverTrigger asChild>
-                <button
-                    type="button"
-                    disabled={disabled}
-                    className="text-muted-foreground block max-w-56 truncate text-left text-xs hover:underline disabled:no-underline"
-                >
-                    {target.specialties.map(specialtyLabel).join(", ") || (disabled ? "–" : "Add specialties")}
-                </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-72 p-0">
-                <p className="text-muted-foreground border-b px-3 py-2 text-xs">Up to {maximumSpecialties}</p>
-                <div className="max-h-64 overflow-y-auto py-1">
-                    {Object.values(Specialty).map((specialty) => {
-                        const checked = selected.includes(specialty);
-                        return (
-                            <label key={specialty} className="hover:bg-accent flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm">
-                                <Checkbox
-                                    checked={checked}
-                                    disabled={!checked && selected.length >= maximumSpecialties}
-                                    onCheckedChange={(value) => {
-                                        setSelected((current) =>
-                                            value === true ? [...current, specialty] : current.filter((item) => item !== specialty)
-                                        );
-                                    }}
-                                />
-                                {specialtyLabel(specialty)}
-                            </label>
-                        );
-                    })}
-                </div>
-                <div className="flex justify-end border-t px-3 py-2">
-                    <Button
-                        size="xs"
-                        disabled={!changed || save.isPending}
-                        onClick={() => {
-                            save.mutate();
-                        }}
-                    >
-                        Save
-                    </Button>
-                </div>
-            </PopoverContent>
-        </Popover>
-    );
-}
-
 interface UserRowProps {
     readonly actor: UserDto;
     readonly target: ModeratedUserDto;
@@ -176,11 +108,18 @@ function UserRow({ actor, target }: UserRowProps): ReactNode {
     const refresh = (): void => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.usersAll });
     };
-    const setRole = useMutation({
-        mutationFn: (role: Role) => platformApi.setRole(target.id, role),
+    const setPrimaryRole = useMutation({
+        mutationFn: (role: Role) => platformApi.setRole(target.id, role, target.specialties),
         onSuccess: (updated) => {
             refresh();
             toast.success(`${updated.username} is now ${roleLabels[updated.role]}.`);
+        }
+    });
+    const setSecondaryRole = useMutation({
+        mutationFn: (specialties: Specialty[]) => platformApi.setRole(target.id, target.role, specialties),
+        onSuccess: () => {
+            refresh();
+            toast.success(`Updated @${target.username}'s secondary role.`);
         }
     });
     const promote = useMutation({
@@ -198,8 +137,9 @@ function UserRow({ actor, target }: UserRowProps): ReactNode {
         }
     });
     const manageable = canManage(actor, target);
-    const busy = setRole.isPending || promote.isPending || lift.isPending;
+    const busy = setPrimaryRole.isPending || setSecondaryRole.isPending || promote.isPending || lift.isPending;
     const avatar = safeHttpUrl(target.avatarUrl);
+    const currentSpecialty = target.specialties[0] ?? "__none__";
 
     return (
         <TableRow>
@@ -209,10 +149,7 @@ function UserRow({ actor, target }: UserRowProps): ReactNode {
                         {avatar !== null && <AvatarImage src={avatar} alt="" />}
                         <AvatarFallback className="text-[10px]">{target.username.slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
-                    <div className="min-w-0">
-                        <p className="truncate font-medium">{target.username}</p>
-                        <SpecialtiesEditor key={target.specialties.join(",")} target={target} disabled={!manageable} />
-                    </div>
+                    <span className="truncate font-medium">{target.username}</span>
                 </div>
             </TableCell>
             <TableCell>
@@ -223,11 +160,11 @@ function UserRow({ actor, target }: UserRowProps): ReactNode {
                         onValueChange={(value) => {
                             const next = value as Role;
                             if (next !== target.role) {
-                                setRole.mutate(next);
+                                setPrimaryRole.mutate(next);
                             }
                         }}
                     >
-                        <SelectTrigger size="sm" className="w-44" aria-label={`Role for ${target.username}`}>
+                        <SelectTrigger size="sm" className="w-40" aria-label={`Primary role for ${target.username}`}>
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -240,6 +177,34 @@ function UserRow({ actor, target }: UserRowProps): ReactNode {
                     </Select>
                 ) : (
                     roleLabels[target.role]
+                )}
+            </TableCell>
+            <TableCell>
+                {manageable ? (
+                    <Select
+                        value={currentSpecialty}
+                        disabled={busy}
+                        onValueChange={(value) => {
+                            const nextSpecs = value === "__none__" ? [] : [value as Specialty];
+                            setSecondaryRole.mutate(nextSpecs);
+                        }}
+                    >
+                        <SelectTrigger size="sm" className="w-40" aria-label={`Secondary role for ${target.username}`}>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__none__">None</SelectItem>
+                            {Object.values(Specialty).map((s) => (
+                                <SelectItem key={s} value={s}>
+                                    {specialtyLabel(s)}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                ) : (
+                    <span className="text-muted-foreground text-xs">
+                        {target.specialties[0] ? specialtyLabel(target.specialties[0]) : "None"}
+                    </span>
                 )}
             </TableCell>
             <TableCell>
@@ -345,10 +310,11 @@ function PeopleTable({ actor }: { readonly actor: UserDto }): ReactNode {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Person</TableHead>
-                                    <TableHead className="w-48">Role</TableHead>
-                                    <TableHead className="w-40">Voting</TableHead>
-                                    <TableHead className="w-40">Joined</TableHead>
-                                    <TableHead className="w-44" />
+                                    <TableHead className="w-44">Primary Role</TableHead>
+                                    <TableHead className="w-44">Secondary Role</TableHead>
+                                    <TableHead className="w-32">Voting</TableHead>
+                                    <TableHead className="w-32">Joined</TableHead>
+                                    <TableHead className="w-40" />
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -377,7 +343,7 @@ function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProp
     const [discordId, setDiscordId] = useState("");
     const [discordUsername, setDiscordUsername] = useState("");
     const [role, setRole] = useState<Role>(Role.Contributor);
-    const [specialties, setSpecialties] = useState<Specialty[]>([]);
+    const [secondaryRole, setSecondaryRole] = useState<string>("__none__");
 
     const roles = grantableRoles(actor);
     const isSuperadmin = isAdminDiscordId(siteConfig, discordId);
@@ -388,7 +354,7 @@ function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProp
             const trimmedUsername = discordUsername.trim();
             return platformApi.setRoleByDiscord(discordId.trim(), {
                 role,
-                specialties,
+                specialties: secondaryRole === "__none__" ? [] : [secondaryRole as Specialty],
                 discordUsername: trimmedUsername.length === 0 ? undefined : trimmedUsername
             });
         },
@@ -399,7 +365,7 @@ function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProp
             setDiscordId("");
             setDiscordUsername("");
             setRole(Role.Contributor);
-            setSpecialties([]);
+            setSecondaryRole("__none__");
         }
     });
 
@@ -467,26 +433,20 @@ function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProp
                         </Select>
                     </div>
                     <div className="space-y-1.5">
-                        <Label>Specialties (up to {maximumSpecialties})</Label>
-                        <div className="grid grid-cols-2 gap-2 rounded-md border p-2 text-xs">
-                            {Object.values(Specialty).map((s) => {
-                                const checked = specialties.includes(s);
-                                return (
-                                    <label key={s} className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded px-2 py-1">
-                                        <Checkbox
-                                            checked={checked}
-                                            disabled={!checked && specialties.length >= maximumSpecialties}
-                                            onCheckedChange={(val) => {
-                                                setSpecialties((current) =>
-                                                    val === true ? [...current, s] : current.filter((item) => item !== s)
-                                                );
-                                            }}
-                                        />
-                                        <span>{specialtyLabel(s)}</span>
-                                    </label>
-                                );
-                            })}
-                        </div>
+                        <Label htmlFor="discord-secondary-role">Secondary Role (Specialty)</Label>
+                        <Select value={secondaryRole} onValueChange={setSecondaryRole}>
+                            <SelectTrigger id="discord-secondary-role">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__none__">None</SelectItem>
+                                {Object.values(Specialty).map((s) => (
+                                    <SelectItem key={s} value={s}>
+                                        {specialtyLabel(s)}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                     <DialogFooter>
                         <Button type="submit" disabled={!validId || assign.isPending}>

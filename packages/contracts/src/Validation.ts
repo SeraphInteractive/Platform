@@ -114,3 +114,63 @@ export function problemOf(schema: z.ZodType, value: unknown): string | null {
     const result = schema.safeParse(value);
     return result.success ? null : (result.error.issues[0]?.message ?? "This value isn't valid.");
 }
+
+export const scheduleLimits = {
+    gracePeriodMinutes: 5,
+    minimumDurationMinutes: 60,
+    maximumDurationDays: 28,
+    maximumAdvanceDays: 28
+} as const;
+
+export function validateRoundWindow(
+    opensAt: Date | string | null,
+    closesAt: Date | string | null,
+    options: { readonly isDraft: boolean; readonly now?: Date }
+): string | null {
+    if (opensAt === null && closesAt === null) {
+        return null;
+    }
+    if (opensAt !== null && closesAt === null) {
+        return "Scheduled rounds must have a closing time.";
+    }
+    if (opensAt === null && closesAt !== null) {
+        return "Scheduled rounds must have an opening time.";
+    }
+    const opens = typeof opensAt === "string" ? new Date(opensAt) : (opensAt as Date);
+    const closes = typeof closesAt === "string" ? new Date(closesAt) : (closesAt as Date);
+    const now = options.now ?? new Date();
+
+    if (options.isDraft) {
+        // allow a small grace window for clock skew when launching immediately
+        const earliestOpen = now.getTime() - scheduleLimits.gracePeriodMinutes * 60_000;
+        if (opens.getTime() < earliestOpen) {
+            return "Start date cannot be more than 5 minutes in the past.";
+        }
+        const latestOpen = now.getTime() + scheduleLimits.maximumAdvanceDays * 86_400_000;
+        if (opens.getTime() > latestOpen) {
+            return `Start date cannot be more than ${scheduleLimits.maximumAdvanceDays} days in advance.`;
+        }
+        const minClose = opens.getTime() + scheduleLimits.minimumDurationMinutes * 60_000;
+        if (closes.getTime() < minClose) {
+            return `Voting duration must be at least ${scheduleLimits.minimumDurationMinutes} minutes.`;
+        }
+        const maxDuration = scheduleLimits.maximumDurationDays * 86_400_000;
+        if (closes.getTime() - opens.getTime() > maxDuration) {
+            return `Voting duration cannot exceed ${scheduleLimits.maximumDurationDays} days.`;
+        }
+        return null;
+    }
+
+    if (closes.getTime() <= opens.getTime()) {
+        return "Closing time must be after the start time.";
+    }
+    if (closes.getTime() < now.getTime()) {
+        return "Closing time cannot be in the past.";
+    }
+    const latestAllowedClose = now.getTime() + scheduleLimits.maximumDurationDays * 86_400_000;
+    if (closes.getTime() > latestAllowedClose) {
+        return `Closing time cannot be more than ${scheduleLimits.maximumDurationDays} days from now.`;
+    }
+    return null;
+}
+

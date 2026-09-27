@@ -7,6 +7,7 @@ export const queryKeys = {
     roundsAll: ["rounds"] as const,
     round: (roundId: string) => ["round", roundId] as const,
     entries: (roundId: string, query: PageQuery & { readonly status?: string }) => ["round", roundId, "entries", query] as const,
+    entriesAll: (roundId: string) => ["round", roundId, "entries"] as const,
     approvedEntries: (roundId: string) => ["round", roundId, "entries", "approved"] as const,
     leaderboard: (roundId: string) => ["round", roundId, "leaderboard"] as const,
     results: (roundId: string) => ["round", roundId, "results"] as const,

@@ -90,6 +90,144 @@ function EditEntryDialog({ roundId, entry }: { readonly roundId: string; readonl
     );
 }
 
+export function ExamineEntryDialog({
+    roundId,
+    entry,
+    trigger
+}: {
+    readonly roundId: string;
+    readonly entry: EntryDto;
+    readonly trigger?: ReactNode;
+}): ReactNode {
+    const { user } = useSession();
+    const queryClient = useQueryClient();
+    const [open, setOpen] = useState(false);
+    const refresh = (): void => {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.round(roundId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.entriesAll(roundId) });
+    };
+    const review = useMutation({
+        mutationFn: (status: EntryStatus) => platformApi.reviewEntry(roundId, entry.id, status),
+        onSuccess: (updated) => {
+            refresh();
+            toast.success(`"${updated.title}": ${entryStatusLabels[updated.status].toLowerCase()}.`);
+        }
+    });
+    const reinstate = useMutation({
+        mutationFn: () => platformApi.reinstateEntry(roundId, entry.id),
+        onSuccess: () => {
+            refresh();
+            toast.success(`"${entry.title}" is back on the ballot.`);
+        }
+    });
+    const remove = useMutation({
+        mutationFn: () => platformApi.deleteEntry(roundId, entry.id),
+        onSuccess: () => {
+            refresh();
+            toast.success(`"${entry.title}" deleted.`);
+            setOpen(false);
+        }
+    });
+    const canReview = hasAtLeast(user, Role.Supervisor);
+    const isAdmin = hasAtLeast(user, Role.Admin);
+    const busy = review.isPending || reinstate.isPending || remove.isPending;
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                {trigger ?? (
+                    <Button size="xs" variant="secondary">
+                        Examine
+                    </Button>
+                )}
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+                <DialogHeader>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <EntryStatusBadge status={entry.status} />
+                        {entry.isQuarantined && <ToneBadge tone={Tone.Negative}>Quarantined</ToneBadge>}
+                        <span className="text-muted-foreground ml-auto font-mono text-xs">
+                            ID: {entry.id.slice(0, 8)}
+                        </span>
+                    </div>
+                    <DialogTitle className="text-base font-semibold leading-snug">{entry.title}</DialogTitle>
+                    <DialogDescription className="text-xs">
+                        Submitted <RelativeTime value={entry.createdAt} />
+                        {entry.submittedBy !== null && ` · Submitter: ${entry.submittedBy.slice(0, 8)}`}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                    <EntryMedia url={entry.mediaUrl} title={entry.title} />
+                    {entry.description !== null && entry.description.trim().length > 0 && (
+                        <div className="bg-muted/20 rounded-md border p-3">
+                            <MarkdownText className="text-sm">{entry.description}</MarkdownText>
+                        </div>
+                    )}
+                </div>
+                <DialogFooter className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+                    <div className="flex gap-2">
+                        {isAdmin && (
+                            <ConfirmButton
+                                title={`Delete "${entry.title}"?`}
+                                description="Only possible for entries without votes."
+                                confirmLabel="Delete entry"
+                                destructive
+                                size="xs"
+                                variant="ghost"
+                                disabled={busy}
+                                onConfirm={() => {
+                                    remove.mutate();
+                                }}
+                            >
+                                Delete
+                            </ConfirmButton>
+                        )}
+                        {isAdmin && entry.isQuarantined && (
+                            <ConfirmButton
+                                title="Lift quarantine?"
+                                description="The entry returns to the ballot."
+                                confirmLabel="Reinstate"
+                                size="xs"
+                                disabled={busy}
+                                onConfirm={() => {
+                                    reinstate.mutate();
+                                }}
+                            >
+                                Reinstate
+                            </ConfirmButton>
+                        )}
+                    </div>
+                    <div className="flex gap-2">
+                        {canReview && entry.status !== EntryStatus.Rejected && (
+                            <Button
+                                size="xs"
+                                variant="outline"
+                                disabled={busy}
+                                onClick={() => {
+                                    review.mutate(EntryStatus.Rejected);
+                                }}
+                            >
+                                Reject
+                            </Button>
+                        )}
+                        {canReview && entry.status !== EntryStatus.Approved && (
+                            <Button
+                                size="xs"
+                                disabled={busy}
+                                onClick={() => {
+                                    review.mutate(EntryStatus.Approved);
+                                }}
+                            >
+                                Approve
+                            </Button>
+                        )}
+                    </div>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function EntryCard({ roundId, entry }: { readonly roundId: string; readonly entry: EntryDto }): ReactNode {
     const { user } = useSession();
     const queryClient = useQueryClient();
@@ -137,6 +275,7 @@ function EntryCard({ roundId, entry }: { readonly roundId: string; readonly entr
                 {entry.description !== null && <MarkdownText className="text-muted-foreground text-sm">{entry.description}</MarkdownText>}
                 <EntryMedia url={entry.mediaUrl} title={entry.title} />
                 <div className="flex flex-wrap gap-1.5">
+                    <ExamineEntryDialog roundId={roundId} entry={entry} />
                     {canReview && entry.status !== EntryStatus.Approved && (
                         <Button
                             size="xs"

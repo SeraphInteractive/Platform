@@ -1,3 +1,4 @@
+import { validateRoundWindow } from "@platform/contracts";
 import { and, count, desc, eq, ne, type SQL } from "drizzle-orm";
 import { ConflictError, ErrorCode, NotFoundError, UnprocessableError } from "../../Common/Errors/ApplicationError.js";
 import { createPage, offsetOf, toIso, type Page, type PaginationQuery } from "../../Common/Http/Schemas.js";
@@ -108,7 +109,7 @@ export class RoundsService {
     }
 
     public async create(actor: UserActor, input: CreateRoundInput): Promise<VotingRoundRecord> {
-        this.assertWindow(input.opensAt, input.closesAt);
+        this.assertWindow(input.opensAt, input.closesAt, true);
         const [round] = await this.database
             .insert(votingRounds)
             .values({
@@ -154,9 +155,16 @@ export class RoundsService {
             if (input.pollType !== undefined && input.pollType !== current.pollType && current.status !== RoundStatus.Draft) {
                 throw new ConflictError("The poll type can only be changed while the round is a draft.", ErrorCode.InvalidStatusTransition);
             }
+            if (
+                input.opensAt !== undefined &&
+                current.status !== RoundStatus.Draft &&
+                input.opensAt?.getTime() !== current.opensAt?.getTime()
+            ) {
+                throw new ConflictError("Start date cannot be modified once a round leaves draft.", ErrorCode.InvalidStatusTransition);
+            }
             const opensAt = input.opensAt === undefined ? current.opensAt : input.opensAt;
             const closesAt = input.closesAt === undefined ? current.closesAt : input.closesAt;
-            this.assertWindow(opensAt, closesAt);
+            this.assertWindow(opensAt, closesAt, current.status === RoundStatus.Draft);
 
             const [updated] = await transaction
                 .update(votingRounds)
@@ -220,10 +228,11 @@ export class RoundsService {
         await this.leaderboardCache.invalidateRound(roundId);
     }
 
-    private assertWindow(opensAt: Date | null, closesAt: Date | null): void {
-        if (opensAt !== null && closesAt !== null && closesAt.getTime() <= opensAt.getTime()) {
-            throw new UnprocessableError("closesAt must be later than opensAt.", ErrorCode.ValidationFailed, [
-                { path: "body.closesAt", message: "must be later than opensAt" }
+    private assertWindow(opensAt: Date | null, closesAt: Date | null, isDraft: boolean): void {
+        const problem = validateRoundWindow(opensAt, closesAt, { isDraft });
+        if (problem !== null) {
+            throw new UnprocessableError(problem, ErrorCode.ValidationFailed, [
+                { path: "body.closesAt", message: problem }
             ]);
         }
     }

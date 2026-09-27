@@ -15,6 +15,7 @@ import { useApprovedEntries } from "@/Features/Voting/UseApprovedEntries";
 import { StreamState, useRoundEvents, type RoundEvent } from "@/Hooks/UseRoundEvents";
 import { formatDateTime, formatNumber, formatPercent } from "@/Lib/Format";
 import { cn } from "@/Lib/Utils";
+import { ScatterChart, ShrinkageChart } from "./TelemetryCharts";
 
 const severityTones: Readonly<Record<RaidSeverity, Tone>> = {
     [RaidSeverity.Normal]: Tone.Neutral,
@@ -181,6 +182,10 @@ export function RoundIntegrity({ roundId, live }: { readonly roundId: string; re
         queryFn: () => platformApi.telemetry(roundId),
         refetchInterval: 60_000
     });
+    const leaderboard = useQuery({
+        queryKey: queryKeys.leaderboard(roundId),
+        queryFn: () => platformApi.leaderboard(roundId)
+    });
     const entries = useApprovedEntries(roundId);
     const titles = new Map((entries.data ?? []).map((entry) => [entry.id, entry.title]));
     const titleOf = (entryId: string): string => titles.get(entryId) ?? "Unknown entry";
@@ -188,6 +193,19 @@ export function RoundIntegrity({ roundId, live }: { readonly roundId: string; re
     return (
         <div className="space-y-8">
             {live && <LiveFeed roundId={roundId} titleOf={titleOf} />}
+            <Section title="Raid Defense">
+                <ScatterChart
+                    telemetryList={telemetry.data ?? []}
+                    leaderboardItems={leaderboard.data?.items ?? []}
+                    onHover={setSelected}
+                    hovered={selected}
+                />
+            </Section>
+            {leaderboard.data !== undefined && leaderboard.data.items.length > 0 && (
+                <Section title="Standings Regularization">
+                    <ShrinkageChart items={leaderboard.data.items} />
+                </Section>
+            )}
             <Section title="Checks">
                 {telemetry.isPending ? (
                     <LoadingRows rows={4} />

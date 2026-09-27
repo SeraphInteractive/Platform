@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DifficultyTier, ShotStatus } from "../src/Domain/Enums.js";
 import { Role } from "../src/Domain/Roles.js";
-import { shots } from "../src/Infrastructure/Database/Schema.js";
+import { shots, users } from "../src/Infrastructure/Database/Schema.js";
 import { StorageBucket } from "../src/Infrastructure/Storage/ObjectStorage.js";
 import { createTestContext, json, nextSnowflake, serviceToken, type TestContext, type TestUser } from "./Support/TestApplication.js";
 
@@ -36,16 +36,13 @@ describe("shot grab-box", () => {
 
     it("runs claim, upload, submit and review", async () => {
         const shotId = await createShot("SC01-010");
-        const contributor = await context.createUser(Role.Contributor);
         const voter = await context.createUser(Role.Voter);
 
-        expect(
-            (await context.application.inject({ method: "POST", url: `/api/v1/shots/${shotId}/claim`, headers: voter.headers })).statusCode
-        ).toBe(403);
+        // users without contributor role can claim tasks
         const claim = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${shotId}/claim`,
-            headers: contributor.headers
+            headers: voter.headers
         });
         expect(claim.statusCode).toBe(200);
         expect(json<Envelope<{ status: string; deadlineAt: string }>>(claim).data.status).toBe(ShotStatus.Claimed);
@@ -54,14 +51,14 @@ describe("shot grab-box", () => {
         const second = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${otherShot}/claim`,
-            headers: contributor.headers
+            headers: voter.headers
         });
         expect(json(second).code).toBe("ACTIVE_CLAIM_EXISTS");
 
         const badExtension = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${shotId}/uploads`,
-            headers: contributor.headers,
+            headers: voter.headers,
             payload: { kind: "video", fileName: "../../evil.sh", contentType: "video/mp4", sizeBytes: 100 }
         });
         expect(badExtension.statusCode).toBe(422);
@@ -69,17 +66,17 @@ describe("shot grab-box", () => {
         const upload = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${shotId}/uploads`,
-            headers: contributor.headers,
+            headers: voter.headers,
             payload: { kind: "video", fileName: "../../final cut.mp4", contentType: "video/mp4", sizeBytes: 1024 }
         });
         expect(upload.statusCode).toBe(201);
         const { key } = json<Envelope<{ key: string }>>(upload).data;
-        expect(key).toMatch(new RegExp(`^shots/${shotId}/${contributor.record.id}/[0-9a-f-]{36}-final_cut\\.mp4$`, "u"));
+        expect(key).toMatch(new RegExp(`^shots/${shotId}/${voter.record.id}/[0-9a-f-]{36}-final_cut\\.mp4$`, "u"));
 
         const missing = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${shotId}/submissions`,
-            headers: contributor.headers,
+            headers: voter.headers,
             payload: { videoKey: key }
         });
         expect(json(missing).code).toBe("UPLOAD_MISSING");
@@ -88,13 +85,17 @@ describe("shot grab-box", () => {
         const submitted = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${shotId}/submissions`,
-            headers: contributor.headers,
+            headers: voter.headers,
             payload: { videoKey: key, notes: "v1" }
         });
         expect(submitted.statusCode).toBe(201);
         const submission = json<Envelope<{ id: string; version: number; videoUrl: string | null }>>(submitted).data;
         expect(submission.version).toBe(1);
         expect(submission.videoUrl).not.toBeNull();
+
+        // submitting work promotes voter to contributor
+        const [updatedUser] = await context.database.select().from(users).where(eq(users.id, voter.record.id));
+        expect(updatedUser?.role).toBe(Role.Contributor);
 
         const publicDetail = await context.application.inject({ method: "GET", url: `/api/v1/shots/${shotId}` });
         expect(json<Envelope<{ submissions: { videoUrl: string | null }[] }>>(publicDetail).data.submissions[0]?.videoUrl).toBeNull();

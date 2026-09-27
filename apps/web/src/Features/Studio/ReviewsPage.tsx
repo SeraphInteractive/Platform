@@ -17,8 +17,12 @@ import { RichTextInputField } from "@/Components/Common/FormField";
 import { MarkdownText } from "@/Components/Common/MarkdownText";
 import { Button } from "@/Components/Ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/Components/Ui/card";
+import { Label } from "@/Components/Ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/Ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/Components/Ui/tabs";
 import { useSession } from "@/Hooks/UseSession";
 import { safeHttpUrl } from "@/Lib/SafeUrl";
+import { EntryModeration } from "./EntryModeration";
 
 function ReviewCard({ item, reviewerId }: { readonly item: ReviewQueueItemDto; readonly reviewerId: string | null }): ReactNode {
     const notesId = useId();
@@ -154,11 +158,65 @@ function ReviewQueue(): ReactNode {
     );
 }
 
+function ProposalsReviewQueue(): ReactNode {
+    const rounds = useQuery({
+        queryKey: queryKeys.rounds({ page: 1, perPage: 100 }),
+        queryFn: () => platformApi.rounds({ page: 1, perPage: 100 })
+    });
+    const [selectedRoundId, setSelectedRoundId] = useState<string>("");
+    const roundList = rounds.data?.data ?? [];
+    const activeRoundId = selectedRoundId || roundList[0]?.id || "";
+
+    if (rounds.isPending) {
+        return <LoadingRows rows={3} />;
+    }
+    if (rounds.isError) {
+        return <ErrorState error={rounds.error} onRetry={() => void rounds.refetch()} />;
+    }
+    if (roundList.length === 0) {
+        return <EmptyState title="No voting rounds created yet" />;
+    }
+
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-wrap items-center gap-3">
+                <Label htmlFor="proposals-round-select" className="text-xs font-semibold">
+                    Round:
+                </Label>
+                <Select value={activeRoundId} onValueChange={setSelectedRoundId}>
+                    <SelectTrigger id="proposals-round-select" size="sm" className="w-64">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {roundList.map((r) => (
+                            <SelectItem key={r.id} value={r.id}>
+                                {r.title} ({r.pollType})
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+            {activeRoundId && <EntryModeration roundId={activeRoundId} />}
+        </div>
+    );
+}
+
 export function ReviewsPage(): ReactNode {
     return (
         <RequireRole role={Role.Supervisor}>
-            <PageHeader title="Reviews" description="Oldest first" />
-            <ReviewQueue />
+            <PageHeader title="Reviews" description="Supervisor feedback on submissions and candidate proposals" />
+            <Tabs defaultValue="tasks" className="space-y-6">
+                <TabsList>
+                    <TabsTrigger value="tasks">Task Deliverables</TabsTrigger>
+                    <TabsTrigger value="proposals">Round Proposals</TabsTrigger>
+                </TabsList>
+                <TabsContent value="tasks">
+                    <ReviewQueue />
+                </TabsContent>
+                <TabsContent value="proposals">
+                    <ProposalsReviewQueue />
+                </TabsContent>
+            </Tabs>
         </RequireRole>
     );
 }

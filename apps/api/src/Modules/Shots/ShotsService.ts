@@ -12,7 +12,7 @@ import {
 import { createPage, offsetOf, type Page, type PaginationQuery } from "../../Common/Http/Schemas.js";
 import type { AuthenticatedUser } from "../../Common/Security/Principal.js";
 import { DeliverableKind, type DifficultyTier, ShotStatus } from "../../Domain/Enums.js";
-import { hasAtLeast, Role } from "../../Domain/Roles.js";
+import { hasAtLeast, rankOf, Role } from "../../Domain/Roles.js";
 import { isUniqueViolation, type Database, type Transaction } from "../../Infrastructure/Database/Database.js";
 import {
     shots,
@@ -403,6 +403,10 @@ export class ShotsService {
                 })
                 .returning();
             await transaction.update(shots).set({ status: ShotStatus.Submitted }).where(eq(shots.id, shotId));
+            if (rankOf(user.role) < rankOf(Role.Contributor)) {
+                // submitting work earns contributor standing
+                await transaction.update(users).set({ role: Role.Contributor }).where(eq(users.id, user.id));
+            }
             if (created === undefined) {
                 throw new Error("Submission insert returned no row.");
             }
