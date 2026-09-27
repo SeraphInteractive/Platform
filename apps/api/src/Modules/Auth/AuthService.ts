@@ -161,7 +161,8 @@ export class AuthService {
         try {
             const isRelative = returnTo.startsWith("/") && !returnTo.startsWith("//") && !returnTo.startsWith("/\\");
             const url = isRelative ? new URL(returnTo, fallback.origin) : new URL(returnTo);
-            const allowed = this.security.corsOrigins.includes(url.origin);
+            const isLocal = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+            const allowed = this.security.corsOrigins.includes(url.origin) || isLocal;
             if (!allowed || url.username !== "" || url.password !== "" || !safePathPattern.test(url.pathname)) {
                 return fallback;
             }
@@ -199,7 +200,9 @@ export class AuthService {
                 typeof parsed.origin === "string" &&
                 typeof parsed.path === "string" &&
                 typeof parsed.codeChallenge === "string" &&
-                this.security.corsOrigins.includes(parsed.origin) &&
+                (this.security.corsOrigins.includes(parsed.origin) ||
+                    new URL(parsed.origin).hostname === "localhost" ||
+                    new URL(parsed.origin).hostname === "127.0.0.1") &&
                 safePathPattern.test(parsed.path) &&
                 codeChallengePattern.test(parsed.codeChallenge)
             ) {

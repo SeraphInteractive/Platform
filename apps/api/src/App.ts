@@ -144,7 +144,21 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
     });
 
     await application.register(cors, {
-        origin: [...configuration.security.corsOrigins],
+        origin: (origin, callback) => {
+            if (!origin) {
+                callback(null, true);
+                return;
+            }
+            try {
+                const url = new URL(origin);
+                const isLocal = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+                if (configuration.security.corsOrigins.includes(origin) || isLocal) {
+                    callback(null, true);
+                    return;
+                }
+            } catch {}
+            callback(new Error("CORS origin not allowed"), false);
+        },
         methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
         allowedHeaders: ["Authorization", "Content-Type", "X-Request-Id"],
         exposedHeaders: ["X-Request-Id", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "Retry-After"],
