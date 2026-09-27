@@ -11,7 +11,14 @@ const roleRanks: Readonly<Record<Role, number>> = Object.freeze({
     [Role.Admin]: 6
 });
 
-const specialtyRoles: ReadonlySet<Role> = new Set([Role.Contributor, Role.SeniorContributor, Role.Supervisor]);
+const specialtyRoles: ReadonlySet<Role> = new Set([
+    Role.Admin,
+    Role.Supervisor,
+    Role.Moderator,
+    Role.SeniorContributor,
+    Role.Contributor,
+    Role.Voter
+]);
 
 export function rankOf(role: Role): number {
     return roleRanks[role];

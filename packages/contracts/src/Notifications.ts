@@ -22,7 +22,8 @@ export enum NotificationType {
     ShotReleased = "shot.released",
     ShotExpired = "shot.expired",
     SubmissionCreated = "submission.created",
-    SubmissionReviewed = "submission.reviewed"
+    SubmissionReviewed = "submission.reviewed",
+    PipelineUpdated = "pipeline.updated"
 }
 
 export const notificationPersonSchema = z.object({
@@ -31,7 +32,11 @@ export const notificationPersonSchema = z.object({
 });
 
 const roundReference = z.object({ id: uuidSchema, title: z.string(), pollType: z.enum(PollType) });
-const entryReference = z.object({ id: uuidSchema, title: z.string() });
+const entryReference = z.object({
+    id: uuidSchema,
+    title: z.string(),
+    mediaUrl: z.string().nullable().optional()
+});
 const shotReference = z.object({
     id: uuidSchema,
     code: z.string(),
@@ -93,6 +98,7 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
             .object({
                 entryId: uuidSchema,
                 title: z.string(),
+                mediaUrl: z.string().nullable().optional(),
                 rawScore: z.number(),
                 voteSharePercentage: z.number(),
                 regularizedTotalScore: z.number().nullable()
@@ -132,6 +138,7 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
         shot: shotReference,
         submissionId: uuidSchema,
         version: z.number().int(),
+        videoUrl: z.string().nullable().optional(),
         contributor: notificationPersonSchema,
         notes: z.string().nullable()
     }),
@@ -139,10 +146,20 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
         shot: shotReference,
         submissionId: uuidSchema,
         version: z.number().int(),
+        videoUrl: z.string().nullable().optional(),
         decision: z.enum(ReviewDecision),
         contributor: notificationPersonSchema,
         reviewer: notificationPersonSchema,
         notes: z.string().nullable()
+    }),
+    notification(NotificationType.PipelineUpdated, {
+        stepId: z.string(),
+        stepTitle: z.string(),
+        phaseNumber: z.number().int(),
+        phaseTitle: z.string(),
+        progressPercent: z.number(),
+        isPhaseTransition: z.boolean(),
+        actor: notificationPersonSchema
     })
 ]);
 

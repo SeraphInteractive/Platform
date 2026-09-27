@@ -10,7 +10,7 @@ import {
     type ShotReference
 } from "@platform/contracts";
 import { ChannelPurpose } from "../State/SettingsStore.js";
-import { Accent, message, panel, person, plain, quote, when, type V2Message } from "../Discord/Ui.js";
+import { Accent, image, message, panel, person, plain, quote, when, type Block, type V2Message } from "../Discord/Ui.js";
 
 export interface RenderedNotification {
     readonly purpose: ChannelPurpose;
@@ -21,8 +21,27 @@ export interface NotificationContext {
     threadFor(shotId: string): string | undefined;
 }
 
-function post(purpose: ChannelPurpose, accent: Accent | null, ...lines: readonly (string | null)[]): RenderedNotification {
-    return { purpose, message: message(panel(accent, lines.filter((line): line is string => line !== null).join("\n"))) };
+function post(purpose: ChannelPurpose, accent: Accent | null, ...blocks: readonly (Block | string | null | undefined)[]): RenderedNotification {
+    const stringLines: string[] = [];
+    const panelBlocks: Block[] = [];
+    for (const b of blocks) {
+        if (b === null || b === undefined) {
+            continue;
+        }
+        if (typeof b === "string") {
+            stringLines.push(b);
+        } else {
+            if (stringLines.length > 0) {
+                panelBlocks.push(stringLines.join("\n"));
+                stringLines.length = 0;
+            }
+            panelBlocks.push(b);
+        }
+    }
+    if (stringLines.length > 0) {
+        panelBlocks.push(stringLines.join("\n"));
+    }
+    return { purpose, message: message(panel(accent, ...panelBlocks)) };
 }
 
 function reason(value: string | null): string | null {
@@ -159,7 +178,8 @@ export function renderNotification(notification: PlatformNotification, context: 
                     Accent.Info,
                     `## ${plain(notification.round.title)}`,
                     describeWinner(notification),
-                    `-# ${notification.totalBallots.toLocaleString("en-US")} ${notification.totalBallots === 1 ? "ballot" : "ballots"} counted`
+                    `-# ${notification.totalBallots.toLocaleString("en-US")} ${notification.totalBallots === 1 ? "ballot" : "ballots"} counted`,
+                    notification.winner?.mediaUrl ? image(notification.winner.mediaUrl, notification.winner.title) : null
                 )
             ];
         case NotificationType.EntrySubmitted:
@@ -169,7 +189,8 @@ export function renderNotification(notification: PlatformNotification, context: 
                     null,
                     `**New entry in ${plain(notification.round.title)}**`,
                     `${plain(notification.entry.title)} by ${person(notification.author)}`,
-                    notification.status === EntryStatus.PendingReview ? "-# Waiting for review" : "-# Approved automatically"
+                    notification.status === EntryStatus.PendingReview ? "-# Waiting for review" : "-# Approved automatically",
+                    notification.entry.mediaUrl ? image(notification.entry.mediaUrl, notification.entry.title) : null
                 )
             ];
         case NotificationType.EntryStatusChanged: {
@@ -180,7 +201,8 @@ export function renderNotification(notification: PlatformNotification, context: 
                     headline.accent,
                     `**${headline.title}**`,
                     `${plain(notification.entry.title)} in ${plain(notification.round.title)}`,
-                    `-# By ${person(notification.actor)}`
+                    `-# By ${person(notification.actor)}`,
+                    notification.entry.mediaUrl ? image(notification.entry.mediaUrl, notification.entry.title) : null
                 )
             ];
         }
@@ -191,7 +213,8 @@ export function renderNotification(notification: PlatformNotification, context: 
                     Accent.Success,
                     "**Entry reinstated**",
                     `${plain(notification.entry.title)} is back on the ballot in ${plain(notification.round.title)}.`,
-                    `-# By ${person(notification.actor)}`
+                    `-# By ${person(notification.actor)}`,
+                    notification.entry.mediaUrl ? image(notification.entry.mediaUrl, notification.entry.title) : null
                 )
             ];
         case NotificationType.ShotCreated:
@@ -236,7 +259,9 @@ export function renderNotification(notification: PlatformNotification, context: 
                     taskLogs,
                     null,
                     `**Submitted:** ${shotLink(notification.shot, context)}, version ${notification.version}`,
-                    `By ${person(notification.contributor)}`
+                    `By ${person(notification.contributor)}`,
+                    notification.notes === null ? null : quote(notification.notes, 500),
+                    notification.videoUrl ? image(notification.videoUrl, `${notification.shot.code} v${notification.version}`) : null
                 )
             ];
         case NotificationType.SubmissionReviewed: {
@@ -247,7 +272,8 @@ export function renderNotification(notification: PlatformNotification, context: 
                     approved ? Accent.Success : Accent.Warning,
                     `**${approved ? "Approved" : "Changes requested"}:** ${shotLink(notification.shot, context)}, version ${notification.version}`,
                     `Reviewed by ${person(notification.reviewer)}`,
-                    notification.notes === null ? null : quote(notification.notes, 600)
+                    notification.notes === null ? null : quote(notification.notes, 600),
+                    notification.videoUrl ? image(notification.videoUrl, `${notification.shot.code} v${notification.version}`) : null
                 )
             ];
             if (approved) {
@@ -255,11 +281,35 @@ export function renderNotification(notification: PlatformNotification, context: 
                     post(
                         ChannelPurpose.Announcements,
                         Accent.Success,
-                        `**${shotName(notification.shot)} is finished.** Delivered by ${person(notification.contributor)}.`
+                        `**${shotName(notification.shot)} is finished.** Delivered by ${person(notification.contributor)}.`,
+                        notification.videoUrl ? image(notification.videoUrl, shotName(notification.shot)) : null
                     )
                 );
             }
             return rendered;
+        }
+        case NotificationType.PipelineUpdated: {
+            if (notification.isPhaseTransition) {
+                return [
+                    post(
+                        ChannelPurpose.Announcements,
+                        Accent.Success,
+                        `@everyone`,
+                        `## Phase ${notification.phaseNumber} Unlocked: ${plain(notification.phaseTitle)}`,
+                        `Now entering **Step ${plain(notification.stepId)}: ${plain(notification.stepTitle)}** (${notification.progressPercent}% overall completed).`,
+                        `-# Updated by ${person(notification.actor)}`
+                    )
+                ];
+            }
+            return [
+                post(
+                    ChannelPurpose.Announcements,
+                    Accent.Info,
+                    `**Pipeline Update: Step ${plain(notification.stepId)} - ${plain(notification.stepTitle)}**`,
+                    `In **${plain(notification.phaseTitle)}** (${notification.progressPercent}% completed).`,
+                    `-# Updated by ${person(notification.actor)}`
+                )
+            ];
         }
     }
 }

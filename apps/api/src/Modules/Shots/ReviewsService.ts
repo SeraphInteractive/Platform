@@ -127,11 +127,13 @@ export class ReviewsService {
             .from(users)
             .where(eq(users.id, submission.contributorId))
             .limit(1);
+        const videoUrl = this.storage.getPublicUrl(StorageBucket.Deliverables, submission.videoKey);
         this.notifier.notify({
             type: NotificationType.SubmissionReviewed,
             shot: shotReferenceOf(shot),
             submissionId: submission.id,
             version: submission.version,
+            videoUrl,
             decision,
             contributor: contributor === undefined ? { discordId: null, username: "Unknown" } : personOfUser(contributor),
             reviewer: personOfActor(reviewer),

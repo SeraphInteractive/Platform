@@ -10,6 +10,25 @@ export enum Role {
 }
 
 export enum Specialty {
+    // Executive Tier (Admin 0)
+    Producer = "producer",
+    CreativeDirector = "creative_director",
+    ProductionManager = "production_manager",
+
+    // Department Tier (Supervisors 1)
+    TechnicalDirector = "technical_director",
+    ArtDirector = "art_director",
+    EditorialSupervisor = "editorial_supervisor",
+    LayoutPrevisLead = "layout_previs_lead",
+    ModellingSupervisor = "modelling_supervisor",
+    RiggingSupervisor = "rigging_supervisor",
+    SurfacingLookDevLead = "surfacing_lookdev_lead",
+    AnimationSupervisor = "animation_supervisor",
+    CfxVfxSupervisor = "cfx_vfx_supervisor",
+    LightingCompositingSupervisor = "lighting_compositing_supervisor",
+    SoundDirector = "sound_director",
+
+    // Contributor Tier (Contributors 2)
     Animator = "animator",
     LayoutArtist = "layout_artist",
     Modeler3d = "3d_modeler",
@@ -18,10 +37,14 @@ export enum Specialty {
     LightingArtist = "lighting_artist",
     VfxArtist = "vfx_artist",
     ConceptArtist = "concept_artist",
-    Screenwriter = "screenwriter",
     VoiceActor = "voice_actor",
     SoundDesigner = "sound_designer",
-    VideoEditor = "video_editor"
+    VideoEditor = "video_editor",
+    GeneralContributor = "general_contributor",
+    Screenwriter = "screenwriter",
+
+    // Community Tier (Voters 3)
+    Voter = "voter"
 }
 
 export const maximumSpecialties = 2;

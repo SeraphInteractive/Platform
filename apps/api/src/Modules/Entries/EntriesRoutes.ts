@@ -21,6 +21,12 @@ const roundParams = z.object({ roundId: uuidSchema });
 const entryParams = z.object({ roundId: uuidSchema, entryId: uuidSchema });
 const mediaKeySchema = z.string().max(255);
 
+const pitchSchema = trimmedText(255).refine(
+    (text) => text.trim().split(/\s+/u).filter(Boolean).length <= 30,
+    { message: "Pitch must not exceed 30 words." }
+);
+const descriptionSchema = trimmedText(250).nullable();
+
 export const entriesRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
     const { entriesService, objectStorage } = services;
     const security = [{ bearer: [] }];
@@ -69,8 +75,8 @@ export const entriesRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
                 security,
                 params: roundParams,
                 body: z.object({
-                    title: trimmedText(255),
-                    description: trimmedText(1500).nullable().default(null),
+                    title: pitchSchema,
+                    description: descriptionSchema.default(null),
                     mediaKey: mediaKeySchema.nullable().default(null)
                 }),
                 response: { 201: dataEnvelope(entrySchema), ...errorResponses }
@@ -93,8 +99,8 @@ export const entriesRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
                 params: entryParams,
                 body: z
                     .object({
-                        title: trimmedText(255).optional(),
-                        description: trimmedText(1500).nullable().optional(),
+                        title: pitchSchema.optional(),
+                        description: descriptionSchema.optional(),
                         mediaKey: mediaKeySchema.nullable().optional()
                     })
                     .refine((body) => Object.keys(body).length > 0, "at least one field is required"),

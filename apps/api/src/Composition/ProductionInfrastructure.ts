@@ -8,7 +8,7 @@ import { LanyardPresenceProvider } from "../Infrastructure/Discord/PresenceProvi
 import { RedisEventBus } from "../Infrastructure/Events/RedisEventBus.js";
 import { StreamNotifier } from "../Infrastructure/Notifications/NotificationLog.js";
 import { RedisNotificationLog } from "../Infrastructure/Notifications/RedisNotificationLog.js";
-import { S3ObjectStorage } from "../Infrastructure/Storage/S3ObjectStorage.js";
+import { LocalMediaStorage } from "../Infrastructure/Storage/LocalStorage.js";
 import type { Infrastructure } from "./ServiceContainer.js";
 
 export function createProductionInfrastructure(configuration: ApplicationConfiguration, logger: FastifyBaseLogger): Infrastructure {
@@ -46,7 +46,7 @@ export function createProductionInfrastructure(configuration: ApplicationConfigu
         databasePing: () => connection.ping(),
         keyValueStore,
         eventBus,
-        objectStorage: new S3ObjectStorage(configuration.storage),
+        objectStorage: new LocalMediaStorage(configuration.storage, configuration.security.appUrl),
         discordOAuth: new HttpDiscordOAuthClient(configuration.discord),
         presenceProvider: new LanyardPresenceProvider(keyValueStore),
         notifier: new StreamNotifier(notificationLog, logger),

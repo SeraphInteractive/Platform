@@ -14,7 +14,7 @@ import {
     roundReferenceOf,
     type Notifier
 } from "../../Infrastructure/Notifications/Notification.js";
-import type { ObjectStorage } from "../../Infrastructure/Storage/ObjectStorage.js";
+import { StorageBucket, type ObjectStorage } from "../../Infrastructure/Storage/ObjectStorage.js";
 import type { LeaderboardCache } from "../Leaderboards/LeaderboardCache.js";
 import { canSeeDrafts } from "../Rounds/RoundVisibility.js";
 import { assertUploadedMedia } from "../Uploads/MediaPolicy.js";
@@ -93,7 +93,6 @@ export class EntriesService {
         if (input.mediaKey !== null) {
             await assertUploadedMedia(this.storage, input.mediaKey, author.id, this.storageConfiguration.mediaMaxBytes);
         }
-        const isStaff = hasAtLeast(author.role, Role.Supervisor);
         const { entry, round } = await this.database.transaction(async (transaction) => {
             const lockedRound = await this.requireRound(transaction, roundId, true);
             if (!submissionStatuses.includes(lockedRound.status)) {
@@ -107,7 +106,7 @@ export class EntriesService {
                     description: input.description,
                     mediaKey: input.mediaKey,
                     submittedBy: author.id,
-                    status: isStaff ? EntryStatus.Approved : EntryStatus.PendingReview
+                    status: EntryStatus.PendingReview
                 })
                 .returning();
             if (created === undefined) {
@@ -116,13 +115,11 @@ export class EntriesService {
             return { entry: created, round: lockedRound };
         });
 
-        if (entry.status === EntryStatus.Approved) {
-            await this.leaderboardCache.invalidateRound(roundId);
-        }
+        const mediaUrl = entry.mediaKey === null ? null : this.storage.getPublicUrl(StorageBucket.Media, entry.mediaKey);
         this.notifier.notify({
             type: NotificationType.EntrySubmitted,
             round: roundReferenceOf(round),
-            entry: { id: entry.id, title: entry.title },
+            entry: { id: entry.id, title: entry.title, mediaUrl },
             status: entry.status,
             author: personOfUser(author)
         });
@@ -156,10 +153,11 @@ export class EntriesService {
         });
         await this.leaderboardCache.invalidateRound(roundId);
         const author = await this.authorOf(entry);
+        const mediaUrl = entry.mediaKey === null ? null : this.storage.getPublicUrl(StorageBucket.Media, entry.mediaKey);
         this.notifier.notify({
             type: NotificationType.EntryStatusChanged,
             round: roundReferenceOf(round),
-            entry: { id: entry.id, title: entry.title },
+            entry: { id: entry.id, title: entry.title, mediaUrl },
             status,
             author: author === null ? null : personOfUser(author),
             actor: personOfActor(actor)
@@ -177,10 +175,11 @@ export class EntriesService {
             return updated;
         });
         await this.leaderboardCache.invalidateRound(roundId);
+        const mediaUrl = entry.mediaKey === null ? null : this.storage.getPublicUrl(StorageBucket.Media, entry.mediaKey);
         this.notifier.notify({
             type: NotificationType.EntryReinstated,
             round: roundReferenceOf(round),
-            entry: { id: entry.id, title: entry.title },
+            entry: { id: entry.id, title: entry.title, mediaUrl },
             actor: personOfActor(actor)
         });
         return entry;

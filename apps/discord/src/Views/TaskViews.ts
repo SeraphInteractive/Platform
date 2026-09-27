@@ -14,6 +14,7 @@ import {
     capitalize,
     divider,
     ephemeral,
+    image,
     linkButton,
     message,
     panel,
@@ -99,7 +100,8 @@ export function threadUpdate(
                         notification.notes === null ? null : quote(notification.notes, 800)
                     ]
                         .filter((line): line is string => line !== null)
-                        .join("\n")
+                        .join("\n"),
+                    notification.videoUrl ? image(notification.videoUrl, `${notification.shot.code} v${notification.version}`) : null
                 )
             );
         case NotificationType.SubmissionReviewed: {
@@ -113,7 +115,8 @@ export function threadUpdate(
                     approved ? Accent.Success : Accent.Warning,
                     [headline, notification.notes === null ? null : quote(notification.notes, 1000), next]
                         .filter((line): line is string => line !== null)
-                        .join("\n")
+                        .join("\n"),
+                    notification.videoUrl ? image(notification.videoUrl, `${notification.shot.code} v${notification.version}`) : null
                 )
             );
         }
@@ -128,7 +131,11 @@ export function reviewCard(notification: NotificationOf<NotificationType.Submiss
         notification.notes === null ? null : quote(notification.notes, 800)
     ].filter((line): line is string => line !== null);
     return message(
-        panel(Accent.Info, lines.join("\n")),
+        panel(
+            Accent.Info,
+            lines.join("\n"),
+            notification.videoUrl ? image(notification.videoUrl, `${notification.shot.code} v${notification.version}`) : null
+        ),
         buttons(
             actionButton(`${reviewButtonPrefix}:${notification.submissionId}:${ReviewDecision.Approved}`, "Approve", ButtonStyle.Success),
             actionButton(

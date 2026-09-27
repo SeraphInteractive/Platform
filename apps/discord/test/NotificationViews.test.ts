@@ -239,6 +239,17 @@ describe("every notification", () => {
             contributor: voter,
             reviewer: supervisor,
             notes: null
+        },
+        {
+            type: NotificationType.PipelineUpdated,
+            occurredAt,
+            stepId: "1.1",
+            stepTitle: "Art Style",
+            phaseNumber: 1,
+            phaseTitle: "Phase 1: Animatic",
+            progressPercent: 18,
+            isPhaseTransition: true,
+            actor: supervisor
         }
     ];
 
@@ -263,6 +274,97 @@ describe("every notification", () => {
         const [rendered] = renderNotification(samples[8] as PlatformNotification, context);
         expect(rendered?.purpose).toBe(ChannelPurpose.Announcements);
         expect(texts(rendered?.message as V2Message).join("\n")).toContain("**Option Alpha** wins with 62.5% of the vote.");
+    });
+
+    it("announces phase unlocks and step progress to announcements channel", () => {
+        const phaseUnlock = only({
+            type: NotificationType.PipelineUpdated,
+            occurredAt,
+            stepId: "2.1",
+            stepTitle: "3D Modelling",
+            phaseNumber: 2,
+            phaseTitle: "Phase 2: LookDev",
+            progressPercent: 36,
+            isPhaseTransition: true,
+            actor: supervisor
+        });
+        expect(phaseUnlock.purpose).toBe(ChannelPurpose.Announcements);
+        expect(phaseUnlock.text).toContain("## Phase 2 Unlocked: Phase 2: LookDev");
+        expect(phaseUnlock.text).toContain("3D Modelling");
+        expect(phaseUnlock.text).toContain("36% overall completed");
+
+        const stepProgress = only({
+            type: NotificationType.PipelineUpdated,
+            occurredAt,
+            stepId: "2.2",
+            stepTitle: "Rigging and Deformation",
+            phaseNumber: 2,
+            phaseTitle: "Phase 2: LookDev",
+            progressPercent: 41,
+            isPhaseTransition: false,
+            actor: supervisor
+        });
+        expect(stepProgress.purpose).toBe(ChannelPurpose.Announcements);
+        expect(stepProgress.text).toContain("Rigging and Deformation");
+        expect(stepProgress.text).toContain("Phase 2: LookDev");
+        expect(stepProgress.text).toContain("41% completed");
+    });
+
+    it("embeds image and video media thumbnails when mediaUrl or videoUrl is present", () => {
+        const entryNotification = only({
+            type: NotificationType.EntrySubmitted,
+            occurredAt,
+            round,
+            entry: {
+                id: shot.id,
+                title: "Hero Design",
+                mediaUrl: "https://dev-api.seraphinteractive.com/api/v1/uploads/media/file/hero.png"
+            },
+            status: EntryStatus.PendingReview,
+            author: voter
+        });
+        const entryJson = entryNotification.payload.components.map((c) => c.toJSON() as ComponentJson);
+        const hasMedia = entryJson.some(
+            (c) => (c.components ?? []).some((child: unknown) => (child as { type?: number })?.type === 12)
+        );
+        expect(hasMedia).toBe(true);
+
+        const winnerNotification = only({
+            type: NotificationType.RoundFinalized,
+            occurredAt,
+            round,
+            totalBallots: 40,
+            winner: {
+                entryId: shot.id,
+                title: "Winning Art",
+                mediaUrl: "https://dev-api.seraphinteractive.com/api/v1/uploads/media/file/winner.png",
+                rawScore: 25,
+                voteSharePercentage: 62.5,
+                regularizedTotalScore: null
+            },
+            actor: admin
+        });
+        const winnerJson = winnerNotification.payload.components.map((c) => c.toJSON() as ComponentJson);
+        const winnerHasMedia = winnerJson.some(
+            (c) => (c.components ?? []).some((child: unknown) => (child as { type?: number })?.type === 12)
+        );
+        expect(winnerHasMedia).toBe(true);
+
+        const submissionNotification = only({
+            type: NotificationType.SubmissionCreated,
+            occurredAt,
+            shot,
+            submissionId: shot.id,
+            version: 1,
+            videoUrl: "https://dev-api.seraphinteractive.com/api/v1/uploads/media/file/shot_v1.mp4",
+            contributor: voter,
+            notes: "Initial blockout"
+        });
+        const submissionJson = submissionNotification.payload.components.map((c) => c.toJSON() as ComponentJson);
+        const subHasMedia = submissionJson.some(
+            (c) => (c.components ?? []).some((child: unknown) => (child as { type?: number })?.type === 12)
+        );
+        expect(subHasMedia).toBe(true);
     });
 });
 

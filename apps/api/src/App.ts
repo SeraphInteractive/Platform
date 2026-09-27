@@ -25,6 +25,7 @@ import { ballotsRoutes } from "./Modules/Ballots/BallotsRoutes.js";
 import { entriesRoutes } from "./Modules/Entries/EntriesRoutes.js";
 import { healthRoutes } from "./Modules/Health/HealthRoutes.js";
 import { notificationRoutes } from "./Modules/Notifications/NotificationRoutes.js";
+import { pipelineRoutes } from "./Modules/Pipeline/PipelineRoutes.js";
 import { roundsRoutes } from "./Modules/Rounds/RoundsRoutes.js";
 import { shotsRoutes } from "./Modules/Shots/ShotsRoutes.js";
 import { telemetryRoutes } from "./Modules/Telemetry/TelemetryRoutes.js";
@@ -107,6 +108,13 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
     application.setValidatorCompiler(validatorCompiler);
     application.setSerializerCompiler(serializerCompiler);
     application.removeContentTypeParser("text/plain");
+    application.addContentTypeParser(
+        ["image/png", "image/jpeg", "image/gif", "image/webp", "video/mp4", "video/webm", "video/quicktime", "application/octet-stream"],
+        { parseAs: "buffer", bodyLimit: 10 * 1024 * 1024 },
+        (_req, body, done) => {
+            done(null, body);
+        }
+    );
     application.decorateRequest("principal", null);
 
     application.addHook("onRequest", async (request, reply) => {
@@ -210,6 +218,7 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
             await api.register(shotsRoutes, { services });
             await api.register(uploadsRoutes, { services });
             await api.register(threadMapsRoutes, { services });
+            await api.register(pipelineRoutes, { services });
             await api.register(notificationRoutes, { services });
         },
         { prefix: apiPrefix }

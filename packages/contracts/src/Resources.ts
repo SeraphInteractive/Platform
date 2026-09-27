@@ -246,6 +246,19 @@ export const shotThreadMapSchema = z
 
 export const reclaimResultSchema = z.object({ reclaimedCount: z.number().int(), shotCodes: z.array(z.string()) });
 
+export const pipelineProgressSchema = z
+    .object({
+        stepIndex: z.number().int().min(0),
+        stepId: z.string().max(32),
+        stepTitle: z.string().max(128),
+        phaseNumber: z.number().int().min(0),
+        phaseTitle: z.string().max(128),
+        progressPercent: z.number().min(0).max(100),
+        isPhaseTransition: z.boolean(),
+        updatedAt: timestampSchema.nullable()
+    })
+    .meta({ id: "PipelineProgress" });
+
 export type UserSummaryDto = z.infer<typeof userSummarySchema>;
 export type UserDto = z.infer<typeof userSchema>;
 export type ModeratedUserDto = z.infer<typeof moderatedUserSchema>;
@@ -267,3 +280,4 @@ export type ReviewQueueItemDto = z.infer<typeof reviewQueueItemSchema>;
 export type PresignedUploadDto = z.infer<typeof presignedUploadSchema>;
 export type ShotThreadMapDto = z.infer<typeof shotThreadMapSchema>;
 export type ReclaimResultDto = z.infer<typeof reclaimResultSchema>;
+export type PipelineProgressDto = z.infer<typeof pipelineProgressSchema>;

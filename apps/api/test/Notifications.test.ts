@@ -1,6 +1,6 @@
 import { actingUserHeader, NotificationType, platformNotificationSchema } from "@platform/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { PollType, RoundStatus } from "../src/Domain/Enums.js";
+import { EntryStatus, PollType, RoundStatus } from "../src/Domain/Enums.js";
 import { Role } from "../src/Domain/Roles.js";
 import { createTestContext, json, nextSnowflake, serviceToken, type TestContext } from "./Support/TestApplication.js";
 
@@ -151,7 +151,14 @@ describe("platform service integration", () => {
                 headers: supervisor.headers,
                 payload: { title }
             });
-            entryIds.push(json<Envelope<{ id: string }>>(entry).data.id);
+            const entryId = json<Envelope<{ id: string }>>(entry).data.id;
+            entryIds.push(entryId);
+            await context.application.inject({
+                method: "PATCH",
+                url: `/api/v1/rounds/${round.id}/entries/${entryId}/status`,
+                headers: supervisor.headers,
+                payload: { status: EntryStatus.Approved }
+            });
         }
         await context.application.inject({
             method: "PATCH",
@@ -184,6 +191,20 @@ describe("platform service integration", () => {
             headers: supervisor.headers,
             payload: { sceneNumber: 1, shotCode: "NT-1", title: "Notify", difficultyTier: "easy" }
         });
+        await context.application.inject({
+            method: "POST",
+            url: "/api/v1/pipeline/progress",
+            headers: supervisor.headers,
+            payload: {
+                stepIndex: 1,
+                stepId: "0.2",
+                stepTitle: "Story Vote",
+                phaseNumber: 0,
+                phaseTitle: "Phase 0: Pre-Production",
+                progressPercent: 7,
+                isPhaseTransition: false
+            }
+        });
 
         await new Promise((resolve) => setTimeout(resolve, 10));
         const types = new Set<string>();
@@ -201,7 +222,8 @@ describe("platform service integration", () => {
             NotificationType.BallotSubmitted,
             NotificationType.RoundFinalized,
             NotificationType.UserBlacklisted,
-            NotificationType.ShotCreated
+            NotificationType.ShotCreated,
+            NotificationType.PipelineUpdated
         ]) {
             expect(types.has(expected), expected).toBe(true);
         }

@@ -24,6 +24,7 @@ import {
 } from "../../Infrastructure/Database/Schema.js";
 import { RoundEventType, type EventBus } from "../../Infrastructure/Events/EventBus.js";
 import { NotificationType, personOfActor, roundReferenceOf, type Notifier } from "../../Infrastructure/Notifications/Notification.js";
+import { StorageBucket, type ObjectStorage } from "../../Infrastructure/Storage/ObjectStorage.js";
 import type { LeaderboardCache } from "./LeaderboardCache.js";
 import type { Leaderboard, LeaderboardItem } from "./LeaderboardTypes.js";
 
@@ -41,7 +42,8 @@ export class LeaderboardService {
         private readonly database: Database,
         private readonly cache: LeaderboardCache,
         private readonly eventBus: EventBus,
-        private readonly notifier: Notifier
+        private readonly notifier: Notifier,
+        private readonly storage?: ObjectStorage
     ) {}
 
     public async getLive(roundId: string, viewer: AuthenticatedUser | null): Promise<Leaderboard> {
@@ -125,6 +127,17 @@ export class LeaderboardService {
         });
 
         const winner = result.leaderboard[0];
+        let winnerMediaUrl: string | null = null;
+        if (winner !== undefined && this.storage !== undefined) {
+            const [winnerEntry] = await this.database
+                .select({ mediaKey: entries.mediaKey })
+                .from(entries)
+                .where(eq(entries.id, winner.entryId))
+                .limit(1);
+            if (winnerEntry?.mediaKey) {
+                winnerMediaUrl = this.storage.getPublicUrl(StorageBucket.Media, winnerEntry.mediaKey);
+            }
+        }
         this.notifier.notify({
             type: NotificationType.RoundFinalized,
             round: roundReferenceOf(round),
@@ -135,6 +148,7 @@ export class LeaderboardService {
                     : {
                           entryId: winner.entryId,
                           title: winner.title,
+                          mediaUrl: winnerMediaUrl,
                           rawScore: winner.rawScore,
                           voteSharePercentage: winner.voteSharePercentage,
                           regularizedTotalScore: winner.regularizedTotalScore
