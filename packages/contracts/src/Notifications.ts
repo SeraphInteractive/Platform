@@ -10,6 +10,7 @@ export enum NotificationType {
     ContributorPromoted = "contributor.promoted",
     RaidAlert = "raid.alert",
     RoundCreated = "round.created",
+    RoundUpdated = "round.updated",
     RoundStatusChanged = "round.status_changed",
     RoundFinalized = "round.finalized",
     EntrySubmitted = "entry.submitted",
@@ -80,6 +81,12 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
         quarantined: z.boolean()
     }),
     notification(NotificationType.RoundCreated, {
+        round: roundReference,
+        actor: notificationPersonSchema,
+        opensAt: timestampSchema.nullable(),
+        closesAt: timestampSchema.nullable()
+    }),
+    notification(NotificationType.RoundUpdated, {
         round: roundReference,
         actor: notificationPersonSchema,
         opensAt: timestampSchema.nullable(),

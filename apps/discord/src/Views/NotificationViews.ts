@@ -162,8 +162,18 @@ export function renderNotification(notification: PlatformNotification, context: 
                     `-# Created by ${person(notification.actor)}`
                 )
             ];
-        case NotificationType.RoundStatusChanged:
+        case NotificationType.RoundUpdated:
             return [
+                post(
+                    telemetry,
+                    Accent.Info,
+                    `**Round updated: ${plain(notification.round.title)}**`,
+                    `${notification.round.pollType === PollType.Binary ? "Binary" : "Ranked choice"}, ${describeSchedule(notification.opensAt, notification.closesAt)}`,
+                    `-# Updated by ${person(notification.actor)}`
+                )
+            ];
+        case NotificationType.RoundStatusChanged: {
+            const posts: RenderedNotification[] = [
                 post(
                     telemetry,
                     notification.to === RoundStatus.Open ? Accent.Success : null,
@@ -171,6 +181,19 @@ export function renderNotification(notification: PlatformNotification, context: 
                     `-# By ${person(notification.actor)}`
                 )
             ];
+            if (notification.to === RoundStatus.Open) {
+                posts.push(
+                    post(
+                        ChannelPurpose.Announcements,
+                        Accent.Success,
+                        `## Voting is now open for ${plain(notification.round.title)}!`,
+                        `Cast your vote on the platform: ${notification.round.pollType === PollType.Binary ? "Binary vote" : "Ranked choice vote"}.`,
+                        `-# Opened by ${person(notification.actor)}`
+                    )
+                );
+            }
+            return posts;
+        }
         case NotificationType.RoundFinalized:
             return [
                 post(

@@ -187,6 +187,7 @@ describe("every notification", () => {
             quarantined: false
         },
         { type: NotificationType.RoundCreated, occurredAt, round, actor: admin, opensAt: null, closesAt: occurredAt },
+        { type: NotificationType.RoundUpdated, occurredAt, round, actor: admin, opensAt: null, closesAt: occurredAt },
         { type: NotificationType.RoundStatusChanged, occurredAt, round, from: RoundStatus.Closed, to: RoundStatus.Open, actor: admin },
         {
             type: NotificationType.RoundFinalized,
@@ -271,9 +272,19 @@ describe("every notification", () => {
     });
 
     it("announces winners publicly", () => {
-        const [rendered] = renderNotification(samples[8] as PlatformNotification, context);
+        const sample = samples.find((s) => s.type === NotificationType.RoundFinalized)!;
+        const [rendered] = renderNotification(sample, context);
         expect(rendered?.purpose).toBe(ChannelPurpose.Announcements);
         expect(texts(rendered?.message as V2Message).join("\n")).toContain("**Option Alpha** wins with 62.5% of the vote.");
+    });
+
+    it("announces when a round is opened for voting", () => {
+        const sample = samples.find((s) => s.type === NotificationType.RoundStatusChanged)!;
+        const rendered = renderNotification(sample, context);
+        expect(rendered).toHaveLength(2);
+        const announcement = rendered.find((r) => r.purpose === ChannelPurpose.Announcements);
+        expect(announcement).toBeDefined();
+        expect(texts(announcement!.message).join("\n")).toContain("## Voting is now open for Binary Test Round!");
     });
 
     it("announces phase unlocks and step progress to announcements channel", () => {

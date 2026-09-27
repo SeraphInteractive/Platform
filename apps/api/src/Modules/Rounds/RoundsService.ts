@@ -176,6 +176,21 @@ export class RoundsService {
         });
 
         await this.leaderboardCache.invalidateRound(roundId);
+        const metadataChanged =
+            before.title !== after.title ||
+            before.pollType !== after.pollType ||
+            before.opensAt?.getTime() !== after.opensAt?.getTime() ||
+            before.closesAt?.getTime() !== after.closesAt?.getTime();
+
+        if (metadataChanged) {
+            this.notifier.notify({
+                type: NotificationType.RoundUpdated,
+                round: roundReferenceOf(after),
+                actor: personOfActor(actor),
+                opensAt: toIso(after.opensAt),
+                closesAt: toIso(after.closesAt)
+            });
+        }
         if (before.status !== after.status) {
             this.notifier.notify({
                 type: NotificationType.RoundStatusChanged,

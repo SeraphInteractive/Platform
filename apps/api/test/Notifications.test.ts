@@ -164,6 +164,12 @@ describe("platform service integration", () => {
             method: "PATCH",
             url: `/api/v1/rounds/${round.id}`,
             headers: supervisor.headers,
+            payload: { title: "Contract Renamed" }
+        });
+        await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/rounds/${round.id}`,
+            headers: supervisor.headers,
             payload: { status: RoundStatus.Open }
         });
         await context.application.inject({
@@ -217,6 +223,7 @@ describe("platform service integration", () => {
         }
         for (const expected of [
             NotificationType.RoundCreated,
+            NotificationType.RoundUpdated,
             NotificationType.EntrySubmitted,
             NotificationType.RoundStatusChanged,
             NotificationType.BallotSubmitted,
