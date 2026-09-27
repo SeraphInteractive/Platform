@@ -4,6 +4,7 @@ import { fieldRules, PollType, problemOf, Role, RoundStatus, textLimits, type Ro
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
+import { Pencil } from "lucide-react";
 import { useId, useState, type ReactNode, type SubmitEvent } from "react";
 import { toast } from "sonner";
 import { platformApi, type CreateRoundInput, type UpdateRoundInput } from "@/Api/PlatformApi";
@@ -18,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useSession } from "@/Hooks/UseSession";
 import { fromLocalInputValue, pollTypeLabels, roundStatusLabels, toLocalInputValue } from "@/Lib/Format";
 import { hasAtLeast } from "@/Lib/Roles";
+import { RoundStatusBadge } from "@/Components/Common/StatusBadge";
 
 interface RoundFormDialogProps {
     readonly round?: RoundDto;
@@ -155,6 +157,55 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
     );
 }
 
+export function RoundStatusSelect({ round }: { readonly round: RoundDto }): ReactNode {
+    const { user } = useSession();
+    const queryClient = useQueryClient();
+    const isSupervisor = hasAtLeast(user, Role.Supervisor);
+
+    const refresh = (): void => {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.roundsAll });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.round(round.id) });
+    };
+
+    const update = useMutation({
+        mutationFn: (status: RoundStatus.Draft | RoundStatus.Open | RoundStatus.Closed) =>
+            platformApi.updateRound(round.id, { status }),
+        onSuccess: (updated) => {
+            refresh();
+            toast.success(`"${updated.title}" is now ${roundStatusLabels[updated.status].toLowerCase()}.`);
+        },
+        onError: (err) => {
+            toast.error(err instanceof Error ? err.message : "Failed to update round status.");
+        }
+    });
+
+    if (!isSupervisor || round.status === RoundStatus.Finalized) {
+        return <RoundStatusBadge status={round.status} />;
+    }
+
+    return (
+        <Select
+            value={round.status}
+            disabled={update.isPending}
+            onValueChange={(val) => {
+                const nextStatus = val as RoundStatus.Draft | RoundStatus.Open | RoundStatus.Closed;
+                if (nextStatus !== round.status) {
+                    update.mutate(nextStatus);
+                }
+            }}
+        >
+            <SelectTrigger size="sm" className="h-7 w-28 text-xs font-medium">
+                <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value={RoundStatus.Draft}>{roundStatusLabels[RoundStatus.Draft]}</SelectItem>
+                <SelectItem value={RoundStatus.Open}>{roundStatusLabels[RoundStatus.Open]}</SelectItem>
+                <SelectItem value={RoundStatus.Closed}>{roundStatusLabels[RoundStatus.Closed]}</SelectItem>
+            </SelectContent>
+        </Select>
+    );
+}
+
 export function RoundActions({ round, compact = false }: { readonly round: RoundDto; readonly compact?: boolean }): ReactNode {
     const router = useRouter();
     const { user } = useSession();
@@ -194,6 +245,17 @@ export function RoundActions({ round, compact = false }: { readonly round: Round
 
     return (
         <div className="flex flex-wrap justify-end gap-1.5">
+            {round.status !== RoundStatus.Finalized && (
+                <RoundFormDialog
+                    round={round}
+                    trigger={
+                        <Button size={size} variant="outline" disabled={busy}>
+                            <Pencil />
+                            Edit
+                        </Button>
+                    }
+                />
+            )}
             {(round.status === RoundStatus.Draft || round.status === RoundStatus.Closed) && (
                 <ConfirmButton
                     title={round.status === RoundStatus.Draft ? `Open "${round.title}" for voting?` : `Reopen "${round.title}"?`}
@@ -206,7 +268,7 @@ export function RoundActions({ round, compact = false }: { readonly round: Round
                         update.mutate(RoundStatus.Open);
                     }}
                 >
-                    {round.status === RoundStatus.Draft ? "Open" : "Reopen"}
+                    {round.status === RoundStatus.Draft ? "Start Voting" : "Reopen"}
                 </ConfirmButton>
             )}
             {round.status === RoundStatus.Open && (

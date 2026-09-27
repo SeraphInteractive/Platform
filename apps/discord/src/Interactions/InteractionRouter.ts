@@ -6,6 +6,7 @@ import { entryPageHandler, roundCommands, roundSelectHandler } from "../Commands
 import { botSetupCommand, setChannelCommand, setupForumCommand } from "../Commands/SetupCommands.js";
 import {
     availableTasksCommand,
+    claimTaskButtonHandler,
     createTaskCommand,
     deliverablesButtonHandler,
     releaseTaskCommand,
@@ -38,6 +39,7 @@ export const slashCommands: readonly SlashCommand[] = [
 const componentHandlers: readonly ComponentHandler[] = [
     roundSelectHandler,
     entryPageHandler,
+    claimTaskButtonHandler,
     reviewButtonHandler,
     reviewModalHandler,
     deliverablesButtonHandler

@@ -224,36 +224,13 @@ export class ServerProvisioner {
                 type: ChannelType.GuildForum,
                 parent: pipeline.id,
                 topic: "Open tasks. Use /take-task in a post to claim it.",
-                permissionOverwrites: [
-                    {
-                        id: everyone,
-                        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
-                        deny: [PermissionFlagsBits.SendMessagesInThreads, PermissionFlagsBits.CreatePublicThreads]
-                    },
-                    ...contributorRoles.map((role) => ({
-                        id: role.id,
-                        allow: [PermissionFlagsBits.SendMessagesInThreads, PermissionFlagsBits.AttachFiles]
-                    })),
-                    ...staffRoles.map((role) => ({
-                        id: role.id,
-                        allow: [PermissionFlagsBits.SendMessagesInThreads, PermissionFlagsBits.ManageThreads]
-                    })),
-                    {
-                        id: botId,
-                        allow: [
-                            PermissionFlagsBits.ViewChannel,
-                            PermissionFlagsBits.SendMessagesInThreads,
-                            PermissionFlagsBits.CreatePublicThreads,
-                            PermissionFlagsBits.ManageThreads
-                        ]
-                    }
-                ],
                 reason: "Studio setup"
             });
             createdChannels.push(forumName);
         } else {
             boundChannels.push(forum.name);
         }
+        await this.ensureForumPermissions(forum);
         const tagged = await this.ensureForumTags(forum);
 
         if ((await rules.messages.fetchPins()).items.length === 0) {
@@ -295,5 +272,73 @@ export class ServerProvisioner {
             }
         });
         return updated;
+    }
+
+    public async ensureForumPermissions(forum: ForumChannel): Promise<void> {
+        const guild = forum.guild;
+        const botId = guild.client.user.id;
+        const everyone = guild.roles.everyone.id;
+        const existingRoles = await guild.roles.fetch();
+        const staffRoles = studioRoles
+            .filter((role) => role.tier <= StudioTier.Department)
+            .map((def) => existingRoles.find((role) => findStudioRole(role.name)?.name === def.name))
+            .filter((role): role is DiscordRole => role !== undefined);
+        const contributorRoles = studioRoles
+            .filter((role) => role.tier === StudioTier.Contributor)
+            .map((def) => existingRoles.find((role) => findStudioRole(role.name)?.name === def.name))
+            .filter((role): role is DiscordRole => role !== undefined);
+
+        // allow thread replies while locking root creation to staff
+        await forum.permissionOverwrites.set(
+            [
+                {
+                    id: everyone,
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.SendMessagesInThreads,
+                        PermissionFlagsBits.UseApplicationCommands
+                    ],
+                    deny: [
+                        PermissionFlagsBits.SendMessages,
+                        PermissionFlagsBits.CreatePublicThreads,
+                        PermissionFlagsBits.CreatePrivateThreads
+                    ]
+                },
+                ...contributorRoles.map((role) => ({
+                    id: role.id,
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.SendMessagesInThreads,
+                        PermissionFlagsBits.UseApplicationCommands,
+                        PermissionFlagsBits.AttachFiles
+                    ]
+                })),
+                ...staffRoles.map((role) => ({
+                    id: role.id,
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.SendMessages,
+                        PermissionFlagsBits.SendMessagesInThreads,
+                        PermissionFlagsBits.CreatePublicThreads,
+                        PermissionFlagsBits.ManageThreads
+                    ]
+                })),
+                {
+                    id: botId,
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.SendMessages,
+                        PermissionFlagsBits.SendMessagesInThreads,
+                        PermissionFlagsBits.CreatePublicThreads,
+                        PermissionFlagsBits.ManageThreads
+                    ]
+                }
+            ],
+            "Configure task forum permissions"
+        );
     }
 }

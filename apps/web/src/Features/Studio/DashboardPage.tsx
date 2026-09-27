@@ -1,8 +1,10 @@
 "use client";
 
-import { EntryStatus, Role, RoundStatus, ShotStatus, type RoundDto } from "@platform/contracts";
+import { EntryStatus, RaidSeverity, Role, RoundStatus, ShotStatus, type RoundDto } from "@platform/contracts";
 import { useQueries, useQuery } from "@tanstack/react-query";
+import { Map as MapIcon, ShieldAlert } from "lucide-react";
 import type { Route } from "next";
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
@@ -13,6 +15,8 @@ import { Section } from "@/Components/Common/Section";
 import { StatTile } from "@/Components/Common/StatTile";
 import { LoadingRows, RequireRole } from "@/Components/Common/States";
 import { RoundStatusBadge, Tone, ToneBadge } from "@/Components/Common/StatusBadge";
+import { Card } from "@/Components/Ui/card";
+import { Progress } from "@/Components/Ui/progress";
 import { useNow } from "@/Hooks/UseNow";
 import { useSession } from "@/Hooks/UseSession";
 import { hasAtLeast } from "@/Lib/Roles";
@@ -58,6 +62,35 @@ function Dashboard(): ReactNode {
     const openRounds = active.rounds.filter((round) => round.status === RoundStatus.Open);
     const roundsNeedingReview = active.rounds.filter((round) => (pending.get(round.id) ?? 0) > 0);
 
+    const pipeline = useQuery({ queryKey: queryKeys.pipeline, queryFn: () => platformApi.pipeline() });
+    const monitoredRound = openRounds[0] ?? active.rounds[0];
+    const telemetry = useQuery({
+        queryKey: queryKeys.telemetry(monitoredRound?.id ?? ""),
+        queryFn: () => platformApi.telemetry(monitoredRound?.id ?? ""),
+        enabled: monitoredRound !== undefined
+    });
+
+    const anomalies = telemetry.data ?? [];
+    const highestSeverity = anomalies.reduce<RaidSeverity>((highest, cur) => {
+        if (cur.severity === RaidSeverity.CriticalRaid) return RaidSeverity.CriticalRaid;
+        if (cur.severity === RaidSeverity.Suspicious && highest !== RaidSeverity.CriticalRaid) return RaidSeverity.Suspicious;
+        return highest;
+    }, RaidSeverity.Normal);
+    const flagCount = anomalies.reduce((acc, cur) => acc + cur.flags.length, 0);
+
+    const telemetryTone =
+        highestSeverity === RaidSeverity.CriticalRaid
+            ? Tone.Negative
+            : highestSeverity === RaidSeverity.Suspicious
+              ? Tone.Warning
+              : Tone.Positive;
+    const telemetryLabel =
+        highestSeverity === RaidSeverity.CriticalRaid
+            ? "Critical"
+            : highestSeverity === RaidSeverity.Suspicious
+              ? "Suspicious"
+              : "Clean";
+
     return (
         <div className="space-y-8">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -84,6 +117,66 @@ function Dashboard(): ReactNode {
                 />
                 <StatTile label="Available tasks" value={available.data?.meta.total ?? "–"} href="/grabbox" />
             </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+                <Card className="gap-3 p-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <MapIcon className="text-muted-foreground size-4" />
+                            <span className="text-sm font-semibold">Production Pipeline</span>
+                        </div>
+                        <Link href="/roadmap" className="text-primary text-xs hover:underline">
+                            Roadmap &rarr;
+                        </Link>
+                    </div>
+                    {pipeline.isPending ? (
+                        <div className="bg-muted/40 h-10 animate-pulse rounded" />
+                    ) : pipeline.data === undefined ? (
+                        <p className="text-muted-foreground text-xs">Pipeline progress unavailable</p>
+                    ) : (
+                        <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                                <span className="text-foreground font-medium">{pipeline.data.stepTitle}</span>
+                                <span className="text-muted-foreground font-mono">{Math.round(pipeline.data.progressPercent)}%</span>
+                            </div>
+                            <Progress value={pipeline.data.progressPercent} className="h-1.5" />
+                            <p className="text-muted-foreground text-[11px]">
+                                Phase {pipeline.data.phaseNumber}: {pipeline.data.phaseTitle}
+                            </p>
+                        </div>
+                    )}
+                </Card>
+
+                <Card className="gap-3 p-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <ShieldAlert className="text-muted-foreground size-4" />
+                            <span className="text-sm font-semibold">Raid Telemetry</span>
+                        </div>
+                        {monitoredRound !== undefined && (
+                            <Link href={`/studio/rounds/${monitoredRound.id}` as Route} className="text-primary text-xs hover:underline">
+                                Inspect &rarr;
+                            </Link>
+                        )}
+                    </div>
+                    {active.isPending || telemetry.isPending ? (
+                        <div className="bg-muted/40 h-10 animate-pulse rounded" />
+                    ) : monitoredRound === undefined ? (
+                        <p className="text-muted-foreground text-xs">No active voting round to monitor</p>
+                    ) : (
+                        <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                                <p className="text-foreground text-xs font-medium">{monitoredRound.title}</p>
+                                <p className="text-muted-foreground text-[11px]">
+                                    {flagCount === 0 ? "0 anomalies detected" : `${flagCount} anomaly flag${flagCount === 1 ? "" : "s"}`}
+                                </p>
+                            </div>
+                            <ToneBadge tone={telemetryTone}>{telemetryLabel}</ToneBadge>
+                        </div>
+                    )}
+                </Card>
+            </div>
+
             <div className="grid gap-8 lg:grid-cols-2">
                 <Section title="Entries awaiting review">
                     {active.isPending ? (

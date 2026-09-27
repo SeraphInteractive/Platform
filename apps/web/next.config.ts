@@ -20,6 +20,7 @@ const nextConfig: NextConfig = {
     images: { unoptimized: true },
     async redirects() {
         return [
+            { source: "/admin", destination: "/studio", permanent: false },
             { source: "/docs", destination: "/guidelines", permanent: false },
             { source: "/progress", destination: "/roadmap", permanent: false }
         ];

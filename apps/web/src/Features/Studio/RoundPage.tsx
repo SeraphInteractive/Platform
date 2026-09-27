@@ -2,7 +2,7 @@
 
 import { Role, RoundStatus, type RoundDetailDto } from "@platform/contracts";
 import { useQuery } from "@tanstack/react-query";
-import { ExternalLink, Pencil } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -22,7 +22,7 @@ import { useSession } from "@/Hooks/UseSession";
 import { formatDateTime, pollTypeLabels } from "@/Lib/Format";
 import { hasAtLeast } from "@/Lib/Roles";
 import { EntryModeration } from "./EntryModeration";
-import { RoundActions, RoundFormDialog } from "./RoundControls";
+import { RoundActions } from "./RoundControls";
 import { RoundIntegrity } from "./RoundIntegrity";
 
 function RoundDetail({ round }: { readonly round: RoundDetailDto }): ReactNode {
@@ -47,18 +47,6 @@ function RoundDetail({ round }: { readonly round: RoundDetailDto }): ReactNode {
                                 Public page
                             </Link>
                         </Button>
-                        {hasAtLeast(user, Role.Supervisor) && round.status !== RoundStatus.Finalized && (
-                            <RoundFormDialog
-                                key={round.updatedAt}
-                                round={round}
-                                trigger={
-                                    <Button variant="outline" size="sm">
-                                        <Pencil />
-                                        Edit
-                                    </Button>
-                                }
-                            />
-                        )}
                         <RoundActions round={round} />
                     </>
                 }

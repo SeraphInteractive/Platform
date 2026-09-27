@@ -24,6 +24,7 @@ import {
     type V2Message
 } from "../Discord/Ui.js";
 
+export const claimButtonPrefix = "claim-task";
 export const reviewButtonPrefix = "review";
 export const deliverablesButtonPrefix = "deliverables";
 
@@ -44,11 +45,12 @@ export function threadStarter(shot: ShotReference, description: string | null): 
                 `-# ${plain(shot.code, 50)}`,
                 details,
                 description === null ? null : plain(description, 1500),
-                "-# Use /take-task in this post to claim it."
+                "-# Click Claim Task or use /take-task to claim."
             ]
                 .filter((line): line is string => line !== null)
                 .join("\n")
-        )
+        ),
+        buttons(actionButton(`${claimButtonPrefix}:${shot.id}`, "Claim Task", ButtonStyle.Primary))
     );
 }
 

@@ -62,7 +62,9 @@ export const setupForumCommand: SlashCommand = {
             throw new UserFacingError("The specified forum channel could not be found.");
         }
         await context.provisioner.ensureForumTags(forum);
+        await context.provisioner.ensureForumPermissions(forum);
         await context.settings.update((settings) => {
+            settings.channels[ChannelPurpose.TaskForum] = forum.id;
             settings.channels[ChannelPurpose.TaskSubmissions] = submissions.id;
             settings.channels[ChannelPurpose.TaskLogs] = log.id;
         });

@@ -326,6 +326,17 @@ export class PlatformApi {
         return (await request("/users/me/specialties", dataEnvelope(userSchema), { method: "PUT", body: { specialties } })).data;
     }
 
+    public async setRoleByDiscord(
+        discordId: string,
+        input: { readonly role: Role; readonly specialties?: readonly Specialty[]; readonly discordUsername?: string }
+    ): Promise<UserDto> {
+        return (
+            await request(`/users/by-discord/${segment(discordId)}/role`, dataEnvelope(userSchema), {
+                method: "PUT",
+                body: input
+            })
+        ).data;
+    }
     public async promote(userId: string): Promise<UserDto> {
         return (await request(`/users/${segment(userId)}/promote`, dataEnvelope(userSchema), { method: "POST" })).data;
     }

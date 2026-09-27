@@ -186,9 +186,11 @@ export class TaskForum {
                 }
                 known.add(existing.id);
                 const tag = this.settings.forumTag(shot.status);
+                const shouldBeLocked = shot.status === ShotStatus.Approved;
                 const stale =
                     existing.name !== this.threadName(reference) ||
-                    (tag !== undefined && (existing.appliedTags.length !== 1 || existing.appliedTags[0] !== tag));
+                    (tag !== undefined && (existing.appliedTags.length !== 1 || existing.appliedTags[0] !== tag)) ||
+                    existing.locked !== shouldBeLocked;
                 if (stale) {
                     await this.rename(reference);
                     await this.setStatus(shot.id, shot.status);

@@ -24,7 +24,16 @@ const environmentSchema = z.object({
         .pipe(z.array(originSchema)),
     DISCORD_GUILD_ID: optional(z.string().regex(/^\d{17,20}$/u)),
     DISCORD_INVITE_URL: optional(z.url({ protocol: /^https$/u })),
-    TURNSTILE_SITE_KEY: optional(z.string().regex(/^[A-Za-z0-9_-]{8,128}$/u))
+    TURNSTILE_SITE_KEY: optional(z.string().regex(/^[A-Za-z0-9_-]{8,128}$/u)),
+    ADMIN_DISCORD_IDS: z
+        .string()
+        .default("")
+        .transform((value) =>
+            value
+                .split(",")
+                .map((item) => item.trim())
+                .filter((item) => /^\d{17,20}$/u.test(item))
+        )
 });
 
 export type WebEnvironment = z.infer<typeof environmentSchema>;

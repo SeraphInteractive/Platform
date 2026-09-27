@@ -11,6 +11,7 @@ import {
     type UserDto
 } from "@platform/contracts";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { UserPlus } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { platformApi } from "@/Api/PlatformApi";
@@ -21,12 +22,15 @@ import { PageHeader } from "@/Components/Common/PageHeader";
 import { Pagination } from "@/Components/Common/Pagination";
 import { EmptyState, ErrorState, LoadingRows, RequireRole } from "@/Components/Common/States";
 import { Tone, ToneBadge } from "@/Components/Common/StatusBadge";
+import { isAdminDiscordId, useSiteConfig } from "@/Components/SiteConfig";
 import { Avatar, AvatarFallback, AvatarImage } from "@/Components/Ui/avatar";
 import { RichTextInputField } from "@/Components/Common/FormField";
 import { MarkdownText } from "@/Components/Common/MarkdownText";
 import { Button } from "@/Components/Ui/button";
 import { Checkbox } from "@/Components/Ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/Components/Ui/dialog";
+import { Input } from "@/Components/Ui/input";
+import { Label } from "@/Components/Ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/Components/Ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/Ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/Ui/table";
@@ -361,15 +365,165 @@ function PeopleTable({ actor }: { readonly actor: UserDto }): ReactNode {
     );
 }
 
+interface AssignDiscordRoleDialogProps {
+    readonly actor: UserDto;
+    readonly trigger: ReactNode;
+}
+
+function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProps): ReactNode {
+    const siteConfig = useSiteConfig();
+    const queryClient = useQueryClient();
+    const [open, setOpen] = useState(false);
+    const [discordId, setDiscordId] = useState("");
+    const [discordUsername, setDiscordUsername] = useState("");
+    const [role, setRole] = useState<Role>(Role.Contributor);
+    const [specialties, setSpecialties] = useState<Specialty[]>([]);
+
+    const roles = grantableRoles(actor);
+    const isSuperadmin = isAdminDiscordId(siteConfig, discordId);
+    const validId = /^\d{17,20}$/u.test(discordId.trim());
+
+    const assign = useMutation({
+        mutationFn: () => {
+            const trimmedUsername = discordUsername.trim();
+            return platformApi.setRoleByDiscord(discordId.trim(), {
+                role,
+                specialties,
+                discordUsername: trimmedUsername.length === 0 ? undefined : trimmedUsername
+            });
+        },
+        onSuccess: (updated) => {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.usersAll });
+            toast.success(`Assigned ${roleLabels[updated.role]} to ${updated.username}.`);
+            setOpen(false);
+            setDiscordId("");
+            setDiscordUsername("");
+            setRole(Role.Contributor);
+            setSpecialties([]);
+        }
+    });
+
+    const onSubmit = (event: React.FormEvent): void => {
+        event.preventDefault();
+        if (validId && !assign.isPending) {
+            assign.mutate();
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>{trigger}</DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Assign role by Discord</DialogTitle>
+                    <DialogDescription>Pre-assign a role and specialties to a user before they log in.</DialogDescription>
+                </DialogHeader>
+                <form onSubmit={onSubmit} className="space-y-4">
+                    <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                            <Label htmlFor="discord-snowflake">Discord Snowflake ID</Label>
+                            {isSuperadmin && <ToneBadge tone={Tone.Positive}>Configured Superadmin</ToneBadge>}
+                        </div>
+                        <Input
+                            id="discord-snowflake"
+                            placeholder="e.g. 965511204372086814"
+                            value={discordId}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                setDiscordId(val);
+                                if (actor.role === Role.Admin && isAdminDiscordId(siteConfig, val)) {
+                                    setRole(Role.Admin);
+                                }
+                            }}
+                            maxLength={20}
+                        />
+                        {discordId.length > 0 && !validId && (
+                            <p className="text-destructive text-xs">Must be a 17-20 digit Discord ID.</p>
+                        )}
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="discord-username">Username (optional hint)</Label>
+                        <Input
+                            id="discord-username"
+                            placeholder="e.g. Lunasa"
+                            value={discordUsername}
+                            onChange={(e) => setDiscordUsername(e.target.value)}
+                            maxLength={64}
+                        />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="discord-role">Studio Role</Label>
+                        <Select value={role} onValueChange={(val) => setRole(val as Role)}>
+                            <SelectTrigger id="discord-role">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {roles.map((r) => (
+                                    <SelectItem key={r} value={r}>
+                                        {roleLabels[r]}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label>Specialties (up to {maximumSpecialties})</Label>
+                        <div className="grid grid-cols-2 gap-2 rounded-md border p-2 text-xs">
+                            {Object.values(Specialty).map((s) => {
+                                const checked = specialties.includes(s);
+                                return (
+                                    <label key={s} className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded px-2 py-1">
+                                        <Checkbox
+                                            checked={checked}
+                                            disabled={!checked && specialties.length >= maximumSpecialties}
+                                            onCheckedChange={(val) => {
+                                                setSpecialties((current) =>
+                                                    val === true ? [...current, s] : current.filter((item) => item !== s)
+                                                );
+                                            }}
+                                        />
+                                        <span>{specialtyLabel(s)}</span>
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button type="submit" disabled={!validId || assign.isPending}>
+                            {assign.isPending ? "Assigning..." : "Assign role"}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function PeopleContent(): ReactNode {
     const { user } = useSession();
     return user === null ? null : <PeopleTable actor={user} />;
 }
 
 export function PeoplePage(): ReactNode {
+    const { user } = useSession();
     return (
         <RequireRole role={Role.Moderator}>
-            <PageHeader title="People" />
+            <PageHeader
+                title="People"
+                actions={
+                    user !== null && hasAtLeast(user, Role.Supervisor) ? (
+                        <AssignDiscordRoleDialog
+                            actor={user}
+                            trigger={
+                                <Button size="sm">
+                                    <UserPlus className="size-4" />
+                                    Assign by Discord
+                                </Button>
+                            }
+                        />
+                    ) : undefined
+                }
+            />
             <PeopleContent />
         </RequireRole>
     );

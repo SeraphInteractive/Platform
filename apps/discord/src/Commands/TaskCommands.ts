@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { DifficultyTier, ReviewDecision, Role, ShotStatus } from "@platform/contracts";
+import { DifficultyTier, ReviewDecision, Role, ShotStatus, type ShotDetailDto } from "@platform/contracts";
 import {
     ChannelType,
     LabelBuilder,
@@ -14,7 +14,13 @@ import {
 } from "discord.js";
 import { Accent, asEdit, buttons, capitalize, divider, ephemeral, linkButton, panel, plain, pluralize, text, when } from "../Discord/Ui.js";
 import { referenceOf } from "../Services/TaskForum.js";
-import { deliverableLinks, deliverablesButtonPrefix, reviewButtonPrefix, reviewOutcome } from "../Views/TaskViews.js";
+import {
+    claimButtonPrefix,
+    deliverableLinks,
+    deliverablesButtonPrefix,
+    reviewButtonPrefix,
+    reviewOutcome
+} from "../Views/TaskViews.js";
 import {
     actingAs,
     hasAtLeast,
@@ -29,14 +35,30 @@ import {
 const reviewModalPrefix = "review-modal";
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
-async function shotInThread(interaction: ChatInputCommandInteraction, context: BotContext): Promise<string> {
+async function resolveShotTarget(
+    interaction: ChatInputCommandInteraction,
+    context: BotContext,
+    taskOption?: string | null
+): Promise<ShotDetailDto> {
+    const raw = taskOption?.trim();
+    if (raw) {
+        if (uuidPattern.test(raw)) {
+            return context.api.getShot(raw);
+        }
+        const all = await context.api.listAllShots();
+        const match = all.find((s) => s.shotCode.toLowerCase() === raw.toLowerCase() || s.id === raw);
+        if (!match) {
+            throw new UserFacingError(`No task found matching "${raw}".`);
+        }
+        return context.api.getShot(match.id);
+    }
     const channel = interaction.channel;
     const inForum = channel !== null && channel.isThread() && channel.parent?.type === ChannelType.GuildForum;
     const shotId = inForum ? await context.forum.resolveShotFor(channel.id) : undefined;
     if (shotId === undefined) {
-        throw new UserFacingError("Run this inside a task post in the task forum.");
+        throw new UserFacingError("Specify a task code (e.g. /take-task task:SC01_A1B2) or run this inside a task post.");
     }
-    return shotId;
+    return context.api.getShot(shotId);
 }
 
 export const createTaskCommand: SlashCommand = {
@@ -91,11 +113,20 @@ export const createTaskCommand: SlashCommand = {
 };
 
 export const takeTaskCommand: SlashCommand = {
-    definition: new SlashCommandBuilder().setName("take-task").setDescription("Claim the task in this post").toJSON(),
+    definition: new SlashCommandBuilder()
+        .setName("take-task")
+        .setDescription("Claim the task in this post or by code")
+        .addStringOption((option) =>
+            option.setName("task").setDescription("Task code (e.g. SC01_A1B2), defaults to current post").setMaxLength(50)
+        )
+        .toJSON(),
     async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        const shotId = await shotInThread(interaction, context);
-        const shot = await actingAs(interaction, context).claimShot(shotId);
+        const target = await resolveShotTarget(interaction, context, interaction.options.getString("task"));
+        if (target.status !== ShotStatus.Available) {
+            throw new UserFacingError(`Task ${target.shotCode} is ${target.status} and cannot be claimed.`);
+        }
+        const shot = await actingAs(interaction, context).claimShot(target.id);
         const due = shot.deadlineAt === null ? "" : ` It's due ${when(shot.deadlineAt)}.`;
         await interaction.editReply(asEdit(ephemeral(panel(null, `It's yours.${due} Use /submit-task here when you're done.`))));
     }
@@ -104,33 +135,49 @@ export const takeTaskCommand: SlashCommand = {
 export const releaseTaskCommand: SlashCommand = {
     definition: new SlashCommandBuilder()
         .setName("release-task")
-        .setDescription("Give up your claim on the task in this post")
+        .setDescription("Give up your claim on the task in this post or by code")
+        .addStringOption((option) =>
+            option.setName("task").setDescription("Task code (e.g. SC01_A1B2), defaults to current post").setMaxLength(50)
+        )
         .addStringOption((option) => option.setName("reason").setDescription("Optional note for the team").setMaxLength(500))
         .toJSON(),
     async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        const shotId = await shotInThread(interaction, context);
-        const shot = await context.api.getShot(shotId);
+        const shot = await resolveShotTarget(interaction, context, interaction.options.getString("task"));
+        if (shot.status === ShotStatus.Approved) {
+            throw new UserFacingError("This task is already completed and cannot be released.");
+        }
+        if (shot.status !== ShotStatus.Claimed) {
+            throw new UserFacingError("Only claimed tasks can be released.");
+        }
         const me = await actingAs(interaction, context).me();
         const isStaff = hasAtLeast(me.role, Role.Supervisor);
         const isClaimant = shot.claimer?.id === me.id;
         if (!isStaff && !isClaimant) {
             throw new UserFacingError("Only the task claimant, department supervisors, or admins can release this task.");
         }
-        await actingAs(interaction, context).releaseShot(shotId, interaction.options.getString("reason")?.trim() ?? null);
-        await interaction.editReply(asEdit(ephemeral(panel(null, "Released. The task is open for someone else."))));
+        await actingAs(interaction, context).releaseShot(shot.id, interaction.options.getString("reason")?.trim() ?? null);
+        await interaction.editReply(asEdit(ephemeral(panel(null, `Released ${shot.shotCode}. The task is open for someone else.`))));
     }
 };
 
 export const submitTaskCommand: SlashCommand = {
     definition: new SlashCommandBuilder()
         .setName("submit-task")
-        .setDescription("Submit deliverables for the task in this post via the Grab-Box UI")
+        .setDescription("Submit deliverables for the task in this post or by code via Grab-Box UI")
+        .addStringOption((option) =>
+            option.setName("task").setDescription("Task code (e.g. SC01_A1B2), defaults to current post").setMaxLength(50)
+        )
         .toJSON(),
     async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        const shotId = await shotInThread(interaction, context);
-        const shot = await context.api.getShot(shotId);
+        const shot = await resolveShotTarget(interaction, context, interaction.options.getString("task"));
+        if (shot.status === ShotStatus.Approved) {
+            throw new UserFacingError("This task is already completed.");
+        }
+        if (shot.status !== ShotStatus.Claimed) {
+            throw new UserFacingError("Only claimed tasks can accept submissions.");
+        }
         const me = await actingAs(interaction, context).me();
         const isStaff = hasAtLeast(me.role, Role.Supervisor);
         const isClaimant = shot.claimer?.id === me.id;
@@ -307,5 +354,22 @@ export const deliverablesButtonHandler: ComponentHandler = {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const shot = await actingAs(interaction, context).getShot(shotId);
         await interaction.editReply(asEdit(deliverableLinks(shot, submissionId)));
+    }
+};
+
+export const claimTaskButtonHandler: ComponentHandler = {
+    prefix: claimButtonPrefix,
+    async handle(interaction: ComponentInteraction, context: BotContext): Promise<void> {
+        if (!interaction.isButton()) {
+            return;
+        }
+        const [, shotId] = interaction.customId.split(":");
+        if (shotId === undefined || !uuidPattern.test(shotId)) {
+            return;
+        }
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const shot = await actingAs(interaction, context).claimShot(shotId);
+        const due = shot.deadlineAt === null ? "" : ` It's due ${when(shot.deadlineAt)}.`;
+        await interaction.editReply(asEdit(ephemeral(panel(null, `It's yours.${due} Use /submit-task here when you're done.`))));
     }
 };

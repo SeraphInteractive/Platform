@@ -19,7 +19,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/Components/Ui/tabs";
 import { useSession } from "@/Hooks/UseSession";
 import { pollTypeLabels, roundStatusLabels } from "@/Lib/Format";
 import { hasAtLeast } from "@/Lib/Roles";
-import { RoundActions, RoundFormDialog } from "./RoundControls";
+import { RoundActions, RoundFormDialog, RoundStatusSelect } from "./RoundControls";
 
 const allStatuses = "all";
 
@@ -82,7 +82,7 @@ function RoundsTable(): ReactNode {
                                             <span className="text-muted-foreground text-xs">{pollTypeLabels[round.pollType]}</span>
                                         </TableCell>
                                         <TableCell>
-                                            <RoundStatusBadge status={round.status} />
+                                            <RoundStatusSelect round={round} />
                                         </TableCell>
                                         <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
                                             {round.opensAt === null && round.closesAt === null ? (

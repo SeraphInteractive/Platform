@@ -28,11 +28,12 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { readonly children: ReactNode }): Promise<ReactNode> {
     const nonce = (await headers()).get("x-nonce") ?? undefined;
     const sidebarOpen = (await cookies()).get("sidebar_state")?.value !== "false";
-    const { DISCORD_GUILD_ID, DISCORD_INVITE_URL, TURNSTILE_SITE_KEY } = env();
+    const { DISCORD_GUILD_ID, DISCORD_INVITE_URL, TURNSTILE_SITE_KEY, ADMIN_DISCORD_IDS } = env();
     const siteConfig = {
         discordGuildId: DISCORD_GUILD_ID ?? null,
         discordInviteUrl: DISCORD_INVITE_URL ?? null,
-        turnstileSiteKey: TURNSTILE_SITE_KEY ?? null
+        turnstileSiteKey: TURNSTILE_SITE_KEY ?? null,
+        adminDiscordIds: ADMIN_DISCORD_IDS
     };
     return (
         <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
