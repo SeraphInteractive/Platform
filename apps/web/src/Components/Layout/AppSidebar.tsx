@@ -120,37 +120,6 @@ export function AppSidebar(): ReactNode {
                         </SidebarMenuItem>
                     )}
                 </SidebarMenu>
-                <nav
-                    aria-label="Legal"
-                    className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 px-2 pb-1 text-xs group-data-[collapsible=icon]:hidden"
-                >
-                    <Link href="/legal/terms" className="hover:text-foreground">
-                        Terms
-                    </Link>
-                    <Link href="/legal/privacy" className="hover:text-foreground">
-                        Privacy
-                    </Link>
-                    <Link href="/legal/acceptable-use" className="hover:text-foreground">
-                        Acceptable use
-                    </Link>
-                </nav>
-                <div
-                    aria-label="Partners"
-                    className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-sidebar-border px-2 pt-2 text-[11px] group-data-[collapsible=icon]:hidden"
-                >
-                    <span className="font-medium text-foreground">Partners:</span>
-                    <a href="https://prismnodes.com/" target="_blank" rel="noopener noreferrer" className="hover:text-foreground">
-                        Prism Nodes
-                    </a>
-                    <span>·</span>
-                    <a href="https://www.youtube.com/@SquaredMediaYT" target="_blank" rel="noopener noreferrer" className="hover:text-foreground">
-                        Squared Media
-                    </a>
-                    <span>·</span>
-                    <a href="https://seraphinteractive.com/" target="_blank" rel="noopener noreferrer" className="hover:text-foreground">
-                        Seraph
-                    </a>
-                </div>
             </SidebarFooter>
             <SidebarRail />
         </Sidebar>
