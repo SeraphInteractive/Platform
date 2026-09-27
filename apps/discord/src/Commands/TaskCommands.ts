@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { DeliverableKind, deliverableContentTypes, DifficultyTier, ReviewDecision, Role, ShotStatus } from "@platform/contracts";
+import { DifficultyTier, ReviewDecision, Role, ShotStatus } from "@platform/contracts";
 import {
     ChannelType,
     LabelBuilder,
@@ -8,13 +8,11 @@ import {
     SlashCommandBuilder,
     TextInputBuilder,
     TextInputStyle,
-    type Attachment,
     type ButtonInteraction,
     type ChatInputCommandInteraction,
     type ModalSubmitInteraction
 } from "discord.js";
-import type { ActingApiClient } from "../Api/PlatformApiClient.js";
-import { Accent, asEdit, capitalize, ephemeral, panel, plain, pluralize, text, when } from "../Discord/Ui.js";
+import { Accent, asEdit, buttons, capitalize, divider, ephemeral, linkButton, panel, plain, pluralize, text, when } from "../Discord/Ui.js";
 import { referenceOf } from "../Services/TaskForum.js";
 import { deliverableLinks, deliverablesButtonPrefix, reviewButtonPrefix, reviewOutcome } from "../Views/TaskViews.js";
 import {
@@ -29,8 +27,6 @@ import {
 } from "./Command.js";
 
 const reviewModalPrefix = "review-modal";
-const maximumAttachmentBytes = 100 * 1024 * 1024;
-const attachmentHosts = new Set(["cdn.discordapp.com", "media.discordapp.net"]);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 async function shotInThread(interaction: ChatInputCommandInteraction, context: BotContext): Promise<string> {
@@ -41,44 +37,6 @@ async function shotInThread(interaction: ChatInputCommandInteraction, context: B
         throw new UserFacingError("Run this inside a task post in the task forum.");
     }
     return shotId;
-}
-
-async function uploadAttachment(api: ActingApiClient, shotId: string, attachment: Attachment, kind: DeliverableKind): Promise<string> {
-    const url = new URL(attachment.url);
-    if (url.protocol !== "https:" || !attachmentHosts.has(url.hostname)) {
-        throw new UserFacingError("Attachments must be uploaded to Discord directly.");
-    }
-    if (attachment.size <= 0 || attachment.size > maximumAttachmentBytes) {
-        throw new UserFacingError("That file is too large to relay through Discord. Upload it on the web app instead.");
-    }
-    const contentType = kind === DeliverableKind.Blend ? "application/octet-stream" : (attachment.contentType?.split(";")[0]?.trim() ?? "");
-    if (!deliverableContentTypes[kind].includes(contentType)) {
-        throw new UserFacingError(
-            kind === DeliverableKind.Video ? "The video must be MP4, WebM or MOV." : "The project file must be a .blend file."
-        );
-    }
-
-    const upload = await api.requestDeliverableUpload(shotId, { kind, fileName: attachment.name, contentType, sizeBytes: attachment.size });
-    const download = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(120_000) });
-    if (!download.ok) {
-        throw new UserFacingError("Discord wouldn't hand over the attachment. Try uploading it again.");
-    }
-    const body = new Uint8Array(await download.arrayBuffer());
-    if (body.byteLength !== attachment.size) {
-        throw new UserFacingError("The attachment changed while it was being uploaded. Try again.");
-    }
-    const stored = await fetch(upload.url, {
-        method: upload.method,
-        headers: upload.headers,
-        body,
-        redirect: "error",
-        signal: AbortSignal.timeout(300_000)
-    });
-    await stored.body?.cancel();
-    if (!stored.ok) {
-        throw new UserFacingError("Storage rejected the upload. Try again, or use the web app.");
-    }
-    return upload.key;
 }
 
 export const createTaskCommand: SlashCommand = {
@@ -167,10 +125,7 @@ export const releaseTaskCommand: SlashCommand = {
 export const submitTaskCommand: SlashCommand = {
     definition: new SlashCommandBuilder()
         .setName("submit-task")
-        .setDescription("Submit your work on the task in this post")
-        .addAttachmentOption((option) => option.setName("video").setDescription("Rendered video (MP4, WebM or MOV)").setRequired(true))
-        .addAttachmentOption((option) => option.setName("blend").setDescription("Project file (.blend)"))
-        .addStringOption((option) => option.setName("notes").setDescription("Anything the reviewer should know").setMaxLength(2000))
+        .setDescription("Submit deliverables for the task in this post via the Grab-Box UI")
         .toJSON(),
     async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -182,17 +137,22 @@ export const submitTaskCommand: SlashCommand = {
         if (!isStaff && !isClaimant) {
             throw new UserFacingError("Only the contributor who claimed this task can submit work for it.");
         }
-        const api = actingAs(interaction, context);
-        const videoKey = await uploadAttachment(api, shotId, interaction.options.getAttachment("video", true), DeliverableKind.Video);
-        const blend = interaction.options.getAttachment("blend");
-        const blendKey = blend === null ? null : await uploadAttachment(api, shotId, blend, DeliverableKind.Blend);
-        const submission = await api.submitWork(shotId, {
-            videoKey,
-            blendKey,
-            notes: interaction.options.getString("notes")?.trim() ?? null
-        });
+        const grabboxUrl = `${context.configuration.webAppUrl}/grabbox?shotId=${shot.id}`;
         await interaction.editReply(
-            asEdit(ephemeral(panel(null, `Submitted version ${submission.version}. A supervisor will review it.`)))
+            asEdit(
+                ephemeral(
+                    panel(
+                        Accent.Info,
+                        `### Deliverable Submission: **${plain(shot.shotCode, 50)}**\n` +
+                            `To prevent Discord file size limits and relay failures, submit full video renders and Blender project files directly through the Grab-Box UI.\n\n` +
+                            `• **Task:** ${plain(shot.title, 100)}\n` +
+                            `• **Status:** ${capitalize(shot.status)}\n` +
+                            `• **Claimant:** <@${interaction.user.id}>`,
+                        divider(),
+                        buttons(linkButton("Open Grab-Box & Submit", grabboxUrl))
+                    )
+                )
+            )
         );
     }
 };
