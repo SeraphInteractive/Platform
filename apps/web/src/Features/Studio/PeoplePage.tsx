@@ -23,14 +23,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/Components/Ui/textarea";
 import { useSession } from "@/Hooks/UseSession";
 import { formatDateTime, specialtyLabel } from "@/Lib/Format";
-import { hasAtLeast, outranks, roleLabels, rolesByRank } from "@/Lib/Roles";
+import { hasAtLeast, isGrantable, outranks, roleLabels, rolesByRank } from "@/Lib/Roles";
 import { safeHttpUrl } from "@/Lib/SafeUrl";
 import { cn } from "@/Lib/Utils";
 
 const anyRole = "any";
 
 function grantableRoles(actor: UserDto): Role[] {
-    return rolesByRank.filter((role) => actor.role === Role.Admin || outranks(actor.role, role));
+    return rolesByRank.filter((role) => isGrantable(role) && (hasAtLeast(actor, Role.Admin) || outranks(actor.role, role)));
 }
 
 function canManage(actor: UserDto, target: ModeratedUserDto): boolean {

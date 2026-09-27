@@ -9,13 +9,13 @@ import { describeError } from "@/Api/ApiClient";
 import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
 import { uploadToStorage } from "@/Api/Uploads";
+import { FilePicker } from "@/Components/Common/FilePicker";
 import { Button } from "@/Components/Ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/Components/Ui/dialog";
 import { Input } from "@/Components/Ui/input";
 import { Label } from "@/Components/Ui/label";
 import { Progress } from "@/Components/Ui/progress";
 import { Textarea } from "@/Components/Ui/textarea";
-import { formatBytes } from "@/Lib/Format";
 
 const maximumTitleLength = 255;
 const maximumTitleWords = 30;
@@ -153,20 +153,15 @@ export function SubmitEntryDialog({ round }: { readonly round: RoundDetailDto })
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor={`${formId}-media`}>Media (optional)</Label>
-                        <Input
+                        <FilePicker
                             id={`${formId}-media`}
-                            type="file"
+                            file={draft.file}
                             accept={acceptedMediaTypes.join(",")}
-                            onChange={(event) => {
-                                const file = event.target.files?.[0] ?? null;
+                            disabled={submit.isPending}
+                            onChange={(file) => {
                                 setDraft((current) => ({ ...current, file }));
                             }}
                         />
-                        {draft.file !== null && (
-                            <p className="text-muted-foreground text-xs">
-                                {draft.file.name} · {formatBytes(draft.file.size)}
-                            </p>
-                        )}
                         {uploadProgress !== null && <Progress value={uploadProgress * 100} aria-label="Upload progress" />}
                     </div>
                     {problem !== null && (draft.title.length > 0 || draft.file !== null) && (

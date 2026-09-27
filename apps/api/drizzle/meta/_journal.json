@@ -15,6 +15,13 @@
       "when": 1790511795849,
       "tag": "0001_pipeline_progress_and_specialties",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790531591750,
+      "tag": "0002_super_admin_role",
+      "breakpoints": true
     }
   ]
 }

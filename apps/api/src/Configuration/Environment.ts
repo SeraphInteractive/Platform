@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { maximumSuperAdmins } from "../Domain/Roles.js";
 
 const optionalString = z
     .string()
@@ -79,6 +80,9 @@ const environmentObject = z.object({
     DISCORD_CLIENT_SECRET: z.string().min(1),
     DISCORD_REDIRECT_URI: z.url({ protocol: /^https?$/u }),
 
+    SUPER_ADMIN_DISCORD_IDS: snowflakeList.pipe(
+        z.array(snowflake).max(maximumSuperAdmins, `must list at most ${maximumSuperAdmins} users`)
+    ),
     ADMIN_DISCORD_IDS: snowflakeList,
     SUPERVISOR_DISCORD_IDS: snowflakeList,
     MODERATOR_DISCORD_IDS: snowflakeList,

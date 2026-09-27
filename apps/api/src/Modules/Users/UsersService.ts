@@ -2,7 +2,7 @@ import { asc, count, desc, eq, inArray } from "drizzle-orm";
 import { ConflictError, ErrorCode, ForbiddenError, NotFoundError } from "../../Common/Errors/ApplicationError.js";
 import { createPage, offsetOf, type Page, type PaginationQuery } from "../../Common/Http/Schemas.js";
 import type { Actor } from "../../Common/Security/Principal.js";
-import { isHigherThan, normalizeSpecialties, Role, type Specialty } from "../../Domain/Roles.js";
+import { hasAtLeast, isGrantable, isHigherThan, normalizeSpecialties, Role, type Specialty } from "../../Domain/Roles.js";
 import type { Database, Transaction } from "../../Infrastructure/Database/Database.js";
 import { users, type UserRecord } from "../../Infrastructure/Database/Schema.js";
 import { NotificationType, personOfActor, personOfUser, type Notifier } from "../../Infrastructure/Notifications/Notification.js";
@@ -178,7 +178,10 @@ export class UsersService {
     }
 
     private assertCanGrant(actor: Actor, role: Role): void {
-        if (actor.role !== Role.Admin && !isHigherThan(actor.role, role)) {
+        if (!isGrantable(role)) {
+            throw new ForbiddenError("Super admins are assigned through the environment only.");
+        }
+        if (!hasAtLeast(actor.role, Role.Admin) && !isHigherThan(actor.role, role)) {
             throw new ForbiddenError("You can only grant roles below your own.");
         }
     }

@@ -41,7 +41,7 @@ export const testConfiguration: ApplicationConfiguration = {
         clientSecret: "secret",
         redirectUri: "https://api.example.test/api/v1/auth/discord/callback"
     },
-    roleAssignments: { admins: [adminDiscordId], supervisors: [], moderators: [], seniorContributors: [] },
+    roleAssignments: { superAdmins: [], admins: [adminDiscordId], supervisors: [], moderators: [], seniorContributors: [] },
     storage: {
         endpoint: undefined,
         region: "auto",

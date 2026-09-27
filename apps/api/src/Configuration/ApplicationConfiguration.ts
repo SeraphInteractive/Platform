@@ -44,6 +44,7 @@ export interface DiscordConfiguration {
 }
 
 export interface RoleAssignmentConfiguration {
+    readonly superAdmins: readonly string[];
     readonly admins: readonly string[];
     readonly supervisors: readonly string[];
     readonly moderators: readonly string[];
@@ -113,6 +114,7 @@ export function createConfiguration(environment: Environment): ApplicationConfig
             redirectUri: environment.DISCORD_REDIRECT_URI
         },
         roleAssignments: {
+            superAdmins: environment.SUPER_ADMIN_DISCORD_IDS,
             admins: environment.ADMIN_DISCORD_IDS,
             supervisors: environment.SUPERVISOR_DISCORD_IDS,
             moderators: environment.MODERATOR_DISCORD_IDS,

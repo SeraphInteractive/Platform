@@ -6,7 +6,8 @@ export enum Role {
     SeniorContributor = "senior_contributor",
     Moderator = "moderator",
     Supervisor = "supervisor",
-    Admin = "admin"
+    Admin = "admin",
+    SuperAdmin = "super_admin"
 }
 
 export enum Specialty {

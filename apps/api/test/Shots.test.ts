@@ -208,7 +208,11 @@ describe("shot grab-box", () => {
             payload: { discordThreadId: threadId }
         });
         expect(bound.statusCode).toBe(200);
-        const lookup = await context.application.inject({ method: "GET", url: `/api/v1/shot-thread-maps/by-thread/${threadId}`, headers: { authorization: `Bearer ${serviceToken}` } });
+        const lookup = await context.application.inject({
+            method: "GET",
+            url: `/api/v1/shot-thread-maps/by-thread/${threadId}`,
+            headers: { authorization: `Bearer ${serviceToken}` }
+        });
         expect(json<Envelope<{ shotId: string }>>(lookup).data.shotId).toBe(shotId);
         const unknownShot = await context.application.inject({
             method: "PUT",

@@ -57,9 +57,9 @@ describe("ballot ranking", () => {
 });
 
 describe("roles", () => {
-    it("orders roles from voter to admin", () => {
+    it("orders roles from voter to super admin", () => {
         expect(rolesByRank[0]).toBe(Role.Voter);
-        expect(rolesByRank.at(-1)).toBe(Role.Admin);
+        expect(rolesByRank.at(-1)).toBe(Role.SuperAdmin);
     });
 
     it("checks minimum roles", () => {

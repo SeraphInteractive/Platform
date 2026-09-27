@@ -173,6 +173,9 @@ export class AuthService {
 
     private assignedRoleFor(discordId: string): Role {
         const assignments = this.roleAssignments;
+        if (assignments.superAdmins.includes(discordId)) {
+            return Role.SuperAdmin;
+        }
         if (assignments.admins.includes(discordId)) {
             return Role.Admin;
         }

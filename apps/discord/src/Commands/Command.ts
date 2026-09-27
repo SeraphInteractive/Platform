@@ -43,7 +43,7 @@ export interface ComponentHandler {
 
 export class UserFacingError extends Error {}
 
-const roleOrder: readonly Role[] = [Role.Voter, Role.Contributor, Role.SeniorContributor, Role.Moderator, Role.Supervisor, Role.Admin];
+const roleOrder: readonly Role[] = [Role.Voter, Role.Contributor, Role.SeniorContributor, Role.Moderator, Role.Supervisor, Role.Admin, Role.SuperAdmin];
 
 export function hasAtLeast(role: Role, required: Role): boolean {
     return roleOrder.indexOf(role) >= roleOrder.indexOf(required);

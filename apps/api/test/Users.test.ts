@@ -22,6 +22,30 @@ describe("user management", () => {
         expect(json<{ meta: { perPage: number } }>(list).meta.perPage).toBe(5);
     });
 
+    it("never grants the super admin role through the api", async () => {
+        const superAdmin = await context.createUser(Role.SuperAdmin);
+        const admin = await context.createUser(Role.Admin);
+        const target = await context.createUser(Role.Voter);
+
+        for (const actor of [superAdmin, admin]) {
+            const response = await context.application.inject({
+                method: "PATCH",
+                url: `/api/v1/users/${target.record.id}/role`,
+                headers: actor.headers,
+                payload: { role: Role.SuperAdmin }
+            });
+            expect(response.statusCode).toBe(403);
+        }
+
+        const demoteAdmin = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${admin.record.id}/role`,
+            headers: superAdmin.headers,
+            payload: { role: Role.Supervisor }
+        });
+        expect(demoteAdmin.statusCode).toBe(200);
+    });
+
     it("prevents supervisors from escalating privileges", async () => {
         const supervisor = await context.createUser(Role.Supervisor);
         const target = await context.createUser(Role.Voter);

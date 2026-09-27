@@ -8,12 +8,11 @@ import { describeError } from "@/Api/ApiClient";
 import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
 import { uploadToStorage } from "@/Api/Uploads";
+import { FilePicker } from "@/Components/Common/FilePicker";
 import { Button } from "@/Components/Ui/button";
-import { Input } from "@/Components/Ui/input";
 import { Label } from "@/Components/Ui/label";
 import { Progress } from "@/Components/Ui/progress";
 import { Textarea } from "@/Components/Ui/textarea";
-import { formatBytes } from "@/Lib/Format";
 
 const maximumNotesLength = 2000;
 const blendContentType = "application/octet-stream";
@@ -104,26 +103,25 @@ export function SubmitWorkForm({ shot, onSubmitted }: { readonly shot: ShotDetai
             <p className="text-sm font-medium">Submit your work</p>
             <div className="space-y-2">
                 <Label htmlFor={`${formId}-video`}>Rendered video</Label>
-                <Input
+                <FilePicker
                     id={`${formId}-video`}
-                    type="file"
+                    file={draft.video}
                     required
                     accept={deliverableContentTypes[DeliverableKind.Video].join(",")}
-                    onChange={(event) => {
-                        const video = event.target.files?.[0] ?? null;
+                    disabled={submit.isPending}
+                    onChange={(video) => {
                         setDraft((current) => ({ ...current, video }));
                     }}
                 />
-                {draft.video !== null && <p className="text-muted-foreground text-xs">{formatBytes(draft.video.size)}</p>}
             </div>
             <div className="space-y-2">
                 <Label htmlFor={`${formId}-blend`}>Project file (.blend, optional)</Label>
-                <Input
+                <FilePicker
                     id={`${formId}-blend`}
-                    type="file"
+                    file={draft.blend}
                     accept=".blend"
-                    onChange={(event) => {
-                        const blend = event.target.files?.[0] ?? null;
+                    disabled={submit.isPending}
+                    onChange={(blend) => {
                         setDraft((current) => ({ ...current, blend }));
                     }}
                 />

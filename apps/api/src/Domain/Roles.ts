@@ -8,10 +8,12 @@ const roleRanks: Readonly<Record<Role, number>> = Object.freeze({
     [Role.SeniorContributor]: 3,
     [Role.Moderator]: 4,
     [Role.Supervisor]: 5,
-    [Role.Admin]: 6
+    [Role.Admin]: 6,
+    [Role.SuperAdmin]: 7
 });
 
 const specialtyRoles: ReadonlySet<Role> = new Set([
+    Role.SuperAdmin,
     Role.Admin,
     Role.Supervisor,
     Role.Moderator,
@@ -19,6 +21,12 @@ const specialtyRoles: ReadonlySet<Role> = new Set([
     Role.Contributor,
     Role.Voter
 ]);
+
+export const maximumSuperAdmins = 2;
+
+export function isGrantable(role: Role): boolean {
+    return role !== Role.SuperAdmin;
+}
 
 export function rankOf(role: Role): number {
     return roleRanks[role];
