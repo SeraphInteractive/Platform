@@ -25,9 +25,13 @@ export class LocalMediaStorage implements ObjectStorage {
         appUrl = ""
     ) {
         this.s3Storage = new S3ObjectStorage(configuration);
-        this.localDir = resolve(process.cwd(), "storage", "media");
-        if (!existsSync(this.localDir)) {
-            mkdirSync(this.localDir, { recursive: true });
+        this.localDir = process.env.STORAGE_MEDIA_DIR || resolve("/tmp", "storage", "media");
+        try {
+            if (!existsSync(this.localDir)) {
+                mkdirSync(this.localDir, { recursive: true });
+            }
+        } catch {
+            // ignore if read-only during initialization
         }
         this.baseUrl = (configuration.mediaPublicUrl || appUrl).replace(/\/+$/u, "");
     }
