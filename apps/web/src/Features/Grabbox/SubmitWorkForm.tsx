@@ -1,0 +1,155 @@
+"use client";
+
+import { DeliverableKind, deliverableContentTypes, type ShotDetailDto } from "@platform/contracts";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useId, useState, type SubmitEvent, type ReactNode } from "react";
+import { toast } from "sonner";
+import { describeError } from "@/Api/ApiClient";
+import { platformApi } from "@/Api/PlatformApi";
+import { queryKeys } from "@/Api/QueryKeys";
+import { uploadToStorage } from "@/Api/Uploads";
+import { Button } from "@/Components/Ui/button";
+import { Input } from "@/Components/Ui/input";
+import { Label } from "@/Components/Ui/label";
+import { Progress } from "@/Components/Ui/progress";
+import { Textarea } from "@/Components/Ui/textarea";
+import { formatBytes } from "@/Lib/Format";
+
+const maximumNotesLength = 2000;
+const blendContentType = "application/octet-stream";
+
+interface WorkDraft {
+    readonly video: File | null;
+    readonly blend: File | null;
+    readonly notes: string;
+}
+
+function validate(draft: WorkDraft): string | null {
+    if (draft.video === null) {
+        return "Attach the rendered video.";
+    }
+    if (!deliverableContentTypes[DeliverableKind.Video].includes(draft.video.type)) {
+        return "The video must be MP4, WebM or MOV.";
+    }
+    if (draft.blend !== null && !draft.blend.name.toLowerCase().endsWith(".blend")) {
+        return "The project file must be a .blend file.";
+    }
+    if (draft.notes.trim().length > maximumNotesLength) {
+        return `Keep notes under ${maximumNotesLength} characters.`;
+    }
+    return null;
+}
+
+export function SubmitWorkForm({ shot, onSubmitted }: { readonly shot: ShotDetailDto; readonly onSubmitted: () => void }): ReactNode {
+    const formId = useId();
+    const queryClient = useQueryClient();
+    const [draft, setDraft] = useState<WorkDraft>({ video: null, blend: null, notes: "" });
+    const [progress, setProgress] = useState<{ readonly label: string; readonly value: number } | null>(null);
+
+    const submit = useMutation({
+        mutationFn: async (input: WorkDraft) => {
+            if (input.video === null) {
+                throw new Error("Missing video.");
+            }
+            const videoUpload = await platformApi.requestDeliverableUpload(shot.id, {
+                kind: DeliverableKind.Video,
+                fileName: input.video.name,
+                contentType: input.video.type,
+                sizeBytes: input.video.size
+            });
+            await uploadToStorage(videoUpload, input.video, (value) => {
+                setProgress({ label: "Uploading video", value });
+            });
+            let blendKey: string | null = null;
+            if (input.blend !== null) {
+                const blendUpload = await platformApi.requestDeliverableUpload(shot.id, {
+                    kind: DeliverableKind.Blend,
+                    fileName: input.blend.name,
+                    contentType: blendContentType,
+                    sizeBytes: input.blend.size
+                });
+                await uploadToStorage(blendUpload, input.blend, (value) => {
+                    setProgress({ label: "Uploading project file", value });
+                });
+                blendKey = blendUpload.key;
+            }
+            const notes = input.notes.trim();
+            return platformApi.submitWork(shot.id, { videoKey: videoUpload.key, blendKey, notes: notes.length === 0 ? null : notes });
+        },
+        onSuccess: (submission) => {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.shot(shot.id) });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.shotsAll });
+            toast.success(`Version ${submission.version} submitted for review.`);
+            setDraft({ video: null, blend: null, notes: "" });
+            onSubmitted();
+        },
+        onError: (error) => {
+            toast.error(describeError(error));
+        },
+        onSettled: () => {
+            setProgress(null);
+        }
+    });
+
+    const problem = validate(draft);
+    const onSubmit = (event: SubmitEvent<HTMLFormElement>): void => {
+        event.preventDefault();
+        if (problem === null && !submit.isPending) {
+            submit.mutate(draft);
+        }
+    };
+
+    return (
+        <form onSubmit={onSubmit} className="space-y-4 border p-4">
+            <p className="text-sm font-medium">Submit your work</p>
+            <div className="space-y-2">
+                <Label htmlFor={`${formId}-video`}>Rendered video</Label>
+                <Input
+                    id={`${formId}-video`}
+                    type="file"
+                    required
+                    accept={deliverableContentTypes[DeliverableKind.Video].join(",")}
+                    onChange={(event) => {
+                        const video = event.target.files?.[0] ?? null;
+                        setDraft((current) => ({ ...current, video }));
+                    }}
+                />
+                {draft.video !== null && <p className="text-muted-foreground text-xs">{formatBytes(draft.video.size)}</p>}
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor={`${formId}-blend`}>Project file (.blend, optional)</Label>
+                <Input
+                    id={`${formId}-blend`}
+                    type="file"
+                    accept=".blend"
+                    onChange={(event) => {
+                        const blend = event.target.files?.[0] ?? null;
+                        setDraft((current) => ({ ...current, blend }));
+                    }}
+                />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor={`${formId}-notes`}>Notes for the reviewer (optional)</Label>
+                <Textarea
+                    id={`${formId}-notes`}
+                    rows={3}
+                    maxLength={maximumNotesLength}
+                    value={draft.notes}
+                    onChange={(event) => {
+                        setDraft((current) => ({ ...current, notes: event.target.value }));
+                    }}
+                />
+            </div>
+            {progress !== null && (
+                <div className="space-y-1">
+                    <p className="text-muted-foreground text-xs">{progress.label}…</p>
+                    <Progress value={progress.value * 100} aria-label={progress.label} />
+                </div>
+            )}
+            {problem !== null && draft.video !== null && <p className="text-destructive text-xs">{problem}</p>}
+            <Button type="submit" disabled={problem !== null || submit.isPending}>
+                {submit.isPending ? "Submitting…" : "Submit for review"}
+            </Button>
+        </form>
+    );
+}

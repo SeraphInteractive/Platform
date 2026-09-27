@@ -194,6 +194,29 @@ services:
       api:
         condition: service_healthy
 
+  web:
+    <<: *api-hardening
+    image: platform-web
+    build:
+      context: .
+      target: web
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+      WEB_APP_URL: ${WEB_APP_URL:?WEB_APP_URL is required}
+      API_INTERNAL_URL: http://api:3333
+      API_PUBLIC_URL: ${APP_URL:?APP_URL is required}
+      STORAGE_ORIGINS: ${WEB_STORAGE_ORIGINS:-}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+      DISCORD_INVITE_URL: ${DISCORD_INVITE_URL:-}
+    networks:
+      - edge
+    depends_on:
+      api:
+        condition: service_healthy
+
 networks:
   backend:
     internal: true
