@@ -91,7 +91,10 @@ export async function replyWithError(
     logger: Logger
 ): Promise<void> {
     const payload = notice(describeError(error, logger), Accent.Danger);
-    if (interaction.deferred || interaction.replied) {
+    if (interaction.deferred && !interaction.replied) {
+        // edit existing deferred placeholder so the spinner terminates
+        await interaction.editReply(payload).catch(() => undefined);
+    } else if (interaction.replied) {
         await interaction.followUp(payload).catch(() => undefined);
     } else {
         await interaction.reply(payload).catch(() => undefined);

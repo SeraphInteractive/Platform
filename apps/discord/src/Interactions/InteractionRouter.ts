@@ -5,6 +5,7 @@ import { assignRoleCommand, blacklistCommand } from "../Commands/ModerationComma
 import { entryPageHandler, roundCommands, roundSelectHandler } from "../Commands/RoundCommands.js";
 import { botSetupCommand, setChannelCommand, setupForumCommand } from "../Commands/SetupCommands.js";
 import {
+    availableTasksCommand,
     createTaskCommand,
     deliverablesButtonHandler,
     releaseTaskCommand,
@@ -22,6 +23,7 @@ export const slashCommands: readonly SlashCommand[] = [
     ...roundCommands,
     blacklistCommand,
     assignRoleCommand,
+    availableTasksCommand,
     createTaskCommand,
     takeTaskCommand,
     releaseTaskCommand,

@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { DeliverableKind, deliverableContentTypes, DifficultyTier, ReviewDecision, Role } from "@platform/contracts";
+import { DeliverableKind, deliverableContentTypes, DifficultyTier, ReviewDecision, Role, ShotStatus } from "@platform/contracts";
 import {
     ChannelType,
     LabelBuilder,
@@ -14,11 +14,12 @@ import {
     type ModalSubmitInteraction
 } from "discord.js";
 import type { ActingApiClient } from "../Api/PlatformApiClient.js";
-import { asEdit, ephemeral, panel, plain, pluralize, text, when } from "../Discord/Ui.js";
+import { Accent, asEdit, capitalize, ephemeral, panel, plain, pluralize, text, when } from "../Discord/Ui.js";
 import { referenceOf } from "../Services/TaskForum.js";
 import { deliverableLinks, deliverablesButtonPrefix, reviewButtonPrefix, reviewOutcome } from "../Views/TaskViews.js";
 import {
     actingAs,
+    hasAtLeast,
     requirePlatformRole,
     UserFacingError,
     type BotContext,
@@ -112,6 +113,7 @@ export const createTaskCommand: SlashCommand = {
         .toJSON(),
     async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        await requirePlatformRole(interaction, context, Role.Supervisor);
         const scene = interaction.options.getInteger("scene", true);
         const code =
             interaction.options.getString("code")?.trim() ??
@@ -150,7 +152,14 @@ export const releaseTaskCommand: SlashCommand = {
     async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
         const shotId = shotInThread(interaction, context);
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        await actingAs(interaction, context).releaseShot(shotId, interaction.options.getString("reason"));
+        const shot = await context.api.getShot(shotId);
+        const me = await actingAs(interaction, context).me();
+        const isStaff = hasAtLeast(me.role, Role.Supervisor);
+        const isClaimant = shot.claimer?.id === me.id;
+        if (!isStaff && !isClaimant) {
+            throw new UserFacingError("Only the task claimant, department supervisors, or admins can release this task.");
+        }
+        await actingAs(interaction, context).releaseShot(shotId, interaction.options.getString("reason")?.trim() ?? null);
         await interaction.editReply(asEdit(ephemeral(panel(null, "Released. The task is open for someone else."))));
     }
 };
@@ -166,6 +175,13 @@ export const submitTaskCommand: SlashCommand = {
     async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
         const shotId = shotInThread(interaction, context);
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const shot = await context.api.getShot(shotId);
+        const me = await actingAs(interaction, context).me();
+        const isStaff = hasAtLeast(me.role, Role.Supervisor);
+        const isClaimant = shot.claimer?.id === me.id;
+        if (!isStaff && !isClaimant) {
+            throw new UserFacingError("Only the contributor who claimed this task can submit work for it.");
+        }
         const api = actingAs(interaction, context);
         const videoKey = await uploadAttachment(api, shotId, interaction.options.getAttachment("video", true), DeliverableKind.Video);
         const blend = interaction.options.getAttachment("blend");
@@ -178,6 +194,59 @@ export const submitTaskCommand: SlashCommand = {
         await interaction.editReply(
             asEdit(ephemeral(panel(null, `Submitted version ${submission.version}. A supervisor will review it.`)))
         );
+    }
+};
+
+export const availableTasksCommand: SlashCommand = {
+    definition: new SlashCommandBuilder()
+        .setName("available-tasks")
+        .setDescription("View all tasks currently available in the grab-box")
+        .addStringOption((option) =>
+            option
+                .setName("difficulty")
+                .setDescription("Filter by difficulty tier")
+                .setRequired(false)
+                .addChoices(
+                    { name: "Easy (5 days)", value: DifficultyTier.Easy },
+                    { name: "Medium (7 days)", value: DifficultyTier.Medium },
+                    { name: "Hard (10 days)", value: DifficultyTier.Hard },
+                    { name: "Complex (14 days)", value: DifficultyTier.Complex }
+                )
+        )
+        .toJSON(),
+    async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const difficulty = interaction.options.getString("difficulty") as DifficultyTier | null;
+        const allShots = await context.api.listAllShots();
+        const available = allShots.filter(
+            (shot) => shot.status === ShotStatus.Available && (difficulty === null || shot.difficultyTier === difficulty)
+        );
+
+        if (available.length === 0) {
+            await interaction.editReply(
+                asEdit(
+                    ephemeral(
+                        panel(
+                            null,
+                            difficulty
+                                ? `No available **${difficulty}** tasks in the grab-box right now.`
+                                : "No available tasks in the grab-box right now."
+                        )
+                    )
+                )
+            );
+            return;
+        }
+
+        const lines = available.slice(0, 15).map((shot) => {
+            const threadId = context.forum.threadFor(shot.id);
+            const destination = threadId !== undefined ? `<#${threadId}>` : `Scene ${shot.sceneNumber}`;
+            return `• **${plain(shot.shotCode, 50)}** - ${plain(shot.title, 80)} (${capitalize(shot.difficultyTier)})\n  ↳ ${destination}`;
+        });
+
+        const overflow = available.length > 15 ? `\n\n-# …and ${available.length - 15} more available tasks.` : "";
+        const body = `### Available Tasks (${available.length})\n${lines.join("\n")}${overflow}\n\n-# Use \`/take-task\` in a task post to claim it.`;
+        await interaction.editReply(asEdit(ephemeral(panel(Accent.Info, body))));
     }
 };
 

@@ -49,10 +49,18 @@ export const setupForumCommand: SlashCommand = {
         .toJSON(),
     async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
         requireManageGuild(interaction);
+        if (interaction.guild === null) {
+            throw new UserFacingError("Run this inside the server.");
+        }
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        const forum = interaction.options.getChannel("forum", true, [ChannelType.GuildForum]);
+        const forumOption = interaction.options.getChannel("forum", true, [ChannelType.GuildForum]);
         const submissions = interaction.options.getChannel("submissions", true, [ChannelType.GuildText]);
         const log = interaction.options.getChannel("log", true, [ChannelType.GuildText]);
+        // fetch the full guild forum channel instance so tag mutations succeed
+        const forum = await interaction.guild.channels.fetch(forumOption.id);
+        if (forum === null || forum.type !== ChannelType.GuildForum) {
+            throw new UserFacingError("The specified forum channel could not be found.");
+        }
         await context.provisioner.ensureForumTags(forum);
         await context.settings.update((settings) => {
             settings.channels[ChannelPurpose.TaskSubmissions] = submissions.id;

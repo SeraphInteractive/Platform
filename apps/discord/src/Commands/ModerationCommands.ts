@@ -64,8 +64,10 @@ export const assignRoleCommand: SlashCommand = {
         const api = actingAs(interaction, context);
         const reason = `${interaction.options.getString("reason") ?? "Assigned with /assign-role"} (by ${interaction.user.username})`;
 
-        const specialtiesOf = (holder: GuildMember, extra?: Specialty): Specialty[] => {
+        const specialtiesOf = (holder: GuildMember, extra?: Specialty, excludeRoleId?: string): Specialty[] => {
+            // exclude role being stripped from specialty list
             const specialties = holder.roles.cache
+                .filter((held) => held.id !== excludeRoleId)
                 .map((held) => findStudioRole(held.name)?.specialty)
                 .filter((value): value is Specialty => value !== undefined);
             return [...new Set(extra === undefined ? specialties : [extra, ...specialties])].slice(0, 2);
@@ -82,7 +84,7 @@ export const assignRoleCommand: SlashCommand = {
                     (held) => held.id !== role.id && isLeadership(findStudioRole(held.name)?.tier ?? 3)
                 );
                 if (!keepsLeadership) {
-                    await api.setRole(holder.id, Role.Contributor, specialtiesOf(holder), holder.user.globalName ?? holder.user.username);
+                    await api.setRole(holder.id, Role.Contributor, specialtiesOf(holder, undefined, role.id), holder.user.globalName ?? holder.user.username);
                 }
                 previous.push(holder);
             }

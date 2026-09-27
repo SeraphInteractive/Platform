@@ -105,6 +105,7 @@ export function analyzeRaidRisk(
 export function calculateVelocityZScore(recentCount: number, trailingHourCount: number): number {
     const baselinePerWindow = Math.max(0, trailingHourCount - recentCount) / (windowsPerHour - 1);
     if (baselinePerWindow === 0) {
+        // no preceding baseline history to evaluate velocity burst against
         return 0;
     }
     return (recentCount - baselinePerWindow) / Math.max(1, Math.sqrt(baselinePerWindow));
