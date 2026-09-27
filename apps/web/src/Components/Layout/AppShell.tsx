@@ -22,6 +22,7 @@ import { TermsGate } from "@/Features/Legal/TermsGate";
 import { loginHref, useLogout, useSession } from "@/Hooks/UseSession";
 import { roleLabels } from "@/Lib/Roles";
 import { safeHttpUrl } from "@/Lib/SafeUrl";
+import { AppFooter } from "./AppFooter";
 import { AppSidebar } from "./AppSidebar";
 import { BreadcrumbProvider, Breadcrumbs } from "./Breadcrumbs";
 import { CommandMenu } from "./CommandMenu";
@@ -135,6 +136,7 @@ export function AppShell({ defaultOpen, children }: { readonly defaultOpen: bool
                     <div id="main" className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
                         <TermsGate>{children}</TermsGate>
                     </div>
+                    <AppFooter />
                 </SidebarInset>
             </BreadcrumbProvider>
         </SidebarProvider>
