@@ -21,7 +21,7 @@ export class LocalMediaStorage implements ObjectStorage {
     private readonly baseUrl: string;
 
     public constructor(
-        private readonly configuration: StorageConfiguration,
+        configuration: StorageConfiguration,
         appUrl = ""
     ) {
         this.s3Storage = new S3ObjectStorage(configuration);
