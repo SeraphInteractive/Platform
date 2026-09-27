@@ -15,7 +15,7 @@ COPY apps/api/package.json apps/api/
 COPY apps/discord/package.json apps/discord/
 
 FROM base AS build
-RUN --mount=type=cache,target=/root/.npm npm ci --ignore-scripts
+RUN npm ci --ignore-scripts
 COPY tsconfig.base.json tsconfig.json ./
 COPY packages/scoring/tsconfig.json packages/scoring/
 COPY packages/scoring/src packages/scoring/src
@@ -28,10 +28,10 @@ COPY apps/discord/src apps/discord/src
 RUN npx tsc -b
 
 FROM base AS api-dependencies
-RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --ignore-scripts --workspace @platform/api
+RUN npm ci --omit=dev --ignore-scripts --workspace @platform/api
 
 FROM base AS discord-dependencies
-RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --ignore-scripts --workspace @platform/discord
+RUN npm ci --omit=dev --ignore-scripts --workspace @platform/discord
 
 FROM ${NODE_IMAGE} AS runtime
 RUN apk upgrade --no-cache \
