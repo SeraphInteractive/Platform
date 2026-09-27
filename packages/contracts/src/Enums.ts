@@ -10,12 +10,23 @@ export enum Role {
 }
 
 export enum Specialty {
-    // Executive Tier (Admin 0)
+    // Postgres enum order is append-only: add new values at the end.
+    Animator = "animator",
+    LayoutArtist = "layout_artist",
+    Modeler3d = "3d_modeler",
+    Rigger = "rigger",
+    SurfaceTextureArtist = "surface_texture_artist",
+    LightingArtist = "lighting_artist",
+    VfxArtist = "vfx_artist",
+    ConceptArtist = "concept_artist",
+    Screenwriter = "screenwriter",
+    VoiceActor = "voice_actor",
+    SoundDesigner = "sound_designer",
+    VideoEditor = "video_editor",
+    GeneralContributor = "general_contributor",
     Producer = "producer",
     CreativeDirector = "creative_director",
     ProductionManager = "production_manager",
-
-    // Department Tier (Supervisors 1)
     TechnicalDirector = "technical_director",
     ArtDirector = "art_director",
     EditorialSupervisor = "editorial_supervisor",
@@ -27,23 +38,6 @@ export enum Specialty {
     CfxVfxSupervisor = "cfx_vfx_supervisor",
     LightingCompositingSupervisor = "lighting_compositing_supervisor",
     SoundDirector = "sound_director",
-
-    // Contributor Tier (Contributors 2)
-    Animator = "animator",
-    LayoutArtist = "layout_artist",
-    Modeler3d = "3d_modeler",
-    Rigger = "rigger",
-    SurfaceTextureArtist = "surface_texture_artist",
-    LightingArtist = "lighting_artist",
-    VfxArtist = "vfx_artist",
-    ConceptArtist = "concept_artist",
-    VoiceActor = "voice_actor",
-    SoundDesigner = "sound_designer",
-    VideoEditor = "video_editor",
-    GeneralContributor = "general_contributor",
-    Screenwriter = "screenwriter",
-
-    // Community Tier (Voters 3)
     Voter = "voter"
 }
 

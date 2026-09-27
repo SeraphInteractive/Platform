@@ -108,13 +108,6 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
     application.setValidatorCompiler(validatorCompiler);
     application.setSerializerCompiler(serializerCompiler);
     application.removeContentTypeParser("text/plain");
-    application.addContentTypeParser(
-        ["image/png", "image/jpeg", "image/gif", "image/webp", "video/mp4", "video/webm", "video/quicktime", "application/octet-stream"],
-        { parseAs: "buffer", bodyLimit: 10 * 1024 * 1024 },
-        (_req, body, done) => {
-            done(null, body);
-        }
-    );
     application.decorateRequest("principal", null);
 
     application.addHook("onRequest", async (request, reply) => {
@@ -152,21 +145,7 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
     });
 
     await application.register(cors, {
-        origin: (origin, callback) => {
-            if (!origin) {
-                callback(null, true);
-                return;
-            }
-            try {
-                const url = new URL(origin);
-                const isLocal = url.hostname === "localhost" || url.hostname === "127.0.0.1";
-                if (configuration.security.corsOrigins.includes(origin) || isLocal) {
-                    callback(null, true);
-                    return;
-                }
-            } catch {}
-            callback(new Error("CORS origin not allowed"), false);
-        },
+        origin: [...configuration.security.corsOrigins],
         methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
         allowedHeaders: ["Authorization", "Content-Type", "X-Request-Id"],
         exposedHeaders: ["X-Request-Id", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "Retry-After"],

@@ -14,7 +14,7 @@ import { MessageFlags } from "discord.js";
 import { describe, expect, it } from "vitest";
 import type { V2Message } from "../src/Discord/Ui.js";
 import { ChannelPurpose } from "../src/State/SettingsStore.js";
-import { renderNotification } from "../src/Views/NotificationViews.js";
+import { renderNotification, type RenderedNotification } from "../src/Views/NotificationViews.js";
 import { reviewCard, threadUpdate } from "../src/Views/TaskViews.js";
 
 const occurredAt = "2026-09-27T01:08:00.000Z";
@@ -272,19 +272,21 @@ describe("every notification", () => {
     });
 
     it("announces winners publicly", () => {
-        const sample = samples.find((s) => s.type === NotificationType.RoundFinalized)!;
-        const [rendered] = renderNotification(sample, context);
+        const sample = samples.find((s) => s.type === NotificationType.RoundFinalized);
+        expect(sample).toBeDefined();
+        const [rendered] = renderNotification(sample as PlatformNotification, context);
         expect(rendered?.purpose).toBe(ChannelPurpose.Announcements);
         expect(texts(rendered?.message as V2Message).join("\n")).toContain("**Option Alpha** wins with 62.5% of the vote.");
     });
 
     it("announces when a round is opened for voting", () => {
-        const sample = samples.find((s) => s.type === NotificationType.RoundStatusChanged)!;
-        const rendered = renderNotification(sample, context);
+        const sample = samples.find((s) => s.type === NotificationType.RoundStatusChanged);
+        expect(sample).toBeDefined();
+        const rendered = renderNotification(sample as PlatformNotification, context);
         expect(rendered).toHaveLength(2);
         const announcement = rendered.find((r) => r.purpose === ChannelPurpose.Announcements);
         expect(announcement).toBeDefined();
-        expect(texts(announcement!.message).join("\n")).toContain("## Voting is now open for Binary Test Round!");
+        expect(texts((announcement as RenderedNotification).message).join("\n")).toContain("## Voting is now open for Binary Test Round!");
     });
 
     it("announces phase unlocks and step progress to announcements channel", () => {
@@ -321,26 +323,22 @@ describe("every notification", () => {
         expect(stepProgress.text).toContain("41% completed");
     });
 
-    it("embeds image and video media thumbnails when mediaUrl or videoUrl is present", () => {
-        const entryNotification = only({
+    it("shows entry and winner media as a components v2 gallery", () => {
+        const hasGallery = (payload: V2Message): boolean =>
+            payload.components.some((c) => ((c.toJSON() as ComponentJson).components ?? []).some((child) => child.type === 12));
+        const entry = only({
             type: NotificationType.EntrySubmitted,
             occurredAt,
             round,
-            entry: {
-                id: shot.id,
-                title: "Hero Design",
-                mediaUrl: "https://dev-api.seraphinteractive.com/api/v1/uploads/media/file/hero.png"
-            },
+            entry: { id: shot.id, title: "Hero Design", mediaUrl: "https://media.example.test/hero.png" },
             status: EntryStatus.PendingReview,
             author: voter
         });
-        const entryJson = entryNotification.payload.components.map((c) => c.toJSON() as ComponentJson);
-        const hasMedia = entryJson.some(
-            (c) => (c.components ?? []).some((child: unknown) => (child as { type?: number })?.type === 12)
-        );
-        expect(hasMedia).toBe(true);
+        expect(hasGallery(entry.payload)).toBe(true);
+        expect(entry.payload).not.toHaveProperty("embeds");
+        expect(entry.text).toContain("Hero Design");
 
-        const winnerNotification = only({
+        const winner = only({
             type: NotificationType.RoundFinalized,
             occurredAt,
             round,
@@ -348,34 +346,24 @@ describe("every notification", () => {
             winner: {
                 entryId: shot.id,
                 title: "Winning Art",
-                mediaUrl: "https://dev-api.seraphinteractive.com/api/v1/uploads/media/file/winner.png",
+                mediaUrl: "https://media.example.test/winner.webp",
                 rawScore: 25,
                 voteSharePercentage: 62.5,
                 regularizedTotalScore: null
             },
             actor: admin
         });
-        const winnerJson = winnerNotification.payload.components.map((c) => c.toJSON() as ComponentJson);
-        const winnerHasMedia = winnerJson.some(
-            (c) => (c.components ?? []).some((child: unknown) => (child as { type?: number })?.type === 12)
-        );
-        expect(winnerHasMedia).toBe(true);
+        expect(hasGallery(winner.payload)).toBe(true);
 
-        const submissionNotification = only({
-            type: NotificationType.SubmissionCreated,
+        const noMedia = only({
+            type: NotificationType.EntrySubmitted,
             occurredAt,
-            shot,
-            submissionId: shot.id,
-            version: 1,
-            videoUrl: "https://dev-api.seraphinteractive.com/api/v1/uploads/media/file/shot_v1.mp4",
-            contributor: voter,
-            notes: "Initial blockout"
+            round,
+            entry: { id: shot.id, title: "Text Only", mediaUrl: null },
+            status: EntryStatus.PendingReview,
+            author: voter
         });
-        const submissionJson = submissionNotification.payload.components.map((c) => c.toJSON() as ComponentJson);
-        const subHasMedia = submissionJson.some(
-            (c) => (c.components ?? []).some((child: unknown) => (child as { type?: number })?.type === 12)
-        );
-        expect(subHasMedia).toBe(true);
+        expect(hasGallery(noMedia.payload)).toBe(false);
     });
 });
 

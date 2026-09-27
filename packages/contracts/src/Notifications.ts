@@ -33,11 +33,7 @@ export const notificationPersonSchema = z.object({
 });
 
 const roundReference = z.object({ id: uuidSchema, title: z.string(), pollType: z.enum(PollType) });
-const entryReference = z.object({
-    id: uuidSchema,
-    title: z.string(),
-    mediaUrl: z.string().nullable().optional()
-});
+const entryReference = z.object({ id: uuidSchema, title: z.string(), mediaUrl: z.string().nullable().optional() });
 const shotReference = z.object({
     id: uuidSchema,
     code: z.string(),
@@ -145,7 +141,6 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
         shot: shotReference,
         submissionId: uuidSchema,
         version: z.number().int(),
-        videoUrl: z.string().nullable().optional(),
         contributor: notificationPersonSchema,
         notes: z.string().nullable()
     }),
@@ -153,7 +148,6 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
         shot: shotReference,
         submissionId: uuidSchema,
         version: z.number().int(),
-        videoUrl: z.string().nullable().optional(),
         decision: z.enum(ReviewDecision),
         contributor: notificationPersonSchema,
         reviewer: notificationPersonSchema,

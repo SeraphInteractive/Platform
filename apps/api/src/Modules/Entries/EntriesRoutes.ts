@@ -21,10 +21,9 @@ const roundParams = z.object({ roundId: uuidSchema });
 const entryParams = z.object({ roundId: uuidSchema, entryId: uuidSchema });
 const mediaKeySchema = z.string().max(255);
 
-const pitchSchema = trimmedText(255).refine(
-    (text) => text.trim().split(/\s+/u).filter(Boolean).length <= 30,
-    { message: "Pitch must not exceed 30 words." }
-);
+const pitchSchema = trimmedText(255).refine((text) => text.trim().split(/\s+/u).filter(Boolean).length <= 30, {
+    message: "Pitch must not exceed 30 words."
+});
 const descriptionSchema = trimmedText(250).nullable();
 
 export const entriesRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {

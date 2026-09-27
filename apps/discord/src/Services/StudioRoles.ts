@@ -58,7 +58,12 @@ export const studioRoles: readonly StudioRole[] = Object.freeze([
     { name: "Surfacing / LookDev Lead", tier: StudioTier.Department, color: 0x16a085, specialty: Specialty.SurfacingLookDevLead },
     { name: "Animation Supervisor", tier: StudioTier.Department, color: 0xf39c12, specialty: Specialty.AnimationSupervisor },
     { name: "CFX and VFX Supervisor", tier: StudioTier.Department, color: 0xe91e63, specialty: Specialty.CfxVfxSupervisor },
-    { name: "Lighting and Compositing Supervisor", tier: StudioTier.Department, color: 0xf1c40f, specialty: Specialty.LightingCompositingSupervisor },
+    {
+        name: "Lighting and Compositing Supervisor",
+        tier: StudioTier.Department,
+        color: 0xf1c40f,
+        specialty: Specialty.LightingCompositingSupervisor
+    },
     { name: "Sound Director", tier: StudioTier.Department, color: 0x00bcd4, specialty: Specialty.SoundDirector },
     { name: "Animators", tier: StudioTier.Contributor, color: 0x2980b9, specialty: Specialty.Animator },
     { name: "Layout Artists", tier: StudioTier.Contributor, color: 0x673ab7, specialty: Specialty.LayoutArtist },

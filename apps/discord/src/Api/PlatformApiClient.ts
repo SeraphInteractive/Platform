@@ -113,8 +113,11 @@ export class PlatformApiClient {
     public async getThreadMapByThread(discordThreadId: string): Promise<ShotThreadMapDto | null> {
         try {
             return (await this.send(`/shot-thread-maps/by-thread/${discordThreadId}`, dataEnvelope(shotThreadMapSchema))).data;
-        } catch {
-            return null;
+        } catch (error: unknown) {
+            if (error instanceof PlatformApiError && error.status === 404) {
+                return null;
+            }
+            throw error;
         }
     }
 

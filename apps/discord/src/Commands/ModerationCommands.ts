@@ -84,7 +84,12 @@ export const assignRoleCommand: SlashCommand = {
                     (held) => held.id !== role.id && isLeadership(findStudioRole(held.name)?.tier ?? 3)
                 );
                 if (!keepsLeadership) {
-                    await api.setRole(holder.id, Role.Contributor, specialtiesOf(holder, undefined, role.id), holder.user.globalName ?? holder.user.username);
+                    await api.setRole(
+                        holder.id,
+                        Role.Contributor,
+                        specialtiesOf(holder, undefined, role.id),
+                        holder.user.globalName ?? holder.user.username
+                    );
                 }
                 previous.push(holder);
             }

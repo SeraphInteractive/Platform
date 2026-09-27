@@ -21,7 +21,7 @@ export enum Accent {
     Danger = 0xd83c3e
 }
 
-export type Block = string | SeparatorBuilder | MediaGalleryBuilder | ActionRowBuilder<MessageActionRowComponentBuilder> | null | undefined;
+export type Block = string | SeparatorBuilder | MediaGalleryBuilder | ActionRowBuilder<MessageActionRowComponentBuilder>;
 
 export type TopLevelComponent = ContainerBuilder | TextDisplayBuilder | ActionRowBuilder<MessageActionRowComponentBuilder>;
 
@@ -50,9 +50,6 @@ export function panel(accent: Accent | null, ...blocks: readonly Block[]): Conta
         container.setAccentColor(accent);
     }
     for (const block of blocks) {
-        if (block === null || block === undefined) {
-            continue;
-        }
         if (typeof block === "string") {
             container.addTextDisplayComponents(text(block));
         } else if (block instanceof SeparatorBuilder) {

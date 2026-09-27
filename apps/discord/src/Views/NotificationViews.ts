@@ -9,8 +9,9 @@ import {
     type PlatformNotification,
     type ShotReference
 } from "@platform/contracts";
+import type { MediaGalleryBuilder } from "discord.js";
 import { ChannelPurpose } from "../State/SettingsStore.js";
-import { Accent, image, message, panel, person, plain, quote, when, type Block, type V2Message } from "../Discord/Ui.js";
+import { Accent, image, message, panel, person, plain, quote, when, type V2Message } from "../Discord/Ui.js";
 
 export interface RenderedNotification {
     readonly purpose: ChannelPurpose;
@@ -21,27 +22,28 @@ export interface NotificationContext {
     threadFor(shotId: string): string | undefined;
 }
 
-function post(purpose: ChannelPurpose, accent: Accent | null, ...blocks: readonly (Block | string | null | undefined)[]): RenderedNotification {
-    const stringLines: string[] = [];
-    const panelBlocks: Block[] = [];
-    for (const b of blocks) {
-        if (b === null || b === undefined) {
+type Line = string | MediaGalleryBuilder | null;
+
+// consecutive text lines share one text display; media galleries sit between them
+function post(purpose: ChannelPurpose, accent: Accent | null, ...lines: readonly Line[]): RenderedNotification {
+    const blocks: (string | MediaGalleryBuilder)[] = [];
+    for (const line of lines) {
+        const previous = blocks.at(-1);
+        if (line === null) {
             continue;
         }
-        if (typeof b === "string") {
-            stringLines.push(b);
+        if (typeof line === "string" && typeof previous === "string") {
+            blocks[blocks.length - 1] = `${previous}
+${line}`;
         } else {
-            if (stringLines.length > 0) {
-                panelBlocks.push(stringLines.join("\n"));
-                stringLines.length = 0;
-            }
-            panelBlocks.push(b);
+            blocks.push(line);
         }
     }
-    if (stringLines.length > 0) {
-        panelBlocks.push(stringLines.join("\n"));
-    }
-    return { purpose, message: message(panel(accent, ...panelBlocks)) };
+    return { purpose, message: message(panel(accent, ...blocks)) };
+}
+
+function preview(url: string | null | undefined, title: string): MediaGalleryBuilder | null {
+    return url === null || url === undefined || !/\.(png|jpe?g|gif|webp)$/iu.test(url) ? null : image(url, title);
 }
 
 function reason(value: string | null): string | null {
@@ -202,7 +204,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     `## ${plain(notification.round.title)}`,
                     describeWinner(notification),
                     `-# ${notification.totalBallots.toLocaleString("en-US")} ${notification.totalBallots === 1 ? "ballot" : "ballots"} counted`,
-                    notification.winner?.mediaUrl ? image(notification.winner.mediaUrl, notification.winner.title) : null
+                    preview(notification.winner?.mediaUrl, notification.winner?.title ?? notification.round.title)
                 )
             ];
         case NotificationType.EntrySubmitted:
@@ -213,7 +215,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     `**New entry in ${plain(notification.round.title)}**`,
                     `${plain(notification.entry.title)} by ${person(notification.author)}`,
                     notification.status === EntryStatus.PendingReview ? "-# Waiting for review" : "-# Approved automatically",
-                    notification.entry.mediaUrl ? image(notification.entry.mediaUrl, notification.entry.title) : null
+                    preview(notification.entry.mediaUrl, notification.entry.title)
                 )
             ];
         case NotificationType.EntryStatusChanged: {
@@ -225,7 +227,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     `**${headline.title}**`,
                     `${plain(notification.entry.title)} in ${plain(notification.round.title)}`,
                     `-# By ${person(notification.actor)}`,
-                    notification.entry.mediaUrl ? image(notification.entry.mediaUrl, notification.entry.title) : null
+                    preview(notification.entry.mediaUrl, notification.entry.title)
                 )
             ];
         }
@@ -237,7 +239,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     "**Entry reinstated**",
                     `${plain(notification.entry.title)} is back on the ballot in ${plain(notification.round.title)}.`,
                     `-# By ${person(notification.actor)}`,
-                    notification.entry.mediaUrl ? image(notification.entry.mediaUrl, notification.entry.title) : null
+                    preview(notification.entry.mediaUrl, notification.entry.title)
                 )
             ];
         case NotificationType.ShotCreated:
@@ -283,8 +285,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     null,
                     `**Submitted:** ${shotLink(notification.shot, context)}, version ${notification.version}`,
                     `By ${person(notification.contributor)}`,
-                    notification.notes === null ? null : quote(notification.notes, 500),
-                    notification.videoUrl ? image(notification.videoUrl, `${notification.shot.code} v${notification.version}`) : null
+                    notification.notes === null ? null : quote(notification.notes, 500)
                 )
             ];
         case NotificationType.SubmissionReviewed: {
@@ -295,8 +296,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     approved ? Accent.Success : Accent.Warning,
                     `**${approved ? "Approved" : "Changes requested"}:** ${shotLink(notification.shot, context)}, version ${notification.version}`,
                     `Reviewed by ${person(notification.reviewer)}`,
-                    notification.notes === null ? null : quote(notification.notes, 600),
-                    notification.videoUrl ? image(notification.videoUrl, `${notification.shot.code} v${notification.version}`) : null
+                    notification.notes === null ? null : quote(notification.notes, 600)
                 )
             ];
             if (approved) {
@@ -304,8 +304,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     post(
                         ChannelPurpose.Announcements,
                         Accent.Success,
-                        `**${shotName(notification.shot)} is finished.** Delivered by ${person(notification.contributor)}.`,
-                        notification.videoUrl ? image(notification.videoUrl, shotName(notification.shot)) : null
+                        `**${shotName(notification.shot)} is finished.** Delivered by ${person(notification.contributor)}.`
                     )
                 );
             }
@@ -317,7 +316,6 @@ export function renderNotification(notification: PlatformNotification, context: 
                     post(
                         ChannelPurpose.Announcements,
                         Accent.Success,
-                        `@everyone`,
                         `## Phase ${notification.phaseNumber} Unlocked: ${plain(notification.phaseTitle)}`,
                         `Now entering **Step ${plain(notification.stepId)}: ${plain(notification.stepTitle)}** (${notification.progressPercent}% overall completed).`,
                         `-# Updated by ${person(notification.actor)}`

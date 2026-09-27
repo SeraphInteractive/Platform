@@ -58,7 +58,7 @@ export const setupForumCommand: SlashCommand = {
         const log = interaction.options.getChannel("log", true, [ChannelType.GuildText]);
         // fetch the full guild forum channel instance so tag mutations succeed
         const forum = await interaction.guild.channels.fetch(forumOption.id);
-        if (forum === null || forum.type !== ChannelType.GuildForum) {
+        if (forum?.type !== ChannelType.GuildForum) {
             throw new UserFacingError("The specified forum channel could not be found.");
         }
         await context.provisioner.ensureForumTags(forum);

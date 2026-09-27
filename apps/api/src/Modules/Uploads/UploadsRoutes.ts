@@ -49,39 +49,4 @@ export const uploadsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
             return reply.status(201).send({ data: toPresignedUploadResponse(upload) });
         }
     );
-
-    application.put(
-        "/uploads/media/file/*",
-        {
-            config: { rateLimit: { max: 60, timeWindow: "1 minute" } }
-        },
-        async (request, reply) => {
-            const rawKey = decodeURIComponent((request.params as { "*": string })["*"] || "");
-            const buffer = request.body as Buffer;
-            if (!buffer || buffer.length === 0) {
-                return reply.status(400).send({ message: "Missing file payload" });
-            }
-            if ("saveMedia" in objectStorage && typeof (objectStorage as { saveMedia: unknown }).saveMedia === "function") {
-                (objectStorage as { saveMedia: (k: string, b: Buffer) => void }).saveMedia(rawKey, buffer);
-            }
-            return reply.status(200).send({ status: "ok", key: rawKey });
-        }
-    );
-
-    application.get(
-        "/uploads/media/file/*",
-        async (request, reply) => {
-            const rawKey = decodeURIComponent((request.params as { "*": string })["*"] || "");
-            if ("readMedia" in objectStorage && typeof (objectStorage as { readMedia: unknown }).readMedia === "function") {
-                const item = (objectStorage as { readMedia: (k: string) => { buffer: Buffer; contentType: string } | null }).readMedia(rawKey);
-                if (item === null) {
-                    return reply.status(404).send({ message: "Media file not found" });
-                }
-                void reply.header("Content-Type", item.contentType);
-                void reply.header("Cache-Control", "public, max-age=31536000, immutable");
-                return reply.send(item.buffer);
-            }
-            return reply.status(404).send({ message: "Media storage unavailable" });
-        }
-    );
 };

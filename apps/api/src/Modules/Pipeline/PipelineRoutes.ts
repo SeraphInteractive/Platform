@@ -2,13 +2,11 @@ import { NotificationType, pipelineProgressSchema } from "@platform/contracts";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { dataEnvelope, errorResponses } from "../../Common/Http/Schemas.js";
-import { actorOf, requireRoleOrService } from "../../Common/Security/Authorization.js";
+import { actorOf, optionalUser, requireRoleOrService } from "../../Common/Security/Authorization.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
 import { Role } from "../../Domain/Roles.js";
+import { pipelineProgress, type PipelineProgressRecord } from "../../Infrastructure/Database/Schema.js";
 import { personOfActor } from "../../Infrastructure/Notifications/Notification.js";
-
-const cacheKey = "pipeline:progress";
-const ttlOneYear = 365 * 86400;
 
 const defaultProgress = {
     stepIndex: 0,
@@ -21,6 +19,19 @@ const defaultProgress = {
     updatedAt: null
 };
 
+function toPipelineProgressResponse(record: PipelineProgressRecord): z.infer<typeof pipelineProgressSchema> {
+    return {
+        stepIndex: record.stepIndex,
+        stepId: record.stepId,
+        stepTitle: record.stepTitle,
+        phaseNumber: record.phaseNumber,
+        phaseTitle: record.phaseTitle,
+        progressPercent: record.progressPercent,
+        isPhaseTransition: record.isPhaseTransition,
+        updatedAt: record.updatedAt.toISOString()
+    };
+}
+
 export const updatePipelineProgressSchema = z.object({
     stepIndex: z.number().int().min(0),
     stepId: z.string().max(32),
@@ -32,7 +43,7 @@ export const updatePipelineProgressSchema = z.object({
 });
 
 export const pipelineRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
-    const { keyValueStore, notifier } = services;
+    const { database, notifier } = services;
     const security = [{ bearer: [] }];
     const supervisor = requireRoleOrService(Role.Supervisor);
 
@@ -46,17 +57,8 @@ export const pipelineRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer 
             }
         },
         async () => {
-            const raw = await keyValueStore.get(cacheKey);
-            if (raw === null) {
-                return { data: defaultProgress };
-            }
-            try {
-                const parsed = JSON.parse(raw);
-                return { data: pipelineProgressSchema.parse(parsed) };
-            } catch {
-                // fallback to initial baseline on stale cache structure
-                return { data: defaultProgress };
-            }
+            const [record] = await database.select().from(pipelineProgress).limit(1);
+            return { data: record === undefined ? defaultProgress : toPipelineProgressResponse(record) };
         }
     );
 
@@ -73,19 +75,15 @@ export const pipelineRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer 
             }
         },
         async (request) => {
-            const now = new Date().toISOString();
-            const record = {
-                stepIndex: request.body.stepIndex,
-                stepId: request.body.stepId,
-                stepTitle: request.body.stepTitle,
-                phaseNumber: request.body.phaseNumber,
-                phaseTitle: request.body.phaseTitle,
-                progressPercent: request.body.progressPercent,
-                isPhaseTransition: request.body.isPhaseTransition,
-                updatedAt: now
-            };
-
-            await keyValueStore.set(cacheKey, JSON.stringify(record), ttlOneYear);
+            const values = { ...request.body, updatedBy: optionalUser(request)?.id ?? null };
+            const [record] = await database
+                .insert(pipelineProgress)
+                .values({ id: 1, ...values })
+                .onConflictDoUpdate({ target: pipelineProgress.id, set: { ...values, updatedAt: new Date() } })
+                .returning();
+            if (record === undefined) {
+                throw new Error("Pipeline progress upsert returned no row.");
+            }
 
             notifier.notify({
                 type: NotificationType.PipelineUpdated,
@@ -98,7 +96,7 @@ export const pipelineRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer 
                 actor: personOfActor(actorOf(request))
             });
 
-            return { data: record };
+            return { data: toPipelineProgressResponse(record) };
         }
     );
 };

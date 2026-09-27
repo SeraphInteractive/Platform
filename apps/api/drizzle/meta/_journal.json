@@ -8,6 +8,13 @@
       "when": 1790449811057,
       "tag": "0000_initial_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790511795849,
+      "tag": "0001_pipeline_progress_and_specialties",
+      "breakpoints": true
     }
   ]
 }

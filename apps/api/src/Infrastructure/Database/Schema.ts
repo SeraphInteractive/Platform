@@ -257,6 +257,26 @@ export const shotThreadMaps = pgTable("shot_thread_maps", {
     ...timestamps
 });
 
+export const pipelineProgress = pgTable(
+    "pipeline_progress",
+    {
+        id: integer("id").primaryKey().default(1),
+        stepIndex: integer("step_index").notNull(),
+        stepId: varchar("step_id", { length: 32 }).notNull(),
+        stepTitle: varchar("step_title", { length: 128 }).notNull(),
+        phaseNumber: integer("phase_number").notNull(),
+        phaseTitle: varchar("phase_title", { length: 128 }).notNull(),
+        progressPercent: doublePrecision("progress_percent").notNull(),
+        isPhaseTransition: boolean("is_phase_transition").notNull(),
+        updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+        ...timestamps
+    },
+    (table) => [
+        check("pipeline_progress_singleton", sql`${table.id} = 1`),
+        check("pipeline_progress_percent_range", sql`${table.progressPercent} BETWEEN 0 AND 100`)
+    ]
+);
+
 export type UserRecord = typeof users.$inferSelect;
 export type VotingRoundRecord = typeof votingRounds.$inferSelect;
 export type EntryRecord = typeof entries.$inferSelect;
@@ -266,3 +286,4 @@ export type RoundResultRecord = typeof roundResults.$inferSelect;
 export type ShotRecord = typeof shots.$inferSelect;
 export type SubmissionRecord = typeof submissions.$inferSelect;
 export type ShotThreadMapRecord = typeof shotThreadMaps.$inferSelect;
+export type PipelineProgressRecord = typeof pipelineProgress.$inferSelect;

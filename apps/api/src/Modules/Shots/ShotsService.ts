@@ -409,13 +409,11 @@ export class ShotsService {
             return { submission: created, shot: locked };
         });
 
-        const videoUrl = this.storage.getPublicUrl(StorageBucket.Deliverables, submission.videoKey);
         this.notifier.notify({
             type: NotificationType.SubmissionCreated,
             shot: shotReferenceOf(shot),
             submissionId: submission.id,
             version: submission.version,
-            videoUrl,
             contributor: personOfUser(user),
             notes: submission.notes
         });

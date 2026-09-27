@@ -211,6 +211,11 @@ describe("platform service integration", () => {
                 isPhaseTransition: false
             }
         });
+        const pipeline = await context.application.inject({ method: "GET", url: "/api/v1/pipeline" });
+        expect(json<Envelope<{ stepId: string; progressPercent: number; updatedAt: string | null }>>(pipeline).data).toMatchObject({
+            stepId: "0.2",
+            progressPercent: 7
+        });
 
         await new Promise((resolve) => setTimeout(resolve, 10));
         const types = new Set<string>();

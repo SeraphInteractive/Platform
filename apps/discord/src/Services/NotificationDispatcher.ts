@@ -92,47 +92,13 @@ export class NotificationDispatcher {
 
     private async channel(purpose: ChannelPurpose): Promise<SendableChannels | null> {
         const id = this.settings.channel(purpose);
-        if (id !== undefined) {
-            const channel = await this.client.channels.fetch(id).catch(() => null);
-            if (channel !== null && channel.isSendable() && !channel.isDMBased() && channel.guildId === this.guildId) {
-                return channel;
-            }
+        if (id === undefined) {
+            return null;
         }
-        // fallback to finding matching text channel on the guild
-        try {
-            const guild = await this.client.guilds.fetch(this.guildId).catch(() => null);
-            if (guild) {
-                const channels = await guild.channels.fetch().catch(() => null);
-                if (channels) {
-                    const expectedKeywords: Record<ChannelPurpose, string[]> = {
-                        [ChannelPurpose.Announcements]: ["announcement", "news", "updates", "general"],
-                        [ChannelPurpose.Telemetry]: ["telemetry", "alerts", "bot-logs", "logs"],
-                        [ChannelPurpose.TaskLogs]: ["task-logs", "tasks", "activity"],
-                        [ChannelPurpose.TaskSubmissions]: ["task-submissions", "submissions", "reviews"],
-                        [ChannelPurpose.TaskForum]: ["tasks", "forum"]
-                    };
-                    const keywords = expectedKeywords[purpose] || [purpose.toLowerCase()];
-                    const match = channels.find(
-                        (ch) =>
-                            ch !== null &&
-                            ch.isTextBased() &&
-                            !ch.isDMBased() &&
-                            keywords.some((kw) => ch.name.toLowerCase().includes(kw))
-                    );
-                    if (match && match.isSendable() && !match.isDMBased()) {
-                        await this.settings.update((s) => {
-                            s.channels[purpose] = match.id;
-                        });
-                        return match as SendableChannels;
-                    }
-                    if (purpose === ChannelPurpose.Announcements && guild.systemChannel && guild.systemChannel.isSendable()) {
-                        return guild.systemChannel;
-                    }
-                }
-            }
-        } catch (err) {
-            this.logger.warn({ err, purpose }, "dynamic channel lookup failed");
+        const channel = await this.client.channels.fetch(id).catch(() => null);
+        if (channel === null || !channel.isSendable() || channel.isDMBased() || channel.guildId !== this.guildId) {
+            return null;
         }
-        return null;
+        return channel;
     }
 }

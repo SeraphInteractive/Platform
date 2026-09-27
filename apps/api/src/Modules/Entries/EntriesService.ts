@@ -116,6 +116,7 @@ export class EntriesService {
         });
 
         const mediaUrl = entry.mediaKey === null ? null : this.storage.getPublicUrl(StorageBucket.Media, entry.mediaKey);
+
         this.notifier.notify({
             type: NotificationType.EntrySubmitted,
             round: roundReferenceOf(round),
