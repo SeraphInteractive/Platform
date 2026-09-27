@@ -1,6 +1,6 @@
 # Platform Backend
 
-Backend for community voting rounds, raid telemetry, the shot grab-box production pipeline and the studio Discord bot.
+Community voting rounds, raid telemetry, the shot grab-box production pipeline, the studio Discord bot and the web app.
 
 ## Getting started
 
@@ -10,6 +10,7 @@ cp .env.example .env
 npm run db:migrate
 npm run dev # set LOG_FORMAT=pretty for readable logs
 npm run dev:discord # the Discord bot
+npm run dev:web # the web app
 ```
 
 ## Docker

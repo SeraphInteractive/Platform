@@ -10,3 +10,5 @@ npm-debug.log*
 .vscode/
 .fleet/
 .DS_Store
+.next/
+next-env.d.ts

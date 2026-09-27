@@ -6,5 +6,6 @@
         "incremental": false,
         "declaration": false
     },
-    "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "apps/*/src/**/*.ts", "apps/*/test/**/*.ts"]
+    "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "apps/*/src/**/*.ts", "apps/*/test/**/*.ts"],
+    "exclude": ["apps/web/**"]
 }

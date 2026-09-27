@@ -1,0 +1,521 @@
+"use client";
+
+import { DifficultyTier, Role, ShotStatus, type ShotDto } from "@platform/contracts";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ExternalLink, MoreHorizontal, Plus } from "lucide-react";
+import type { Route } from "next";
+import Link from "next/link";
+import { useId, useState, type ReactNode, type SubmitEvent } from "react";
+import { toast } from "sonner";
+import { platformApi, type CreateShotInput } from "@/Api/PlatformApi";
+import { queryKeys } from "@/Api/QueryKeys";
+import { ConfirmButton } from "@/Components/Common/ConfirmButton";
+import { Toolbar } from "@/Components/Common/DataList";
+import { PageHeader } from "@/Components/Common/PageHeader";
+import { Pagination } from "@/Components/Common/Pagination";
+import { EmptyState, ErrorState, LoadingRows, RequireRole } from "@/Components/Common/States";
+import { ShotStatusBadge } from "@/Components/Common/StatusBadge";
+import { discordThreadUrl, useSiteConfig } from "@/Components/SiteConfig";
+import { Button } from "@/Components/Ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/Components/Ui/dialog";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger
+} from "@/Components/Ui/dropdown-menu";
+import { Input } from "@/Components/Ui/input";
+import { Label } from "@/Components/Ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/Ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/Ui/table";
+import { Textarea } from "@/Components/Ui/textarea";
+import { useSession } from "@/Hooks/UseSession";
+import { difficultyLabels, shotStatusLabels } from "@/Lib/Format";
+import { hasAtLeast } from "@/Lib/Roles";
+
+const anyValue = "any";
+
+interface ShotDraft {
+    readonly sceneNumber: string;
+    readonly shotCode: string;
+    readonly title: string;
+    readonly description: string;
+    readonly difficultyTier: DifficultyTier;
+    readonly seniorPriorityHours: string;
+}
+
+function draftOf(shot: ShotDto | undefined): ShotDraft {
+    return {
+        sceneNumber: shot === undefined ? "" : String(shot.sceneNumber),
+        shotCode: shot?.shotCode ?? "",
+        title: shot?.title ?? "",
+        description: shot?.description ?? "",
+        difficultyTier: shot?.difficultyTier ?? DifficultyTier.Medium,
+        seniorPriorityHours: "0"
+    };
+}
+
+function toInput(draft: ShotDraft): CreateShotInput | null {
+    const sceneNumber = Number(draft.sceneNumber);
+    const seniorPriorityHours = Number(draft.seniorPriorityHours);
+    const shotCode = draft.shotCode.trim();
+    const title = draft.title.trim();
+    const description = draft.description.trim();
+    const valid =
+        Number.isInteger(sceneNumber) &&
+        sceneNumber >= 1 &&
+        sceneNumber <= 100_000 &&
+        Number.isInteger(seniorPriorityHours) &&
+        seniorPriorityHours >= 0 &&
+        seniorPriorityHours <= 168 &&
+        shotCode.length > 0 &&
+        shotCode.length <= 50 &&
+        title.length > 0 &&
+        title.length <= 255 &&
+        description.length <= 5000;
+    if (!valid) {
+        return null;
+    }
+    return {
+        roundId: null,
+        sceneNumber,
+        shotCode,
+        title,
+        description: description.length === 0 ? null : description,
+        difficultyTier: draft.difficultyTier,
+        seniorPriorityHours
+    };
+}
+
+function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly trigger: ReactNode }): ReactNode {
+    const formId = useId();
+    const queryClient = useQueryClient();
+    const [open, setOpen] = useState(false);
+    const [draft, setDraft] = useState<ShotDraft>(() => draftOf(shot));
+    const input = toInput(draft);
+    const save = useMutation({
+        mutationFn: (value: CreateShotInput): Promise<ShotDto> => {
+            if (shot === undefined) {
+                return platformApi.createShot(value);
+            }
+            return platformApi.updateShot(shot.id, {
+                sceneNumber: value.sceneNumber,
+                shotCode: value.shotCode,
+                title: value.title,
+                description: value.description,
+                difficultyTier: value.difficultyTier
+            });
+        },
+        onSuccess: (saved) => {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.shotsAll });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.shot(saved.id) });
+            toast.success(shot === undefined ? `Created ${saved.shotCode}.` : `Saved ${saved.shotCode}.`);
+            setOpen(false);
+            if (shot === undefined) {
+                setDraft(draftOf(undefined));
+            }
+        }
+    });
+    const onSubmit = (event: SubmitEvent<HTMLFormElement>): void => {
+        event.preventDefault();
+        if (input !== null && !save.isPending) {
+            save.mutate(input);
+        }
+    };
+    const field =
+        (key: keyof ShotDraft) =>
+        (event: { readonly target: { readonly value: string } }): void => {
+            setDraft((current) => ({ ...current, [key]: event.target.value }));
+        };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>{trigger}</DialogTrigger>
+            <DialogContent className="sm:max-w-xl">
+                <DialogHeader>
+                    <DialogTitle>{shot === undefined ? "New task" : `Edit ${shot.shotCode}`}</DialogTitle>
+                </DialogHeader>
+                <form id={formId} onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-4">
+                    <div className="space-y-1.5">
+                        <Label htmlFor={`${formId}-scene`}>Scene</Label>
+                        <Input id={`${formId}-scene`} inputMode="numeric" value={draft.sceneNumber} onChange={field("sceneNumber")} />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor={`${formId}-code`}>Code</Label>
+                        <Input
+                            id={`${formId}-code`}
+                            maxLength={50}
+                            className="font-mono"
+                            value={draft.shotCode}
+                            onChange={field("shotCode")}
+                        />
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor={`${formId}-difficulty`}>Difficulty</Label>
+                        <Select
+                            value={draft.difficultyTier}
+                            onValueChange={(value) => {
+                                setDraft((current) => ({ ...current, difficultyTier: value as DifficultyTier }));
+                            }}
+                        >
+                            <SelectTrigger id={`${formId}-difficulty`} className="w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {Object.values(DifficultyTier).map((tier) => (
+                                    <SelectItem key={tier} value={tier}>
+                                        {difficultyLabels[tier]}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-4">
+                        <Label htmlFor={`${formId}-title`}>Title</Label>
+                        <Input id={`${formId}-title`} maxLength={255} value={draft.title} onChange={field("title")} />
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-4">
+                        <Label htmlFor={`${formId}-description`}>Brief</Label>
+                        <Textarea
+                            id={`${formId}-description`}
+                            rows={5}
+                            maxLength={5000}
+                            value={draft.description}
+                            onChange={field("description")}
+                        />
+                    </div>
+                    {shot === undefined && (
+                        <div className="space-y-1.5 sm:col-span-2">
+                            <Label htmlFor={`${formId}-senior`}>Senior priority (hours)</Label>
+                            <Input
+                                id={`${formId}-senior`}
+                                inputMode="numeric"
+                                value={draft.seniorPriorityHours}
+                                onChange={field("seniorPriorityHours")}
+                            />
+                        </div>
+                    )}
+                </form>
+                <DialogFooter>
+                    <Button type="submit" form={formId} disabled={input === null || save.isPending}>
+                        {shot === undefined ? "Create" : "Save"}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function TaskRowActions({
+    shot,
+    threadUrl,
+    hasThread
+}: {
+    readonly shot: ShotDto;
+    readonly threadUrl: string | null;
+    readonly hasThread: boolean;
+}): ReactNode {
+    const { user } = useSession();
+    const queryClient = useQueryClient();
+    const [confirm, setConfirm] = useState<"delete" | "unbind" | null>(null);
+    const remove = useMutation({
+        mutationFn: () => platformApi.deleteShot(shot.id),
+        onSuccess: () => {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.shotsAll });
+            toast.success(`Deleted ${shot.shotCode}.`);
+        }
+    });
+    const unbind = useMutation({
+        mutationFn: () => platformApi.unbindThread(shot.id),
+        onSuccess: () => {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.threadMaps });
+            toast.success(`Unlinked the Discord thread from ${shot.shotCode}.`);
+        }
+    });
+    return (
+        <div className="flex justify-end gap-1">
+            <TaskFormDialog
+                key={shot.updatedAt}
+                shot={shot}
+                trigger={
+                    <Button size="xs" variant="ghost">
+                        Edit
+                    </Button>
+                }
+            />
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button size="icon-xs" variant="ghost" aria-label={`More actions for ${shot.shotCode}`}>
+                        <MoreHorizontal />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild>
+                        <Link href={`/grabbox/${shot.id}` as Route}>Open task page</Link>
+                    </DropdownMenuItem>
+                    {threadUrl !== null && (
+                        <DropdownMenuItem asChild>
+                            <a href={threadUrl} target="_blank" rel="noopener noreferrer">
+                                Discord thread
+                                <ExternalLink className="ml-auto" />
+                            </a>
+                        </DropdownMenuItem>
+                    )}
+                    {hasThread && (
+                        <DropdownMenuItem
+                            onSelect={() => {
+                                setConfirm("unbind");
+                            }}
+                        >
+                            Unlink Discord thread
+                        </DropdownMenuItem>
+                    )}
+                    {hasAtLeast(user, Role.Admin) && (
+                        <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                variant="destructive"
+                                onSelect={() => {
+                                    setConfirm("delete");
+                                }}
+                            >
+                                Delete
+                            </DropdownMenuItem>
+                        </>
+                    )}
+                </DropdownMenuContent>
+            </DropdownMenu>
+            {confirm !== null && (
+                <ConfirmDialog
+                    title={confirm === "delete" ? `Delete ${shot.shotCode}?` : `Unlink the thread from ${shot.shotCode}?`}
+                    description={
+                        confirm === "delete" ? "Deletes the task and all its submissions." : "The bot stops posting updates to that thread."
+                    }
+                    confirmLabel={confirm === "delete" ? "Delete" : "Unlink"}
+                    destructive={confirm === "delete"}
+                    onCancel={() => {
+                        setConfirm(null);
+                    }}
+                    onConfirm={() => {
+                        if (confirm === "delete") {
+                            remove.mutate();
+                        } else {
+                            unbind.mutate();
+                        }
+                        setConfirm(null);
+                    }}
+                />
+            )}
+        </div>
+    );
+}
+
+interface ConfirmDialogProps {
+    readonly title: string;
+    readonly description: string;
+    readonly confirmLabel: string;
+    readonly destructive: boolean;
+    readonly onConfirm: () => void;
+    readonly onCancel: () => void;
+}
+
+function ConfirmDialog({ title, description, confirmLabel, destructive, onConfirm, onCancel }: ConfirmDialogProps): ReactNode {
+    return (
+        <Dialog
+            open
+            onOpenChange={(open) => {
+                if (!open) {
+                    onCancel();
+                }
+            }}
+        >
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{title}</DialogTitle>
+                </DialogHeader>
+                <p className="text-muted-foreground text-sm">{description}</p>
+                <DialogFooter>
+                    <Button variant="outline" onClick={onCancel}>
+                        Cancel
+                    </Button>
+                    <Button variant={destructive ? "destructive" : "default"} onClick={onConfirm}>
+                        {confirmLabel}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function TasksTable(): ReactNode {
+    const siteConfig = useSiteConfig();
+    const [status, setStatus] = useState<ShotStatus | typeof anyValue>(anyValue);
+    const [difficulty, setDifficulty] = useState<DifficultyTier | typeof anyValue>(anyValue);
+    const [page, setPage] = useState(1);
+    const query = {
+        page,
+        perPage: 25,
+        status: status === anyValue ? undefined : status,
+        difficultyTier: difficulty === anyValue ? undefined : difficulty
+    };
+    const shots = useQuery({
+        queryKey: queryKeys.shots(query),
+        queryFn: () => platformApi.shots(query),
+        placeholderData: keepPreviousData
+    });
+    const threads = useQuery({ queryKey: queryKeys.threadMaps, queryFn: () => platformApi.threadMaps(), staleTime: 60_000 });
+    const threadByShot = new Map((threads.data ?? []).map((map) => [map.shotId, map.discordThreadId]));
+
+    return (
+        <>
+            <Toolbar
+                trailing={
+                    shots.data === undefined ? undefined : (
+                        <span className="text-muted-foreground text-xs">{shots.data.meta.total} tasks</span>
+                    )
+                }
+            >
+                <Select
+                    value={status}
+                    onValueChange={(value) => {
+                        setStatus(value as ShotStatus | typeof anyValue);
+                        setPage(1);
+                    }}
+                >
+                    <SelectTrigger size="sm" className="w-36" aria-label="Status">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value={anyValue}>Any status</SelectItem>
+                        {Object.values(ShotStatus).map((item) => (
+                            <SelectItem key={item} value={item}>
+                                {shotStatusLabels[item]}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Select
+                    value={difficulty}
+                    onValueChange={(value) => {
+                        setDifficulty(value as DifficultyTier | typeof anyValue);
+                        setPage(1);
+                    }}
+                >
+                    <SelectTrigger size="sm" className="w-36" aria-label="Difficulty">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value={anyValue}>Any difficulty</SelectItem>
+                        {Object.values(DifficultyTier).map((item) => (
+                            <SelectItem key={item} value={item}>
+                                {difficultyLabels[item]}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </Toolbar>
+            {shots.isPending ? (
+                <LoadingRows rows={6} />
+            ) : shots.isError ? (
+                <ErrorState error={shots.error} onRetry={() => void shots.refetch()} />
+            ) : shots.data.data.length === 0 ? (
+                <EmptyState title="No tasks" />
+            ) : (
+                <>
+                    <div className="bg-card overflow-x-auto rounded-md border">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-28">Code</TableHead>
+                                    <TableHead>Title</TableHead>
+                                    <TableHead className="w-16">Scene</TableHead>
+                                    <TableHead className="w-24">Difficulty</TableHead>
+                                    <TableHead className="w-28">Status</TableHead>
+                                    <TableHead className="w-36">Claimant</TableHead>
+                                    <TableHead className="w-24" />
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {shots.data.data.map((shot) => {
+                                    const threadId = threadByShot.get(shot.id);
+                                    return (
+                                        <TableRow key={shot.id}>
+                                            <TableCell className="text-muted-foreground font-mono text-xs">{shot.shotCode}</TableCell>
+                                            <TableCell className="max-w-80 truncate font-medium">{shot.title}</TableCell>
+                                            <TableCell className="tabular-nums">{shot.sceneNumber}</TableCell>
+                                            <TableCell>{difficultyLabels[shot.difficultyTier]}</TableCell>
+                                            <TableCell>
+                                                <ShotStatusBadge status={shot.status} />
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground max-w-36 truncate">
+                                                {shot.claimer?.username ?? "–"}
+                                            </TableCell>
+                                            <TableCell>
+                                                <TaskRowActions
+                                                    shot={shot}
+                                                    hasThread={threadId !== undefined}
+                                                    threadUrl={threadId === undefined ? null : discordThreadUrl(siteConfig, threadId)}
+                                                />
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
+                            </TableBody>
+                        </Table>
+                    </div>
+                    <Pagination meta={shots.data.meta} onPageChange={setPage} />
+                </>
+            )}
+        </>
+    );
+}
+
+function ReclaimButton(): ReactNode {
+    const queryClient = useQueryClient();
+    const reclaim = useMutation({
+        mutationFn: () => platformApi.reclaimExpired(),
+        onSuccess: (result) => {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.shotsAll });
+            toast.success(result.reclaimedCount === 0 ? "No overdue claims." : `Reclaimed ${result.shotCodes.join(", ")}.`);
+        }
+    });
+    return (
+        <ConfirmButton
+            title="Reclaim overdue tasks?"
+            description="Every claim past its deadline returns to the grab-box."
+            confirmLabel="Reclaim"
+            variant="outline"
+            disabled={reclaim.isPending}
+            onConfirm={() => {
+                reclaim.mutate();
+            }}
+        >
+            Reclaim overdue
+        </ConfirmButton>
+    );
+}
+
+export function TasksPage(): ReactNode {
+    return (
+        <RequireRole role={Role.Supervisor}>
+            <PageHeader
+                title="Tasks"
+                actions={
+                    <>
+                        <ReclaimButton />
+                        <TaskFormDialog
+                            trigger={
+                                <Button size="sm">
+                                    <Plus />
+                                    New task
+                                </Button>
+                            }
+                        />
+                    </>
+                }
+            />
+            <TasksTable />
+        </RequireRole>
+    );
+}

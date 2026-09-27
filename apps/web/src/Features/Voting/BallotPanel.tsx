@@ -1,0 +1,225 @@
+"use client";
+
+import { PollType, type EntryDto, type RoundDetailDto } from "@platform/contracts";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowDown, ArrowUp, Check, X } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { toast } from "sonner";
+import { ApiError, describeError } from "@/Api/ApiClient";
+import { platformApi } from "@/Api/PlatformApi";
+import { queryKeys } from "@/Api/QueryKeys";
+import { EmptyState, ErrorState, LoadingRows, SignInPrompt } from "@/Components/Common/States";
+import { Alert, AlertDescription } from "@/Components/Ui/alert";
+import { Button } from "@/Components/Ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/Components/Ui/card";
+import { useSession } from "@/Hooks/UseSession";
+import { formatDateTime } from "@/Lib/Format";
+import { movePick, samePicks, togglePick } from "@/Lib/Ranking";
+import { cn } from "@/Lib/Utils";
+import { EntryMedia } from "./EntryMedia";
+import { isEligible, requiredPicks, useApprovedEntries } from "./UseApprovedEntries";
+
+async function fetchMyBallot(roundId: string): Promise<string[] | null> {
+    try {
+        return (await platformApi.myBallot(roundId)).picks;
+    } catch (error: unknown) {
+        if (error instanceof ApiError && error.status === 404) {
+            return null;
+        }
+        throw error;
+    }
+}
+
+interface BallotEditorProps {
+    readonly round: RoundDetailDto;
+    readonly entries: readonly EntryDto[];
+    readonly savedPicks: readonly string[] | null;
+}
+
+function BallotEditor({ round, entries, savedPicks }: BallotEditorProps): ReactNode {
+    const queryClient = useQueryClient();
+    const required = requiredPicks[round.pollType];
+    const eligibleIds = useMemo(() => new Set(entries.map((entry) => entry.id)), [entries]);
+    const [picks, setPicks] = useState<string[]>(() => (savedPicks ?? []).filter((pick) => eligibleIds.has(pick)));
+    const entriesById = useMemo(() => new Map(entries.map((entry) => [entry.id, entry])), [entries]);
+
+    const cast = useMutation({
+        mutationFn: (selection: readonly string[]) => platformApi.castBallot(round.id, selection),
+        onSuccess: (ballot) => {
+            queryClient.setQueryData(queryKeys.myBallot(round.id), ballot.picks);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.leaderboard(round.id) });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.round(round.id) });
+            toast.success(savedPicks === null ? "Your vote is in." : "Your ballot was updated.");
+        },
+        onError: (error) => {
+            toast.error(describeError(error));
+        }
+    });
+
+    const toggle = (entryId: string): void => {
+        setPicks((current) => togglePick(current, entryId, required));
+    };
+
+    const isUnchanged = samePicks(savedPicks, picks);
+
+    return (
+        <div className="space-y-6">
+            {round.pollType === PollType.RankedChoice && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-sm">Your ranking</CardTitle>
+                        <CardDescription>Pick exactly {required} entries, best first.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ol className="space-y-2">
+                            {Array.from({ length: required }, (_, index) => {
+                                const pick = picks[index];
+                                const entry = pick === undefined ? undefined : entriesById.get(pick);
+                                return (
+                                    <li key={index} className="flex items-center gap-2 border px-3 py-2 text-sm">
+                                        <span className="text-muted-foreground w-6 tabular-nums">#{index + 1}</span>
+                                        <span className={cn("flex-1 truncate", entry === undefined && "text-muted-foreground")}>
+                                            {entry?.title ?? "Empty"}
+                                        </span>
+                                        {pick !== undefined && (
+                                            <div className="flex gap-1">
+                                                <Button
+                                                    size="icon-xs"
+                                                    variant="ghost"
+                                                    aria-label="Move up"
+                                                    disabled={index === 0}
+                                                    onClick={() => {
+                                                        setPicks((current) => movePick(current, index, -1));
+                                                    }}
+                                                >
+                                                    <ArrowUp />
+                                                </Button>
+                                                <Button
+                                                    size="icon-xs"
+                                                    variant="ghost"
+                                                    aria-label="Move down"
+                                                    disabled={index === picks.length - 1}
+                                                    onClick={() => {
+                                                        setPicks((current) => movePick(current, index, 1));
+                                                    }}
+                                                >
+                                                    <ArrowDown />
+                                                </Button>
+                                                <Button
+                                                    size="icon-xs"
+                                                    variant="ghost"
+                                                    aria-label="Remove"
+                                                    onClick={() => {
+                                                        toggle(pick);
+                                                    }}
+                                                >
+                                                    <X />
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </li>
+                                );
+                            })}
+                        </ol>
+                    </CardContent>
+                </Card>
+            )}
+            <ul className="grid gap-4 sm:grid-cols-2">
+                {entries.map((entry) => {
+                    const position = picks.indexOf(entry.id);
+                    const isPicked = position >= 0;
+                    return (
+                        <li key={entry.id}>
+                            <Card className={cn("h-full", isPicked && "border-foreground")}>
+                                <CardHeader>
+                                    <CardTitle className="text-sm">{entry.title}</CardTitle>
+                                    {entry.description !== null && (
+                                        <CardDescription className="whitespace-pre-line">{entry.description}</CardDescription>
+                                    )}
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    <EntryMedia url={entry.mediaUrl} title={entry.title} />
+                                    <Button
+                                        size="sm"
+                                        className="w-full"
+                                        variant={isPicked ? "default" : "outline"}
+                                        aria-pressed={isPicked}
+                                        disabled={!isPicked && required > 1 && picks.length >= required}
+                                        onClick={() => {
+                                            toggle(entry.id);
+                                        }}
+                                    >
+                                        {isPicked ? (
+                                            <>
+                                                <Check />
+                                                {required === 1 ? "Selected" : `Ranked #${position + 1}`}
+                                            </>
+                                        ) : required === 1 ? (
+                                            "Select"
+                                        ) : (
+                                            "Add to ranking"
+                                        )}
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        </li>
+                    );
+                })}
+            </ul>
+            <div className="bg-background/95 sticky bottom-0 flex items-center justify-between gap-3 border-t py-3">
+                <span className="text-muted-foreground text-xs">
+                    {picks.length}/{required} selected{savedPicks !== null && " · you have already voted"}
+                </span>
+                <Button
+                    disabled={picks.length !== required || cast.isPending || isUnchanged}
+                    onClick={() => {
+                        cast.mutate(picks);
+                    }}
+                >
+                    {savedPicks === null ? "Cast vote" : "Update vote"}
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+export function BallotPanel({ round }: { readonly round: RoundDetailDto }): ReactNode {
+    const { user, isLoading } = useSession();
+    const entries = useApprovedEntries(round.id);
+    const ballot = useQuery({
+        queryKey: queryKeys.myBallot(round.id),
+        queryFn: () => fetchMyBallot(round.id),
+        enabled: user !== null
+    });
+
+    if (!round.isAcceptingVotes) {
+        return <EmptyState title="Voting is closed">This round opens {formatDateTime(round.opensAt)}.</EmptyState>;
+    }
+    if (isLoading) {
+        return <LoadingRows />;
+    }
+    if (user === null) {
+        return <SignInPrompt message="Sign in with Discord to vote." />;
+    }
+    if (user.isBlacklisted) {
+        return (
+            <Alert variant="destructive">
+                <AlertDescription>Your account is blacklisted from voting.</AlertDescription>
+            </Alert>
+        );
+    }
+    if (entries.isPending || ballot.isPending) {
+        return <LoadingRows rows={4} />;
+    }
+    if (entries.isError) {
+        return <ErrorState error={entries.error} onRetry={() => void entries.refetch()} />;
+    }
+    if (ballot.isError) {
+        return <ErrorState error={ballot.error} onRetry={() => void ballot.refetch()} />;
+    }
+    const eligible = entries.data.filter(isEligible);
+    if (eligible.length < requiredPicks[round.pollType] || (round.pollType === PollType.Binary && eligible.length < 2)) {
+        return <EmptyState title="Not enough entries yet">Voting starts once enough entries are approved.</EmptyState>;
+    }
+    return <BallotEditor key={ballot.data?.join(",") ?? "new"} round={round} entries={eligible} savedPicks={ballot.data} />;
+}
