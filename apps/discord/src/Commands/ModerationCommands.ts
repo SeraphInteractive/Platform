@@ -2,7 +2,7 @@ import { Role, type Specialty } from "@platform/contracts";
 import { MessageFlags, SlashCommandBuilder, type ChatInputCommandInteraction, type GuildMember } from "discord.js";
 import { asEdit, ephemeral, message, panel, plain } from "../Discord/Ui.js";
 import { findStudioRole, isLeadership, platformRoleFor } from "../Services/StudioRoles.js";
-import { actingAs, UserFacingError, type BotContext, type SlashCommand } from "./Command.js";
+import { actingAs, requirePlatformRole, UserFacingError, type BotContext, type SlashCommand } from "./Command.js";
 
 export const blacklistCommand: SlashCommand = {
     definition: new SlashCommandBuilder()
@@ -25,6 +25,7 @@ export const blacklistCommand: SlashCommand = {
             throw new UserFacingError("Pick a member or give a valid Discord ID.");
         }
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        await requirePlatformRole(interaction, context, Role.Supervisor);
         const api = actingAs(interaction, context);
         const ban = interaction.options.getString("action", true) === "ban";
         const user = ban ? await api.blacklist(target, interaction.options.getString("reason")) : await api.reinstate(target);

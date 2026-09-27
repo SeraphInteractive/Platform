@@ -16,6 +16,7 @@ import {
 import { actingUserHeader } from "@platform/contracts";
 import { ApplicationError, BadRequestError, ErrorCode, ForbiddenError, UnauthorizedError } from "./Common/Errors/ApplicationError.js";
 import type { Principal } from "./Common/Security/Principal.js";
+import { requireRole } from "./Common/Security/Authorization.js";
 import type { TokenService } from "./Modules/Auth/TokenService.js";
 import { registerErrorHandling } from "./Common/Http/ErrorHandling.js";
 import type { ServiceContainer } from "./Composition/ServiceContainer.js";
@@ -187,7 +188,7 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
 
     await application.register(
         async (api) => {
-            api.get("/openapi.json", { schema: { hide: true } }, async () => application.swagger());
+            api.get("/openapi.json", { schema: { hide: true }, preHandler: requireRole(Role.Moderator) }, async () => application.swagger());
             await api.register(authRoutes, { services });
             await api.register(usersRoutes, { services });
             await api.register(roundsRoutes, { services });

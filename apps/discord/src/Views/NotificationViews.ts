@@ -43,7 +43,7 @@ ${line}`;
 }
 
 function preview(url: string | null | undefined, title: string): MediaGalleryBuilder | null {
-    return url === null || url === undefined || !/\.(png|jpe?g|gif|webp)$/iu.test(url) ? null : image(url, title);
+    return url === null || url === undefined || !/\.(png|jpe?g|gif|webp|mp4|webm|mov)$/iu.test(url) ? null : image(url, title);
 }
 
 function reason(value: string | null): string | null {

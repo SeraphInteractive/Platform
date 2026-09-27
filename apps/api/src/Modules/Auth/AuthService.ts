@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
 import type { RoleAssignmentConfiguration, SecurityConfiguration } from "../../Configuration/ApplicationConfiguration.js";
 import { BadRequestError, ErrorCode } from "../../Common/Errors/ApplicationError.js";
@@ -142,7 +142,7 @@ export class AuthService {
                 set: {
                     discordUsername: profile.username,
                     discordAvatar: profile.avatar,
-                    role: sql`GREATEST(${users.role}, excluded.role)`,
+                    role: assignedRole,
                     updatedAt: new Date()
                 }
             })
