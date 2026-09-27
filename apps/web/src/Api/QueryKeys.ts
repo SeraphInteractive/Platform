@@ -23,5 +23,8 @@ export const queryKeys = {
     entry: (roundId: string, entryId: string) => ["round", roundId, "entry", entryId] as const,
     entryTelemetry: (roundId: string, entryId: string) => ["round", roundId, "telemetry", entryId] as const,
     presence: (discordIds: readonly string[]) => ["presence", [...discordIds].sort().join(",")] as const,
-    threadMaps: ["thread-maps"] as const
+    threadMaps: ["thread-maps"] as const,
+    document: (slug: string) => ["document", slug] as const,
+    documentRevisions: (slug: string) => ["document", slug, "revisions"] as const,
+    legalAcceptance: ["legal-acceptance"] as const
 };

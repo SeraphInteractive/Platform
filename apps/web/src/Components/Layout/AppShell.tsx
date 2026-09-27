@@ -1,6 +1,6 @@
 "use client";
 
-import { LogIn, LogOut, Moon, Sun, UserRound } from "lucide-react";
+import { CircleUser, LogIn, LogOut, Moon, Sun, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -18,6 +18,7 @@ import {
 import { Separator } from "@/Components/Ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/Components/Ui/sidebar";
 import { Skeleton } from "@/Components/Ui/skeleton";
+import { TermsGate } from "@/Features/Legal/TermsGate";
 import { loginHref, useLogout, useSession } from "@/Hooks/UseSession";
 import { roleLabels } from "@/Lib/Roles";
 import { safeHttpUrl } from "@/Lib/SafeUrl";
@@ -79,6 +80,12 @@ function UserMenu(): ReactNode {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
+                    <Link href="/profile">
+                        <CircleUser />
+                        Profile
+                    </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
                     <Link href="/me">
                         <UserRound />
                         My work
@@ -126,7 +133,7 @@ export function AppShell({ defaultOpen, children }: { readonly defaultOpen: bool
                         </div>
                     </header>
                     <div id="main" className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
-                        {children}
+                        <TermsGate>{children}</TermsGate>
                     </div>
                 </SidebarInset>
             </BreadcrumbProvider>

@@ -1,6 +1,6 @@
 "use client";
 
-import { DifficultyTier, Role, ShotStatus, type ShotDto } from "@platform/contracts";
+import { DifficultyTier, fieldRules, problemOf, Role, ShotStatus, textLimits, type ShotDto } from "@platform/contracts";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, MoreHorizontal, Plus } from "lucide-react";
 import type { Route } from "next";
@@ -16,6 +16,7 @@ import { Pagination } from "@/Components/Common/Pagination";
 import { EmptyState, ErrorState, LoadingRows, RequireRole } from "@/Components/Common/States";
 import { ShotStatusBadge } from "@/Components/Common/StatusBadge";
 import { discordThreadUrl, useSiteConfig } from "@/Components/SiteConfig";
+import { RichTextInputField, TextInputField } from "@/Components/Common/FormField";
 import { Button } from "@/Components/Ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/Components/Ui/dialog";
 import {
@@ -29,7 +30,6 @@ import { Input } from "@/Components/Ui/input";
 import { Label } from "@/Components/Ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/Ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/Ui/table";
-import { Textarea } from "@/Components/Ui/textarea";
 import { useSession } from "@/Hooks/UseSession";
 import { difficultyLabels, shotStatusLabels } from "@/Lib/Format";
 import { hasAtLeast } from "@/Lib/Roles";
@@ -56,27 +56,40 @@ function draftOf(shot: ShotDto | undefined): ShotDraft {
     };
 }
 
+interface ShotProblems {
+    readonly sceneNumber: string | null;
+    readonly shotCode: string | null;
+    readonly title: string | null;
+    readonly description: string | null;
+    readonly seniorPriorityHours: string | null;
+}
+
+function integerProblem(value: string, minimum: number, maximum: number, label: string): string | null {
+    const number = Number(value);
+    return value.trim().length === 0 || !Number.isInteger(number) || number < minimum || number > maximum
+        ? `${label} must be a whole number from ${minimum} to ${maximum}.`
+        : null;
+}
+
+function problemsOf(draft: ShotDraft): ShotProblems {
+    return {
+        sceneNumber: integerProblem(draft.sceneNumber, 1, 100_000, "Scene"),
+        shotCode: problemOf(fieldRules.shotCode, draft.shotCode),
+        title: problemOf(fieldRules.shotTitle, draft.title),
+        description: problemOf(fieldRules.shotDescription, draft.description),
+        seniorPriorityHours: integerProblem(draft.seniorPriorityHours, 0, 168, "Senior priority")
+    };
+}
+
 function toInput(draft: ShotDraft): CreateShotInput | null {
+    if (Object.values(problemsOf(draft)).some((problem) => problem !== null)) {
+        return null;
+    }
     const sceneNumber = Number(draft.sceneNumber);
     const seniorPriorityHours = Number(draft.seniorPriorityHours);
     const shotCode = draft.shotCode.trim();
     const title = draft.title.trim();
     const description = draft.description.trim();
-    const valid =
-        Number.isInteger(sceneNumber) &&
-        sceneNumber >= 1 &&
-        sceneNumber <= 100_000 &&
-        Number.isInteger(seniorPriorityHours) &&
-        seniorPriorityHours >= 0 &&
-        seniorPriorityHours <= 168 &&
-        shotCode.length > 0 &&
-        shotCode.length <= 50 &&
-        title.length > 0 &&
-        title.length <= 255 &&
-        description.length <= 5000;
-    if (!valid) {
-        return null;
-    }
     return {
         roundId: null,
         sceneNumber,
@@ -94,6 +107,7 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
     const [open, setOpen] = useState(false);
     const [draft, setDraft] = useState<ShotDraft>(() => draftOf(shot));
     const input = toInput(draft);
+    const problems = problemsOf(draft);
     const save = useMutation({
         mutationFn: (value: CreateShotInput): Promise<ShotDto> => {
             if (shot === undefined) {
@@ -139,15 +153,30 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
                 <form id={formId} onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-4">
                     <div className="space-y-1.5">
                         <Label htmlFor={`${formId}-scene`}>Scene</Label>
-                        <Input id={`${formId}-scene`} inputMode="numeric" value={draft.sceneNumber} onChange={field("sceneNumber")} />
+                        <Input
+                            id={`${formId}-scene`}
+                            type="number"
+                            min={1}
+                            max={100_000}
+                            step={1}
+                            required
+                            value={draft.sceneNumber}
+                            aria-invalid={(draft.sceneNumber.length > 0 && problems.sceneNumber !== null) || undefined}
+                            title={problems.sceneNumber ?? undefined}
+                            onChange={field("sceneNumber")}
+                        />
                     </div>
                     <div className="space-y-1.5">
                         <Label htmlFor={`${formId}-code`}>Code</Label>
                         <Input
                             id={`${formId}-code`}
-                            maxLength={50}
+                            maxLength={textLimits.shotCode}
+                            required
+                            autoComplete="off"
                             className="font-mono"
                             value={draft.shotCode}
+                            aria-invalid={(draft.shotCode.length > 0 && problems.shotCode !== null) || undefined}
+                            title={problems.shotCode ?? undefined}
                             onChange={field("shotCode")}
                         />
                     </div>
@@ -171,18 +200,34 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="space-y-1.5 sm:col-span-4">
-                        <Label htmlFor={`${formId}-title`}>Title</Label>
-                        <Input id={`${formId}-title`} maxLength={255} value={draft.title} onChange={field("title")} />
+                    {draft.shotCode.length > 0 && problems.shotCode !== null && (
+                        <p className="text-destructive text-xs sm:col-span-4">{problems.shotCode}</p>
+                    )}
+                    <div className="sm:col-span-4">
+                        <TextInputField
+                            id={`${formId}-title`}
+                            label="Title"
+                            value={draft.title}
+                            rule={fieldRules.shotTitle}
+                            limit={textLimits.shotTitle}
+                            hint="Keep it short. Put the detail in the brief."
+                            required
+                            autoComplete="off"
+                            onValueChange={(title) => {
+                                setDraft((current) => ({ ...current, title }));
+                            }}
+                        />
                     </div>
-                    <div className="space-y-1.5 sm:col-span-4">
-                        <Label htmlFor={`${formId}-description`}>Brief</Label>
-                        <Textarea
+                    <div className="sm:col-span-4">
+                        <RichTextInputField
                             id={`${formId}-description`}
-                            rows={5}
-                            maxLength={5000}
+                            label="Brief"
                             value={draft.description}
-                            onChange={field("description")}
+                            rule={fieldRules.shotDescription}
+                            limit={textLimits.shotDescription}
+                            onValueChange={(description) => {
+                                setDraft((current) => ({ ...current, description }));
+                            }}
                         />
                     </div>
                     {shot === undefined && (
@@ -190,10 +235,18 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
                             <Label htmlFor={`${formId}-senior`}>Senior priority (hours)</Label>
                             <Input
                                 id={`${formId}-senior`}
-                                inputMode="numeric"
+                                type="number"
+                                min={0}
+                                max={168}
+                                step={1}
+                                required
                                 value={draft.seniorPriorityHours}
+                                aria-invalid={problems.seniorPriorityHours !== null || undefined}
                                 onChange={field("seniorPriorityHours")}
                             />
+                            {problems.seniorPriorityHours !== null && (
+                                <p className="text-destructive text-xs">{problems.seniorPriorityHours}</p>
+                            )}
                         </div>
                     )}
                 </form>

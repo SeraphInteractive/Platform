@@ -16,7 +16,7 @@ import { Button } from "@/Components/Ui/button";
 import { Card, CardContent } from "@/Components/Ui/card";
 import { useMyShots } from "@/Features/Grabbox/UseMyShots";
 import { useSession } from "@/Hooks/UseSession";
-import { formatDateTime, specialtyLabel } from "@/Lib/Format";
+import { formatDate, specialtyLabel } from "@/Lib/Format";
 import { hasAtLeast, roleLabels } from "@/Lib/Roles";
 import { safeHttpUrl } from "@/Lib/SafeUrl";
 
@@ -38,7 +38,7 @@ function Profile({ user }: { readonly user: UserDto }): ReactNode {
                         </ToneBadge>
                     ))}
                 </div>
-                <p className="text-muted-foreground text-xs">Member since {formatDateTime(user.createdAt)}</p>
+                <p className="text-muted-foreground text-xs">Member since {formatDate(user.createdAt)}</p>
             </div>
         </div>
     );

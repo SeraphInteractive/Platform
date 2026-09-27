@@ -10,13 +10,22 @@ import { pino } from "pino";
 import { buildApplication } from "../../src/App.js";
 import type { ApplicationConfiguration } from "../../src/Configuration/ApplicationConfiguration.js";
 import { createServiceContainer, type ServiceContainer } from "../../src/Composition/ServiceContainer.js";
-import { type Role } from "../../src/Domain/Roles.js";
+import { initialTermsVersion } from "@platform/contracts";
+import { Role } from "../../src/Domain/Roles.js";
 import { MemoryKeyValueStore } from "../../src/Infrastructure/Cache/MemoryKeyValueStore.js";
 import type { Database } from "../../src/Infrastructure/Database/Database.js";
 import * as schema from "../../src/Infrastructure/Database/Schema.js";
 import { MemoryEventBus } from "../../src/Infrastructure/Events/MemoryEventBus.js";
 import { MemoryNotificationLog } from "../../src/Infrastructure/Notifications/MemoryNotificationLog.js";
-import { FakeDiscordOAuthClient, FakeObjectStorage, FakePresenceProvider, RecordingNotifier } from "./TestDoubles.js";
+import {
+    FakeCaptchaVerifier,
+    FakeDiscordOAuthClient,
+    FakeMailDomainChecker,
+    FakeObjectStorage,
+    FakePresenceProvider,
+    RecordingEmailSender,
+    RecordingNotifier
+} from "./TestDoubles.js";
 
 export const webOrigin = "https://app.example.test";
 export const serviceToken = "service-token-for-integration-tests-0123456789";
@@ -52,7 +61,9 @@ export const testConfiguration: ApplicationConfiguration = {
         mediaPublicUrl: "https://media.test",
         mediaMaxBytes: 5 * 1024 * 1024,
         deliverableMaxBytes: 100 * 1024 * 1024
-    }
+    },
+    email: { resendApiKey: undefined, from: undefined },
+    verification: { turnstileSecretKey: undefined }
 };
 
 export interface TestUser {
@@ -70,6 +81,7 @@ export interface TestContext {
     readonly eventBus: MemoryEventBus;
     readonly storage: FakeObjectStorage;
     readonly discord: FakeDiscordOAuthClient;
+    readonly emailSender: RecordingEmailSender;
     createUser(role: Role, overrides?: Partial<schema.UserRecord>): Promise<TestUser>;
     close(): Promise<void>;
 }
@@ -125,6 +137,7 @@ export async function createTestContext(): Promise<TestContext> {
     const eventBus = new MemoryEventBus();
     const storage = new FakeObjectStorage();
     const discord = new FakeDiscordOAuthClient();
+    const emailSender = new RecordingEmailSender();
     const services = createServiceContainer(
         testConfiguration,
         {
@@ -138,6 +151,9 @@ export async function createTestContext(): Promise<TestContext> {
             notifier,
             notificationLog,
             rateLimitRedis: undefined,
+            emailSender,
+            captchaVerifier: new FakeCaptchaVerifier(),
+            mailDomainChecker: new FakeMailDomainChecker(),
             dispose: () => testDatabase.close()
         },
         logger,
@@ -155,10 +171,19 @@ export async function createTestContext(): Promise<TestContext> {
         eventBus,
         storage,
         discord,
+        emailSender,
         createUser: async (role, overrides = {}) => {
             const [record] = await database
                 .insert(schema.users)
-                .values({ discordId: nextSnowflake(), discordUsername: `${role}-user`, role, ...overrides })
+                .values({
+                    discordId: nextSnowflake(),
+                    discordUsername: `${role}-user`,
+                    role,
+                    termsVersion: initialTermsVersion,
+                    termsAcceptedAt: new Date(),
+                    emailVerifiedAt: role === Role.Member ? null : new Date(),
+                    ...overrides
+                })
                 .returning();
             if (record === undefined) {
                 throw new Error("user insert failed");

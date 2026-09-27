@@ -47,7 +47,8 @@ export class TokenService {
                 discordId: users.discordId,
                 discordUsername: users.discordUsername,
                 role: users.role,
-                isBlacklisted: users.isBlacklisted
+                isBlacklisted: users.isBlacklisted,
+                termsVersion: users.termsVersion
             })
             .from(accessTokens)
             .innerJoin(users, eq(users.id, accessTokens.userId))
@@ -77,7 +78,8 @@ export class TokenService {
                 discordId: row.discordId,
                 discordUsername: row.discordUsername,
                 role: row.role,
-                isBlacklisted: row.isBlacklisted
+                isBlacklisted: row.isBlacklisted,
+                termsVersion: row.termsVersion
             }
         };
     }
@@ -89,7 +91,8 @@ export class TokenService {
                 discordId: users.discordId,
                 discordUsername: users.discordUsername,
                 role: users.role,
-                isBlacklisted: users.isBlacklisted
+                isBlacklisted: users.isBlacklisted,
+                termsVersion: users.termsVersion
             })
             .from(users)
             .where(eq(users.discordId, discordId))

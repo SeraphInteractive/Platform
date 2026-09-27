@@ -1,3 +1,6 @@
+import type { CaptchaVerifier } from "../../src/Infrastructure/Captcha/CaptchaVerifier.js";
+import type { EmailMessage, EmailSender } from "../../src/Infrastructure/Email/EmailSender.js";
+import type { MailDomainChecker } from "../../src/Infrastructure/Email/MailDomainChecker.js";
 import type { NotificationInput } from "../../src/Infrastructure/Notifications/Notification.js";
 import { StreamNotifier } from "../../src/Infrastructure/Notifications/NotificationLog.js";
 import { DiscordOAuthError, type DiscordOAuthClient, type DiscordProfile } from "../../src/Infrastructure/Discord/DiscordOAuthClient.js";
@@ -79,5 +82,36 @@ export class RecordingNotifier extends StreamNotifier {
     public override notify(notification: NotificationInput): void {
         this.notifications.push(notification);
         super.notify(notification);
+    }
+}
+
+export const passingCaptchaToken = "captcha-pass";
+
+export class FakeCaptchaVerifier implements CaptchaVerifier {
+    public verify(token: string): Promise<boolean> {
+        return Promise.resolve(token === passingCaptchaToken);
+    }
+}
+
+export class FakeMailDomainChecker implements MailDomainChecker {
+    public acceptsMail(domain: string): Promise<boolean> {
+        return Promise.resolve(!domain.endsWith(".invalid"));
+    }
+}
+
+export class RecordingEmailSender implements EmailSender {
+    public readonly messages: EmailMessage[] = [];
+
+    public isEnabled(): boolean {
+        return true;
+    }
+
+    public send(message: EmailMessage): Promise<void> {
+        this.messages.push(message);
+        return Promise.resolve();
+    }
+
+    public lastCode(): string | null {
+        return /\d{6}/u.exec(this.messages.at(-1)?.text ?? "")?.[0] ?? null;
     }
 }

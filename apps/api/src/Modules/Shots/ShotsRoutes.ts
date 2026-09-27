@@ -1,15 +1,7 @@
-import { reviewQueueItemSchema, shotDetailSchema, shotSchema, submissionSchema } from "@platform/contracts";
+import { fieldRules, reviewQueueItemSchema, shotDetailSchema, shotSchema, submissionSchema } from "@platform/contracts";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
-import {
-    dataEnvelope,
-    errorResponses,
-    pageEnvelope,
-    paginationQuerySchema,
-    toIso,
-    trimmedText,
-    uuidSchema
-} from "../../Common/Http/Schemas.js";
+import { dataEnvelope, errorResponses, pageEnvelope, paginationQuerySchema, toIso, uuidSchema } from "../../Common/Http/Schemas.js";
 import { currentUser, optionalUser, requireRole, userActorOf } from "../../Common/Security/Authorization.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
 import { DeliverableKind, DifficultyTier, ReviewDecision, ShotStatus } from "../../Domain/Enums.js";
@@ -132,9 +124,9 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
                 body: z.object({
                     roundId: uuidSchema.nullable().default(null),
                     sceneNumber: z.number().int().positive().max(100_000),
-                    shotCode: trimmedText(50),
-                    title: trimmedText(255),
-                    description: trimmedText(5000).nullable().default(null),
+                    shotCode: fieldRules.shotCode,
+                    title: fieldRules.shotTitle,
+                    description: fieldRules.shotDescription.default(null),
                     difficultyTier: z.enum(DifficultyTier),
                     seniorPriorityHours: z.number().int().min(0).max(168).default(0)
                 }),
@@ -160,9 +152,9 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
                     .object({
                         roundId: uuidSchema.nullable().optional(),
                         sceneNumber: z.number().int().positive().max(100_000).optional(),
-                        shotCode: trimmedText(50).optional(),
-                        title: trimmedText(255).optional(),
-                        description: trimmedText(5000).nullable().optional(),
+                        shotCode: fieldRules.shotCode.optional(),
+                        title: fieldRules.shotTitle.optional(),
+                        description: fieldRules.shotDescription.optional(),
                         difficultyTier: z.enum(DifficultyTier).optional()
                     })
                     .refine((body) => Object.keys(body).length > 0, "at least one field is required"),
@@ -221,7 +213,7 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
                 summary: "Return a claimed shot to the pool.",
                 security,
                 params: shotParams,
-                body: z.object({ reason: trimmedText(500).nullable().default(null) }).default({ reason: null }),
+                body: z.object({ reason: fieldRules.reason.default(null) }).default({ reason: null }),
                 response: { 200: dataEnvelope(shotSchema), ...errorResponses }
             }
         },
@@ -271,7 +263,7 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
                 body: z.object({
                     videoKey: z.string().min(1).max(512),
                     blendKey: z.string().min(1).max(512).nullable().default(null),
-                    notes: trimmedText(2000).nullable().default(null)
+                    notes: fieldRules.workNotes.default(null)
                 }),
                 response: { 201: dataEnvelope(submissionSchema), ...errorResponses }
             }
@@ -335,7 +327,7 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
                 summary: "Approve a submission or request a revision.",
                 security,
                 params: z.object({ submissionId: uuidSchema }),
-                body: z.object({ decision: z.enum(ReviewDecision), notes: trimmedText(2000).nullable().default(null) }),
+                body: z.object({ decision: z.enum(ReviewDecision), notes: fieldRules.reviewNotes.default(null) }),
                 response: { 200: dataEnvelope(submissionSchema), ...errorResponses }
             }
         },

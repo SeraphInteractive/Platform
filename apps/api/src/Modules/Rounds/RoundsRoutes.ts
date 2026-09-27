@@ -1,3 +1,4 @@
+import { fieldRules } from "@platform/contracts";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import {
@@ -7,7 +8,6 @@ import {
     paginationQuerySchema,
     timestampSchema,
     toIso,
-    trimmedText,
     uuidSchema
 } from "../../Common/Http/Schemas.js";
 import { actorOf, optionalUser, requireRole, userActorOf } from "../../Common/Security/Authorization.js";
@@ -89,7 +89,7 @@ export const roundsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }>
                 summary: "Create a voting round in draft status.",
                 security,
                 body: z.object({
-                    title: trimmedText(255),
+                    title: fieldRules.roundTitle,
                     pollType: z.enum(PollType).default(PollType.RankedChoice),
                     opensAt: dateInput.nullable().default(null),
                     closesAt: dateInput.nullable().default(null)
@@ -114,7 +114,7 @@ export const roundsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }>
                 params: roundParams,
                 body: z
                     .object({
-                        title: trimmedText(255).optional(),
+                        title: fieldRules.roundTitle.optional(),
                         pollType: z.enum(PollType).optional(),
                         status: editableStatus.optional(),
                         opensAt: dateInput.nullable().optional(),

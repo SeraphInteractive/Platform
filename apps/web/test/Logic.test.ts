@@ -1,7 +1,15 @@
 import { Role, Specialty, type UserDto } from "@platform/contracts";
 import { describe, expect, it } from "vitest";
 import { buildQuery } from "@/Api/ApiClient";
-import { formatBytes, formatPercent, fromLocalInputValue, specialtyLabel, toLocalInputValue } from "@/Lib/Format";
+import {
+    formatBytes,
+    formatDate,
+    formatDateTime,
+    formatPercent,
+    fromLocalInputValue,
+    specialtyLabel,
+    toLocalInputValue
+} from "@/Lib/Format";
 import { pipelineSteps, progressPercentFor } from "@/Lib/Pipeline";
 import { movePick, samePicks, togglePick } from "@/Lib/Ranking";
 import { hasAtLeast, outranks, rolesByRank } from "@/Lib/Roles";
@@ -15,6 +23,9 @@ function user(role: Role): UserDto {
         role,
         specialties: [],
         isBlacklisted: false,
+        isOnboarded: true,
+        termsVersion: null,
+        isVerified: true,
         createdAt: "2026-09-27T00:00:00.000Z"
     };
 }
@@ -58,7 +69,7 @@ describe("ballot ranking", () => {
 
 describe("roles", () => {
     it("orders roles from voter to super admin", () => {
-        expect(rolesByRank[0]).toBe(Role.Voter);
+        expect(rolesByRank[0]).toBe(Role.Member);
         expect(rolesByRank.at(-1)).toBe(Role.SuperAdmin);
     });
 
@@ -113,5 +124,24 @@ describe("pipeline", () => {
     it("matches the API default for the first step and ends at 100%", () => {
         expect(progressPercentFor(0)).toBe(3);
         expect(progressPercentFor(pipelineSteps.length - 1)).toBe(100);
+    });
+});
+
+describe("date formatting", () => {
+    const now = new Date(2026, 8, 27, 12, 0);
+
+    it("names nearby days", () => {
+        expect(formatDateTime(new Date(2026, 8, 27, 9, 5).toISOString(), now)).toBe("Today, 09:05");
+        expect(formatDateTime(new Date(2026, 8, 28, 18, 30).toISOString(), now)).toBe("Tomorrow, 18:30");
+    });
+
+    it("drops the year within the current year", () => {
+        expect(formatDateTime(new Date(2026, 9, 3, 14, 0).toISOString(), now)).toBe("Sat 3 Oct, 14:00");
+        expect(formatDateTime(new Date(2025, 0, 5, 8, 0).toISOString(), now)).toBe("5 Jan 2025, 08:00");
+    });
+
+    it("formats plain dates", () => {
+        expect(formatDate(new Date(2026, 8, 27).toISOString())).toBe("27 Sept 2026");
+        expect(formatDate(null)).toBe("Not set");
     });
 });

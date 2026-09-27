@@ -1,6 +1,15 @@
 "use client";
 
-import { maximumSpecialties, PresenceStatus, Role, Specialty, type ModeratedUserDto, type UserDto } from "@platform/contracts";
+import {
+    fieldRules,
+    maximumSpecialties,
+    type ModeratedUserDto,
+    problemOf,
+    Role,
+    Specialty,
+    textLimits,
+    type UserDto
+} from "@platform/contracts";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -13,19 +22,18 @@ import { Pagination } from "@/Components/Common/Pagination";
 import { EmptyState, ErrorState, LoadingRows, RequireRole } from "@/Components/Common/States";
 import { Tone, ToneBadge } from "@/Components/Common/StatusBadge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/Components/Ui/avatar";
+import { RichTextInputField } from "@/Components/Common/FormField";
+import { MarkdownText } from "@/Components/Common/MarkdownText";
 import { Button } from "@/Components/Ui/button";
 import { Checkbox } from "@/Components/Ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/Components/Ui/dialog";
-import { Label } from "@/Components/Ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/Components/Ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/Ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/Ui/table";
-import { Textarea } from "@/Components/Ui/textarea";
 import { useSession } from "@/Hooks/UseSession";
-import { formatDateTime, specialtyLabel } from "@/Lib/Format";
+import { formatDate, specialtyLabel } from "@/Lib/Format";
 import { hasAtLeast, isGrantable, outranks, roleLabels, rolesByRank } from "@/Lib/Roles";
 import { safeHttpUrl } from "@/Lib/SafeUrl";
-import { cn } from "@/Lib/Utils";
 
 const anyRole = "any";
 
@@ -65,22 +73,18 @@ function BlacklistDialog({ target, onDone }: { readonly target: ModeratedUserDto
                     <DialogTitle>Blacklist {target.username}?</DialogTitle>
                     <DialogDescription>Their ballots stop counting in every round.</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-1.5">
-                    <Label htmlFor={reasonId}>Reason (optional)</Label>
-                    <Textarea
-                        id={reasonId}
-                        rows={3}
-                        maxLength={500}
-                        value={reason}
-                        onChange={(event) => {
-                            setReason(event.target.value);
-                        }}
-                    />
-                </div>
+                <RichTextInputField
+                    id={reasonId}
+                    label="Reason (optional)"
+                    value={reason}
+                    rule={fieldRules.reason}
+                    limit={textLimits.reason}
+                    onValueChange={setReason}
+                />
                 <DialogFooter>
                     <Button
                         variant="destructive"
-                        disabled={blacklist.isPending}
+                        disabled={blacklist.isPending || problemOf(fieldRules.reason, reason) !== null}
                         onClick={() => {
                             blacklist.mutate();
                         }}
@@ -92,13 +96,6 @@ function BlacklistDialog({ target, onDone }: { readonly target: ModeratedUserDto
         </Dialog>
     );
 }
-
-const presenceClasses: Readonly<Record<PresenceStatus, string>> = {
-    [PresenceStatus.Online]: "bg-success",
-    [PresenceStatus.Idle]: "bg-warning",
-    [PresenceStatus.DoNotDisturb]: "bg-destructive",
-    [PresenceStatus.Offline]: "bg-muted-foreground/40"
-};
 
 function SpecialtiesEditor({ target, disabled }: { readonly target: ModeratedUserDto; readonly disabled: boolean }): ReactNode {
     const queryClient = useQueryClient();
@@ -168,10 +165,9 @@ function SpecialtiesEditor({ target, disabled }: { readonly target: ModeratedUse
 interface UserRowProps {
     readonly actor: UserDto;
     readonly target: ModeratedUserDto;
-    readonly presence: PresenceStatus | undefined;
 }
 
-function UserRow({ actor, target, presence }: UserRowProps): ReactNode {
+function UserRow({ actor, target }: UserRowProps): ReactNode {
     const queryClient = useQueryClient();
     const refresh = (): void => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.usersAll });
@@ -205,21 +201,10 @@ function UserRow({ actor, target, presence }: UserRowProps): ReactNode {
         <TableRow>
             <TableCell>
                 <div className="flex items-center gap-2">
-                    <span className="relative">
-                        <Avatar className="size-7">
-                            {avatar !== null && <AvatarImage src={avatar} alt="" />}
-                            <AvatarFallback className="text-[10px]">{target.username.slice(0, 2).toUpperCase()}</AvatarFallback>
-                        </Avatar>
-                        {presence !== undefined && (
-                            <span
-                                className={cn(
-                                    "ring-card absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2",
-                                    presenceClasses[presence]
-                                )}
-                                title={presence}
-                            />
-                        )}
-                    </span>
+                    <Avatar className="size-7">
+                        {avatar !== null && <AvatarImage src={avatar} alt="" />}
+                        <AvatarFallback className="text-[10px]">{target.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
                     <div className="min-w-0">
                         <p className="truncate font-medium">{target.username}</p>
                         <SpecialtiesEditor key={target.specialties.join(",")} target={target} disabled={!manageable} />
@@ -258,14 +243,14 @@ function UserRow({ actor, target, presence }: UserRowProps): ReactNode {
                     <span className="space-y-0.5">
                         <ToneBadge tone={Tone.Negative}>Blacklisted</ToneBadge>
                         {target.blacklistReason !== null && (
-                            <span className="text-muted-foreground block text-xs">{target.blacklistReason}</span>
+                            <MarkdownText className="text-muted-foreground text-xs">{target.blacklistReason}</MarkdownText>
                         )}
                     </span>
                 ) : (
                     <ToneBadge tone={Tone.Neutral}>Active</ToneBadge>
                 )}
             </TableCell>
-            <TableCell className="text-muted-foreground text-xs whitespace-nowrap">{formatDateTime(target.createdAt)}</TableCell>
+            <TableCell className="text-muted-foreground text-xs whitespace-nowrap">{formatDate(target.createdAt)}</TableCell>
             <TableCell>
                 {manageable && (
                     <div className="flex flex-wrap justify-end gap-1.5">
@@ -312,15 +297,6 @@ function PeopleTable({ actor }: { readonly actor: UserDto }): ReactNode {
         queryKey: queryKeys.users(query),
         queryFn: () => platformApi.users(query),
         placeholderData: keepPreviousData
-    });
-    const discordIds = (users.data?.data ?? []).map((user) => user.discordId);
-    const presence = useQuery({
-        queryKey: queryKeys.presence(discordIds),
-        queryFn: () => platformApi.presence(discordIds),
-        enabled: discordIds.length > 0,
-        staleTime: 90_000,
-        refetchOnWindowFocus: false,
-        retry: false
     });
 
     return (
@@ -373,7 +349,7 @@ function PeopleTable({ actor }: { readonly actor: UserDto }): ReactNode {
                             </TableHeader>
                             <TableBody>
                                 {users.data.data.map((target) => (
-                                    <UserRow key={target.id} actor={actor} target={target} presence={presence.data?.[target.discordId]} />
+                                    <UserRow key={target.id} actor={actor} target={target} />
                                 ))}
                             </TableBody>
                         </Table>

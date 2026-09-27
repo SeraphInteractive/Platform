@@ -77,7 +77,7 @@ describe("authentication", () => {
         expect(exchange.statusCode).toBe(200);
         const session = json<{ data: { token: string; user: { discordId: string; role: string } } }>(exchange).data;
         expect(session.user.discordId).toBe(discordId);
-        expect(session.user.role).toBe(Role.Voter);
+        expect(session.user.role).toBe(Role.Member);
 
         const me = await context.application.inject({
             method: "GET",
@@ -162,6 +162,22 @@ describe("authentication", () => {
             payload: { code: fragment.get("code"), codeVerifier: verifier }
         });
         expect(json<{ data: { user: { role: string } } }>(exchange).data.user.role).toBe(Role.Admin);
+    });
+
+    it("keeps roles granted in the app when the user logs in again", async () => {
+        const discordId = nextSnowflake();
+        const existing = await context.createUser(Role.Contributor, { discordId });
+        context.discord.register("returning-code", { id: discordId, username: "Returning", avatar: null });
+        const { fragment, verifier } = await login("returning-code");
+        const exchange = await context.application.inject({
+            method: "POST",
+            url: "/api/v1/auth/token",
+            payload: { code: fragment.get("code"), codeVerifier: verifier }
+        });
+        expect(json<{ data: { user: { id: string; role: string } } }>(exchange).data.user).toMatchObject({
+            id: existing.record.id,
+            role: Role.Contributor
+        });
     });
 
     it("rejects malformed and unknown bearer tokens", async () => {

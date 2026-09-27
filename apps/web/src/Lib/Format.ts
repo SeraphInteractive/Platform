@@ -1,13 +1,14 @@
 import { DifficultyTier, EntryStatus, PollType, RoundStatus, ShotStatus, SubmissionStatus, type Specialty } from "@platform/contracts";
 
-const dateTimeFormat = new Intl.DateTimeFormat("en-GB", {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZoneName: "short"
-});
+const timeFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
+const dayFormat = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short" });
+const dateFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const dayNames: Readonly<Record<number, string>> = { [-1]: "Yesterday", 0: "Today", 1: "Tomorrow" };
+
+function calendarDayOffset(date: Date, now: Date): number {
+    const start = (value: Date): number => new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
+    return Math.round((start(date) - start(now)) / (24 * 3600 * 1000));
+}
 
 const relativeFormat = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 
@@ -21,8 +22,21 @@ const relativeUnits: readonly [Intl.RelativeTimeFormatUnit, number][] = [
     ["second", 1]
 ];
 
-export function formatDateTime(value: string | null): string {
-    return value === null ? "Not set" : dateTimeFormat.format(new Date(value));
+export function formatDate(value: string | null): string {
+    return value === null ? "Not set" : dateFormat.format(new Date(value));
+}
+
+export function formatDateTime(value: string | null, now: Date = new Date()): string {
+    if (value === null) {
+        return "Not set";
+    }
+    const date = new Date(value);
+    const time = timeFormat.format(date);
+    const named = dayNames[calendarDayOffset(date, now)];
+    if (named !== undefined) {
+        return `${named}, ${time}`;
+    }
+    return `${date.getFullYear() === now.getFullYear() ? dayFormat.format(date) : dateFormat.format(date)}, ${time}`;
 }
 
 export function formatRelative(value: string, now: number = Date.now()): string {

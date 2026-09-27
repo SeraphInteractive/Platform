@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { GuidelinesView } from "@/Features/Guidelines/GuidelinesView";
+import { DocumentSlug } from "@platform/contracts";
+import { DocumentView } from "@/Features/Documents/DocumentView";
 
 export const metadata: Metadata = { title: "Guidelines" };
 
 export default function GuidelinesPage(): ReactNode {
-    return <GuidelinesView />;
+    return <DocumentView slug={DocumentSlug.Guidelines} />;
 }

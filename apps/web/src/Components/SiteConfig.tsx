@@ -5,9 +5,10 @@ import { createContext, useContext, type ReactNode } from "react";
 export interface SiteConfig {
     readonly discordGuildId: string | null;
     readonly discordInviteUrl: string | null;
+    readonly turnstileSiteKey: string | null;
 }
 
-const SiteConfigContext = createContext<SiteConfig>({ discordGuildId: null, discordInviteUrl: null });
+const SiteConfigContext = createContext<SiteConfig>({ discordGuildId: null, discordInviteUrl: null, turnstileSiteKey: null });
 
 export function SiteConfigProvider({ value, children }: { readonly value: SiteConfig; readonly children: ReactNode }): ReactNode {
     return <SiteConfigContext value={value}>{children}</SiteConfigContext>;

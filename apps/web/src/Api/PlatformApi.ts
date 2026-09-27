@@ -3,6 +3,11 @@ import {
     PresenceStatus,
     shotThreadMapSchema,
     dataEnvelope,
+    documentRevisionSchema,
+    documentRevisionSummarySchema,
+    documentSchema,
+    legalAcceptanceSchema,
+    emailVerificationSchema,
     entrySchema,
     leaderboardSchema,
     ledgerBallotSchema,
@@ -23,6 +28,12 @@ import {
     type BallotDto,
     type DeliverableKind,
     type DifficultyTier,
+    type DocumentDto,
+    type DocumentRevisionDto,
+    type DocumentRevisionSummaryDto,
+    type DocumentSlug,
+    type DocumentUpdateDto,
+    type EmailVerificationDto,
     type EntryDto,
     type EntryStatus,
     type LeaderboardDto,
@@ -275,6 +286,44 @@ export class PlatformApi {
     public async setRole(userId: string, role: Role, specialties?: readonly Specialty[]): Promise<UserDto> {
         return (await request(`/users/${segment(userId)}/role`, dataEnvelope(userSchema), { method: "PATCH", body: { role, specialties } }))
             .data;
+    }
+
+    public async document(slug: DocumentSlug): Promise<DocumentDto> {
+        return (await request(`/documents/${segment(slug)}`, dataEnvelope(documentSchema))).data;
+    }
+
+    public async publishDocument(slug: DocumentSlug, update: DocumentUpdateDto): Promise<DocumentDto> {
+        return (await request(`/documents/${segment(slug)}`, dataEnvelope(documentSchema), { method: "PUT", body: update })).data;
+    }
+
+    public async documentRevisions(slug: DocumentSlug): Promise<DocumentRevisionSummaryDto[]> {
+        return (await request(`/documents/${segment(slug)}/revisions`, dataEnvelope(z.array(documentRevisionSummarySchema)))).data;
+    }
+
+    public async documentRevision(slug: DocumentSlug, revision: number): Promise<DocumentRevisionDto> {
+        return (await request(`/documents/${segment(slug)}/revisions/${revision}`, dataEnvelope(documentRevisionSchema))).data;
+    }
+
+    public async legalAcceptance(): Promise<string> {
+        return (await request("/legal/acceptance", dataEnvelope(legalAcceptanceSchema))).data.version;
+    }
+
+    public async acceptTerms(version: string): Promise<UserDto> {
+        return (await request("/users/me/terms", dataEnvelope(userSchema), { method: "PUT", body: { version } })).data;
+    }
+
+    public async startEmailVerification(email: string, captchaToken: string): Promise<EmailVerificationDto> {
+        return (
+            await request("/verification/email", dataEnvelope(emailVerificationSchema), { method: "POST", body: { email, captchaToken } })
+        ).data;
+    }
+
+    public async confirmEmailVerification(code: string): Promise<UserDto> {
+        return (await request("/verification/email/confirm", dataEnvelope(userSchema), { method: "POST", body: { code } })).data;
+    }
+
+    public async chooseSpecialties(specialties: readonly Specialty[]): Promise<UserDto> {
+        return (await request("/users/me/specialties", dataEnvelope(userSchema), { method: "PUT", body: { specialties } })).data;
     }
 
     public async promote(userId: string): Promise<UserDto> {

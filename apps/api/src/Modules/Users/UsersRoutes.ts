@@ -1,3 +1,4 @@
+import { fieldRules } from "@platform/contracts";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import {
@@ -6,12 +7,18 @@ import {
     pageEnvelope,
     paginationQuerySchema,
     snowflakeSchema,
-    trimmedText,
     uuidSchema
 } from "../../Common/Http/Schemas.js";
-import { actorOf, requireRole, requireRoleOrService, requireService, requireUser } from "../../Common/Security/Authorization.js";
+import {
+    actorOf,
+    currentUser,
+    requireRole,
+    requireRoleOrService,
+    requireService,
+    requireUser
+} from "../../Common/Security/Authorization.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
-import { maximumSpecialties, Role, Specialty } from "../../Domain/Roles.js";
+import { maximumSpecialties, Role, selfSelectableSpecialties, Specialty } from "../../Domain/Roles.js";
 import { PresenceStatus } from "../../Infrastructure/Discord/PresenceProvider.js";
 import { moderatedUserSchema, toModeratedUserResponse, toUserResponse, userSchema } from "./UserPresenter.js";
 import type { UserReference } from "./UsersService.js";
@@ -21,7 +28,11 @@ const roleChangeSchema = z.object({
     specialties: z.array(z.enum(Specialty)).max(maximumSpecialties).optional()
 });
 
-const blacklistSchema = z.object({ reason: trimmedText(500).nullable().default(null) });
+const ownSpecialtiesSchema = z.object({
+    specialties: z.array(z.enum(selfSelectableSpecialties)).max(maximumSpecialties)
+});
+
+const blacklistSchema = z.object({ reason: fieldRules.reason.default(null) });
 
 const userIdParams = z.object({ userId: uuidSchema });
 const discordIdParams = z.object({ discordId: snowflakeSchema });
@@ -50,6 +61,38 @@ export const usersRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
             const page = await usersService.list(request.query);
             return { data: page.data.map(toModeratedUserResponse), meta: page.meta };
         }
+    );
+
+    application.put(
+        "/users/me/terms",
+        {
+            preHandler: requireUser(),
+            schema: {
+                tags: ["Users"],
+                summary: "Accept the current terms of service and privacy policy.",
+                security,
+                body: z.object({ version: z.string().min(1).max(32) }),
+                response: { 200: dataEnvelope(userSchema), ...errorResponses }
+            }
+        },
+        async (request) => ({ data: toUserResponse(await usersService.acceptTerms(currentUser(request).id, request.body.version)) })
+    );
+
+    application.put(
+        "/users/me/specialties",
+        {
+            preHandler: requireUser(),
+            schema: {
+                tags: ["Users"],
+                summary: "Choose your own specialties and complete onboarding.",
+                security,
+                body: ownSpecialtiesSchema,
+                response: { 200: dataEnvelope(userSchema), ...errorResponses }
+            }
+        },
+        async (request) => ({
+            data: toUserResponse(await usersService.chooseOwnSpecialties(currentUser(request).id, request.body.specialties))
+        })
     );
 
     application.get(
@@ -111,7 +154,7 @@ export const usersRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
                 summary: "Set a user's role by Discord ID, creating the user if needed.",
                 security,
                 params: discordIdParams,
-                body: roleChangeSchema.extend({ discordUsername: trimmedText(64).optional() }),
+                body: roleChangeSchema.extend({ discordUsername: fieldRules.username.optional() }),
                 response: { 200: dataEnvelope(userSchema), ...errorResponses }
             }
         },
@@ -168,7 +211,7 @@ export const usersRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
                 security,
                 params: discordIdParams,
                 body: z.object({
-                    username: trimmedText(64),
+                    username: fieldRules.username,
                     avatar: z
                         .string()
                         .regex(/^(?:a_)?[a-f0-9]{32}$/u)

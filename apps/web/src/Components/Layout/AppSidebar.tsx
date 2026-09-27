@@ -99,8 +99,8 @@ export function AppSidebar(): ReactNode {
                     );
                 })}
             </SidebarContent>
-            {discordInviteUrl !== null && (
-                <SidebarFooter>
+            <SidebarFooter>
+                {discordInviteUrl !== null && (
                     <SidebarMenu>
                         <SidebarMenuItem>
                             <SidebarMenuButton asChild tooltip="Join the Discord">
@@ -111,8 +111,22 @@ export function AppSidebar(): ReactNode {
                             </SidebarMenuButton>
                         </SidebarMenuItem>
                     </SidebarMenu>
-                </SidebarFooter>
-            )}
+                )}
+                <nav
+                    aria-label="Legal"
+                    className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 px-2 pb-1 text-xs group-data-[collapsible=icon]:hidden"
+                >
+                    <Link href="/legal/terms" className="hover:text-foreground">
+                        Terms
+                    </Link>
+                    <Link href="/legal/privacy" className="hover:text-foreground">
+                        Privacy
+                    </Link>
+                    <Link href="/legal/acceptable-use" className="hover:text-foreground">
+                        Acceptable use
+                    </Link>
+                </nav>
+            </SidebarFooter>
             <SidebarRail />
         </Sidebar>
     );

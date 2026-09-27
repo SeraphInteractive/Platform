@@ -2,7 +2,8 @@ import { ballotSchema, ledgerBallotSchema as ledgerRowSchema } from "@platform/c
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { dataEnvelope, errorResponses, pageEnvelope, paginationQuerySchema, toIso, uuidSchema } from "../../Common/Http/Schemas.js";
-import { currentUser, requireUser } from "../../Common/Security/Authorization.js";
+import { currentUser, requireParticipant, requireUser } from "../../Common/Security/Authorization.js";
+import { Role } from "../../Domain/Roles.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
 import type { BallotRecord } from "../../Infrastructure/Database/Schema.js";
 import { picksOf } from "./BallotsService.js";
@@ -60,7 +61,7 @@ export const ballotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
     application.put(
         "/rounds/:roundId/ballots/me",
         {
-            preHandler: requireUser(),
+            preHandler: requireParticipant(Role.Voter, services.documentsService),
             config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
             schema: {
                 tags: ["Ballots"],

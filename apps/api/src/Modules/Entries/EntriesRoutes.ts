@@ -1,16 +1,8 @@
-import { entrySchema } from "@platform/contracts";
+import { entrySchema, fieldRules } from "@platform/contracts";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
-import {
-    dataEnvelope,
-    errorResponses,
-    pageEnvelope,
-    paginationQuerySchema,
-    toIso,
-    trimmedText,
-    uuidSchema
-} from "../../Common/Http/Schemas.js";
-import { actorOf, currentUser, optionalUser, requireRole, requireUser } from "../../Common/Security/Authorization.js";
+import { dataEnvelope, errorResponses, pageEnvelope, paginationQuerySchema, toIso, uuidSchema } from "../../Common/Http/Schemas.js";
+import { actorOf, currentUser, optionalUser, requireParticipant, requireRole } from "../../Common/Security/Authorization.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
 import { EntryStatus } from "../../Domain/Enums.js";
 import { Role } from "../../Domain/Roles.js";
@@ -21,10 +13,8 @@ const roundParams = z.object({ roundId: uuidSchema });
 const entryParams = z.object({ roundId: uuidSchema, entryId: uuidSchema });
 const mediaKeySchema = z.string().max(255);
 
-const pitchSchema = trimmedText(255).refine((text) => text.trim().split(/\s+/u).filter(Boolean).length <= 30, {
-    message: "Pitch must not exceed 30 words."
-});
-const descriptionSchema = trimmedText(250).nullable();
+const pitchSchema = fieldRules.entryTitle;
+const descriptionSchema = fieldRules.entryDescription;
 
 export const entriesRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
     const { entriesService, objectStorage } = services;
@@ -66,7 +56,7 @@ export const entriesRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
     application.post(
         "/rounds/:roundId/entries",
         {
-            preHandler: requireUser(),
+            preHandler: requireParticipant(Role.Voter, services.documentsService),
             config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
             schema: {
                 tags: ["Entries"],

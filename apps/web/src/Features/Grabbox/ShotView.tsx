@@ -17,6 +17,7 @@ import { EmptyState, ErrorState, LoadingRows } from "@/Components/Common/States"
 import { ShotStatusBadge, SubmissionStatusBadge } from "@/Components/Common/StatusBadge";
 import { useBreadcrumbLabel } from "@/Components/Layout/Breadcrumbs";
 import { discordThreadUrl, useSiteConfig } from "@/Components/SiteConfig";
+import { MarkdownText } from "@/Components/Common/MarkdownText";
 import { Button } from "@/Components/Ui/button";
 import { Card, CardContent } from "@/Components/Ui/card";
 import { Checkbox } from "@/Components/Ui/checkbox";
@@ -256,7 +257,7 @@ function SubmissionTimeline({ submissions }: { readonly submissions: readonly Su
                     <p className="text-muted-foreground text-xs">
                         {submission.contributor?.username ?? "Unknown"} · <RelativeTime value={submission.createdAt} />
                     </p>
-                    {submission.notes !== null && <p className="text-sm whitespace-pre-line">{submission.notes}</p>}
+                    {submission.notes !== null && <MarkdownText className="text-sm">{submission.notes}</MarkdownText>}
                     {submission.supervisorNotes !== null && (
                         <div className="bg-muted/50 border-l-2 px-3 py-2 text-sm">
                             <p className="text-muted-foreground mb-1 text-xs">
@@ -315,7 +316,7 @@ function ShotDetail({ shot }: { readonly shot: ShotDetailDto }): ReactNode {
                         {shot.description === null ? (
                             <p className="text-muted-foreground text-sm">No brief.</p>
                         ) : (
-                            <p className="max-w-[70ch] text-sm leading-relaxed whitespace-pre-line">{shot.description}</p>
+                            <MarkdownText className="max-w-[70ch] text-sm leading-relaxed">{shot.description}</MarkdownText>
                         )}
                     </Section>
                     <Section title="Submissions">

@@ -1,20 +1,23 @@
 "use client";
 
-import { PollType, type EntryDto, type RoundDetailDto } from "@platform/contracts";
+import { PollType, Role, type EntryDto, type RoundDetailDto } from "@platform/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Check, X } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { ApiError, describeError } from "@/Api/ApiClient";
 import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
 import { EmptyState, ErrorState, LoadingRows, SignInPrompt } from "@/Components/Common/States";
 import { Alert, AlertDescription } from "@/Components/Ui/alert";
+import { MarkdownText } from "@/Components/Common/MarkdownText";
 import { Button } from "@/Components/Ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/Components/Ui/card";
 import { useSession } from "@/Hooks/UseSession";
 import { formatDateTime } from "@/Lib/Format";
 import { movePick, samePicks, togglePick } from "@/Lib/Ranking";
+import { hasAtLeast } from "@/Lib/Roles";
 import { cn } from "@/Lib/Utils";
 import { EntryMedia } from "./EntryMedia";
 import { isEligible, requiredPicks, useApprovedEntries } from "./UseApprovedEntries";
@@ -134,7 +137,7 @@ function BallotEditor({ round, entries, savedPicks }: BallotEditorProps): ReactN
                                 <CardHeader>
                                     <CardTitle className="text-sm">{entry.title}</CardTitle>
                                     {entry.description !== null && (
-                                        <CardDescription className="whitespace-pre-line">{entry.description}</CardDescription>
+                                        <MarkdownText className="text-muted-foreground text-sm">{entry.description}</MarkdownText>
                                     )}
                                 </CardHeader>
                                 <CardContent className="space-y-3">
@@ -206,6 +209,16 @@ export function BallotPanel({ round }: { readonly round: RoundDetailDto }): Reac
             <Alert variant="destructive">
                 <AlertDescription>Your account is blacklisted from voting.</AlertDescription>
             </Alert>
+        );
+    }
+    if (!hasAtLeast(user, Role.Voter)) {
+        return (
+            <EmptyState title="Verify to vote">
+                <span className="block">Verify your email once to vote in every round.</span>
+                <Button asChild size="sm" className="mt-3">
+                    <Link href="/verify">Verify</Link>
+                </Button>
+            </EmptyState>
         );
     }
     if (entries.isPending || ballot.isPending) {

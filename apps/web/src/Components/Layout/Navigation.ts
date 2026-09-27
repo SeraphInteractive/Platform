@@ -2,6 +2,7 @@ import { Role } from "@platform/contracts";
 import {
     BookOpen,
     ClipboardCheck,
+    FileText,
     Gauge,
     Hammer,
     Home,
@@ -83,6 +84,13 @@ export const navigationGroups: readonly NavigationGroup[] = [
                 description: "Roles, specialties and voting access",
                 icon: Users,
                 minimumRole: Role.Moderator
+            },
+            {
+                href: "/studio/content",
+                label: "Content",
+                description: "Edit the guidelines and legal pages",
+                icon: FileText,
+                minimumRole: Role.SuperAdmin
             }
         ]
     }
@@ -93,6 +101,7 @@ export const segmentLabels: Readonly<Record<string, string>> = {
     grabbox: "Grab-box",
     roadmap: "Roadmap",
     me: "My work",
+    profile: "Profile",
     guidelines: "Guidelines",
     studio: "Studio",
     rounds: "Rounds",
@@ -100,7 +109,13 @@ export const segmentLabels: Readonly<Record<string, string>> = {
     tasks: "Tasks",
     people: "People",
     auth: "Sign in",
-    callback: "Signing in"
+    callback: "Signing in",
+    content: "Content",
+    legal: "Legal",
+    terms: "Terms",
+    privacy: "Privacy",
+    "acceptable-use": "Acceptable use",
+    verify: "Verify"
 };
 
 export function isActivePath(pathname: string, item: NavigationItem): boolean {

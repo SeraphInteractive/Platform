@@ -3,6 +3,10 @@ import { z } from "zod";
 
 const originSchema = z.url().transform((value) => new URL(value).origin);
 
+function optional<T extends z.ZodType>(schema: T): z.ZodPreprocess<z.ZodOptional<T>> {
+    return z.preprocess((value) => (value === "" ? undefined : value), schema.optional());
+}
+
 const environmentSchema = z.object({
     NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
     WEB_APP_URL: originSchema,
@@ -18,11 +22,9 @@ const environmentSchema = z.object({
                 .filter((item) => item.length > 0)
         )
         .pipe(z.array(originSchema)),
-    DISCORD_GUILD_ID: z
-        .string()
-        .regex(/^\d{17,20}$/u)
-        .optional(),
-    DISCORD_INVITE_URL: z.url({ protocol: /^https$/u }).optional()
+    DISCORD_GUILD_ID: optional(z.string().regex(/^\d{17,20}$/u)),
+    DISCORD_INVITE_URL: optional(z.url({ protocol: /^https$/u })),
+    TURNSTILE_SITE_KEY: optional(z.string().regex(/^[A-Za-z0-9_-]{8,128}$/u))
 });
 
 export type WebEnvironment = z.infer<typeof environmentSchema>;

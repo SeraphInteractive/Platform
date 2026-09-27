@@ -1,23 +1,25 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { env, isSecureDeployment } from "@/Server/Environment";
 
+const turnstileOrigin = "https://challenges.cloudflare.com";
+
 function contentSecurityPolicy(nonce: string): string {
     const { NODE_ENV, STORAGE_ORIGINS } = env();
     const isDevelopment = NODE_ENV === "development";
     const storage = STORAGE_ORIGINS.join(" ");
     const directives = [
         "default-src 'self'",
-        `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDevelopment ? " 'unsafe-eval'" : ""}`,
+        `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' ${turnstileOrigin}${isDevelopment ? " 'unsafe-eval'" : ""}`,
         "style-src 'self' 'unsafe-inline'",
         `img-src 'self' data: blob: https://cdn.discordapp.com ${storage}`,
         `media-src 'self' blob: ${storage}`,
-        `connect-src 'self' ${storage}${isDevelopment ? " ws:" : ""}`,
+        `connect-src 'self' ${storage} ${turnstileOrigin}${isDevelopment ? " ws:" : ""}`,
         "font-src 'self'",
         "object-src 'none'",
         "base-uri 'none'",
         "form-action 'self'",
         "frame-ancestors 'none'",
-        "frame-src 'none'",
+        `frame-src ${turnstileOrigin}`,
         "worker-src 'self' blob:",
         "manifest-src 'self'"
     ];

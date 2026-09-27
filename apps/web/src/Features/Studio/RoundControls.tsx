@@ -1,6 +1,6 @@
 "use client";
 
-import { PollType, Role, RoundStatus, type RoundDto } from "@platform/contracts";
+import { fieldRules, PollType, problemOf, Role, RoundStatus, textLimits, type RoundDto } from "@platform/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { platformApi, type CreateRoundInput, type UpdateRoundInput } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
 import { ConfirmButton } from "@/Components/Common/ConfirmButton";
+import { TextInputField } from "@/Components/Common/FormField";
 import { Button } from "@/Components/Ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/Components/Ui/dialog";
 import { Input } from "@/Components/Ui/input";
@@ -35,12 +36,8 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
 
     const opens = fromLocalInputValue(opensAt);
     const closes = fromLocalInputValue(closesAt);
-    const problem =
-        title.trim().length === 0
-            ? "Give the round a title."
-            : opens !== null && closes !== null && closes <= opens
-              ? "The round has to close after it opens."
-              : null;
+    const scheduleProblem = opens !== null && closes !== null && closes <= opens ? "The round has to close after it opens." : null;
+    const problem = problemOf(fieldRules.roundTitle, title) ?? scheduleProblem;
 
     const save = useMutation({
         mutationFn: (): Promise<RoundDto> => {
@@ -87,18 +84,17 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
                     </DialogDescription>
                 </DialogHeader>
                 <form id={formId} onSubmit={onSubmit} className="space-y-4">
-                    <div className="space-y-1.5">
-                        <Label htmlFor={`${formId}-title`}>Question or title</Label>
-                        <Input
-                            id={`${formId}-title`}
-                            value={title}
-                            maxLength={255}
-                            placeholder="Which story should we make?"
-                            onChange={(event) => {
-                                setTitle(event.target.value);
-                            }}
-                        />
-                    </div>
+                    <TextInputField
+                        id={`${formId}-title`}
+                        label="Question or title"
+                        value={title}
+                        rule={fieldRules.roundTitle}
+                        limit={textLimits.roundTitle}
+                        placeholder="Which story should we make?"
+                        required
+                        autoComplete="off"
+                        onValueChange={setTitle}
+                    />
                     <div className="space-y-1.5">
                         <Label htmlFor={`${formId}-poll`}>Poll type</Label>
                         <Select
@@ -140,13 +136,14 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
                                 id={`${formId}-closes`}
                                 type="datetime-local"
                                 value={closesAt}
+                                aria-invalid={scheduleProblem !== null || undefined}
                                 onChange={(event) => {
                                     setClosesAt(event.target.value);
                                 }}
                             />
                         </div>
                     </div>
-                    {problem !== null && title.length > 0 && <p className="text-destructive text-xs">{problem}</p>}
+                    {scheduleProblem !== null && <p className="text-destructive text-xs">{scheduleProblem}</p>}
                 </form>
                 <DialogFooter>
                     <Button type="submit" form={formId} disabled={problem !== null || save.isPending}>

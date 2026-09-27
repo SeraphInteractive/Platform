@@ -3,6 +3,7 @@
 import { Role, RoundStatus, type EntryDto, type RoundDetailDto } from "@platform/contracts";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
+import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { ApiError } from "@/Api/ApiClient";
 import { platformApi } from "@/Api/PlatformApi";
@@ -14,7 +15,9 @@ import { Pagination } from "@/Components/Common/Pagination";
 import { EmptyState, ErrorState, LoadingRows } from "@/Components/Common/States";
 import { RoundStatusBadge } from "@/Components/Common/StatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/Components/Ui/alert";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/Components/Ui/card";
+import { MarkdownText } from "@/Components/Common/MarkdownText";
+import { Button } from "@/Components/Ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/Components/Ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/Ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/Components/Ui/tabs";
 import { useSession } from "@/Hooks/UseSession";
@@ -45,7 +48,7 @@ function EntriesGrid({ roundId }: { readonly roundId: string }): ReactNode {
                         <CardHeader>
                             <CardTitle className="text-sm">{entry.title}</CardTitle>
                             {entry.description !== null && (
-                                <CardDescription className="whitespace-pre-line">{entry.description}</CardDescription>
+                                <MarkdownText className="text-muted-foreground text-sm">{entry.description}</MarkdownText>
                             )}
                         </CardHeader>
                         <CardContent>
@@ -137,7 +140,15 @@ function RoundDetail({ round }: { readonly round: RoundDetailDto }): ReactNode {
                         )}
                     </span>
                 }
-                actions={canPropose ? <SubmitEntryDialog round={round} /> : undefined}
+                actions={
+                    !canPropose ? undefined : hasAtLeast(user, Role.Voter) ? (
+                        <SubmitEntryDialog round={round} />
+                    ) : (
+                        <Button asChild size="sm" variant="outline">
+                            <Link href="/verify">Verify to propose</Link>
+                        </Button>
+                    )
+                }
             />
             {hasAtLeast(user, Role.Moderator) && round.warnings.length > 0 && (
                 <Alert className="mb-6">

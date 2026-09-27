@@ -1,6 +1,6 @@
 "use client";
 
-import { DeliverableKind, deliverableContentTypes, type ShotDetailDto } from "@platform/contracts";
+import { deliverableContentTypes, DeliverableKind, fieldRules, problemOf, type ShotDetailDto, textLimits } from "@platform/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, type SubmitEvent, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -9,12 +9,11 @@ import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
 import { uploadToStorage } from "@/Api/Uploads";
 import { FilePicker } from "@/Components/Common/FilePicker";
+import { RichTextInputField } from "@/Components/Common/FormField";
 import { Button } from "@/Components/Ui/button";
 import { Label } from "@/Components/Ui/label";
 import { Progress } from "@/Components/Ui/progress";
-import { Textarea } from "@/Components/Ui/textarea";
 
-const maximumNotesLength = 2000;
 const blendContentType = "application/octet-stream";
 
 interface WorkDraft {
@@ -23,20 +22,21 @@ interface WorkDraft {
     readonly notes: string;
 }
 
+function videoProblem(video: File | null): string | null {
+    return video !== null && !deliverableContentTypes[DeliverableKind.Video].includes(video.type)
+        ? "The video must be MP4, WebM or MOV."
+        : null;
+}
+
+function blendProblem(blend: File | null): string | null {
+    return blend !== null && !blend.name.toLowerCase().endsWith(".blend") ? "The project file must be a .blend file." : null;
+}
+
 function validate(draft: WorkDraft): string | null {
     if (draft.video === null) {
         return "Attach the rendered video.";
     }
-    if (!deliverableContentTypes[DeliverableKind.Video].includes(draft.video.type)) {
-        return "The video must be MP4, WebM or MOV.";
-    }
-    if (draft.blend !== null && !draft.blend.name.toLowerCase().endsWith(".blend")) {
-        return "The project file must be a .blend file.";
-    }
-    if (draft.notes.trim().length > maximumNotesLength) {
-        return `Keep notes under ${maximumNotesLength} characters.`;
-    }
-    return null;
+    return videoProblem(draft.video) ?? blendProblem(draft.blend) ?? problemOf(fieldRules.workNotes, draft.notes);
 }
 
 export function SubmitWorkForm({ shot, onSubmitted }: { readonly shot: ShotDetailDto; readonly onSubmitted: () => void }): ReactNode {
@@ -109,6 +109,7 @@ export function SubmitWorkForm({ shot, onSubmitted }: { readonly shot: ShotDetai
                     required
                     accept={deliverableContentTypes[DeliverableKind.Video].join(",")}
                     disabled={submit.isPending}
+                    invalid={videoProblem(draft.video) !== null}
                     onChange={(video) => {
                         setDraft((current) => ({ ...current, video }));
                     }}
@@ -121,23 +122,23 @@ export function SubmitWorkForm({ shot, onSubmitted }: { readonly shot: ShotDetai
                     file={draft.blend}
                     accept=".blend"
                     disabled={submit.isPending}
+                    invalid={blendProblem(draft.blend) !== null}
                     onChange={(blend) => {
                         setDraft((current) => ({ ...current, blend }));
                     }}
                 />
             </div>
-            <div className="space-y-2">
-                <Label htmlFor={`${formId}-notes`}>Notes for the reviewer (optional)</Label>
-                <Textarea
-                    id={`${formId}-notes`}
-                    rows={3}
-                    maxLength={maximumNotesLength}
-                    value={draft.notes}
-                    onChange={(event) => {
-                        setDraft((current) => ({ ...current, notes: event.target.value }));
-                    }}
-                />
-            </div>
+            <RichTextInputField
+                id={`${formId}-notes`}
+                label="Notes for the reviewer (optional)"
+                value={draft.notes}
+                rule={fieldRules.workNotes}
+                limit={textLimits.workNotes}
+                disabled={submit.isPending}
+                onValueChange={(notes) => {
+                    setDraft((current) => ({ ...current, notes }));
+                }}
+            />
             {progress !== null && (
                 <div className="space-y-1">
                     <p className="text-muted-foreground text-xs">{progress.label}…</p>

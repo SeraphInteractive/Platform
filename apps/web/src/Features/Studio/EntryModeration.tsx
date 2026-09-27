@@ -1,6 +1,6 @@
 "use client";
 
-import { EntryStatus, Role, type EntryDto } from "@platform/contracts";
+import { EntryStatus, fieldRules, problemOf, Role, textLimits, type EntryDto } from "@platform/contracts";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, type ReactNode, type SubmitEvent } from "react";
 import { toast } from "sonner";
@@ -11,13 +11,12 @@ import { Pagination } from "@/Components/Common/Pagination";
 import { RelativeTime } from "@/Components/Common/RelativeTime";
 import { EmptyState, ErrorState, LoadingRows } from "@/Components/Common/States";
 import { EntryStatusBadge, Tone, ToneBadge } from "@/Components/Common/StatusBadge";
+import { RichTextInputField, TextInputField } from "@/Components/Common/FormField";
+import { MarkdownText } from "@/Components/Common/MarkdownText";
 import { Button } from "@/Components/Ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/Components/Ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/Components/Ui/dialog";
-import { Input } from "@/Components/Ui/input";
-import { Label } from "@/Components/Ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/Components/Ui/tabs";
-import { Textarea } from "@/Components/Ui/textarea";
 import { EntryMedia } from "@/Features/Voting/EntryMedia";
 import { useSession } from "@/Hooks/UseSession";
 import { entryStatusLabels } from "@/Lib/Format";
@@ -29,18 +28,7 @@ function EditEntryDialog({ roundId, entry }: { readonly roundId: string; readonl
     const [open, setOpen] = useState(false);
     const [title, setTitle] = useState(entry.title);
     const [description, setDescription] = useState(entry.description ?? "");
-    const words = title
-        .trim()
-        .split(/\s+/u)
-        .filter((word) => word.length > 0).length;
-    const problem =
-        title.trim().length === 0
-            ? "A title is required."
-            : words > 30
-              ? "Keep the title to 30 words."
-              : description.trim().length > 250
-                ? "Keep the description under 250 characters."
-                : null;
+    const problem = problemOf(fieldRules.entryTitle, title) ?? problemOf(fieldRules.entryDescription, description);
     const save = useMutation({
         mutationFn: () => {
             const trimmed = description.trim();
@@ -71,31 +59,26 @@ function EditEntryDialog({ roundId, entry }: { readonly roundId: string; readonl
                     <DialogDescription>Visible to voters immediately.</DialogDescription>
                 </DialogHeader>
                 <form id={formId} onSubmit={onSubmit} className="space-y-4">
-                    <div className="space-y-1.5">
-                        <Label htmlFor={`${formId}-title`}>Title</Label>
-                        <Input
-                            id={`${formId}-title`}
-                            value={title}
-                            maxLength={255}
-                            onChange={(event) => {
-                                setTitle(event.target.value);
-                            }}
-                        />
-                        <p className="text-muted-foreground text-xs">{words}/30 words</p>
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label htmlFor={`${formId}-description`}>Description</Label>
-                        <Textarea
-                            id={`${formId}-description`}
-                            rows={3}
-                            maxLength={250}
-                            value={description}
-                            onChange={(event) => {
-                                setDescription(event.target.value);
-                            }}
-                        />
-                    </div>
-                    {problem !== null && <p className="text-destructive text-xs">{problem}</p>}
+                    <TextInputField
+                        id={`${formId}-title`}
+                        label="Title"
+                        value={title}
+                        rule={fieldRules.entryTitle}
+                        limit={textLimits.entryTitle}
+                        required
+                        autoComplete="off"
+                        disabled={save.isPending}
+                        onValueChange={setTitle}
+                    />
+                    <RichTextInputField
+                        id={`${formId}-description`}
+                        label="Description"
+                        value={description}
+                        rule={fieldRules.entryDescription}
+                        limit={textLimits.entryDescription}
+                        disabled={save.isPending}
+                        onValueChange={setDescription}
+                    />
                 </form>
                 <DialogFooter>
                     <Button type="submit" form={formId} disabled={problem !== null || save.isPending}>
@@ -151,7 +134,7 @@ function EntryCard({ roundId, entry }: { readonly roundId: string; readonly entr
                 <CardTitle className="text-sm leading-snug">{entry.title}</CardTitle>
             </CardHeader>
             <CardContent className="mt-auto space-y-3">
-                {entry.description !== null && <p className="text-muted-foreground text-sm whitespace-pre-line">{entry.description}</p>}
+                {entry.description !== null && <MarkdownText className="text-muted-foreground text-sm">{entry.description}</MarkdownText>}
                 <EntryMedia url={entry.mediaUrl} title={entry.title} />
                 <div className="flex flex-wrap gap-1.5">
                     {canReview && entry.status !== EntryStatus.Approved && (

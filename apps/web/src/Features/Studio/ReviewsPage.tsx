@@ -1,6 +1,6 @@
 "use client";
 
-import { ReviewDecision, Role, SubmissionStatus, type ReviewQueueItemDto } from "@platform/contracts";
+import { fieldRules, problemOf, ReviewDecision, type ReviewQueueItemDto, Role, SubmissionStatus, textLimits } from "@platform/contracts";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download } from "lucide-react";
 import type { Route } from "next";
@@ -13,10 +13,10 @@ import { PageHeader } from "@/Components/Common/PageHeader";
 import { Pagination } from "@/Components/Common/Pagination";
 import { RelativeTime } from "@/Components/Common/RelativeTime";
 import { EmptyState, ErrorState, LoadingRows, RequireRole } from "@/Components/Common/States";
+import { RichTextInputField } from "@/Components/Common/FormField";
+import { MarkdownText } from "@/Components/Common/MarkdownText";
 import { Button } from "@/Components/Ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/Components/Ui/card";
-import { Label } from "@/Components/Ui/label";
-import { Textarea } from "@/Components/Ui/textarea";
 import { useSession } from "@/Hooks/UseSession";
 import { safeHttpUrl } from "@/Lib/SafeUrl";
 
@@ -24,6 +24,7 @@ function ReviewCard({ item, reviewerId }: { readonly item: ReviewQueueItemDto; r
     const notesId = useId();
     const queryClient = useQueryClient();
     const [notes, setNotes] = useState("");
+    const notesProblem = problemOf(fieldRules.reviewNotes, notes);
     const review = useMutation({
         mutationFn: (decision: ReviewDecision) => {
             const trimmed = notes.trim();
@@ -84,29 +85,25 @@ function ReviewCard({ item, reviewerId }: { readonly item: ReviewQueueItemDto; r
                         )}
                     </div>
                     {item.notes !== null && (
-                        <p className="text-muted-foreground border-l-2 pl-3 text-sm whitespace-pre-line">{item.notes}</p>
+                        <MarkdownText className="text-muted-foreground border-l-2 pl-3 text-sm">{item.notes}</MarkdownText>
                     )}
                 </div>
                 <div className="space-y-3">
-                    <div className="space-y-1.5">
-                        <Label htmlFor={notesId}>Feedback</Label>
-                        <Textarea
-                            id={notesId}
-                            rows={5}
-                            maxLength={2000}
-                            value={notes}
-                            disabled={isOwn}
-                            placeholder="Required for revisions"
-                            onChange={(event) => {
-                                setNotes(event.target.value);
-                            }}
-                        />
-                    </div>
+                    <RichTextInputField
+                        id={notesId}
+                        label="Feedback"
+                        value={notes}
+                        rule={fieldRules.reviewNotes}
+                        limit={textLimits.reviewNotes}
+                        disabled={isOwn}
+                        placeholder="Required for revisions"
+                        onValueChange={setNotes}
+                    />
                     {isOwn && <p className="text-muted-foreground text-xs">You can&apos;t review your own submission.</p>}
                     <div className="grid grid-cols-2 gap-2">
                         <Button
                             variant="outline"
-                            disabled={review.isPending || isOwn || notes.trim().length === 0}
+                            disabled={review.isPending || isOwn || notes.trim().length === 0 || notesProblem !== null}
                             onClick={() => {
                                 review.mutate(ReviewDecision.RevisionRequested);
                             }}
@@ -114,7 +111,7 @@ function ReviewCard({ item, reviewerId }: { readonly item: ReviewQueueItemDto; r
                             Request changes
                         </Button>
                         <Button
-                            disabled={review.isPending || isOwn}
+                            disabled={review.isPending || isOwn || notesProblem !== null}
                             onClick={() => {
                                 review.mutate(ReviewDecision.Approved);
                             }}

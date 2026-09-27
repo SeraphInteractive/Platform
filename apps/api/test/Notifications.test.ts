@@ -30,7 +30,7 @@ describe("platform service integration", () => {
             payload: { username: "BotUser", avatar: null }
         });
         expect(synced.statusCode).toBe(200);
-        expect(json<Envelope<{ role: string; username: string }>>(synced).data).toMatchObject({ role: Role.Voter, username: "BotUser" });
+        expect(json<Envelope<{ role: string; username: string }>>(synced).data).toMatchObject({ role: Role.Member, username: "BotUser" });
 
         const user = await context.createUser(Role.Voter);
         const forbidden = await context.application.inject({

@@ -2,10 +2,20 @@ import { asc, count, desc, eq, inArray } from "drizzle-orm";
 import { ConflictError, ErrorCode, ForbiddenError, NotFoundError } from "../../Common/Errors/ApplicationError.js";
 import { createPage, offsetOf, type Page, type PaginationQuery } from "../../Common/Http/Schemas.js";
 import type { Actor } from "../../Common/Security/Principal.js";
-import { hasAtLeast, isGrantable, isHigherThan, normalizeSpecialties, Role, type Specialty } from "../../Domain/Roles.js";
+import {
+    hasAtLeast,
+    isGrantable,
+    isHigherThan,
+    normalizeSpecialties,
+    Role,
+    selfSelectableSpecialties,
+    settleRole,
+    type Specialty
+} from "../../Domain/Roles.js";
 import type { Database, Transaction } from "../../Infrastructure/Database/Database.js";
 import { users, type UserRecord } from "../../Infrastructure/Database/Schema.js";
 import { NotificationType, personOfActor, personOfUser, type Notifier } from "../../Infrastructure/Notifications/Notification.js";
+import type { LegalAcceptance } from "../Documents/DocumentsService.js";
 import type { LeaderboardCache } from "../Leaderboards/LeaderboardCache.js";
 
 export type UserReference = { readonly kind: "id"; readonly id: string } | { readonly kind: "discord"; readonly discordId: string };
@@ -24,7 +34,8 @@ export class UsersService {
     public constructor(
         private readonly database: Database,
         private readonly notifier: Notifier,
-        private readonly leaderboardCache: LeaderboardCache
+        private readonly leaderboardCache: LeaderboardCache,
+        private readonly legal: LegalAcceptance
     ) {}
 
     public async findById(userId: string): Promise<UserRecord | null> {
@@ -60,7 +71,7 @@ export class UsersService {
                     .values({
                         discordId: reference.discordId,
                         discordUsername: change.discordUsername ?? `discord_${reference.discordId}`,
-                        role: change.role,
+                        role: settleRole(change.role, false, null),
                         specialties: normalizeSpecialties(change.role, change.specialties ?? [])
                     })
                     .onConflictDoNothing({ target: users.discordId })
@@ -72,15 +83,46 @@ export class UsersService {
             }
 
             this.assertCanManage(current, target);
-            const specialties = normalizeSpecialties(change.role, change.specialties ?? target.specialties);
+            const role = settleRole(change.role, target.emailVerifiedAt !== null, target.role);
+            const specialties = normalizeSpecialties(role, change.specialties ?? target.specialties);
             const [updated] = await transaction
                 .update(users)
                 .set({
-                    role: change.role,
+                    role,
                     specialties,
                     ...(change.discordUsername === undefined ? {} : { discordUsername: change.discordUsername })
                 })
                 .where(eq(users.id, target.id))
+                .returning();
+            return this.required(updated);
+        });
+    }
+
+    public async acceptTerms(userId: string, version: string): Promise<UserRecord> {
+        if (version !== (await this.legal.currentAcceptanceVersion())) {
+            throw new ConflictError("The terms have changed. Reload the page and review them again.");
+        }
+        const [updated] = await this.database
+            .update(users)
+            .set({ termsVersion: version, termsAcceptedAt: new Date() })
+            .where(eq(users.id, userId))
+            .returning();
+        return this.required(updated);
+    }
+
+    public async chooseOwnSpecialties(userId: string, chosen: readonly Specialty[]): Promise<UserRecord> {
+        return this.database.transaction(async (transaction) => {
+            const [user] = await transaction.select().from(users).where(eq(users.id, userId)).limit(1).for("update");
+            const current = this.required(user);
+            const assigned = current.specialties.filter((specialty) => !selfSelectableSpecialties.includes(specialty));
+            const selected = chosen.filter((specialty) => selfSelectableSpecialties.includes(specialty));
+            const [updated] = await transaction
+                .update(users)
+                .set({
+                    specialties: normalizeSpecialties(current.role, [...assigned, ...selected]),
+                    onboardedAt: current.onboardedAt ?? new Date()
+                })
+                .where(eq(users.id, userId))
                 .returning();
             return this.required(updated);
         });

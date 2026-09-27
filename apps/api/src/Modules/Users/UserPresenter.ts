@@ -28,6 +28,9 @@ export function toUserResponse(user: UserRecord): UserDto {
         role: user.role,
         specialties: user.specialties,
         isBlacklisted: user.isBlacklisted,
+        isOnboarded: user.onboardedAt !== null,
+        termsVersion: user.termsVersion,
+        isVerified: user.emailVerifiedAt !== null,
         createdAt: toIso(user.createdAt)
     };
 }

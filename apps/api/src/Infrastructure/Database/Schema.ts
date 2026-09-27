@@ -45,7 +45,7 @@ export const users = pgTable(
         discordId: varchar("discord_id", { length: 20 }).notNull().unique(),
         discordUsername: varchar("discord_username", { length: 64 }).notNull(),
         discordAvatar: varchar("discord_avatar", { length: 64 }),
-        role: roleEnum("role").notNull().default(Role.Voter),
+        role: roleEnum("role").notNull(),
         specialties: specialtyEnum("specialties")
             .array()
             .notNull()
@@ -53,6 +53,11 @@ export const users = pgTable(
         isBlacklisted: boolean("is_blacklisted").notNull().default(false),
         blacklistReason: varchar("blacklist_reason", { length: 500 }),
         blacklistedAt: timestamp("blacklisted_at", { withTimezone: true }),
+        onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
+        termsVersion: varchar("terms_version", { length: 32 }),
+        termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
+        verifiedEmailHash: varchar("verified_email_hash", { length: 64 }).unique(),
+        emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
         ...timestamps
     },
     (table) => [
@@ -277,7 +282,43 @@ export const pipelineProgress = pgTable(
     ]
 );
 
+export interface StoredDocumentSection {
+    readonly id: string;
+    readonly title: string;
+    readonly html: string;
+}
+
+export const documents = pgTable("documents", {
+    slug: varchar("slug", { length: 32 }).primaryKey(),
+    title: varchar("title", { length: 200 }).notNull(),
+    sections: jsonb("sections").$type<StoredDocumentSection[]>().notNull(),
+    revision: integer("revision").notNull(),
+    acceptanceVersion: varchar("acceptance_version", { length: 32 }),
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps
+});
+
+export const documentRevisions = pgTable(
+    "document_revisions",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        slug: varchar("slug", { length: 32 })
+            .notNull()
+            .references(() => documents.slug, { onDelete: "cascade" }),
+        revision: integer("revision").notNull(),
+        title: varchar("title", { length: 200 }).notNull(),
+        sections: jsonb("sections").$type<StoredDocumentSection[]>().notNull(),
+        requiresReacceptance: boolean("requires_reacceptance").notNull().default(false),
+        note: varchar("note", { length: 500 }),
+        authorId: uuid("author_id").references(() => users.id, { onDelete: "set null" }),
+        createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+    },
+    (table) => [uniqueIndex("document_revisions_slug_revision").on(table.slug, table.revision)]
+);
+
 export type UserRecord = typeof users.$inferSelect;
+export type DocumentRecord = typeof documents.$inferSelect;
+export type DocumentRevisionRecord = typeof documentRevisions.$inferSelect;
 export type VotingRoundRecord = typeof votingRounds.$inferSelect;
 export type EntryRecord = typeof entries.$inferSelect;
 export type BallotRecord = typeof ballots.$inferSelect;

@@ -22,6 +22,34 @@ describe("user management", () => {
         expect(json<{ meta: { perPage: number } }>(list).meta.perPage).toBe(5);
     });
 
+    it("lets users choose craft specialties but keeps assigned leadership ones", async () => {
+        const user = await context.createUser(Role.Contributor, { specialties: [Specialty.Producer] });
+        expect(
+            json<{ data: { isOnboarded: boolean } }>(
+                await context.application.inject({ method: "GET", url: "/api/v1/auth/me", headers: user.headers })
+            ).data.isOnboarded
+        ).toBe(false);
+
+        const leadership = await context.application.inject({
+            method: "PUT",
+            url: "/api/v1/users/me/specialties",
+            headers: user.headers,
+            payload: { specialties: [Specialty.CreativeDirector] }
+        });
+        expect(leadership.statusCode).toBe(400);
+
+        const chosen = await context.application.inject({
+            method: "PUT",
+            url: "/api/v1/users/me/specialties",
+            headers: user.headers,
+            payload: { specialties: [Specialty.Animator, Specialty.Rigger] }
+        });
+        expect(chosen.statusCode).toBe(200);
+        const body = json<{ data: { specialties: string[]; isOnboarded: boolean } }>(chosen).data;
+        expect(body.specialties).toEqual([Specialty.Producer, Specialty.Animator]);
+        expect(body.isOnboarded).toBe(true);
+    });
+
     it("never grants the super admin role through the api", async () => {
         const superAdmin = await context.createUser(Role.SuperAdmin);
         const admin = await context.createUser(Role.Admin);

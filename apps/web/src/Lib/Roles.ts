@@ -1,6 +1,7 @@
 import { Role, type UserDto } from "@platform/contracts";
 
 const roleRanks: Readonly<Record<Role, number>> = {
+    [Role.Member]: 0,
     [Role.Voter]: 1,
     [Role.Contributor]: 2,
     [Role.SeniorContributor]: 3,
@@ -11,6 +12,7 @@ const roleRanks: Readonly<Record<Role, number>> = {
 };
 
 export const roleLabels: Readonly<Record<Role, string>> = {
+    [Role.Member]: "Member",
     [Role.Voter]: "Voter",
     [Role.Contributor]: "Contributor",
     [Role.SeniorContributor]: "Senior contributor",

@@ -1,6 +1,6 @@
 "use client";
 
-import { EntryStatus, MediaContentType, type RoundDetailDto } from "@platform/contracts";
+import { EntryStatus, fieldRules, MediaContentType, problemOf, textLimits, type RoundDetailDto } from "@platform/contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { useId, useState, type SubmitEvent, type ReactNode } from "react";
@@ -10,16 +10,12 @@ import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
 import { uploadToStorage } from "@/Api/Uploads";
 import { FilePicker } from "@/Components/Common/FilePicker";
+import { RichTextInputField, TextInputField } from "@/Components/Common/FormField";
 import { Button } from "@/Components/Ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/Components/Ui/dialog";
-import { Input } from "@/Components/Ui/input";
 import { Label } from "@/Components/Ui/label";
 import { Progress } from "@/Components/Ui/progress";
-import { Textarea } from "@/Components/Ui/textarea";
 
-const maximumTitleLength = 255;
-const maximumTitleWords = 30;
-const maximumDescriptionLength = 250;
 const acceptedMediaTypes: readonly string[] = Object.values(MediaContentType);
 
 interface EntryDraft {
@@ -28,28 +24,18 @@ interface EntryDraft {
     readonly file: File | null;
 }
 
-function wordCount(value: string): number {
-    return value
-        .trim()
-        .split(/\s+/u)
-        .filter((word) => word.length > 0).length;
+function fileProblem(file: File | null): string | null {
+    return file !== null && !acceptedMediaTypes.includes(file.type)
+        ? "Media must be a PNG, JPEG, GIF or WebP image, or an MP4, WebM or MOV video."
+        : null;
 }
 
 function validate(draft: EntryDraft): string | null {
-    const title = draft.title.trim();
-    if (title.length === 0) {
-        return "Give your entry a title.";
-    }
-    if (title.length > maximumTitleLength || wordCount(title) > maximumTitleWords) {
-        return `Keep the title under ${maximumTitleWords} words and ${maximumTitleLength} characters.`;
-    }
-    if (draft.description.trim().length > maximumDescriptionLength) {
-        return `Keep the description under ${maximumDescriptionLength} characters.`;
-    }
-    if (draft.file !== null && !acceptedMediaTypes.includes(draft.file.type)) {
-        return "Media must be a PNG, JPEG, GIF or WebP image, or an MP4, WebM or MOV video.";
-    }
-    return null;
+    return (
+        problemOf(fieldRules.entryTitle, draft.title) ??
+        problemOf(fieldRules.entryDescription, draft.description) ??
+        fileProblem(draft.file)
+    );
 }
 
 export function SubmitEntryDialog({ round }: { readonly round: RoundDetailDto }): ReactNode {
@@ -120,37 +106,31 @@ export function SubmitEntryDialog({ round }: { readonly round: RoundDetailDto })
                     <DialogDescription>Entries are reviewed before they appear on the ballot.</DialogDescription>
                 </DialogHeader>
                 <form id={formId} onSubmit={onSubmit} className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor={`${formId}-title`}>Title</Label>
-                        <Input
-                            id={`${formId}-title`}
-                            value={draft.title}
-                            maxLength={maximumTitleLength}
-                            required
-                            autoComplete="off"
-                            onChange={(event) => {
-                                setDraft((current) => ({ ...current, title: event.target.value }));
-                            }}
-                        />
-                        <p className="text-muted-foreground text-xs">
-                            {wordCount(draft.title)}/{maximumTitleWords} words
-                        </p>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor={`${formId}-description`}>Description (optional)</Label>
-                        <Textarea
-                            id={`${formId}-description`}
-                            value={draft.description}
-                            maxLength={maximumDescriptionLength}
-                            rows={3}
-                            onChange={(event) => {
-                                setDraft((current) => ({ ...current, description: event.target.value }));
-                            }}
-                        />
-                        <p className="text-muted-foreground text-xs">
-                            {draft.description.trim().length}/{maximumDescriptionLength}
-                        </p>
-                    </div>
+                    <TextInputField
+                        id={`${formId}-title`}
+                        label="Title"
+                        value={draft.title}
+                        rule={fieldRules.entryTitle}
+                        limit={textLimits.entryTitle}
+                        hint="Keep it short. Put the detail in the description."
+                        required
+                        autoComplete="off"
+                        disabled={submit.isPending}
+                        onValueChange={(title) => {
+                            setDraft((current) => ({ ...current, title }));
+                        }}
+                    />
+                    <RichTextInputField
+                        id={`${formId}-description`}
+                        label="Description (optional)"
+                        value={draft.description}
+                        rule={fieldRules.entryDescription}
+                        limit={textLimits.entryDescription}
+                        disabled={submit.isPending}
+                        onValueChange={(description) => {
+                            setDraft((current) => ({ ...current, description }));
+                        }}
+                    />
                     <div className="space-y-2">
                         <Label htmlFor={`${formId}-media`}>Media (optional)</Label>
                         <FilePicker
@@ -158,15 +138,14 @@ export function SubmitEntryDialog({ round }: { readonly round: RoundDetailDto })
                             file={draft.file}
                             accept={acceptedMediaTypes.join(",")}
                             disabled={submit.isPending}
+                            invalid={fileProblem(draft.file) !== null}
                             onChange={(file) => {
                                 setDraft((current) => ({ ...current, file }));
                             }}
                         />
+                        {fileProblem(draft.file) !== null && <p className="text-destructive text-xs">{fileProblem(draft.file)}</p>}
                         {uploadProgress !== null && <Progress value={uploadProgress * 100} aria-label="Upload progress" />}
                     </div>
-                    {problem !== null && (draft.title.length > 0 || draft.file !== null) && (
-                        <p className="text-destructive text-xs">{problem}</p>
-                    )}
                 </form>
                 <DialogFooter>
                     <Button type="submit" form={formId} disabled={problem !== null || submit.isPending}>

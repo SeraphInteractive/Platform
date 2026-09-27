@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
     DifficultyTier,
+    DocumentSlug,
+    documentLimits,
     EntryStatus,
     PollType,
     RaidFlag,
@@ -14,6 +16,7 @@ import {
     SubmissionStatus
 } from "./Enums.js";
 import { snowflakeSchema, timestampSchema, uuidSchema } from "./Http.js";
+import { fieldRules } from "./Validation.js";
 
 export const userSummarySchema = z
     .object({
@@ -32,6 +35,9 @@ export const userSchema = z
         role: z.enum(Role),
         specialties: z.array(z.enum(Specialty)),
         isBlacklisted: z.boolean(),
+        isOnboarded: z.boolean(),
+        termsVersion: z.string().nullable(),
+        isVerified: z.boolean(),
         createdAt: timestampSchema
     })
     .meta({ id: "User" });
@@ -281,3 +287,78 @@ export type PresignedUploadDto = z.infer<typeof presignedUploadSchema>;
 export type ShotThreadMapDto = z.infer<typeof shotThreadMapSchema>;
 export type ReclaimResultDto = z.infer<typeof reclaimResultSchema>;
 export type PipelineProgressDto = z.infer<typeof pipelineProgressSchema>;
+
+export const emailVerificationSchema = z
+    .object({
+        expiresAt: timestampSchema,
+        resendAvailableAt: timestampSchema
+    })
+    .meta({ id: "EmailVerification" });
+
+export type EmailVerificationDto = z.infer<typeof emailVerificationSchema>;
+
+export const documentSectionSchema = z
+    .object({
+        id: z
+            .string()
+            .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u)
+            .max(documentLimits.sectionIdLength),
+        title: z.string(),
+        html: z.string().max(documentLimits.sectionHtmlLength)
+    })
+    .meta({ id: "DocumentSection" });
+
+export const documentSectionInputSchema = z
+    .object({
+        id: z
+            .string()
+            .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u)
+            .max(documentLimits.sectionIdLength),
+        title: fieldRules.sectionTitle,
+        html: z.string().max(documentLimits.sectionHtmlLength)
+    })
+    .meta({ id: "DocumentSectionEdit" });
+
+export const documentSchema = z
+    .object({
+        slug: z.enum(DocumentSlug),
+        title: z.string(),
+        sections: z.array(documentSectionSchema),
+        revision: z.number().int().nonnegative(),
+        updatedAt: timestampSchema.nullable(),
+        updatedBy: userSummarySchema.nullable()
+    })
+    .meta({ id: "Document" });
+
+export const documentUpdateSchema = z
+    .object({
+        title: fieldRules.documentTitle,
+        sections: z.array(documentSectionInputSchema).min(1).max(documentLimits.sections),
+        expectedRevision: z.number().int().nonnegative(),
+        requireReacceptance: z.boolean().default(false),
+        note: fieldRules.documentNote.default(null)
+    })
+    .meta({ id: "DocumentUpdate" });
+
+export const documentRevisionSummarySchema = z
+    .object({
+        revision: z.number().int().positive(),
+        title: z.string(),
+        note: z.string().nullable(),
+        requiresReacceptance: z.boolean(),
+        author: userSummarySchema.nullable(),
+        createdAt: timestampSchema
+    })
+    .meta({ id: "DocumentRevisionSummary" });
+
+export const documentRevisionSchema = documentRevisionSummarySchema
+    .extend({ sections: z.array(documentSectionSchema) })
+    .meta({ id: "DocumentRevision" });
+
+export const legalAcceptanceSchema = z.object({ version: z.string() }).meta({ id: "LegalAcceptance" });
+
+export type DocumentSectionDto = z.infer<typeof documentSectionSchema>;
+export type DocumentDto = z.infer<typeof documentSchema>;
+export type DocumentUpdateDto = z.input<typeof documentUpdateSchema>;
+export type DocumentRevisionSummaryDto = z.infer<typeof documentRevisionSummarySchema>;
+export type DocumentRevisionDto = z.infer<typeof documentRevisionSchema>;

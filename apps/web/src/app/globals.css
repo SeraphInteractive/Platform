@@ -112,9 +112,83 @@
     }
     body {
         @apply bg-background text-foreground font-sans text-[13px] antialiased;
+        overflow-wrap: anywhere;
     }
     code,
     kbd {
         @apply font-mono;
+    }
+}
+
+@layer components {
+    .doc-prose {
+        @apply text-foreground/90 space-y-3 text-sm leading-relaxed text-pretty;
+    }
+    .doc-prose h3 {
+        @apply text-foreground pt-2 text-[15px] font-semibold;
+    }
+    .doc-prose h4 {
+        @apply text-foreground pt-1 font-semibold;
+    }
+    .doc-prose a {
+        @apply decoration-muted-foreground hover:decoration-foreground underline underline-offset-4;
+    }
+    .doc-prose ul {
+        @apply ml-5 list-[square] space-y-1.5;
+    }
+    .doc-prose ol {
+        @apply ml-5 list-decimal space-y-1.5;
+    }
+    .doc-prose blockquote {
+        @apply text-muted-foreground border-l-2 pl-4;
+    }
+    .doc-prose code {
+        @apply bg-muted rounded px-1 py-0.5 font-mono text-[0.9em];
+    }
+    .doc-prose pre {
+        @apply bg-muted overflow-x-auto p-3;
+    }
+    .doc-prose pre code {
+        @apply bg-transparent p-0;
+    }
+    .doc-prose hr {
+        @apply my-6;
+    }
+    .doc-prose table {
+        @apply w-full border-collapse border text-left;
+    }
+    .doc-prose th,
+    .doc-prose td {
+        @apply border px-3 py-2 align-top;
+    }
+    .doc-prose th {
+        @apply text-foreground font-semibold;
+    }
+    .doc-prose .selectedCell {
+        @apply bg-accent;
+    }
+    .doc-prose p.is-editor-empty:first-child::before {
+        @apply text-muted-foreground pointer-events-none float-left h-0 content-[attr(data-placeholder)];
+    }
+}
+
+@layer components {
+    .md-text {
+        @apply space-y-2 break-words;
+    }
+    .md-text a {
+        @apply decoration-muted-foreground hover:decoration-foreground underline underline-offset-4;
+    }
+    .md-text ul {
+        @apply ml-5 list-[square] space-y-1;
+    }
+    .md-text ol {
+        @apply ml-5 list-decimal space-y-1;
+    }
+    .md-text blockquote {
+        @apply border-l-2 pl-3;
+    }
+    .md-text code {
+        @apply bg-muted rounded px-1 py-0.5 font-mono text-[0.9em];
     }
 }

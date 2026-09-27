@@ -102,7 +102,7 @@ export function platformRoleFor(tier: StudioTier): Role {
         case StudioTier.Contributor:
             return Role.Contributor;
         case StudioTier.Community:
-            return Role.Voter;
+            return Role.Member;
     }
 }
 

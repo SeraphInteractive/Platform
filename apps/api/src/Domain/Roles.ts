@@ -1,8 +1,9 @@
 import { maximumSpecialties, Role, type Specialty } from "@platform/contracts";
 
-export { maximumSpecialties, Role, Specialty } from "@platform/contracts";
+export { maximumSpecialties, Role, selfSelectableSpecialties, Specialty } from "@platform/contracts";
 
 const roleRanks: Readonly<Record<Role, number>> = Object.freeze({
+    [Role.Member]: 0,
     [Role.Voter]: 1,
     [Role.Contributor]: 2,
     [Role.SeniorContributor]: 3,
@@ -23,6 +24,16 @@ const specialtyRoles: ReadonlySet<Role> = new Set([
 ]);
 
 export const maximumSuperAdmins = 2;
+
+export function settleRole(role: Role, isVerified: boolean, currentRole: Role | null): Role {
+    if (role === Role.Member && isVerified) {
+        return Role.Voter;
+    }
+    if (role === Role.Voter && !isVerified && currentRole !== Role.Voter) {
+        return Role.Member;
+    }
+    return role;
+}
 
 export function isGrantable(role: Role): boolean {
     return role !== Role.SuperAdmin;

@@ -1,13 +1,15 @@
 export { PollType, RaidFlag, RaidSeverity, SeparationAction, SeparationStatus } from "@platform/scoring";
 
 export enum Role {
+    // Postgres enum order is append-only: add new values at the end.
     Voter = "voter",
     Contributor = "contributor",
     SeniorContributor = "senior_contributor",
     Moderator = "moderator",
     Supervisor = "supervisor",
     Admin = "admin",
-    SuperAdmin = "super_admin"
+    SuperAdmin = "super_admin",
+    Member = "member"
 }
 
 export enum Specialty {
@@ -43,6 +45,42 @@ export enum Specialty {
 }
 
 export const maximumSpecialties = 2;
+
+export const initialTermsVersion = "2026-09-27";
+
+export enum DocumentSlug {
+    Guidelines = "guidelines",
+    Terms = "terms",
+    Privacy = "privacy",
+    AcceptableUse = "acceptable-use"
+}
+
+export const legalDocumentSlugs: readonly DocumentSlug[] = [DocumentSlug.Terms, DocumentSlug.Privacy, DocumentSlug.AcceptableUse];
+
+export const documentLimits = {
+    sectionIdLength: 64,
+    sections: 40,
+    sectionHtmlLength: 100_000
+} as const;
+
+export const emailCodeLength = 6;
+
+export const selfSelectableSpecialties: readonly Specialty[] = [
+    Specialty.Animator,
+    Specialty.LayoutArtist,
+    Specialty.Modeler3d,
+    Specialty.Rigger,
+    Specialty.SurfaceTextureArtist,
+    Specialty.LightingArtist,
+    Specialty.VfxArtist,
+    Specialty.ConceptArtist,
+    Specialty.Screenwriter,
+    Specialty.VoiceActor,
+    Specialty.SoundDesigner,
+    Specialty.VideoEditor,
+    Specialty.GeneralContributor,
+    Specialty.Voter
+];
 
 export enum RoundStatus {
     Draft = "draft",
