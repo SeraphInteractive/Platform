@@ -33,10 +33,10 @@ const maximumAttachmentBytes = 100 * 1024 * 1024;
 const attachmentHosts = new Set(["cdn.discordapp.com", "media.discordapp.net"]);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
-function shotInThread(interaction: ChatInputCommandInteraction, context: BotContext): string {
+async function shotInThread(interaction: ChatInputCommandInteraction, context: BotContext): Promise<string> {
     const channel = interaction.channel;
     const inForum = channel !== null && channel.isThread() && channel.parent?.type === ChannelType.GuildForum;
-    const shotId = inForum ? context.forum.shotFor(channel.id) : undefined;
+    const shotId = inForum ? await context.forum.resolveShotFor(channel.id) : undefined;
     if (shotId === undefined) {
         throw new UserFacingError("Run this inside a task post in the task forum.");
     }
@@ -135,8 +135,8 @@ export const createTaskCommand: SlashCommand = {
 export const takeTaskCommand: SlashCommand = {
     definition: new SlashCommandBuilder().setName("take-task").setDescription("Claim the task in this post").toJSON(),
     async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
-        const shotId = shotInThread(interaction, context);
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const shotId = await shotInThread(interaction, context);
         const shot = await actingAs(interaction, context).claimShot(shotId);
         const due = shot.deadlineAt === null ? "" : ` It's due ${when(shot.deadlineAt)}.`;
         await interaction.editReply(asEdit(ephemeral(panel(null, `It's yours.${due} Use /submit-task here when you're done.`))));
@@ -150,8 +150,8 @@ export const releaseTaskCommand: SlashCommand = {
         .addStringOption((option) => option.setName("reason").setDescription("Optional note for the team").setMaxLength(500))
         .toJSON(),
     async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
-        const shotId = shotInThread(interaction, context);
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const shotId = await shotInThread(interaction, context);
         const shot = await context.api.getShot(shotId);
         const me = await actingAs(interaction, context).me();
         const isStaff = hasAtLeast(me.role, Role.Supervisor);
@@ -173,8 +173,8 @@ export const submitTaskCommand: SlashCommand = {
         .addStringOption((option) => option.setName("notes").setDescription("Anything the reviewer should know").setMaxLength(2000))
         .toJSON(),
     async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
-        const shotId = shotInThread(interaction, context);
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const shotId = await shotInThread(interaction, context);
         const shot = await context.api.getShot(shotId);
         const me = await actingAs(interaction, context).me();
         const isStaff = hasAtLeast(me.role, Role.Supervisor);

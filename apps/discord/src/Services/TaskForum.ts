@@ -37,8 +37,34 @@ export class TaskForum {
     ) {}
 
     public async load(): Promise<void> {
-        for (const map of await this.api.listThreadMaps()) {
-            this.remember(map.shotId, map.discordThreadId);
+        try {
+            const maps = await this.api.listThreadMaps();
+            for (const map of maps) {
+                this.remember(map.shotId, map.discordThreadId);
+            }
+            // auto-discover any active threads in forum not yet in thread map
+            const forum = await this.forum();
+            if (forum !== null) {
+                const active = await forum.threads.fetchActive().catch(() => null);
+                if (active !== null) {
+                    const allShots = await this.api.listAllShots().catch(() => []);
+                    const byCode = new Map(allShots.map((s) => [s.shotCode.toUpperCase(), s]));
+                    for (const [threadId, thread] of active.threads) {
+                        if (thread.parentId === forum.id && !this.shotsByThread.has(threadId)) {
+                            const match = /^([A-Z0-9_]+)\s*-\s*/iu.exec(thread.name);
+                            if (match && match[1]) {
+                                const shot = byCode.get(match[1].trim().toUpperCase());
+                                if (shot) {
+                                    this.remember(shot.id, threadId);
+                                    await this.api.bindThread(shot.id, threadId).catch(() => undefined);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (error: unknown) {
+            this.logger.warn({ err: error }, "failed to load task thread bindings");
         }
     }
 
@@ -48,6 +74,39 @@ export class TaskForum {
 
     public shotFor(threadId: string): string | undefined {
         return this.shotsByThread.get(threadId);
+    }
+
+    public async resolveShotFor(threadId: string): Promise<string | undefined> {
+        const cached = this.shotsByThread.get(threadId);
+        if (cached !== undefined) {
+            return cached;
+        }
+        // fallback to querying platform api for thread binding
+        const remote = await this.api.getThreadMapByThread(threadId);
+        if (remote !== null) {
+            this.remember(remote.shotId, remote.discordThreadId);
+            return remote.shotId;
+        }
+        // fallback to matching thread title against shot codes
+        try {
+            const channel = await this.client.channels.fetch(threadId).catch(() => null);
+            if (channel !== null && channel.isThread()) {
+                const match = /^([A-Z0-9_]+)\s*-\s*/iu.exec(channel.name);
+                if (match && match[1]) {
+                    const code = match[1].trim().toUpperCase();
+                    const allShots = await this.api.listAllShots();
+                    const shot = allShots.find((s) => s.shotCode.toUpperCase() === code);
+                    if (shot) {
+                        this.remember(shot.id, threadId);
+                        await this.api.bindThread(shot.id, threadId).catch(() => undefined);
+                        return shot.id;
+                    }
+                }
+            }
+        } catch {
+            // ignore resolution errors
+        }
+        return undefined;
     }
 
     public async forum(): Promise<ForumChannel | null> {

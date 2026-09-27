@@ -110,6 +110,14 @@ export class PlatformApiClient {
         return (await this.send("/shot-thread-maps", dataEnvelope(z.array(shotThreadMapSchema)))).data;
     }
 
+    public async getThreadMapByThread(discordThreadId: string): Promise<ShotThreadMapDto | null> {
+        try {
+            return (await this.send(`/shot-thread-maps/by-thread/${discordThreadId}`, dataEnvelope(shotThreadMapSchema))).data;
+        } catch {
+            return null;
+        }
+    }
+
     public async bindThread(shotId: string, discordThreadId: string): Promise<void> {
         await this.send(`/shot-thread-maps/${shotId}`, dataEnvelope(shotThreadMapSchema), { method: "PUT", body: { discordThreadId } });
     }
