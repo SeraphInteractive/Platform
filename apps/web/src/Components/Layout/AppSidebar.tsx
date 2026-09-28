@@ -2,12 +2,12 @@
 
 import { RoundStatus, ShotStatus, type UserDto } from "@platform/contracts";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
+import { DiscordIcon, YouTubeIcon } from "@/Components/Icons/BrandIcons";
 import { useSiteConfig } from "@/Components/SiteConfig";
 import {
     Sidebar,
@@ -104,7 +104,7 @@ export function AppSidebar(): ReactNode {
                     <SidebarMenuItem>
                         <SidebarMenuButton asChild tooltip="YouTube">
                             <a href="https://www.youtube.com/@ProjectStairwayMovie" target="_blank" rel="noopener noreferrer">
-                                <ExternalLink />
+                                <YouTubeIcon />
                                 <span>YouTube</span>
                             </a>
                         </SidebarMenuButton>
@@ -113,7 +113,7 @@ export function AppSidebar(): ReactNode {
                         <SidebarMenuItem>
                             <SidebarMenuButton asChild tooltip="Join the Discord">
                                 <a href={discordInviteUrl} target="_blank" rel="noopener noreferrer">
-                                    <ExternalLink />
+                                    <DiscordIcon />
                                     <span>Join the Discord</span>
                                 </a>
                             </SidebarMenuButton>
