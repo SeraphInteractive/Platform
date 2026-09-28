@@ -1,4 +1,4 @@
-import { dataEnvelope, sessionSchema, userSchema } from "@platform/contracts";
+import { Role, Specialty, dataEnvelope, sessionSchema, userSchema, type UserDto } from "@platform/contracts";
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { apiFetch } from "@/Server/Upstream";
@@ -7,6 +7,20 @@ import { clearSessionCookie, clearVerifierCookie, isSameOrigin, readSessionToken
 export const dynamic = "force-dynamic";
 
 const exchangeBody = z.object({ code: z.string().min(1).max(128) });
+
+const devSuperadminUser: UserDto = {
+    id: "00000000-0000-4000-8000-000000000001",
+    discordId: "965511204372086814",
+    username: "yan",
+    avatarUrl: null,
+    role: Role.SuperAdmin,
+    specialties: [Specialty.Producer, Specialty.CreativeDirector, Specialty.GeneralContributor],
+    isBlacklisted: false,
+    isOnboarded: true,
+    termsVersion: "2026-09-27",
+    isVerified: true,
+    createdAt: "2026-01-01T00:00:00.000Z"
+};
 
 function problem(status: number, detail: string): NextResponse {
     return NextResponse.json(
@@ -19,6 +33,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const headers = { "Cache-Control": "private, no-store" };
     const token = readSessionToken(request);
     if (token === null) {
+        if (process.env.NODE_ENV === "development" && process.env.DEV_SUPERADMIN === "true" && !request.cookies.has("dev_guest")) {
+            return NextResponse.json({ data: devSuperadminUser }, { headers });
+        }
         return NextResponse.json({ data: null }, { headers });
     }
     let upstream: Response;
@@ -82,5 +99,9 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     }
     const response = new NextResponse(null, { status: 204, headers: { "Cache-Control": "no-store" } });
     clearSessionCookie(response);
+    if (process.env.NODE_ENV === "development" && process.env.DEV_SUPERADMIN === "true") {
+        // allow local logout to persist guest view until cleared
+        response.cookies.set("dev_guest", "1", { path: "/" });
+    }
     return response;
 }

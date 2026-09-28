@@ -19,13 +19,14 @@ export function DataList({ children }: { readonly children: ReactNode }): ReactN
 interface DataRowProps {
     readonly href: Route;
     readonly code?: ReactNode;
+    readonly thumbnail?: ReactNode;
     readonly title: ReactNode;
     readonly meta?: ReactNode;
     readonly fields?: ReactNode;
     readonly highlight?: boolean;
 }
 
-export function DataRow({ href, code, title, meta, fields, highlight = false }: DataRowProps): ReactNode {
+export function DataRow({ href, code, thumbnail, title, meta, fields, highlight = false }: DataRowProps): ReactNode {
     return (
         <li>
             <Link
@@ -35,6 +36,7 @@ export function DataRow({ href, code, title, meta, fields, highlight = false }: 
                     highlight && "bg-primary/5"
                 )}
             >
+                {thumbnail !== undefined && <div className="size-8 shrink-0 overflow-hidden rounded border bg-muted/40">{thumbnail}</div>}
                 {code !== undefined && <span className="text-muted-foreground w-24 shrink-0 truncate font-mono text-xs">{code}</span>}
                 <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{title}</span>

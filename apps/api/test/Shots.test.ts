@@ -223,4 +223,54 @@ describe("shot grab-box", () => {
         });
         expect(unknownShot.statusCode).toBe(404);
     });
+
+    it("attaches and resolves up to 4 reference images", async () => {
+        const key1 = "media/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222.png";
+        const key2 = "media/11111111-1111-4111-8111-111111111111/33333333-3333-4333-8333-333333333333.jpg";
+
+        const response = await context.application.inject({
+            method: "POST",
+            url: "/api/v1/shots",
+            headers: supervisor.headers,
+            payload: {
+                sceneNumber: 2,
+                shotCode: "SC06-010",
+                title: "Ref test",
+                difficultyTier: DifficultyTier.Easy,
+                imageKeys: [key1, key2]
+            }
+        });
+        expect(response.statusCode).toBe(201);
+        const created = json<Envelope<{ id: string; imageUrls: string[] }>>(response).data;
+        expect(created.imageUrls).toHaveLength(2);
+        expect(created.imageUrls[0]).toContain(key1);
+        expect(created.imageUrls[1]).toContain(key2);
+
+        // reject more than 4 images
+        const tooMany = await context.application.inject({
+            method: "POST",
+            url: "/api/v1/shots",
+            headers: supervisor.headers,
+            payload: {
+                sceneNumber: 2,
+                shotCode: "SC06-020",
+                title: "Too many images",
+                difficultyTier: DifficultyTier.Easy,
+                imageKeys: ["key1", "key2", "key3", "key4", "key5"]
+            }
+        });
+        expect(tooMany.statusCode).toBe(400);
+
+        // update images
+        const updated = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/shots/${created.id}`,
+            headers: supervisor.headers,
+            payload: {
+                imageKeys: [key1]
+            }
+        });
+        expect(updated.statusCode).toBe(200);
+        expect(json<Envelope<{ imageUrls: string[] }>>(updated).data.imageUrls).toHaveLength(1);
+    });
 });

@@ -12,13 +12,17 @@ import { toPresignedUploadResponse } from "../Uploads/UploadsRoutes.js";
 import { presignedUploadSchema } from "@platform/contracts";
 import { consumeUploadQuota, UploadQuota } from "../Uploads/UploadQuota.js";
 import { deliverableContentTypes, tierDaysOf } from "./DeliverablePolicy.js";
+import { StorageBucket, type ObjectStorage } from "../../Infrastructure/Storage/ObjectStorage.js";
 import type { ShotListItem, SubmissionView } from "./ShotsService.js";
 import type { ReviewQueueItem } from "./ReviewsService.js";
 
 const shotParams = z.object({ shotId: uuidSchema });
 const allDeliverableTypes = [...new Set(Object.values(deliverableContentTypes).flat())] as [string, ...string[]];
 
-function toShotCore(shot: ShotRecord): Omit<z.infer<typeof shotSchema>, "claimer" | "latestSubmission" | "isSeniorLocked"> {
+function toShotCore(
+    shot: ShotRecord,
+    storage: ObjectStorage
+): Omit<z.infer<typeof shotSchema>, "claimer" | "latestSubmission" | "isSeniorLocked"> {
     return {
         id: shot.id,
         roundId: shot.roundId,
@@ -32,14 +36,17 @@ function toShotCore(shot: ShotRecord): Omit<z.infer<typeof shotSchema>, "claimer
         claimedAt: toIso(shot.claimedAt),
         deadlineAt: toIso(shot.deadlineAt),
         seniorPriorityUntil: toIso(shot.seniorPriorityUntil),
+        imageUrls: (shot.imageKeys ?? [])
+            .map((key) => storage.getPublicUrl(StorageBucket.Media, key))
+            .filter((url): url is string => url !== null),
         createdAt: toIso(shot.createdAt),
         updatedAt: toIso(shot.updatedAt)
     };
 }
 
-function toShotResponse(item: ShotListItem): z.infer<typeof shotSchema> {
+function toShotResponse(item: ShotListItem, storage: ObjectStorage): z.infer<typeof shotSchema> {
     return {
-        ...toShotCore(item.shot),
+        ...toShotCore(item.shot, storage),
         claimer: item.claimer === null ? null : toUserSummary(item.claimer),
         isSeniorLocked: item.isSeniorLocked,
         latestSubmission: item.latestSubmission
@@ -66,12 +73,12 @@ function toSubmissionResponse(
     };
 }
 
-function toReviewQueueResponse(item: ReviewQueueItem): z.infer<typeof reviewQueueItemSchema> {
-    return { ...toSubmissionResponse({ ...item, reviewer: null }), shot: toShotCore(item.shot) };
+function toReviewQueueResponse(item: ReviewQueueItem, storage: ObjectStorage): z.infer<typeof reviewQueueItemSchema> {
+    return { ...toSubmissionResponse({ ...item, reviewer: null }), shot: toShotCore(item.shot, storage) };
 }
 
 export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
-    const { shotsService, reviewsService, configuration } = services;
+    const { shotsService, reviewsService, objectStorage, configuration } = services;
     const security = [{ bearer: [] }];
     const supervisor = requireRole(Role.Supervisor);
 
@@ -91,7 +98,7 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
         },
         async (request) => {
             const page = await shotsService.list(request.query, optionalUser(request));
-            return { data: page.data.map(toShotResponse), meta: page.meta };
+            return { data: page.data.map((item) => toShotResponse(item, objectStorage)), meta: page.meta };
         }
     );
 
@@ -108,7 +115,12 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
         async (request, reply) => {
             const detail = await shotsService.getDetail(request.params.shotId, optionalUser(request));
             void reply.header("Cache-Control", "private, no-store");
-            return { data: { ...toShotResponse(detail), submissions: detail.submissions.map(toSubmissionResponse) } };
+            return {
+                data: {
+                    ...toShotResponse(detail, objectStorage),
+                    submissions: detail.submissions.map(toSubmissionResponse)
+                }
+            };
         }
     );
 
@@ -127,14 +139,17 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
                     title: fieldRules.shotTitle,
                     description: fieldRules.shotDescription.default(null),
                     difficultyTier: z.enum(DifficultyTier),
-                    seniorPriorityHours: z.number().int().min(0).max(168).default(0)
+                    seniorPriorityHours: z.number().int().min(0).max(168).default(0),
+                    imageKeys: fieldRules.shotImageKeys.default([])
                 }),
                 response: { 201: dataEnvelope(shotSchema), ...errorResponses }
             }
         },
         async (request, reply) => {
             const shot = await shotsService.create(request.body);
-            return reply.status(201).send({ data: toShotResponse({ shot, claimer: null, latestSubmission: null, isSeniorLocked: false }) });
+            return reply.status(201).send({
+                data: toShotResponse({ shot, claimer: null, latestSubmission: null, isSeniorLocked: false }, objectStorage)
+            });
         }
     );
 
@@ -154,7 +169,8 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
                         shotCode: fieldRules.shotCode.optional(),
                         title: fieldRules.shotTitle.optional(),
                         description: fieldRules.shotDescription.optional(),
-                        difficultyTier: z.enum(DifficultyTier).optional()
+                        difficultyTier: z.enum(DifficultyTier).optional(),
+                        imageKeys: fieldRules.shotImageKeys.optional()
                     })
                     .refine((body) => Object.keys(body).length > 0, "at least one field is required"),
                 response: { 200: dataEnvelope(shotSchema), ...errorResponses }
@@ -162,7 +178,12 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
         },
         async (request) => {
             await shotsService.update(request.params.shotId, request.body);
-            return { data: toShotResponse(await shotsService.getDetail(request.params.shotId, currentUser(request))) };
+            return {
+                data: toShotResponse(
+                    await shotsService.getDetail(request.params.shotId, currentUser(request)),
+                    objectStorage
+                )
+            };
         }
     );
 
@@ -199,7 +220,7 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
         async (request) => {
             const user = currentUser(request);
             await shotsService.claim(user, request.params.shotId);
-            return { data: toShotResponse(await shotsService.getDetail(request.params.shotId, user)) };
+            return { data: toShotResponse(await shotsService.getDetail(request.params.shotId, user), objectStorage) };
         }
     );
 
@@ -219,7 +240,7 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
         async (request) => {
             const user = currentUser(request);
             await shotsService.release(user, request.params.shotId, request.body.reason);
-            return { data: toShotResponse(await shotsService.getDetail(request.params.shotId, user)) };
+            return { data: toShotResponse(await shotsService.getDetail(request.params.shotId, user), objectStorage) };
         }
     );
 
@@ -313,7 +334,7 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
         async (request, reply) => {
             const page = await reviewsService.queue(request.query);
             void reply.header("Cache-Control", "private, no-store");
-            return { data: page.data.map(toReviewQueueResponse), meta: page.meta };
+            return { data: page.data.map((item) => toReviewQueueResponse(item, objectStorage)), meta: page.meta };
         }
     );
 

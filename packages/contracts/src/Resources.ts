@@ -204,6 +204,7 @@ export const shotSchema = z
         seniorPriorityUntil: timestampSchema.nullable(),
         isSeniorLocked: z.boolean(),
         latestSubmission: z.object({ version: z.number().int(), status: z.enum(SubmissionStatus) }).nullable(),
+        imageUrls: z.array(z.url()).default([]),
         createdAt: timestampSchema,
         updatedAt: timestampSchema
     })

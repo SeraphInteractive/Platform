@@ -43,6 +43,13 @@
       "when": 1790533730975,
       "tag": "0005_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790546500000,
+      "tag": "0006_shot_image_keys",
+      "breakpoints": true
     }
   ]
 }

@@ -208,6 +208,10 @@ export const shots = pgTable(
         claimedAt: timestamp("claimed_at", { withTimezone: true }),
         deadlineAt: timestamp("deadline_at", { withTimezone: true }),
         seniorPriorityUntil: timestamp("senior_priority_until", { withTimezone: true }),
+        imageKeys: text("image_keys")
+            .array()
+            .notNull()
+            .default(sql`'{}'`),
         ...timestamps
     },
     (table) => [
@@ -220,6 +224,7 @@ export const shots = pgTable(
             .on(table.claimedBy)
             .where(sql`${table.status} IN ('claimed', 'submitted')`),
         check("shots_scene_number_positive", sql`${table.sceneNumber} > 0`),
+        check("shots_image_keys_limit", sql`cardinality(${table.imageKeys}) <= 4`),
         check(
             "shots_active_claim_consistency",
             sql`${table.status} NOT IN ('claimed', 'submitted') OR (${table.claimedBy} IS NOT NULL AND ${table.claimedAt} IS NOT NULL)`

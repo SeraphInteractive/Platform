@@ -107,7 +107,8 @@ export const fieldRules = {
     documentTitle: singleLineText(textLimits.documentTitle, "Title"),
     sectionTitle: singleLineText(textLimits.sectionTitle, "Section title"),
     documentNote: optionalMultiLineText(textLimits.documentNote, "Note"),
-    username: singleLineText(textLimits.username, "Username")
+    username: singleLineText(textLimits.username, "Username"),
+    shotImageKeys: z.array(z.string().max(255)).max(4, "A task can have at most 4 images.")
 } as const;
 
 export function problemOf(schema: z.ZodType, value: unknown): string | null {

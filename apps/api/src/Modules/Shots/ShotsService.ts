@@ -69,6 +69,7 @@ export interface CreateShotInput {
     readonly description: string | null;
     readonly difficultyTier: DifficultyTier;
     readonly seniorPriorityHours: number;
+    readonly imageKeys?: readonly string[];
 }
 
 export interface UpdateShotInput {
@@ -78,6 +79,7 @@ export interface UpdateShotInput {
     readonly title?: string;
     readonly description?: string | null;
     readonly difficultyTier?: DifficultyTier;
+    readonly imageKeys?: readonly string[];
 }
 
 export interface DeliverableUploadInput {
@@ -237,7 +239,8 @@ export class ShotsService {
                     title: input.title,
                     description: input.description,
                     difficultyTier: input.difficultyTier,
-                    seniorPriorityUntil
+                    seniorPriorityUntil,
+                    imageKeys: input.imageKeys === undefined ? [] : [...input.imageKeys]
                 })
                 .returning();
             if (shot === undefined) {
@@ -254,8 +257,17 @@ export class ShotsService {
         if (input.roundId !== undefined && input.roundId !== null) {
             await this.requireRound(input.roundId);
         }
+        const values: Partial<typeof shots.$inferInsert> = {
+            ...(input.roundId !== undefined ? { roundId: input.roundId } : {}),
+            ...(input.sceneNumber !== undefined ? { sceneNumber: input.sceneNumber } : {}),
+            ...(input.shotCode !== undefined ? { shotCode: input.shotCode } : {}),
+            ...(input.title !== undefined ? { title: input.title } : {}),
+            ...(input.description !== undefined ? { description: input.description } : {}),
+            ...(input.difficultyTier !== undefined ? { difficultyTier: input.difficultyTier } : {}),
+            ...(input.imageKeys !== undefined ? { imageKeys: [...input.imageKeys] } : {})
+        };
         try {
-            const [shot] = await this.database.update(shots).set(input).where(eq(shots.id, shotId)).returning();
+            const [shot] = await this.database.update(shots).set(values).where(eq(shots.id, shotId)).returning();
             if (shot === undefined) {
                 throw new NotFoundError("Shot");
             }

@@ -1,14 +1,16 @@
 "use client";
 
-import { DifficultyTier, fieldRules, problemOf, Role, ShotStatus, textLimits, type ShotDto } from "@platform/contracts";
+import { DifficultyTier, fieldRules, MediaContentType, problemOf, Role, ShotStatus, textLimits, type ShotDto } from "@platform/contracts";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, MoreHorizontal, Plus } from "lucide-react";
+import { ExternalLink, ImagePlus, MoreHorizontal, Plus, X } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { useId, useState, type ReactNode, type SubmitEvent } from "react";
+import { useId, useRef, useState, type ChangeEvent, type ReactNode, type SubmitEvent } from "react";
 import { toast } from "sonner";
+import { describeError } from "@/Api/ApiClient";
 import { platformApi, type CreateShotInput } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
+import { uploadToStorage } from "@/Api/Uploads";
 import { ConfirmButton } from "@/Components/Common/ConfirmButton";
 import { Toolbar } from "@/Components/Common/DataList";
 import { PageHeader } from "@/Components/Common/PageHeader";
@@ -28,6 +30,7 @@ import {
 } from "@/Components/Ui/dropdown-menu";
 import { Input } from "@/Components/Ui/input";
 import { Label } from "@/Components/Ui/label";
+import { Progress } from "@/Components/Ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/Ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/Ui/table";
 import { useSession } from "@/Hooks/UseSession";
@@ -35,6 +38,19 @@ import { difficultyLabels, shotStatusLabels } from "@/Lib/Format";
 import { hasAtLeast } from "@/Lib/Roles";
 
 const anyValue = "any";
+const acceptedImageTypes: readonly string[] = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+
+function extractMediaKey(url: string): string {
+    const match = url.match(/media\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(?:png|jpg|gif|webp|mp4|webm|mov)/iu);
+    return match ? match[0] : url;
+}
+
+interface TaskImageItem {
+    readonly id: string;
+    readonly previewUrl: string;
+    readonly file?: File;
+    readonly mediaKey?: string;
+}
 
 interface ShotDraft {
     readonly sceneNumber: string;
@@ -103,22 +119,124 @@ function toInput(draft: ShotDraft): CreateShotInput | null {
 
 function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly trigger: ReactNode }): ReactNode {
     const formId = useId();
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const queryClient = useQueryClient();
     const [open, setOpen] = useState(false);
     const [draft, setDraft] = useState<ShotDraft>(() => draftOf(shot));
+    const [images, setImages] = useState<TaskImageItem[]>(() =>
+        shot?.imageUrls.map((url, i) => ({
+            id: `existing-${i}-${url}`,
+            previewUrl: url,
+            mediaKey: extractMediaKey(url)
+        })) ?? []
+    );
+    const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+
     const input = toInput(draft);
     const problems = problemsOf(draft);
+
+    const onOpenChange = (next: boolean): void => {
+        if (save.isPending) {
+            return;
+        }
+        setOpen(next);
+        if (next) {
+            setDraft(draftOf(shot));
+            setImages(
+                shot?.imageUrls.map((url, i) => ({
+                    id: `existing-${i}-${url}`,
+                    previewUrl: url,
+                    mediaKey: extractMediaKey(url)
+                })) ?? []
+            );
+        }
+    };
+
+    const handleFileSelect = (event: ChangeEvent<HTMLInputElement>): void => {
+        const files = Array.from(event.target.files ?? []);
+        if (files.length === 0) {
+            return;
+        }
+
+        const availableSlots = 4 - images.length;
+        if (availableSlots <= 0) {
+            toast.error("A task can have at most 4 images.");
+            return;
+        }
+
+        const validItems: TaskImageItem[] = [];
+        for (const file of files.slice(0, availableSlots)) {
+            if (!acceptedImageTypes.includes(file.type)) {
+                toast.error(`"${file.name}" is not a supported image format.`);
+                continue;
+            }
+            validItems.push({
+                id: `new-${Date.now()}-${Math.random()}`,
+                previewUrl: URL.createObjectURL(file),
+                file
+            });
+        }
+
+        if (validItems.length > 0) {
+            setImages((current) => [...current, ...validItems]);
+        }
+        if (fileInputRef.current !== null) {
+            fileInputRef.current.value = "";
+        }
+    };
+
+    const removeImage = (id: string): void => {
+        setImages((current) => {
+            const item = current.find((img) => img.id === id);
+            if (item?.file !== undefined) {
+                URL.revokeObjectURL(item.previewUrl);
+            }
+            return current.filter((img) => img.id !== id);
+        });
+    };
+
     const save = useMutation({
-        mutationFn: (value: CreateShotInput): Promise<ShotDto> => {
+        mutationFn: async (value: CreateShotInput): Promise<ShotDto> => {
+            const resolvedKeys: string[] = [];
+            const filesToUpload = images.filter((img) => img.file !== undefined);
+            let uploaded = 0;
+
+            if (filesToUpload.length > 0) {
+                setUploadProgress(0);
+            }
+
+            for (const item of images) {
+                if (item.mediaKey !== undefined) {
+                    resolvedKeys.push(item.mediaKey);
+                } else if (item.file !== undefined) {
+                    const upload = await platformApi.requestMediaUpload(
+                        item.file.type as MediaContentType,
+                        item.file.size
+                    );
+                    await uploadToStorage(upload, item.file, (fraction) => {
+                        const overall = (uploaded + fraction) / filesToUpload.length;
+                        setUploadProgress(overall);
+                    });
+                    uploaded++;
+                    resolvedKeys.push(upload.key);
+                }
+            }
+
+            const payload: CreateShotInput = {
+                ...value,
+                imageKeys: resolvedKeys
+            };
+
             if (shot === undefined) {
-                return platformApi.createShot(value);
+                return platformApi.createShot(payload);
             }
             return platformApi.updateShot(shot.id, {
-                sceneNumber: value.sceneNumber,
-                shotCode: value.shotCode,
-                title: value.title,
-                description: value.description,
-                difficultyTier: value.difficultyTier
+                sceneNumber: payload.sceneNumber,
+                shotCode: payload.shotCode,
+                title: payload.title,
+                description: payload.description,
+                difficultyTier: payload.difficultyTier,
+                imageKeys: resolvedKeys
             });
         },
         onSuccess: (saved) => {
@@ -128,15 +246,24 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
             setOpen(false);
             if (shot === undefined) {
                 setDraft(draftOf(undefined));
+                setImages([]);
             }
+        },
+        onError: (error) => {
+            toast.error(describeError(error));
+        },
+        onSettled: () => {
+            setUploadProgress(null);
         }
     });
+
     const onSubmit = (event: SubmitEvent<HTMLFormElement>): void => {
         event.preventDefault();
         if (input !== null && !save.isPending) {
             save.mutate(input);
         }
     };
+
     const field =
         (key: keyof ShotDraft) =>
         (event: { readonly target: { readonly value: string } }): void => {
@@ -144,7 +271,7 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
         };
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogTrigger asChild>{trigger}</DialogTrigger>
             <DialogContent className="sm:max-w-xl">
                 <DialogHeader>
@@ -249,10 +376,64 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
                             )}
                         </div>
                     )}
+                    <div className="space-y-1.5 sm:col-span-4">
+                        <div className="flex items-center justify-between">
+                            <Label>Reference images</Label>
+                            <span className="text-muted-foreground text-xs">{images.length}/4</span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2">
+                            {images.map((img) => (
+                                <div key={img.id} className="group relative aspect-video overflow-hidden rounded border bg-muted/40">
+                                    <img src={img.previewUrl} alt="" className="size-full object-cover" />
+                                    <button
+                                        type="button"
+                                        disabled={save.isPending}
+                                        onClick={() => removeImage(img.id)}
+                                        className="bg-background/80 hover:bg-destructive hover:text-destructive-foreground absolute top-1 right-1 rounded p-0.5 text-muted-foreground transition-colors"
+                                        aria-label="Remove image"
+                                    >
+                                        <X className="size-3.5" />
+                                    </button>
+                                </div>
+                            ))}
+                            {images.length < 4 && (
+                                <button
+                                    type="button"
+                                    disabled={save.isPending}
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="hover:border-foreground/40 hover:bg-muted/30 flex aspect-video flex-col items-center justify-center gap-1 rounded border border-dashed text-xs text-muted-foreground transition-colors"
+                                >
+                                    <ImagePlus className="size-4" />
+                                    <span>Add image</span>
+                                </button>
+                            )}
+                        </div>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            multiple
+                            accept="image/png,image/jpeg,image/webp,image/gif"
+                            className="sr-only"
+                            onChange={handleFileSelect}
+                        />
+                    </div>
+                    {uploadProgress !== null && (
+                        <div className="space-y-1 sm:col-span-4">
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                                <span>Uploading images…</span>
+                                <span>{Math.round(uploadProgress * 100)}%</span>
+                            </div>
+                            <Progress value={uploadProgress * 100} />
+                        </div>
+                    )}
                 </form>
                 <DialogFooter>
                     <Button type="submit" form={formId} disabled={input === null || save.isPending}>
-                        {shot === undefined ? "Create" : "Save"}
+                        {save.isPending
+                            ? "Saving…"
+                            : shot === undefined
+                              ? "Create"
+                              : "Save"}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -494,7 +675,19 @@ function TasksTable(): ReactNode {
                                     const threadId = threadByShot.get(shot.id);
                                     return (
                                         <TableRow key={shot.id}>
-                                            <TableCell className="text-muted-foreground font-mono text-xs">{shot.shotCode}</TableCell>
+                                            <TableCell className="text-muted-foreground font-mono text-xs">
+                                                <div className="flex items-center gap-2">
+                                                    {shot.imageUrls.length > 0 && (
+                                                        <img
+                                                            src={shot.imageUrls[0]}
+                                                            alt=""
+                                                            className="size-6 shrink-0 rounded border object-cover"
+                                                            loading="lazy"
+                                                        />
+                                                    )}
+                                                    <span>{shot.shotCode}</span>
+                                                </div>
+                                            </TableCell>
                                             <TableCell className="max-w-80 truncate font-medium">{shot.title}</TableCell>
                                             <TableCell className="tabular-nums">{shot.sceneNumber}</TableCell>
                                             <TableCell>{difficultyLabels[shot.difficultyTier]}</TableCell>

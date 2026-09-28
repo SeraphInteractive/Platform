@@ -111,6 +111,7 @@ export interface CreateShotInput {
     readonly description: string | null;
     readonly difficultyTier: DifficultyTier;
     readonly seniorPriorityHours: number;
+    readonly imageKeys?: readonly string[];
 }
 
 export interface ShotQuery extends PageQuery {

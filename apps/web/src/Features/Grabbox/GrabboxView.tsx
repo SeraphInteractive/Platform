@@ -164,6 +164,11 @@ export function GrabboxView(): ReactNode {
                             <DataRow
                                 key={shot.id}
                                 href={`/grabbox/${shot.id}` as Route}
+                                thumbnail={
+                                    shot.imageUrls.length > 0 ? (
+                                        <img src={shot.imageUrls[0]} alt="" className="size-full object-cover" loading="lazy" />
+                                    ) : undefined
+                                }
                                 code={shot.shotCode}
                                 title={shot.title}
                                 meta={

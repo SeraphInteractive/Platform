@@ -18,6 +18,7 @@ import { ShotStatusBadge, SubmissionStatusBadge } from "@/Components/Common/Stat
 import { useBreadcrumbLabel } from "@/Components/Layout/Breadcrumbs";
 import { discordThreadUrl, useSiteConfig } from "@/Components/SiteConfig";
 import { MarkdownText } from "@/Components/Common/MarkdownText";
+import { TaskImageCarousel } from "@/Components/Common/TaskImageCarousel";
 import { Button } from "@/Components/Ui/button";
 import { Card, CardContent } from "@/Components/Ui/card";
 import { Checkbox } from "@/Components/Ui/checkbox";
@@ -312,6 +313,9 @@ function ShotDetail({ shot }: { readonly shot: ShotDetailDto }): ReactNode {
             />
             <div className="grid gap-10 lg:grid-cols-[1fr_18rem]">
                 <div className="space-y-10">
+                    {shot.imageUrls.length > 0 && (
+                        <TaskImageCarousel images={shot.imageUrls} alt={shot.title} />
+                    )}
                     <Section title="The brief">
                         {shot.description === null ? (
                             <p className="text-muted-foreground text-sm">No brief.</p>
