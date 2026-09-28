@@ -188,6 +188,7 @@ describe("every notification", () => {
         },
         { type: NotificationType.RoundCreated, occurredAt, round, actor: admin, opensAt: null, closesAt: occurredAt },
         { type: NotificationType.RoundUpdated, occurredAt, round, actor: admin, opensAt: null, closesAt: occurredAt },
+        { type: NotificationType.RoundDeleted, occurredAt, round, actor: admin },
         { type: NotificationType.RoundStatusChanged, occurredAt, round, from: RoundStatus.Closed, to: RoundStatus.Open, actor: admin },
         {
             type: NotificationType.RoundFinalized,
@@ -204,6 +205,20 @@ describe("every notification", () => {
             entry: { id: shot.id, title: "A" },
             status: EntryStatus.Approved,
             author: voter
+        },
+        {
+            type: NotificationType.EntryUpdated,
+            occurredAt,
+            round,
+            entry: { id: shot.id, title: "A" },
+            actor: admin
+        },
+        {
+            type: NotificationType.EntryDeleted,
+            occurredAt,
+            round,
+            entry: { id: shot.id, title: "A" },
+            actor: admin
         },
         {
             type: NotificationType.EntryStatusChanged,

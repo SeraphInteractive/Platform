@@ -174,6 +174,15 @@ export function renderNotification(notification: PlatformNotification, context: 
                     `-# Updated by ${person(notification.actor)}`
                 )
             ];
+        case NotificationType.RoundDeleted:
+            return [
+                post(
+                    telemetry,
+                    Accent.Warning,
+                    `**Round deleted: ${plain(notification.round.title)}**`,
+                    `-# Deleted by ${person(notification.actor)}`
+                )
+            ];
         case NotificationType.RoundStatusChanged: {
             const posts: RenderedNotification[] = [
                 post(
@@ -216,6 +225,27 @@ export function renderNotification(notification: PlatformNotification, context: 
                     `${plain(notification.entry.title)} by ${person(notification.author)}`,
                     notification.status === EntryStatus.PendingReview ? "-# Waiting for review" : "-# Approved automatically",
                     preview(notification.entry.mediaUrl, notification.entry.title)
+                )
+            ];
+        case NotificationType.EntryUpdated:
+            return [
+                post(
+                    telemetry,
+                    Accent.Info,
+                    `**Entry updated in ${plain(notification.round.title)}**`,
+                    plain(notification.entry.title),
+                    `-# Updated by ${person(notification.actor)}`,
+                    preview(notification.entry.mediaUrl, notification.entry.title)
+                )
+            ];
+        case NotificationType.EntryDeleted:
+            return [
+                post(
+                    telemetry,
+                    Accent.Warning,
+                    `**Entry deleted in ${plain(notification.round.title)}**`,
+                    plain(notification.entry.title),
+                    `-# Deleted by ${person(notification.actor)}`
                 )
             ];
         case NotificationType.EntryStatusChanged: {

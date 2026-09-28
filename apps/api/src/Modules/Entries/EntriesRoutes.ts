@@ -96,7 +96,9 @@ export const entriesRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
                 response: { 200: dataEnvelope(entrySchema), ...errorResponses }
             }
         },
-        async (request) => ({ data: present(await entriesService.update(request.params.roundId, request.params.entryId, request.body)) })
+        async (request) => ({
+            data: present(await entriesService.update(actorOf(request), request.params.roundId, request.params.entryId, request.body))
+        })
     );
 
     application.patch(
@@ -149,7 +151,7 @@ export const entriesRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
             }
         },
         async (request, reply) => {
-            await entriesService.delete(request.params.roundId, request.params.entryId);
+            await entriesService.delete(actorOf(request), request.params.roundId, request.params.entryId);
             return reply.status(204).send(null);
         }
     );

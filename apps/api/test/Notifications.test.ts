@@ -217,6 +217,46 @@ describe("platform service integration", () => {
             progressPercent: 7
         });
 
+        const admin = await context.createUser(Role.Admin);
+        const tempRound = json<Envelope<{ id: string }>>(
+            await context.application.inject({
+                method: "POST",
+                url: "/api/v1/rounds",
+                headers: supervisor.headers,
+                payload: { title: "Temp Round", pollType: PollType.Binary }
+            })
+        ).data;
+        await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/rounds/${tempRound.id}`,
+            headers: supervisor.headers,
+            payload: { status: RoundStatus.Open }
+        });
+        const tempEntry = json<Envelope<{ id: string }>>(
+            await context.application.inject({
+                method: "POST",
+                url: `/api/v1/rounds/${tempRound.id}/entries`,
+                headers: supervisor.headers,
+                payload: { title: "Temp Entry" }
+            })
+        ).data;
+        await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/rounds/${tempRound.id}/entries/${tempEntry.id}`,
+            headers: admin.headers,
+            payload: { title: "Renamed Entry" }
+        });
+        await context.application.inject({
+            method: "DELETE",
+            url: `/api/v1/rounds/${tempRound.id}/entries/${tempEntry.id}`,
+            headers: admin.headers
+        });
+        await context.application.inject({
+            method: "DELETE",
+            url: `/api/v1/rounds/${tempRound.id}`,
+            headers: supervisor.headers
+        });
+
         await new Promise((resolve) => setTimeout(resolve, 10));
         const types = new Set<string>();
         for (const entry of context.notificationLog.entries) {
@@ -229,7 +269,10 @@ describe("platform service integration", () => {
         for (const expected of [
             NotificationType.RoundCreated,
             NotificationType.RoundUpdated,
+            NotificationType.RoundDeleted,
             NotificationType.EntrySubmitted,
+            NotificationType.EntryUpdated,
+            NotificationType.EntryDeleted,
             NotificationType.RoundStatusChanged,
             NotificationType.BallotSubmitted,
             NotificationType.RoundFinalized,

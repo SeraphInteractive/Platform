@@ -128,11 +128,11 @@ export class EntriesService {
         return entry;
     }
 
-    public async update(roundId: string, entryId: string, input: UpdateEntryInput): Promise<EntryRecord> {
+    public async update(actor: Actor, roundId: string, entryId: string, input: UpdateEntryInput): Promise<EntryRecord> {
         if (input.mediaKey !== undefined && input.mediaKey !== null) {
             await assertUploadedMedia(this.storage, input.mediaKey, null, this.storageConfiguration.mediaMaxBytes);
         }
-        const entry = await this.mutate(roundId, entryId, async (transaction) => {
+        const { entry, round } = await this.mutate(roundId, entryId, async (transaction) => {
             const [updated] = await transaction
                 .update(entries)
                 .set({
@@ -145,7 +145,14 @@ export class EntriesService {
             return updated;
         });
         await this.leaderboardCache.invalidateRound(roundId);
-        return entry.entry;
+        const mediaUrl = entry.mediaKey === null ? null : this.storage.getPublicUrl(StorageBucket.Media, entry.mediaKey);
+        this.notifier.notify({
+            type: NotificationType.EntryUpdated,
+            round: roundReferenceOf(round),
+            entry: { id: entry.id, title: entry.title, mediaUrl },
+            actor: personOfActor(actor)
+        });
+        return entry;
     }
 
     public async setStatus(actor: Actor, roundId: string, entryId: string, status: EntryStatus): Promise<EntryRecord> {
@@ -209,12 +216,17 @@ export class EntriesService {
         return entry;
     }
 
-    public async delete(roundId: string, entryId: string): Promise<void> {
+    public async delete(actor: Actor, roundId: string, entryId: string): Promise<void> {
+        let deletedEntry: EntryRecord | undefined;
+        let parentRound: VotingRoundRecord | undefined;
         try {
-            await this.mutate(roundId, entryId, async (transaction) => {
+            const result = await this.mutate(roundId, entryId, async (transaction) => {
+                const [target] = await transaction.select().from(entries).where(eq(entries.id, entryId)).limit(1);
                 const [deleted] = await transaction.delete(entries).where(eq(entries.id, entryId)).returning();
-                return deleted;
+                return target ?? deleted;
             });
+            deletedEntry = result.entry;
+            parentRound = result.round;
         } catch (error: unknown) {
             if (isForeignKeyViolation(error)) {
                 throw new ConflictError(
@@ -225,6 +237,14 @@ export class EntriesService {
             throw error;
         }
         await this.leaderboardCache.invalidateRound(roundId);
+        if (deletedEntry !== undefined && parentRound !== undefined) {
+            this.notifier.notify({
+                type: NotificationType.EntryDeleted,
+                round: roundReferenceOf(parentRound),
+                entry: { id: deletedEntry.id, title: deletedEntry.title, mediaUrl: null },
+                actor: personOfActor(actor)
+            });
+        }
     }
 
     private async authorOf(entry: EntryRecord): Promise<{ discordId: string; discordUsername: string } | null> {

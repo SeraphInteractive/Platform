@@ -211,7 +211,8 @@ export class RoundsService {
         return after;
     }
 
-    public async delete(roundId: string): Promise<void> {
+    public async delete(actor: Actor, roundId: string): Promise<void> {
+        let deletedRound: VotingRoundRecord | undefined;
         await this.database.transaction(async (transaction) => {
             const [current] = await transaction.select().from(votingRounds).where(eq(votingRounds.id, roundId)).limit(1).for("update");
             if (current === undefined) {
@@ -224,8 +225,16 @@ export class RoundsService {
                 );
             }
             await transaction.delete(votingRounds).where(eq(votingRounds.id, roundId));
+            deletedRound = current;
         });
         await this.leaderboardCache.invalidateRound(roundId);
+        if (deletedRound !== undefined) {
+            this.notifier.notify({
+                type: NotificationType.RoundDeleted,
+                round: roundReferenceOf(deletedRound),
+                actor: personOfActor(actor)
+            });
+        }
     }
 
     private assertWindow(opensAt: Date | null, closesAt: Date | null, isDraft: boolean): void {

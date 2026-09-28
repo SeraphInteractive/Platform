@@ -143,7 +143,7 @@ export const roundsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }>
             }
         },
         async (request, reply) => {
-            await roundsService.delete(request.params.roundId);
+            await roundsService.delete(actorOf(request), request.params.roundId);
             return reply.status(204).send(null);
         }
     );
