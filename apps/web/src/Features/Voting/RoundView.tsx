@@ -119,7 +119,7 @@ function RoundDetail({ round }: { readonly round: RoundDetailDto }): ReactNode {
     const { user } = useSession();
     const entries = useApprovedEntries(round.id);
     useBreadcrumbLabel(round.id, round.title);
-    const canPropose = user !== null && (round.status === RoundStatus.Open || round.status === RoundStatus.Draft);
+    const canPropose = user !== null && round.status === RoundStatus.Open;
     const [tab, setTab] = useState(round.isAcceptingVotes ? "vote" : round.status === RoundStatus.Finalized ? "standings" : "entries");
 
     return (

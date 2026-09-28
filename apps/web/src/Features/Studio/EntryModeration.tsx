@@ -4,6 +4,7 @@ import { EntryStatus, fieldRules, problemOf, Role, textLimits, type EntryDto } f
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, type ReactNode, type SubmitEvent } from "react";
 import { toast } from "sonner";
+import { describeError } from "@/Api/ApiClient";
 import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
 import { ConfirmButton } from "@/Components/Common/ConfirmButton";
@@ -111,6 +112,9 @@ export function ExamineEntryDialog({
         onSuccess: (updated) => {
             refresh();
             toast.success(`"${updated.title}": ${entryStatusLabels[updated.status].toLowerCase()}.`);
+        },
+        onError: (error) => {
+            toast.error(describeError(error));
         }
     });
     const reinstate = useMutation({
@@ -118,6 +122,9 @@ export function ExamineEntryDialog({
         onSuccess: () => {
             refresh();
             toast.success(`"${entry.title}" is back on the ballot.`);
+        },
+        onError: (error) => {
+            toast.error(describeError(error));
         }
     });
     const remove = useMutation({
@@ -126,6 +133,9 @@ export function ExamineEntryDialog({
             refresh();
             toast.success(`"${entry.title}" deleted.`);
             setOpen(false);
+        },
+        onError: (error) => {
+            toast.error(describeError(error));
         }
     });
     const canReview = hasAtLeast(user, Role.Supervisor);
@@ -239,6 +249,9 @@ function EntryCard({ roundId, entry }: { readonly roundId: string; readonly entr
         onSuccess: (updated) => {
             refresh();
             toast.success(`"${updated.title}": ${entryStatusLabels[updated.status].toLowerCase()}.`);
+        },
+        onError: (error) => {
+            toast.error(describeError(error));
         }
     });
     const reinstate = useMutation({
@@ -246,6 +259,9 @@ function EntryCard({ roundId, entry }: { readonly roundId: string; readonly entr
         onSuccess: () => {
             refresh();
             toast.success(`"${entry.title}" is back on the ballot.`);
+        },
+        onError: (error) => {
+            toast.error(describeError(error));
         }
     });
     const remove = useMutation({
@@ -253,6 +269,9 @@ function EntryCard({ roundId, entry }: { readonly roundId: string; readonly entr
         onSuccess: () => {
             refresh();
             toast.success(`"${entry.title}" deleted.`);
+        },
+        onError: (error) => {
+            toast.error(describeError(error));
         }
     });
     const busy = review.isPending || reinstate.isPending || remove.isPending;

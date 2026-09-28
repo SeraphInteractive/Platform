@@ -81,13 +81,15 @@ describe("voting rounds", () => {
     it("runs a ranked-choice round from draft to certified results", async () => {
         const roundId = await createRound(PollType.RankedChoice);
         const community = await context.createUser(Role.Voter);
-        const pendingId = await addEntry(roundId, community, "Community pitch");
-        const a = await addEntry(roundId, supervisor, "A");
-        const b = await addEntry(roundId, supervisor, "B");
-        const c = await addEntry(roundId, supervisor, "C");
-        await approveEntry(roundId, supervisor, a);
-        await approveEntry(roundId, supervisor, b);
-        await approveEntry(roundId, supervisor, c);
+
+        // submissions are blocked while round is in draft
+        const draftSubmission = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/rounds/${roundId}/entries`,
+            headers: community.headers,
+            payload: { title: "Draft pitch" }
+        });
+        expect(draftSubmission.statusCode).toBe(409);
 
         const draftForPublic = await context.application.inject({ method: "GET", url: `/api/v1/rounds/${roundId}` });
         expect(draftForPublic.statusCode).toBe(404);
@@ -98,9 +100,17 @@ describe("voting rounds", () => {
         });
         expect(draftForStaff.statusCode).toBe(200);
 
-        const voter = await context.createUser(Role.Voter);
-        expect(await vote(voter, roundId, [a, b, c])).toBe(409);
         expect(await setRoundStatus(roundId, RoundStatus.Open)).toBe(200);
+
+        const pendingId = await addEntry(roundId, community, "Community pitch");
+        const a = await addEntry(roundId, supervisor, "A");
+        const b = await addEntry(roundId, supervisor, "B");
+        const c = await addEntry(roundId, supervisor, "C");
+        await approveEntry(roundId, supervisor, a);
+        await approveEntry(roundId, supervisor, b);
+        await approveEntry(roundId, supervisor, c);
+
+        const voter = await context.createUser(Role.Voter);
 
         const publicList = await context.application.inject({
             method: "GET",
@@ -175,11 +185,11 @@ describe("voting rounds", () => {
 
     it("excludes blacklisted voters from live standings", async () => {
         const roundId = await createRound(PollType.Binary);
+        await setRoundStatus(roundId, RoundStatus.Open);
         const yes = await addEntry(roundId, supervisor, "Yes");
         const no = await addEntry(roundId, supervisor, "No");
         await approveEntry(roundId, supervisor, yes);
         await approveEntry(roundId, supervisor, no);
-        await setRoundStatus(roundId, RoundStatus.Open);
         const honest = await context.createUser(Role.Voter);
         const brigader = await context.createUser(Role.Voter);
         expect(await vote(honest, roundId, [yes])).toBe(200);
@@ -201,11 +211,11 @@ describe("voting rounds", () => {
 
     it("does not quarantine a popular binary option", async () => {
         const roundId = await createRound(PollType.Binary);
+        await setRoundStatus(roundId, RoundStatus.Open);
         const popular = await addEntry(roundId, supervisor, "Popular");
         const other = await addEntry(roundId, supervisor, "Other");
         await approveEntry(roundId, supervisor, popular);
         await approveEntry(roundId, supervisor, other);
-        await setRoundStatus(roundId, RoundStatus.Open);
         for (let index = 0; index < 12; index++) {
             const voter = await context.createUser(Role.Voter);
             expect(await vote(voter, roundId, [popular])).toBe(200);
@@ -218,6 +228,7 @@ describe("voting rounds", () => {
 
     it("guards entry moderation and deletion", async () => {
         const roundId = await createRound(PollType.RankedChoice);
+        await setRoundStatus(roundId, RoundStatus.Open);
         const voter = await context.createUser(Role.Voter);
         const entryId = await addEntry(roundId, voter, "Needs review");
 
@@ -241,7 +252,6 @@ describe("voting rounds", () => {
         const c = await addEntry(roundId, supervisor, "C");
         await approveEntry(roundId, supervisor, b);
         await approveEntry(roundId, supervisor, c);
-        await setRoundStatus(roundId, RoundStatus.Open);
         expect(await vote(voter, roundId, [entryId, b, c])).toBe(200);
 
         const deletion = await context.application.inject({
@@ -263,6 +273,7 @@ describe("voting rounds", () => {
 
     it("blocks blacklisted users from proposing entries", async () => {
         const roundId = await createRound(PollType.RankedChoice);
+        await setRoundStatus(roundId, RoundStatus.Open);
         const banned = await context.createUser(Role.Voter);
         await context.database.update(users).set({ isBlacklisted: true }).where(eq(users.id, banned.record.id));
         const response = await context.application.inject({
@@ -272,5 +283,30 @@ describe("voting rounds", () => {
             payload: { title: "Nope" }
         });
         expect(response.statusCode).toBe(403);
+    });
+
+    it("enforces a maximum of 5 approved entries per round", async () => {
+        const roundId = await createRound(PollType.RankedChoice);
+        await setRoundStatus(roundId, RoundStatus.Open);
+        const author = await context.createUser(Role.Voter);
+        const entryIds: string[] = [];
+        for (let i = 0; i < 6; i++) {
+            entryIds.push(await addEntry(roundId, author, `Option ${i + 1}`));
+        }
+
+        // approve first 5 entries
+        for (let i = 0; i < 5; i++) {
+            await approveEntry(roundId, supervisor, entryIds[i]!);
+        }
+
+        // 6th approval should fail with 409
+        const sixthApproval = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/rounds/${roundId}/entries/${entryIds[5]}/status`,
+            headers: supervisor.headers,
+            payload: { status: EntryStatus.Approved }
+        });
+        expect(sixthApproval.statusCode).toBe(409);
+        expect(json(sixthApproval).detail).toContain("maximum of 5 approved entries");
     });
 });

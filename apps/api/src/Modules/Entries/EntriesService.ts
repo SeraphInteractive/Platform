@@ -1,4 +1,4 @@
-import { and, count, desc, eq, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, ne, type SQL } from "drizzle-orm";
 import { ConflictError, ErrorCode, ForbiddenError, NotFoundError } from "../../Common/Errors/ApplicationError.js";
 import { createPage, offsetOf, type Page, type PaginationQuery } from "../../Common/Http/Schemas.js";
 import type { Actor, AuthenticatedUser } from "../../Common/Security/Principal.js";
@@ -35,7 +35,8 @@ export interface UpdateEntryInput {
     readonly mediaKey?: string | null;
 }
 
-const submissionStatuses: readonly RoundStatus[] = [RoundStatus.Draft, RoundStatus.Open];
+const submissionStatuses: readonly RoundStatus[] = [RoundStatus.Open];
+const maxApprovedEntriesPerRound = 5;
 
 export class EntriesService {
     public constructor(
@@ -96,7 +97,7 @@ export class EntriesService {
         const { entry, round } = await this.database.transaction(async (transaction) => {
             const lockedRound = await this.requireRound(transaction, roundId, true);
             if (!submissionStatuses.includes(lockedRound.status)) {
-                throw new ConflictError("This round is no longer accepting entries.", ErrorCode.RoundNotOpen);
+                throw new ConflictError("Entries can only be submitted once the round is open.", ErrorCode.RoundNotOpen);
             }
             const [created] = await transaction
                 .insert(entries)
@@ -149,6 +150,18 @@ export class EntriesService {
 
     public async setStatus(actor: Actor, roundId: string, entryId: string, status: EntryStatus): Promise<EntryRecord> {
         const { entry, round } = await this.mutate(roundId, entryId, async (transaction) => {
+            if (status === EntryStatus.Approved) {
+                const [approvedCount] = await transaction
+                    .select({ total: count() })
+                    .from(entries)
+                    .where(and(eq(entries.roundId, roundId), eq(entries.status, EntryStatus.Approved), ne(entries.id, entryId)));
+                if ((approvedCount?.total ?? 0) >= maxApprovedEntriesPerRound) {
+                    throw new ConflictError(
+                        `A round can have a maximum of ${maxApprovedEntriesPerRound} approved entries.`,
+                        ErrorCode.Conflict
+                    );
+                }
+            }
             const [updated] = await transaction.update(entries).set({ status }).where(eq(entries.id, entryId)).returning();
             return updated;
         });
@@ -168,6 +181,16 @@ export class EntriesService {
 
     public async reinstate(actor: Actor, roundId: string, entryId: string): Promise<EntryRecord> {
         const { entry, round } = await this.mutate(roundId, entryId, async (transaction) => {
+            const [approvedCount] = await transaction
+                .select({ total: count() })
+                .from(entries)
+                .where(and(eq(entries.roundId, roundId), eq(entries.status, EntryStatus.Approved), ne(entries.id, entryId)));
+            if ((approvedCount?.total ?? 0) >= maxApprovedEntriesPerRound) {
+                throw new ConflictError(
+                    `A round can have a maximum of ${maxApprovedEntriesPerRound} approved entries.`,
+                    ErrorCode.Conflict
+                );
+            }
             const [updated] = await transaction
                 .update(entries)
                 .set({ status: EntryStatus.Approved, isQuarantined: false })

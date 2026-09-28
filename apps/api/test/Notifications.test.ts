@@ -143,6 +143,18 @@ describe("platform service integration", () => {
                 payload: { title: "Contract", pollType: PollType.Binary }
             })
         ).data;
+        await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/rounds/${round.id}`,
+            headers: supervisor.headers,
+            payload: { title: "Contract Renamed" }
+        });
+        await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/rounds/${round.id}`,
+            headers: supervisor.headers,
+            payload: { status: RoundStatus.Open }
+        });
         const entryIds: string[] = [];
         for (const title of ["A", "B"]) {
             const entry = await context.application.inject({
@@ -160,18 +172,6 @@ describe("platform service integration", () => {
                 payload: { status: EntryStatus.Approved }
             });
         }
-        await context.application.inject({
-            method: "PATCH",
-            url: `/api/v1/rounds/${round.id}`,
-            headers: supervisor.headers,
-            payload: { title: "Contract Renamed" }
-        });
-        await context.application.inject({
-            method: "PATCH",
-            url: `/api/v1/rounds/${round.id}`,
-            headers: supervisor.headers,
-            payload: { status: RoundStatus.Open }
-        });
         await context.application.inject({
             method: "PUT",
             url: `/api/v1/rounds/${round.id}/ballots/me`,
