@@ -16,12 +16,14 @@ import { RichTextInputField, TextInputField } from "@/Components/Common/FormFiel
 import { MarkdownText } from "@/Components/Common/MarkdownText";
 import { Button } from "@/Components/Ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/Components/Ui/card";
+import { Checkbox } from "@/Components/Ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/Components/Ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/Components/Ui/tabs";
 import { EntryMedia } from "@/Features/Voting/EntryMedia";
 import { useSession } from "@/Hooks/UseSession";
 import { entryStatusLabels } from "@/Lib/Format";
 import { hasAtLeast } from "@/Lib/Roles";
+import { cn } from "@/Lib/Utils";
 
 function EditEntryDialog({ roundId, entry }: { readonly roundId: string; readonly entry: EntryDto }): ReactNode {
     const formId = useId();
@@ -238,7 +240,17 @@ export function ExamineEntryDialog({
     );
 }
 
-function EntryCard({ roundId, entry }: { readonly roundId: string; readonly entry: EntryDto }): ReactNode {
+function EntryCard({
+    roundId,
+    entry,
+    selected = false,
+    onToggleSelect
+}: {
+    readonly roundId: string;
+    readonly entry: EntryDto;
+    readonly selected?: boolean;
+    readonly onToggleSelect?: (id: string) => void;
+}): ReactNode {
     const { user } = useSession();
     const queryClient = useQueryClient();
     const refresh = (): void => {
@@ -279,9 +291,18 @@ function EntryCard({ roundId, entry }: { readonly roundId: string; readonly entr
     const isAdmin = hasAtLeast(user, Role.Admin);
 
     return (
-        <Card className="h-full">
+        <Card className={cn("h-full transition-colors", selected && "border-primary/60 bg-primary/[0.02]")}>
             <CardHeader className="gap-2">
-                <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                    {onToggleSelect !== undefined && (
+                        <Checkbox
+                            checked={selected}
+                            onCheckedChange={() => {
+                                onToggleSelect(entry.id);
+                            }}
+                            aria-label={`Select ${entry.title}`}
+                        />
+                    )}
                     <EntryStatusBadge status={entry.status} />
                     {entry.isQuarantined && <ToneBadge tone={Tone.Negative}>Quarantined</ToneBadge>}
                     <span className="text-muted-foreground ml-auto text-xs">
@@ -356,8 +377,13 @@ function EntryCard({ roundId, entry }: { readonly roundId: string; readonly entr
 }
 
 export function EntryModeration({ roundId }: { readonly roundId: string }): ReactNode {
+    const { user } = useSession();
+    const queryClient = useQueryClient();
     const [status, setStatus] = useState<EntryStatus>(EntryStatus.PendingReview);
     const [page, setPage] = useState(1);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [isBulkOperating, setIsBulkOperating] = useState(false);
+
     const query = { status, page, perPage: 20 };
     const entries = useQuery({
         queryKey: queryKeys.entries(roundId, query),
@@ -365,23 +391,183 @@ export function EntryModeration({ roundId }: { readonly roundId: string }): Reac
         placeholderData: keepPreviousData
     });
 
+    const canReview = hasAtLeast(user, Role.Supervisor);
+    const isAdmin = hasAtLeast(user, Role.Admin);
+
+    const handleTabChange = (value: string): void => {
+        setStatus(value as EntryStatus);
+        setPage(1);
+        setSelectedIds(new Set());
+    };
+
+    const handlePageChange = (nextPage: number): void => {
+        setPage(nextPage);
+        setSelectedIds(new Set());
+    };
+
+    const toggleSelect = (id: string): void => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
+            return next;
+        });
+    };
+
+    const pageEntries = entries.data?.data ?? [];
+    const allOnPageSelected = pageEntries.length > 0 && pageEntries.every((e) => selectedIds.has(e.id));
+    const someOnPageSelected = pageEntries.some((e) => selectedIds.has(e.id));
+
+    const toggleSelectAll = (): void => {
+        if (allOnPageSelected) {
+            setSelectedIds((prev) => {
+                const next = new Set(prev);
+                for (const e of pageEntries) {
+                    next.delete(e.id);
+                }
+                return next;
+            });
+        } else {
+            setSelectedIds((prev) => {
+                const next = new Set(prev);
+                for (const e of pageEntries) {
+                    next.add(e.id);
+                }
+                return next;
+            });
+        }
+    };
+
+    const refreshAll = (): void => {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.round(roundId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.entriesAll(roundId) });
+    };
+
+    const handleBulkReject = async (): Promise<void> => {
+        const ids = Array.from(selectedIds);
+        if (ids.length === 0) {
+            return;
+        }
+        setIsBulkOperating(true);
+        try {
+            const results = await Promise.allSettled(
+                ids.map((id) => platformApi.reviewEntry(roundId, id, EntryStatus.Rejected))
+            );
+            const succeeded = results.filter((r) => r.status === "fulfilled").length;
+            const failed = results.filter((r) => r.status === "rejected").length;
+            refreshAll();
+            if (failed === 0) {
+                toast.success(`Rejected ${succeeded} ${succeeded === 1 ? "entry" : "entries"}.`);
+            } else {
+                toast.warning(`Rejected ${succeeded} entries (${failed} failed).`);
+            }
+            setSelectedIds(new Set());
+        } finally {
+            setIsBulkOperating(false);
+        }
+    };
+
+    const handleBulkDelete = async (): Promise<void> => {
+        const ids = Array.from(selectedIds);
+        if (ids.length === 0) {
+            return;
+        }
+        setIsBulkOperating(true);
+        try {
+            const results = await Promise.allSettled(
+                ids.map((id) => platformApi.deleteEntry(roundId, id))
+            );
+            const succeeded = results.filter((r) => r.status === "fulfilled").length;
+            const failed = results.filter((r) => r.status === "rejected").length;
+            refreshAll();
+            if (failed === 0) {
+                toast.success(`Deleted ${succeeded} ${succeeded === 1 ? "entry" : "entries"}.`);
+            } else {
+                toast.warning(`Deleted ${succeeded} entries (${failed} failed, entries with votes cannot be deleted).`);
+            }
+            setSelectedIds(new Set());
+        } finally {
+            setIsBulkOperating(false);
+        }
+    };
+
     return (
         <div className="space-y-4">
-            <Tabs
-                value={status}
-                onValueChange={(value) => {
-                    setStatus(value as EntryStatus);
-                    setPage(1);
-                }}
-            >
-                <TabsList>
-                    {Object.values(EntryStatus).map((item) => (
-                        <TabsTrigger key={item} value={item}>
-                            {entryStatusLabels[item]}
-                        </TabsTrigger>
-                    ))}
-                </TabsList>
-            </Tabs>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <Tabs value={status} onValueChange={handleTabChange}>
+                    <TabsList>
+                        {Object.values(EntryStatus).map((item) => (
+                            <TabsTrigger key={item} value={item}>
+                                {entryStatusLabels[item]}
+                            </TabsTrigger>
+                        ))}
+                    </TabsList>
+                </Tabs>
+                {pageEntries.length > 0 && (canReview || isAdmin) && (
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs">
+                            <Checkbox
+                                id="select-all-entries"
+                                checked={allOnPageSelected ? true : someOnPageSelected ? "indeterminate" : false}
+                                onCheckedChange={toggleSelectAll}
+                                disabled={isBulkOperating}
+                            />
+                            <label htmlFor="select-all-entries" className="cursor-pointer select-none font-medium">
+                                Select all
+                            </label>
+                            {selectedIds.size > 0 && (
+                                <span className="text-muted-foreground ml-1 font-mono">
+                                    ({selectedIds.size})
+                                </span>
+                            )}
+                        </div>
+                        {selectedIds.size > 0 && (
+                            <>
+                                {canReview && status !== EntryStatus.Rejected && (
+                                    <ConfirmButton
+                                        title={`Reject ${selectedIds.size} ${selectedIds.size === 1 ? "entry" : "entries"}?`}
+                                        description="They will be moved to the rejected tab."
+                                        confirmLabel={`Reject (${selectedIds.size})`}
+                                        size="xs"
+                                        variant="outline"
+                                        disabled={isBulkOperating}
+                                        onConfirm={handleBulkReject}
+                                    >
+                                        Reject ({selectedIds.size})
+                                    </ConfirmButton>
+                                )}
+                                {isAdmin && (
+                                    <ConfirmButton
+                                        title={`Delete ${selectedIds.size} ${selectedIds.size === 1 ? "entry" : "entries"}?`}
+                                        description="Entries without votes will be permanently deleted."
+                                        confirmLabel={`Delete (${selectedIds.size})`}
+                                        destructive
+                                        size="xs"
+                                        variant="ghost"
+                                        disabled={isBulkOperating}
+                                        onConfirm={handleBulkDelete}
+                                    >
+                                        Delete ({selectedIds.size})
+                                    </ConfirmButton>
+                                )}
+                                <Button
+                                    size="xs"
+                                    variant="ghost"
+                                    disabled={isBulkOperating}
+                                    onClick={() => {
+                                        setSelectedIds(new Set());
+                                    }}
+                                >
+                                    Clear
+                                </Button>
+                            </>
+                        )}
+                    </div>
+                )}
+            </div>
             {entries.isPending ? (
                 <LoadingRows rows={4} />
             ) : entries.isError ? (
@@ -393,11 +579,16 @@ export function EntryModeration({ roundId }: { readonly roundId: string }): Reac
                     <ul className="grid gap-4 md:grid-cols-2">
                         {entries.data.data.map((entry) => (
                             <li key={entry.id}>
-                                <EntryCard roundId={roundId} entry={entry} />
+                                <EntryCard
+                                    roundId={roundId}
+                                    entry={entry}
+                                    selected={selectedIds.has(entry.id)}
+                                    onToggleSelect={canReview || isAdmin ? toggleSelect : undefined}
+                                />
                             </li>
                         ))}
                     </ul>
-                    <Pagination meta={entries.data.meta} onPageChange={setPage} />
+                    <Pagination meta={entries.data.meta} onPageChange={handlePageChange} />
                 </>
             )}
         </div>
