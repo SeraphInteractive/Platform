@@ -2,6 +2,7 @@ import type { Interaction } from "discord.js";
 import { replyWithError, type BotContext, type ComponentHandler, type SlashCommand } from "../Commands/Command.js";
 import { docsCommand, helpCommand, statusCommand } from "../Commands/InfoCommands.js";
 import { assignRoleCommand, blacklistCommand } from "../Commands/ModerationCommands.js";
+import { reminderCommand } from "../Commands/ReminderCommands.js";
 import { entryPageHandler, roundCommands, roundSelectHandler } from "../Commands/RoundCommands.js";
 import { botSetupCommand, setChannelCommand, setupForumCommand } from "../Commands/SetupCommands.js";
 import {
@@ -33,7 +34,8 @@ export const slashCommands: readonly SlashCommand[] = [
     botSetupCommand,
     setupForumCommand,
     setChannelCommand,
-    statusCommand
+    statusCommand,
+    reminderCommand
 ];
 
 const componentHandlers: readonly ComponentHandler[] = [

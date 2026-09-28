@@ -14,8 +14,10 @@ import type { NotificationConsumer } from "../Api/NotificationConsumer.js";
 import { PlatformApiError, type ActingApiClient, type DiscordIdentity, type PlatformApiClient } from "../Api/PlatformApiClient.js";
 import type { BotConfiguration } from "../Configuration/BotConfiguration.js";
 import { Accent, notice } from "../Discord/Ui.js";
+import type { ReminderScheduler } from "../Services/ReminderScheduler.js";
 import type { ServerProvisioner } from "../Services/ServerProvisioner.js";
 import type { TaskForum } from "../Services/TaskForum.js";
+import type { ReminderStore } from "../State/ReminderStore.js";
 import type { SettingsStore } from "../State/SettingsStore.js";
 
 export interface BotContext {
@@ -25,6 +27,8 @@ export interface BotContext {
     readonly forum: TaskForum;
     readonly provisioner: ServerProvisioner;
     readonly consumer: NotificationConsumer;
+    readonly reminders: ReminderStore;
+    readonly reminderScheduler: ReminderScheduler;
     readonly logger: Logger;
 }
 

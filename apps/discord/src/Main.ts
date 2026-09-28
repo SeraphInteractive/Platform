@@ -6,8 +6,10 @@ import { createLogger } from "./Common/Logger.js";
 import { ConfigurationError, loadBotConfiguration } from "./Configuration/BotConfiguration.js";
 import { InteractionRouter, slashCommands } from "./Interactions/InteractionRouter.js";
 import { NotificationDispatcher } from "./Services/NotificationDispatcher.js";
+import { ReminderScheduler } from "./Services/ReminderScheduler.js";
 import { ServerProvisioner } from "./Services/ServerProvisioner.js";
 import { TaskForum } from "./Services/TaskForum.js";
+import { ReminderStore } from "./State/ReminderStore.js";
 import { BoundRole, SettingsStore } from "./State/SettingsStore.js";
 
 async function main(): Promise<void> {
@@ -22,7 +24,10 @@ async function main(): Promise<void> {
     const dispatcher = new NotificationDispatcher(client, configuration.guildId, settings, forum, logger);
     const consumer = new NotificationConsumer(api, settings, (notification) => dispatcher.handle(notification), logger);
     const provisioner = new ServerProvisioner(settings, logger);
-    const context: BotContext = { configuration, api, settings, forum, provisioner, consumer, logger };
+    const reminders = new ReminderStore(configuration.dataDirectory);
+    await reminders.load();
+    const reminderScheduler = new ReminderScheduler(client, reminders, logger);
+    const context: BotContext = { configuration, api, settings, forum, provisioner, consumer, reminders, reminderScheduler, logger };
     const router = new InteractionRouter(context);
 
     await new REST({ version: "10" })
@@ -48,6 +53,7 @@ async function main(): Promise<void> {
                 logger.warn({ err: error }, "failed to load task thread bindings");
             });
             consumer.start();
+            reminderScheduler.start();
         })();
     });
 
@@ -77,6 +83,7 @@ async function main(): Promise<void> {
         stopping = true;
         logger.info({ signal }, "shutting down");
         consumer.stop();
+        reminderScheduler.stop();
         void client.destroy().finally(() => process.exit(0));
     };
     process.once("SIGTERM", () => {

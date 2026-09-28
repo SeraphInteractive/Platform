@@ -11,6 +11,8 @@ const helpText = [
     "`/available-tasks` • `/take-task` • `/release-task` • `/submit-task`",
     "**Staff & Production**",
     "`/create-task` • `/sync-task` • `/assign-role` • `/blacklist`",
+    "**Personal**",
+    "`/reminder set` • `/reminder list` • `/reminder cancel`",
     "**Server Administration**",
     "`/bot-setup` • `/setup-forum` • `/set-channel` • `/bot-status` • `/help` • `/docs`"
 ].join("\n");
