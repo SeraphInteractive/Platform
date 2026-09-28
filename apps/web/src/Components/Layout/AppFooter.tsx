@@ -1,14 +1,14 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+// import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-const partners = [
-    { label: "Prism Nodes", href: "https://prismnodes.com/" },
-    { label: "Squared Media", href: "https://www.youtube.com/@SquaredMediaYT" },
-    { label: "Seraph Interactive", href: "https://seraphinteractive.com/" }
-] as const;
+// const partners = [
+//     { label: "Prism Nodes", href: "https://prismnodes.com/" },
+//     { label: "Squared Media", href: "https://www.youtube.com/@SquaredMediaYT" },
+//     { label: "Seraph Interactive", href: "https://seraphinteractive.com/" }
+// ] as const;
 
 export function AppFooter(): ReactNode {
     return (
@@ -21,7 +21,7 @@ export function AppFooter(): ReactNode {
                     <Link href="/legal/privacy" className="hover:text-foreground">Privacy</Link>
                     <Link href="/legal/acceptable-use" className="hover:text-foreground">Acceptable use</Link>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                {/* <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     {partners.map((partner, i) => (
                         <span key={partner.href} className="inline-flex items-center gap-1">
                             {i > 0 && <span className="mr-1.5">·</span>}
@@ -36,7 +36,7 @@ export function AppFooter(): ReactNode {
                             </a>
                         </span>
                     ))}
-                </div>
+                </div> */}
             </div>
         </footer>
     );
