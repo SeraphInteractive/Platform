@@ -1,5 +1,5 @@
 import { Role, Specialty } from "@platform/contracts";
-import { PermissionFlagsBits } from "discord.js";
+import { type GuildMember, PermissionFlagsBits } from "discord.js";
 
 export enum StudioTier {
     Executive = 0,
@@ -121,3 +121,61 @@ export function permissionsFor(tier: StudioTier): readonly bigint[] {
             return communityPermissions;
     }
 }
+
+export function targetStudioRoleNames(role: Role, specialties: readonly Specialty[]): Set<string> {
+    const names = new Set<string>();
+
+    for (const specialty of specialties) {
+        const studio = studioRoles.find((r) => r.specialty === specialty);
+        if (studio !== undefined) {
+            names.add(studio.name);
+        }
+    }
+
+    if (role === Role.Contributor || role === Role.SeniorContributor) {
+        names.add(contributorRoleName);
+    } else if (role === Role.Voter) {
+        names.add("Voters");
+    } else if (role === Role.Member) {
+        names.add(observerRoleName);
+    }
+
+    return names;
+}
+
+export async function syncMemberStudioRoles(
+    member: GuildMember,
+    role: Role,
+    specialties: readonly Specialty[],
+    reason: string = "Platform role sync"
+): Promise<void> {
+    const targetNames = targetStudioRoleNames(role, specialties);
+    const guildRoles = await member.guild.roles.fetch();
+
+    const toAdd: string[] = [];
+    const toRemove: string[] = [];
+
+    for (const [, guildRole] of guildRoles) {
+        const studio = findStudioRole(guildRole.name);
+        if (studio === undefined) {
+            continue;
+        }
+
+        const shouldHave = targetNames.has(studio.name);
+        const hasRole = member.roles.cache.has(guildRole.id);
+
+        if (shouldHave && !hasRole) {
+            toAdd.push(guildRole.id);
+        } else if (!shouldHave && hasRole) {
+            toRemove.push(guildRole.id);
+        }
+    }
+
+    if (toRemove.length > 0) {
+        await member.roles.remove(toRemove, reason.slice(0, 400));
+    }
+    if (toAdd.length > 0) {
+        await member.roles.add(toAdd, reason.slice(0, 400));
+    }
+}
+

@@ -1,6 +1,7 @@
 import { fieldRules } from "@platform/contracts";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
+import { NotFoundError } from "../../Common/Errors/ApplicationError.js";
 import {
     dataEnvelope,
     errorResponses,
@@ -197,6 +198,27 @@ export const usersRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
         },
         async (request) => {
             const user = await usersService.reinstate(actorOf(request), byId(request.params));
+            return { data: toModeratedUserResponse(user) };
+        }
+    );
+
+    application.get(
+        "/users/by-discord/:discordId",
+        {
+            preHandler: staffOrService,
+            schema: {
+                tags: ["Users"],
+                summary: "Get a user by Discord ID.",
+                security,
+                params: discordIdParams,
+                response: { 200: dataEnvelope(moderatedUserSchema), ...errorResponses }
+            }
+        },
+        async (request) => {
+            const user = await usersService.findByDiscordId(request.params.discordId);
+            if (user === null) {
+                throw new NotFoundError("User");
+            }
             return { data: toModeratedUserResponse(user) };
         }
     );

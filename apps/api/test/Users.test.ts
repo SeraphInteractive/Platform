@@ -1,3 +1,4 @@
+import { NotificationType } from "@platform/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Role, Specialty } from "../src/Domain/Roles.js";
 import { createTestContext, json, nextSnowflake, serviceToken, type TestContext } from "./Support/TestApplication.js";
@@ -174,5 +175,52 @@ describe("user management", () => {
             headers: viewer.headers
         });
         expect(good.statusCode).toBe(200);
+    });
+
+    it("fetches users by discord id and returns 404 if missing", async () => {
+        const user = await context.createUser(Role.Contributor, { specialties: [Specialty.Animator] });
+        const headers = { authorization: `Bearer ${serviceToken}` };
+
+        const response = await context.application.inject({
+            method: "GET",
+            url: `/api/v1/users/by-discord/${user.record.discordId}`,
+            headers
+        });
+        expect(response.statusCode).toBe(200);
+        expect(json<{ data: { id: string; role: string; specialties: string[] } }>(response).data).toMatchObject({
+            id: user.record.id,
+            role: Role.Contributor,
+            specialties: [Specialty.Animator]
+        });
+
+        const missing = await context.application.inject({
+            method: "GET",
+            url: `/api/v1/users/by-discord/${nextSnowflake()}`,
+            headers
+        });
+        expect(missing.statusCode).toBe(404);
+    });
+
+    it("emits UserRoleChanged notification when role or specialties change", async () => {
+        const admin = await context.createUser(Role.Admin);
+        const target = await context.createUser(Role.Voter);
+        context.notifier.notifications.length = 0;
+
+        const response = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${target.record.id}/role`,
+            headers: admin.headers,
+            payload: { role: Role.Contributor, specialties: [Specialty.Animator] }
+        });
+        expect(response.statusCode).toBe(200);
+
+        const emitted = context.notifier.notifications.find((n) => n.type === NotificationType.UserRoleChanged);
+        expect(emitted).toBeDefined();
+        expect(emitted).toMatchObject({
+            type: NotificationType.UserRoleChanged,
+            user: { discordId: target.record.discordId, username: target.record.discordUsername },
+            role: Role.Contributor,
+            specialties: [Specialty.Animator]
+        });
     });
 });

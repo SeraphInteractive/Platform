@@ -20,6 +20,7 @@ import { isUniqueViolation, type Database } from "../../Infrastructure/Database/
 import { users, type UserRecord } from "../../Infrastructure/Database/Schema.js";
 import type { EmailSender } from "../../Infrastructure/Email/EmailSender.js";
 import type { MailDomainChecker } from "../../Infrastructure/Email/MailDomainChecker.js";
+import { NotificationType, personOfUser, type Notifier } from "../../Infrastructure/Notifications/Notification.js";
 import { isDisposableDomain, parseEmail } from "./EmailPolicy.js";
 
 export const captchaAction = "verify-email";
@@ -57,7 +58,8 @@ export class VerificationService {
         private readonly captcha: CaptchaVerifier,
         private readonly mailDomains: MailDomainChecker,
         private readonly appKey: string,
-        private readonly logger: FastifyBaseLogger
+        private readonly logger: FastifyBaseLogger,
+        private readonly notifier?: Notifier
     ) {}
 
     public async start(user: AuthenticatedUser, email: string, captchaToken: string): Promise<StartedVerification> {
@@ -162,6 +164,15 @@ export class VerificationService {
             });
             if (updated === undefined) {
                 throw new ConflictError("Your account is already verified.");
+            }
+            if (updated.role !== user.role && this.notifier !== undefined) {
+                this.notifier.notify({
+                    type: NotificationType.UserRoleChanged,
+                    user: personOfUser(updated),
+                    role: updated.role,
+                    specialties: updated.specialties,
+                    actor: personOfUser(updated)
+                });
             }
             return updated;
         } catch (error: unknown) {

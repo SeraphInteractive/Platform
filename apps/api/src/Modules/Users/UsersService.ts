@@ -43,6 +43,11 @@ export class UsersService {
         return user ?? null;
     }
 
+    public async findByDiscordId(discordId: string): Promise<UserRecord | null> {
+        const [user] = await this.database.select().from(users).where(eq(users.discordId, discordId)).limit(1);
+        return user ?? null;
+    }
+
     public async list(query: UserListQuery): Promise<Page<UserRecord>> {
         const filter = query.role === undefined ? undefined : eq(users.role, query.role);
         const [rows, totals] = await Promise.all([
@@ -59,7 +64,7 @@ export class UsersService {
     }
 
     public async changeRole(actor: Actor, reference: UserReference, change: RoleChange, createIfMissing: boolean): Promise<UserRecord> {
-        return this.database.transaction(async (transaction) => {
+        const user = await this.database.transaction(async (transaction) => {
             const { actor: current, target } = await this.lockParticipants(transaction, actor, reference);
             this.assertCanGrant(current, change.role);
             if (target === null) {
@@ -96,6 +101,14 @@ export class UsersService {
                 .returning();
             return this.required(updated);
         });
+        this.notifier.notify({
+            type: NotificationType.UserRoleChanged,
+            user: personOfUser(user),
+            role: user.role,
+            specialties: user.specialties,
+            actor: personOfActor(actor)
+        });
+        return user;
     }
 
     public async acceptTerms(userId: string, version: string): Promise<UserRecord> {
@@ -111,7 +124,7 @@ export class UsersService {
     }
 
     public async chooseOwnSpecialties(userId: string, chosen: readonly Specialty[]): Promise<UserRecord> {
-        return this.database.transaction(async (transaction) => {
+        const user = await this.database.transaction(async (transaction) => {
             const [user] = await transaction.select().from(users).where(eq(users.id, userId)).limit(1).for("update");
             const current = this.required(user);
             const assigned = current.specialties.filter((specialty) => !selfSelectableSpecialties.includes(specialty));
@@ -126,6 +139,14 @@ export class UsersService {
                 .returning();
             return this.required(updated);
         });
+        this.notifier.notify({
+            type: NotificationType.UserRoleChanged,
+            user: personOfUser(user),
+            role: user.role,
+            specialties: user.specialties,
+            actor: personOfUser(user)
+        });
+        return user;
     }
 
     public async blacklist(actor: Actor, reference: UserReference, reason: string | null): Promise<UserRecord> {

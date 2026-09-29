@@ -106,6 +106,17 @@ export class PlatformApiClient {
         this.syncedProfiles.set(identity.id, Date.now());
     }
 
+    public async getUserByDiscordId(discordId: string): Promise<ModeratedUserDto | null> {
+        try {
+            return (await this.send(`/users/by-discord/${discordId}`, dataEnvelope(moderatedUserSchema))).data;
+        } catch (error: unknown) {
+            if (error instanceof PlatformApiError && error.status === 404) {
+                return null;
+            }
+            throw error;
+        }
+    }
+
     public async listThreadMaps(): Promise<readonly ShotThreadMapDto[]> {
         return (await this.send("/shot-thread-maps", dataEnvelope(z.array(shotThreadMapSchema)))).data;
     }

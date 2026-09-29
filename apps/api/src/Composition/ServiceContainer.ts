@@ -108,7 +108,8 @@ export function createServiceContainer(
             infrastructure.captchaVerifier,
             infrastructure.mailDomainChecker,
             configuration.security.appKey,
-            logger
+            logger,
+            notifier
         )
     };
 }

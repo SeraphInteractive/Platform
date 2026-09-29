@@ -8,6 +8,7 @@ import { InteractionRouter, slashCommands } from "./Interactions/InteractionRout
 import { NotificationDispatcher } from "./Services/NotificationDispatcher.js";
 import { ReminderScheduler } from "./Services/ReminderScheduler.js";
 import { ServerProvisioner } from "./Services/ServerProvisioner.js";
+import { syncMemberStudioRoles } from "./Services/StudioRoles.js";
 import { TaskForum } from "./Services/TaskForum.js";
 import { ReminderStore } from "./State/ReminderStore.js";
 import { BoundRole, SettingsStore } from "./State/SettingsStore.js";
@@ -62,13 +63,29 @@ async function main(): Promise<void> {
     });
 
     client.on(Events.GuildMemberAdd, (member) => {
-        const roleId = settings.role(BoundRole.Observer);
-        if (member.guild.id !== configuration.guildId || roleId === undefined) {
-            return;
-        }
-        member.roles.add(roleId, "New member").catch((error: unknown) => {
-            logger.warn({ err: error, member: member.id }, "failed to grant observer role");
-        });
+        void (async (): Promise<void> => {
+            if (member.guild.id !== configuration.guildId) {
+                return;
+            }
+            try {
+                const user = await api.getUserByDiscordId(member.id);
+                if (user?.isBlacklisted) {
+                    await member.ban({ reason: (user.blacklistReason ?? "Blacklisted on platform").slice(0, 500) });
+                    logger.info({ member: member.id }, "banned blacklisted member upon joining");
+                    return;
+                }
+                if (user !== null) {
+                    await syncMemberStudioRoles(member, user.role, user.specialties, "Member joined/rejoined");
+                    return;
+                }
+                const roleId = settings.role(BoundRole.Observer);
+                if (roleId !== undefined) {
+                    await member.roles.add(roleId, "New member");
+                }
+            } catch (error: unknown) {
+                logger.warn({ err: error, member: member.id }, "failed to handle member add");
+            }
+        })();
     });
 
     client.on(Events.Error, (error) => {

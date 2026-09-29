@@ -7,7 +7,9 @@ import {
     RaidFlag,
     RaidSeverity,
     ReviewDecision,
+    Role,
     RoundStatus,
+    Specialty,
     type PlatformNotification
 } from "@platform/contracts";
 import { MessageFlags } from "discord.js";
@@ -149,6 +151,20 @@ describe("telemetry alerts", () => {
         );
     });
 
+    it("renders user role updates", () => {
+        const { text } = only({
+            type: NotificationType.UserRoleChanged,
+            occurredAt,
+            user: voter,
+            role: Role.Contributor,
+            specialties: [Specialty.Animator, Specialty.Rigger],
+            actor: admin
+        });
+        expect(text).toBe(
+            ["**User role updated**", "<@215537065863938049> is now contributor (animator, rigger), by <@212401207694721024>"].join("\n")
+        );
+    });
+
     it("omits empty reasons instead of printing placeholders", () => {
         const { text } = only({ type: NotificationType.BallotBlocked, occurredAt, round, voter, reason: null });
         expect(text).not.toMatch(/reason|no reason|n\/a/iu);
@@ -193,6 +209,14 @@ describe("every notification", () => {
         { type: NotificationType.BallotBlocked, occurredAt, round, voter, reason: null },
         { type: NotificationType.UserBlacklisted, occurredAt, user: voter, actor: admin, reason: null },
         { type: NotificationType.UserReinstated, occurredAt, user: voter, actor: admin },
+        {
+            type: NotificationType.UserRoleChanged,
+            occurredAt,
+            user: voter,
+            role: Role.Contributor,
+            specialties: [Specialty.Animator],
+            actor: admin
+        },
         { type: NotificationType.ContributorPromoted, occurredAt, user: voter, actor: admin },
         {
             type: NotificationType.RaidAlert,

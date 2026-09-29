@@ -1,9 +1,10 @@
-import { EntryStatus, NotificationType, ReviewDecision, ShotStatus, type PlatformNotification } from "@platform/contracts";
+import { EntryStatus, NotificationType, ReviewDecision, Role, ShotStatus, type PlatformNotification } from "@platform/contracts";
 import type { Client, SendableChannels } from "discord.js";
 import type { Logger } from "pino";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
 import { renderNotification } from "../Views/NotificationViews.js";
 import { reviewCard, threadUpdate } from "../Views/TaskViews.js";
+import { syncMemberStudioRoles } from "./StudioRoles.js";
 import type { TaskForum } from "./TaskForum.js";
 
 function collectDiscordIds(notification: PlatformNotification): string[] {
@@ -56,7 +57,7 @@ export class NotificationDispatcher {
         const memberIds = new Set<string>();
         await Promise.all(
             ids.map(async (id) => {
-                if (guild.members.cache.has(id)) {
+                if (guild.members.cache?.has(id) === true) {
                     memberIds.add(id);
                     return;
                 }
@@ -102,6 +103,60 @@ export class NotificationDispatcher {
                 await this.forum.setStatus(notification.shot.id, approved ? ShotStatus.Approved : ShotStatus.Claimed);
                 return;
             }
+            case NotificationType.UserBlacklisted:
+                if (notification.user.discordId !== null) {
+                    const guild = await this.client.guilds.fetch(this.guildId).catch(() => null);
+                    if (guild !== null) {
+                        await guild.members
+                            .ban(notification.user.discordId, {
+                                reason: (notification.reason ?? "Blacklisted on platform").slice(0, 500)
+                            })
+                            .catch((error: unknown) => {
+                                this.logger.warn({ err: error, discordId: notification.user.discordId }, "failed to ban blacklisted member");
+                            });
+                    }
+                }
+                return;
+            case NotificationType.UserReinstated:
+                if (notification.user.discordId !== null) {
+                    const guild = await this.client.guilds.fetch(this.guildId).catch(() => null);
+                    if (guild !== null) {
+                        await guild.bans.remove(notification.user.discordId, "Reinstated on platform").catch((error: unknown) => {
+                            this.logger.warn({ err: error, discordId: notification.user.discordId }, "failed to unban reinstated member");
+                        });
+                    }
+                }
+                return;
+            case NotificationType.UserRoleChanged:
+                if (notification.user.discordId !== null) {
+                    const guild = await this.client.guilds.fetch(this.guildId).catch(() => null);
+                    if (guild !== null) {
+                        const member = await guild.members.fetch(notification.user.discordId).catch(() => null);
+                        if (member !== null) {
+                            await syncMemberStudioRoles(member, notification.role, notification.specialties, "Platform role updated").catch(
+                                (error: unknown) => {
+                                    this.logger.warn({ err: error, discordId: notification.user.discordId }, "failed to sync member studio roles");
+                                }
+                            );
+                        }
+                    }
+                }
+                return;
+            case NotificationType.ContributorPromoted:
+                if (notification.user.discordId !== null) {
+                    const guild = await this.client.guilds.fetch(this.guildId).catch(() => null);
+                    if (guild !== null) {
+                        const member = await guild.members.fetch(notification.user.discordId).catch(() => null);
+                        if (member !== null) {
+                            await syncMemberStudioRoles(member, Role.SeniorContributor, [], "Promoted to senior contributor").catch(
+                                (error: unknown) => {
+                                    this.logger.warn({ err: error, discordId: notification.user.discordId }, "failed to sync member studio roles");
+                                }
+                            );
+                        }
+                    }
+                }
+                return;
             case NotificationType.EntryStatusChanged:
                 if (
                     notification.status === EntryStatus.Approved &&

@@ -145,6 +145,15 @@ export function renderNotification(notification: PlatformNotification, context: 
                     `${person(notification.user, isMember)}, by ${person(notification.actor, isMember)}`
                 )
             ];
+        case NotificationType.UserRoleChanged:
+            return [
+                post(
+                    telemetry,
+                    Accent.Info,
+                    "**User role updated**",
+                    `${person(notification.user, isMember)} is now ${notification.role}${notification.specialties.length > 0 ? ` (${notification.specialties.join(", ")})` : ""}, by ${person(notification.actor, isMember)}`
+                )
+            ];
         case NotificationType.ContributorPromoted:
             return [
                 post(ChannelPurpose.Announcements, Accent.Success, `${person(notification.user, isMember)} is now a senior contributor.`)
