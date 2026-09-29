@@ -28,7 +28,8 @@ export enum NotificationType {
     ShotExpired = "shot.expired",
     SubmissionCreated = "submission.created",
     SubmissionReviewed = "submission.reviewed",
-    PipelineUpdated = "pipeline.updated"
+    PipelineUpdated = "pipeline.updated",
+    MediaFlaggedAi = "media.flagged_ai"
 }
 
 export const notificationPersonSchema = z.object({
@@ -184,6 +185,14 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
         progressPercent: z.number(),
         isPhaseTransition: z.boolean(),
         actor: notificationPersonSchema
+    }),
+    notification(NotificationType.MediaFlaggedAi, {
+        mediaKind: z.enum(["entry", "task_submission"]),
+        targetId: uuidSchema,
+        title: z.string(),
+        author: notificationPersonSchema,
+        flags: z.array(z.string()),
+        snippet: z.string().nullable()
     })
 ]);
 

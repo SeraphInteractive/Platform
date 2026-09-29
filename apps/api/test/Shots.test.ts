@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DifficultyTier, ShotStatus } from "../src/Domain/Enums.js";
 import { Role } from "../src/Domain/Roles.js";
 import { shots, users } from "../src/Infrastructure/Database/Schema.js";
+import { NotificationType } from "../src/Infrastructure/Notifications/Notification.js";
 import { StorageBucket } from "../src/Infrastructure/Storage/ObjectStorage.js";
 import { createTestContext, json, nextSnowflake, serviceToken, type TestContext, type TestUser } from "./Support/TestApplication.js";
 
@@ -272,5 +273,46 @@ describe("shot grab-box", () => {
         });
         expect(updated.statusCode).toBe(200);
         expect(json<Envelope<{ imageUrls: string[] }>>(updated).data.imageUrls).toHaveLength(1);
+    });
+
+    it("scans task deliverables for AI video signatures and notifies supervisors", async () => {
+        const shotId = await createShot("SC07-010");
+        const worker = await context.createUser(Role.Contributor);
+
+        await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${shotId}/claim`,
+            headers: worker.headers
+        });
+
+        // create synthetic MP4 with Runway Gen-3 metadata in moov atom
+        const moovPayload = Buffer.from("Rendered with Runway Gen-3 Alpha model", "utf-8");
+        const atomLen = Buffer.alloc(4);
+        atomLen.writeUInt32BE(moovPayload.length + 8, 0);
+        const ftyp = Buffer.concat([Buffer.from([0x00, 0x00, 0x00, 0x14]), Buffer.from("ftypisom", "ascii"), Buffer.alloc(8)]);
+        const mp4Buf = Buffer.concat([ftyp, atomLen, Buffer.from("moov", "ascii"), moovPayload]);
+
+        const videoKey = `shots/${shotId}/${worker.record.id}/11111111-2222-3333-4444-555555555555-video_ai.mp4`;
+        context.storage.store(StorageBucket.Deliverables, videoKey, mp4Buf.length, "video/mp4", mp4Buf);
+
+        const submitted = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${shotId}/submissions`,
+            headers: worker.headers,
+            payload: { videoKey, notes: "AI generated test shot" }
+        });
+        expect(submitted.statusCode).toBe(201);
+        const submission = json<Envelope<{ id: string; aiFlags: string[] }>>(submitted).data;
+        expect(submission.aiFlags).toContain("Runway AI video signature");
+
+        // verify telemetry alert notification
+        const aiNotif = context.notifier.notifications.find(
+            (n) => n.type === NotificationType.MediaFlaggedAi && n.targetId === submission.id
+        );
+        expect(aiNotif).toBeDefined();
+        if (aiNotif && aiNotif.type === NotificationType.MediaFlaggedAi) {
+            expect(aiNotif.mediaKind).toBe("task_submission");
+            expect(aiNotif.flags).toContain("Runway AI video signature");
+        }
     });
 });

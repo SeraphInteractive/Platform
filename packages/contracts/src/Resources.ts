@@ -90,6 +90,7 @@ export const entrySchema = z
         status: z.enum(EntryStatus),
         isQuarantined: z.boolean(),
         mediaUrl: z.url().nullable(),
+        aiFlags: z.array(z.string()).default([]),
         submittedBy: uuidSchema.nullable(),
         createdAt: timestampSchema,
         updatedAt: timestampSchema
@@ -223,6 +224,7 @@ export const submissionSchema = z
         reviewedAt: timestampSchema.nullable(),
         videoUrl: z.url().nullable().describe("Short-lived download link, only for staff and the contributor."),
         blendUrl: z.url().nullable(),
+        aiFlags: z.array(z.string()).default([]),
         createdAt: timestampSchema
     })
     .meta({ id: "Submission" });

@@ -72,6 +72,29 @@ export class S3ObjectStorage implements ObjectStorage {
         }
     }
 
+    public async getObject(bucket: StorageBucket, key: string, maxBytes?: number): Promise<Buffer | null> {
+        const { client, name } = this.resolve(bucket);
+        try {
+            const result = await client.send(
+                new GetObjectCommand({
+                    Bucket: name,
+                    Key: key,
+                    Range: maxBytes !== undefined && maxBytes > 0 ? `bytes=0-${maxBytes - 1}` : undefined
+                })
+            );
+            if (result.Body === undefined) {
+                return null;
+            }
+            const byteArray = await result.Body.transformToByteArray();
+            return Buffer.from(byteArray);
+        } catch (error: unknown) {
+            if (error instanceof NotFound || (error instanceof S3ServiceException && error.$metadata.httpStatusCode === 404)) {
+                return null;
+            }
+            throw error;
+        }
+    }
+
     public async createDownloadUrl(bucket: StorageBucket, key: string): Promise<string> {
         const { client, name } = this.resolve(bucket);
         const fileName = key.slice(key.lastIndexOf("/") + 1);

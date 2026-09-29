@@ -5,6 +5,7 @@ import { EntryStatus, PollType, RoundStatus } from "../src/Domain/Enums.js";
 import { Role } from "../src/Domain/Roles.js";
 import { entries, users } from "../src/Infrastructure/Database/Schema.js";
 import { NotificationType } from "../src/Infrastructure/Notifications/Notification.js";
+import { StorageBucket } from "../src/Infrastructure/Storage/ObjectStorage.js";
 import { createTestContext, json, type TestContext, type TestUser } from "./Support/TestApplication.js";
 
 interface Envelope<T> {
@@ -326,5 +327,50 @@ describe("voting rounds", () => {
         });
         expect(sixthApproval.statusCode).toBe(409);
         expect(json(sixthApproval).detail).toContain("maximum of 5 approved entries");
+    });
+
+    it("scans uploaded entry media for AI metadata and notifies supervisors", async () => {
+        const roundId = await createRound(PollType.RankedChoice);
+        await setRoundStatus(roundId, RoundStatus.Open);
+        const author = await context.createUser(Role.Voter);
+
+        // create synthetic PNG with Stable Diffusion parameters in tEXt chunk
+        const prompt = "Cyberpunk staircase\nSteps: 20, Sampler: Euler a, CFG scale: 7";
+        const textPayload = Buffer.concat([
+            Buffer.from("parameters", "latin1"),
+            Buffer.from([0x00]),
+            Buffer.from(prompt, "utf-8")
+        ]);
+        const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+        const ihdr = Buffer.concat([Buffer.from([0x00, 0x00, 0x00, 0x0d]), Buffer.from("IHDR", "ascii"), Buffer.alloc(13), Buffer.alloc(4)]);
+        const customLen = Buffer.alloc(4);
+        customLen.writeUInt32BE(textPayload.length, 0);
+        const customChunk = Buffer.concat([customLen, Buffer.from("tEXt", "ascii"), textPayload, Buffer.alloc(4)]);
+        const iend = Buffer.concat([Buffer.from([0x00, 0x00, 0x00, 0x00]), Buffer.from("IEND", "ascii"), Buffer.alloc(4)]);
+        const pngBuf = Buffer.concat([signature, ihdr, customChunk, iend]);
+
+        const mediaKey = `media/${author.record.id}/11111111-2222-3333-4444-555555555555.png`;
+        context.storage.store(StorageBucket.Media, mediaKey, pngBuf.length, "image/png", pngBuf);
+
+        const response = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/rounds/${roundId}/entries`,
+            headers: author.headers,
+            payload: { title: "AI Generated Entry", mediaKey }
+        });
+        expect(response.statusCode).toBe(201);
+        const createdEntry = json<Envelope<{ id: string; aiFlags: string[] }>>(response).data;
+        expect(createdEntry.aiFlags.length).toBeGreaterThan(0);
+        expect(createdEntry.aiFlags).toContain("PNG parameters chunk (Stable Diffusion / WebUI)");
+
+        // verify notification was emitted
+        const aiNotif = context.notifier.notifications.find(
+            (n) => n.type === NotificationType.MediaFlaggedAi && n.targetId === createdEntry.id
+        );
+        expect(aiNotif).toBeDefined();
+        if (aiNotif && aiNotif.type === NotificationType.MediaFlaggedAi) {
+            expect(aiNotif.mediaKind).toBe("entry");
+            expect(aiNotif.flags).toContain("PNG parameters chunk (Stable Diffusion / WebUI)");
+        }
     });
 });

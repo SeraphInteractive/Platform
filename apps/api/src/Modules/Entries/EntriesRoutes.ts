@@ -166,6 +166,7 @@ export function toEntryResponse(entry: EntryRecord, storage: ObjectStorage): z.i
         status: entry.status,
         isQuarantined: entry.isQuarantined,
         mediaUrl: entry.mediaKey === null ? null : storage.getPublicUrl(StorageBucket.Media, entry.mediaKey),
+        aiFlags: entry.aiFlags ?? [],
         submittedBy: entry.submittedBy,
         createdAt: toIso(entry.createdAt),
         updatedAt: toIso(entry.updatedAt)

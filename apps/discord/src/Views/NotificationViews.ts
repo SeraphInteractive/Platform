@@ -375,5 +375,19 @@ export function renderNotification(notification: PlatformNotification, context: 
                 )
             ];
         }
+        case NotificationType.MediaFlaggedAi: {
+            const kindLabel = notification.mediaKind === "entry" ? "Round Entry" : "Task Deliverable";
+            const flagLines = notification.flags.map((flag) => `• ${plain(flag, 120)}`).join("\n");
+            return [
+                post(
+                    ChannelPurpose.Telemetry,
+                    Accent.Warning,
+                    `**AI signatures detected:** ${kindLabel} "${plain(notification.title, 80)}"`,
+                    `Uploaded by ${person(notification.author, isMember)}`,
+                    flagLines,
+                    notification.snippet === null ? null : quote(notification.snippet, 300)
+                )
+            ];
+        }
     }
 }

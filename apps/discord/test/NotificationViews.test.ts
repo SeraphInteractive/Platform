@@ -189,6 +189,25 @@ describe("telemetry alerts", () => {
         );
     });
 
+    it("renders AI detection telemetry alerts", () => {
+        const { purpose, text } = only({
+            type: NotificationType.MediaFlaggedAi,
+            occurredAt,
+            mediaKind: "entry",
+            targetId: "a0f3d5c7-1b2e-4c3d-8e9f-0a1b2c3d4e5f",
+            title: "Option Beta",
+            author: voter,
+            flags: ["Stable Diffusion generation parameters", "Negative prompt parameter"],
+            snippet: "A high quality render of a staircase"
+        });
+        expect(purpose).toBe(ChannelPurpose.Telemetry);
+        expect(text).toContain("**AI signatures detected:** Round Entry \"Option Beta\"");
+        expect(text).toContain("<@215537065863938049>");
+        expect(text).toContain("• Stable Diffusion generation parameters");
+        expect(text).toContain("• Negative prompt parameter");
+        expect(text).toContain("> A high quality render of a staircase");
+    });
+
     it("never lets user content ping or inject markdown", () => {
         const { text, payload } = only({
             type: NotificationType.EntrySubmitted,
@@ -308,6 +327,16 @@ describe("every notification", () => {
             progressPercent: 18,
             isPhaseTransition: true,
             actor: supervisor
+        },
+        {
+            type: NotificationType.MediaFlaggedAi,
+            occurredAt,
+            mediaKind: "entry",
+            targetId: shot.id,
+            title: "Option Alpha",
+            author: voter,
+            flags: ["Stable Diffusion generation parameters"],
+            snippet: "A detailed 3d render"
         }
     ];
 

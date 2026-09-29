@@ -50,6 +50,13 @@
       "when": 1790546500000,
       "tag": "0006_shot_image_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790680000000,
+      "tag": "0007_ai_flags",
+      "breakpoints": true
     }
   ]
 }

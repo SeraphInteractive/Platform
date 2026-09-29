@@ -69,6 +69,7 @@ function toSubmissionResponse(
         reviewedAt: toIso(submission.reviewedAt),
         videoUrl: view.videoUrl,
         blendUrl: view.blendUrl,
+        aiFlags: submission.aiFlags ?? [],
         createdAt: toIso(submission.createdAt)
     };
 }

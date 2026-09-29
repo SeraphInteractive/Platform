@@ -44,6 +44,7 @@ export class FakePresenceProvider implements PresenceProvider {
 
 export class FakeObjectStorage implements ObjectStorage {
     private readonly objects = new Map<string, StoredObjectMetadata>();
+    private readonly buffers = new Map<string, Buffer>();
 
     public isEnabled(): boolean {
         return true;
@@ -59,12 +60,23 @@ export class FakeObjectStorage implements ObjectStorage {
         });
     }
 
-    public store(bucket: StorageBucket, key: string, sizeBytes: number, contentType: string): void {
+    public store(bucket: StorageBucket, key: string, sizeBytes: number, contentType: string, data?: Buffer): void {
         this.objects.set(`${bucket}:${key}`, { sizeBytes, contentType });
+        if (data !== undefined) {
+            this.buffers.set(`${bucket}:${key}`, data);
+        }
     }
 
     public getMetadata(bucket: StorageBucket, key: string): Promise<StoredObjectMetadata | null> {
         return Promise.resolve(this.objects.get(`${bucket}:${key}`) ?? null);
+    }
+
+    public getObject(bucket: StorageBucket, key: string, maxBytes?: number): Promise<Buffer | null> {
+        const buf = this.buffers.get(`${bucket}:${key}`);
+        if (buf === undefined) {
+            return Promise.resolve(null);
+        }
+        return Promise.resolve(maxBytes !== undefined && maxBytes > 0 ? buf.subarray(0, maxBytes) : buf);
     }
 
     public createDownloadUrl(bucket: StorageBucket, key: string): Promise<string> {

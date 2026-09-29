@@ -114,6 +114,7 @@ export const entries = pgTable(
         status: entryStatusEnum("status").notNull().default(EntryStatus.PendingReview),
         mediaKey: varchar("media_key", { length: 255 }),
         isQuarantined: boolean("is_quarantined").notNull().default(false),
+        aiFlags: jsonb("ai_flags").$type<string[]>().notNull().default([]),
         ...timestamps
     },
     (table) => [index("entries_round_status_idx").on(table.roundId, table.status, table.createdAt)]
@@ -250,6 +251,7 @@ export const submissions = pgTable(
         supervisorNotes: varchar("supervisor_notes", { length: 2000 }),
         reviewedBy: uuid("reviewed_by").references(() => users.id, { onDelete: "set null" }),
         reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+        aiFlags: jsonb("ai_flags").$type<string[]>().notNull().default([]),
         ...timestamps
     },
     (table) => [

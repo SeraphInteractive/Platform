@@ -24,6 +24,7 @@ import {
 import { StorageBucket, type ObjectStorage } from "../../Infrastructure/Storage/ObjectStorage.js";
 import type { LeaderboardCache } from "../Leaderboards/LeaderboardCache.js";
 import { canSeeDrafts } from "../Rounds/RoundVisibility.js";
+import { inspectMediaAiSignatures } from "../Uploads/AiMetadataDetector.js";
 import { assertUploadedMedia } from "../Uploads/MediaPolicy.js";
 
 export interface EntryListQuery extends PaginationQuery {
@@ -98,8 +99,16 @@ export class EntriesService {
         if (author.isBlacklisted) {
             throw new ForbiddenError("Your account is blacklisted from participating in rounds.", ErrorCode.UserBlacklisted);
         }
+        let aiFlags: string[] = [];
+        let aiSnippet: string | null = null;
         if (input.mediaKey !== null) {
             await assertUploadedMedia(this.storage, input.mediaKey, author.id, this.storageConfiguration.mediaMaxBytes);
+            const buffer = await this.storage.getObject(StorageBucket.Media, input.mediaKey, 524288);
+            const detection = inspectMediaAiSignatures(buffer);
+            if (detection.flagged) {
+                aiFlags = [...detection.flags];
+                aiSnippet = detection.snippet;
+            }
         }
         const { entry, round } = await this.database.transaction(async (transaction) => {
             const lockedRound = await this.requireRound(transaction, roundId, true);
@@ -128,7 +137,8 @@ export class EntriesService {
                     description: input.description,
                     mediaKey: input.mediaKey,
                     submittedBy: author.id,
-                    status: EntryStatus.PendingReview
+                    status: EntryStatus.PendingReview,
+                    aiFlags
                 })
                 .returning();
             if (created === undefined) {
@@ -146,12 +156,34 @@ export class EntriesService {
             status: entry.status,
             author: personOfUser(author)
         });
+
+        if (aiFlags.length > 0) {
+            this.notifier.notify({
+                type: NotificationType.MediaFlaggedAi,
+                mediaKind: "entry",
+                targetId: entry.id,
+                title: entry.title,
+                author: personOfUser(author),
+                flags: aiFlags,
+                snippet: aiSnippet
+            });
+        }
         return entry;
     }
 
     public async update(actor: Actor, roundId: string, entryId: string, input: UpdateEntryInput): Promise<EntryRecord> {
-        if (input.mediaKey !== undefined && input.mediaKey !== null) {
-            await assertUploadedMedia(this.storage, input.mediaKey, null, this.storageConfiguration.mediaMaxBytes);
+        let aiFlags: string[] | undefined = undefined;
+        let aiSnippet: string | null = null;
+        if (input.mediaKey !== undefined) {
+            if (input.mediaKey !== null) {
+                await assertUploadedMedia(this.storage, input.mediaKey, null, this.storageConfiguration.mediaMaxBytes);
+                const buffer = await this.storage.getObject(StorageBucket.Media, input.mediaKey, 524288);
+                const detection = inspectMediaAiSignatures(buffer);
+                aiFlags = [...detection.flags];
+                aiSnippet = detection.snippet;
+            } else {
+                aiFlags = [];
+            }
         }
         const { entry, round } = await this.mutate(roundId, entryId, async (transaction) => {
             const [updated] = await transaction
@@ -159,7 +191,8 @@ export class EntriesService {
                 .set({
                     ...(input.title === undefined ? {} : { title: input.title }),
                     ...(input.description === undefined ? {} : { description: input.description }),
-                    ...(input.mediaKey === undefined ? {} : { mediaKey: input.mediaKey })
+                    ...(input.mediaKey === undefined ? {} : { mediaKey: input.mediaKey }),
+                    ...(aiFlags === undefined ? {} : { aiFlags })
                 })
                 .where(eq(entries.id, entryId))
                 .returning();
@@ -173,6 +206,19 @@ export class EntriesService {
             entry: { id: entry.id, title: entry.title, mediaUrl },
             actor: personOfActor(actor)
         });
+
+        if (aiFlags !== undefined && aiFlags.length > 0) {
+            const author = await this.authorOf(entry);
+            this.notifier.notify({
+                type: NotificationType.MediaFlaggedAi,
+                mediaKind: "entry",
+                targetId: entry.id,
+                title: entry.title,
+                author: author === null ? personOfActor(actor) : { discordId: author.discordId, username: author.discordUsername },
+                flags: aiFlags,
+                snippet: aiSnippet
+            });
+        }
         return entry;
     }
 

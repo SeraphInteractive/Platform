@@ -34,6 +34,7 @@ import {
     seniorPriorityTiers,
     tierDaysOf
 } from "./DeliverablePolicy.js";
+import { inspectMediaAiSignatures } from "../Uploads/AiMetadataDetector.js";
 
 type UserSummaryRecord = Pick<UserRecord, "id" | "discordId" | "discordUsername" | "discordAvatar">;
 
@@ -406,6 +407,10 @@ export class ShotsService {
             await assertDeliverable(this.storage, input.blendKey, DeliverableKind.Blend, shotId, user.id, maxBytes, "blendKey");
         }
 
+        const buffer = await this.storage.getObject(StorageBucket.Deliverables, input.videoKey, 524288);
+        const detection = inspectMediaAiSignatures(buffer);
+        const aiFlags = detection.flagged ? [...detection.flags] : [];
+
         const { submission, shot } = await this.database.transaction(async (transaction) => {
             const locked = await this.lockShot(transaction, shotId);
             this.assertActiveClaim(locked, user);
@@ -423,7 +428,8 @@ export class ShotsService {
                     version: (latest?.version ?? 0) + 1,
                     videoKey: input.videoKey,
                     blendKey: input.blendKey,
-                    notes: input.notes
+                    notes: input.notes,
+                    aiFlags
                 })
                 .returning();
             await transaction.update(shots).set({ status: ShotStatus.Submitted }).where(eq(shots.id, shotId));
@@ -445,6 +451,18 @@ export class ShotsService {
             contributor: personOfUser(user),
             notes: submission.notes
         });
+
+        if (aiFlags.length > 0) {
+            this.notifier.notify({
+                type: NotificationType.MediaFlaggedAi,
+                mediaKind: "task_submission",
+                targetId: submission.id,
+                title: `${shot.shotCode} (v${submission.version})`,
+                author: personOfUser(user),
+                flags: aiFlags,
+                snippet: detection.snippet
+            });
+        }
         return submission;
     }
 
