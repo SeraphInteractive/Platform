@@ -23,6 +23,8 @@ interface ConfirmButtonProps {
     readonly destructive?: boolean;
     readonly size?: ComponentProps<typeof Button>["size"];
     readonly variant?: ComponentProps<typeof Button>["variant"];
+    readonly requireCheckbox?: boolean;
+    readonly checkboxLabel?: string;
     readonly children: ReactNode;
 }
 
@@ -35,11 +37,23 @@ export function ConfirmButton({
     destructive = false,
     size = "sm",
     variant = "outline",
+    requireCheckbox = false,
+    checkboxLabel = "I confirm that I want to finalize and certify this round. This action cannot be undone.",
     children
 }: ConfirmButtonProps): ReactNode {
     const [open, setOpen] = useState(false);
+    const [confirmed, setConfirmed] = useState(false);
+
     return (
-        <AlertDialog open={open} onOpenChange={setOpen}>
+        <AlertDialog
+            open={open}
+            onOpenChange={(next) => {
+                setOpen(next);
+                if (!next) {
+                    setConfirmed(false);
+                }
+            }}
+        >
             <AlertDialogTrigger asChild>
                 <Button size={size} variant={variant} disabled={disabled}>
                     {children}
@@ -48,14 +62,31 @@ export function ConfirmButton({
             <AlertDialogContent>
                 <AlertDialogHeader>
                     <AlertDialogTitle>{title}</AlertDialogTitle>
-                    <AlertDialogDescription>{description}</AlertDialogDescription>
+                    <AlertDialogDescription asChild>
+                        <div className="space-y-3">
+                            <div>{description}</div>
+                            {requireCheckbox && (
+                                <label className="flex items-center gap-2 pt-2 text-xs cursor-pointer select-none text-foreground font-medium">
+                                    <input
+                                        type="checkbox"
+                                        checked={confirmed}
+                                        onChange={(e) => setConfirmed(e.target.checked)}
+                                        className="h-4 w-4 rounded border-gray-300"
+                                    />
+                                    <span>{checkboxLabel}</span>
+                                </label>
+                            )}
+                        </div>
+                    </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
+                        disabled={requireCheckbox && !confirmed}
                         className={destructive ? "bg-destructive hover:bg-destructive/90 text-white" : undefined}
                         onClick={() => {
                             setOpen(false);
+                            setConfirmed(false);
                             onConfirm();
                         }}
                     >

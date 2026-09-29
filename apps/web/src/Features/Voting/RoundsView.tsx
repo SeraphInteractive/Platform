@@ -20,17 +20,20 @@ import { pollTypeLabels } from "@/Lib/Format";
 import { hasAtLeast } from "@/Lib/Roles";
 
 const filterLabels: Readonly<Record<RoundStatus, string>> = {
-    [RoundStatus.Open]: "Open",
-    [RoundStatus.Closed]: "Closed",
+    [RoundStatus.Voting]: "Voting",
+    [RoundStatus.Open]: "Submissions",
     [RoundStatus.Finalized]: "Results",
     [RoundStatus.Draft]: "Drafts"
 };
 
-const filterOrder: readonly RoundStatus[] = [RoundStatus.Open, RoundStatus.Closed, RoundStatus.Finalized, RoundStatus.Draft];
+const filterOrder: readonly RoundStatus[] = [RoundStatus.Voting, RoundStatus.Open, RoundStatus.Finalized, RoundStatus.Draft];
 
 function Schedule({ round }: { readonly round: RoundDto }): ReactNode {
-    if (round.status === RoundStatus.Open && round.closesAt !== null) {
+    if (round.status === RoundStatus.Voting && round.closesAt !== null) {
         return <RelativeTime value={round.closesAt} prefix="Closes" />;
+    }
+    if (round.status === RoundStatus.Open && round.closesAt !== null) {
+        return <RelativeTime value={round.closesAt} prefix="Submissions close" />;
     }
     if (round.status === RoundStatus.Draft && round.opensAt !== null) {
         return <RelativeTime value={round.opensAt} prefix="Opens" />;

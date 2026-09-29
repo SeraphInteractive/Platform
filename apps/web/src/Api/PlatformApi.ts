@@ -84,7 +84,7 @@ export interface CreateRoundInput {
 export interface UpdateRoundInput {
     readonly title?: string;
     readonly pollType?: PollType;
-    readonly status?: RoundStatus.Draft | RoundStatus.Open | RoundStatus.Closed;
+    readonly status?: RoundStatus.Draft | RoundStatus.Open | RoundStatus.Voting;
     readonly opensAt?: string | null;
     readonly closesAt?: string | null;
 }

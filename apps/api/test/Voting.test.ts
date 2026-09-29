@@ -124,6 +124,21 @@ describe("voting rounds", () => {
         const hidden = await context.application.inject({ method: "GET", url: `/api/v1/rounds/${roundId}/entries/${pendingId}` });
         expect(hidden.statusCode).toBe(404);
 
+        // voting is blocked while round is still in submission (open) stage
+        expect(await vote(voter, roundId, [a, b, c])).toBe(409);
+
+        // cannot transition to voting if criteria not met, but 3 approved entries is valid for ranked choice
+        expect(await setRoundStatus(roundId, RoundStatus.Voting)).toBe(200);
+
+        // submissions are blocked once round enters voting stage
+        const lateSubmission = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/rounds/${roundId}/entries`,
+            headers: community.headers,
+            payload: { title: "Late pitch" }
+        });
+        expect(lateSubmission.statusCode).toBe(409);
+
         expect(await vote(voter, roundId, [a, a, b])).toBe(422);
         expect(await vote(voter, roundId, [a, b, pendingId])).toBe(422);
         expect(await vote(voter, roundId, [a, b])).toBe(422);
@@ -156,15 +171,8 @@ describe("voting rounds", () => {
         expect(ledgerBody).not.toContain(voter.record.id);
         expect(json<{ data: { voter: string }[] }>(ledger).data).toHaveLength(2);
 
-        const early = await context.application.inject({
-            method: "POST",
-            url: `/api/v1/rounds/${roundId}/finalize`,
-            headers: supervisor.headers
-        });
-        expect(json(early).code).toBe("ROUND_NOT_CLOSED");
-
-        expect(await setRoundStatus(roundId, RoundStatus.Closed)).toBe(200);
-        expect(await vote(second, roundId, [a, b, c])).toBe(409);
+        // cannot backtrack state from voting to open
+        expect(await setRoundStatus(roundId, RoundStatus.Open)).toBe(409);
 
         const finalized = await context.application.inject({
             method: "POST",
@@ -178,7 +186,9 @@ describe("voting rounds", () => {
 
         const results = await context.application.inject({ method: "GET", url: `/api/v1/rounds/${roundId}/results` });
         expect(results.statusCode).toBe(200);
+        expect(await vote(second, roundId, [a, b, c])).toBe(409);
         expect(await setRoundStatus(roundId, RoundStatus.Open)).toBe(409);
+        expect(await setRoundStatus(roundId, RoundStatus.Voting)).toBe(409);
         const deletion = await context.application.inject({
             method: "DELETE",
             url: `/api/v1/rounds/${roundId}`,
@@ -196,6 +206,7 @@ describe("voting rounds", () => {
         const no = await addEntry(roundId, noAuthor, "No");
         await approveEntry(roundId, supervisor, yes);
         await approveEntry(roundId, supervisor, no);
+        expect(await setRoundStatus(roundId, RoundStatus.Voting)).toBe(200);
         const honest = await context.createUser(Role.Voter);
         const brigader = await context.createUser(Role.Voter);
         expect(await vote(honest, roundId, [yes])).toBe(200);
@@ -224,6 +235,7 @@ describe("voting rounds", () => {
         const other = await addEntry(roundId, otherAuthor, "Other");
         await approveEntry(roundId, supervisor, popular);
         await approveEntry(roundId, supervisor, other);
+        expect(await setRoundStatus(roundId, RoundStatus.Voting)).toBe(200);
         for (let index = 0; index < 12; index++) {
             const voter = await context.createUser(Role.Voter);
             expect(await vote(voter, roundId, [popular])).toBe(200);
@@ -262,6 +274,7 @@ describe("voting rounds", () => {
         const c = await addEntry(roundId, cAuthor, "C");
         await approveEntry(roundId, supervisor, b);
         await approveEntry(roundId, supervisor, c);
+        expect(await setRoundStatus(roundId, RoundStatus.Voting)).toBe(200);
         expect(await vote(voter, roundId, [entryId, b, c])).toBe(200);
 
         const deletion = await context.application.inject({

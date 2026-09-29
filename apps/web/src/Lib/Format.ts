@@ -97,7 +97,7 @@ export const pollTypeLabels: Readonly<Record<PollType, string>> = {
 export const roundStatusLabels: Readonly<Record<RoundStatus, string>> = {
     [RoundStatus.Draft]: "Draft",
     [RoundStatus.Open]: "Open",
-    [RoundStatus.Closed]: "Closed",
+    [RoundStatus.Voting]: "Voting",
     [RoundStatus.Finalized]: "Finalized"
 };
 

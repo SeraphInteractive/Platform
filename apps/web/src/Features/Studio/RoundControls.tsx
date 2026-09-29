@@ -188,7 +188,7 @@ export function RoundStatusSelect({ round }: { readonly round: RoundDto }): Reac
     };
 
     const update = useMutation({
-        mutationFn: (status: RoundStatus.Draft | RoundStatus.Open | RoundStatus.Closed) => platformApi.updateRound(round.id, { status }),
+        mutationFn: (status: RoundStatus.Draft | RoundStatus.Open | RoundStatus.Voting) => platformApi.updateRound(round.id, { status }),
         onSuccess: (updated) => {
             refresh();
             toast.success(`"${updated.title}" is now ${roundStatusLabels[updated.status].toLowerCase()}.`);
@@ -202,12 +202,19 @@ export function RoundStatusSelect({ round }: { readonly round: RoundDto }): Reac
         return <RoundStatusBadge status={round.status} />;
     }
 
+    const allowedOptions: RoundStatus[] =
+        round.status === RoundStatus.Draft
+            ? [RoundStatus.Draft, RoundStatus.Open]
+            : round.status === RoundStatus.Open
+              ? [RoundStatus.Open, RoundStatus.Voting]
+              : [RoundStatus.Voting];
+
     return (
         <Select
             value={round.status}
             disabled={update.isPending}
             onValueChange={(val) => {
-                const nextStatus = val as RoundStatus.Draft | RoundStatus.Open | RoundStatus.Closed;
+                const nextStatus = val as RoundStatus.Draft | RoundStatus.Open | RoundStatus.Voting;
                 if (nextStatus !== round.status) {
                     update.mutate(nextStatus);
                 }
@@ -217,9 +224,11 @@ export function RoundStatusSelect({ round }: { readonly round: RoundDto }): Reac
                 <SelectValue />
             </SelectTrigger>
             <SelectContent>
-                <SelectItem value={RoundStatus.Draft}>{roundStatusLabels[RoundStatus.Draft]}</SelectItem>
-                <SelectItem value={RoundStatus.Open}>{roundStatusLabels[RoundStatus.Open]}</SelectItem>
-                <SelectItem value={RoundStatus.Closed}>{roundStatusLabels[RoundStatus.Closed]}</SelectItem>
+                {allowedOptions.map((st) => (
+                    <SelectItem key={st} value={st}>
+                        {roundStatusLabels[st]}
+                    </SelectItem>
+                ))}
             </SelectContent>
         </Select>
     );
@@ -234,10 +243,13 @@ export function RoundActions({ round, compact = false }: { readonly round: Round
         void queryClient.invalidateQueries({ queryKey: queryKeys.round(round.id) });
     };
     const update = useMutation({
-        mutationFn: (status: RoundStatus.Open | RoundStatus.Closed) => platformApi.updateRound(round.id, { status }),
+        mutationFn: (status: RoundStatus.Open | RoundStatus.Voting) => platformApi.updateRound(round.id, { status }),
         onSuccess: (updated) => {
             refresh();
             toast.success(`"${updated.title}" is now ${roundStatusLabels[updated.status].toLowerCase()}.`);
+        },
+        onError: (err) => {
+            toast.error(err instanceof Error ? err.message : "Failed to update round status.");
         }
     });
     const finalize = useMutation({
@@ -245,6 +257,9 @@ export function RoundActions({ round, compact = false }: { readonly round: Round
         onSuccess: () => {
             refresh();
             toast.success(`"${round.title}" is certified.`);
+        },
+        onError: (err) => {
+            toast.error(err instanceof Error ? err.message : "Failed to finalize round.");
         }
     });
     const remove = useMutation({
@@ -275,11 +290,11 @@ export function RoundActions({ round, compact = false }: { readonly round: Round
                     }
                 />
             )}
-            {(round.status === RoundStatus.Draft || round.status === RoundStatus.Closed) && (
+            {round.status === RoundStatus.Draft && (
                 <ConfirmButton
-                    title={round.status === RoundStatus.Draft ? `Open "${round.title}" for voting?` : `Reopen "${round.title}"?`}
-                    description="Voting starts now and is announced on Discord."
-                    confirmLabel="Open voting"
+                    title={`Open "${round.title}" for submissions?`}
+                    description="Community members can begin submitting proposal entries."
+                    confirmLabel="Open Submissions"
                     size={size}
                     variant={compact ? "outline" : "default"}
                     disabled={busy}
@@ -287,28 +302,31 @@ export function RoundActions({ round, compact = false }: { readonly round: Round
                         update.mutate(RoundStatus.Open);
                     }}
                 >
-                    {round.status === RoundStatus.Draft ? "Start Voting" : "Reopen"}
+                    Open Submissions
                 </ConfirmButton>
             )}
             {round.status === RoundStatus.Open && (
                 <ConfirmButton
-                    title={`Close "${round.title}"?`}
-                    description="Voting stops. You can reopen it later."
-                    confirmLabel="Close voting"
+                    title={`Publish finalists & start voting for "${round.title}"?`}
+                    description="Entry submissions will close and community ballot voting will begin for approved entries."
+                    confirmLabel="Start Voting"
                     size={size}
+                    variant={compact ? "outline" : "default"}
                     disabled={busy}
                     onConfirm={() => {
-                        update.mutate(RoundStatus.Closed);
+                        update.mutate(RoundStatus.Voting);
                     }}
                 >
-                    Close
+                    Start Voting
                 </ConfirmButton>
             )}
-            {round.status === RoundStatus.Closed && (
+            {round.status === RoundStatus.Voting && (
                 <ConfirmButton
-                    title={`Certify "${round.title}"?`}
-                    description="The result becomes permanent and is announced on Discord."
-                    confirmLabel="Certify result"
+                    title={`Finalize and certify "${round.title}"?`}
+                    description="Voting will close permanently and certified standings will be recorded."
+                    confirmLabel="Finalize"
+                    requireCheckbox={true}
+                    checkboxLabel="I confirm that I want to finalize and certify this round. This action cannot be undone."
                     size={size}
                     variant={compact ? "outline" : "default"}
                     disabled={busy}

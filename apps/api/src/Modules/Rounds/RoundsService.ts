@@ -25,7 +25,7 @@ export interface CreateRoundInput {
 export interface UpdateRoundInput {
     readonly title?: string;
     readonly pollType?: PollType;
-    readonly status?: RoundStatus.Draft | RoundStatus.Open | RoundStatus.Closed;
+    readonly status?: RoundStatus.Draft | RoundStatus.Open | RoundStatus.Voting;
     readonly opensAt?: Date | null;
     readonly closesAt?: Date | null;
 }
@@ -38,9 +38,9 @@ export interface RoundDetail {
 }
 
 const allowedTransitions: Readonly<Record<RoundStatus, readonly RoundStatus[]>> = {
-    [RoundStatus.Draft]: [RoundStatus.Open, RoundStatus.Closed],
-    [RoundStatus.Open]: [RoundStatus.Closed],
-    [RoundStatus.Closed]: [RoundStatus.Open],
+    [RoundStatus.Draft]: [RoundStatus.Open],
+    [RoundStatus.Open]: [RoundStatus.Voting],
+    [RoundStatus.Voting]: [RoundStatus.Finalized],
     [RoundStatus.Finalized]: []
 };
 
@@ -150,9 +150,28 @@ export class RoundsService {
                 !allowedTransitions[current.status].includes(input.status)
             ) {
                 throw new ConflictError(
-                    `A round cannot move from ${current.status} to ${input.status}.`,
+                    `A round cannot move from ${current.status} to ${input.status}. Backtracking round states is not allowed.`,
                     ErrorCode.InvalidStatusTransition
                 );
+            }
+            if (input.status === RoundStatus.Voting && current.status === RoundStatus.Open) {
+                const [approvedCount] = await transaction
+                    .select({ total: count() })
+                    .from(entries)
+                    .where(and(eq(entries.roundId, roundId), eq(entries.status, EntryStatus.Approved), eq(entries.isQuarantined, false)));
+                const totalApproved = approvedCount?.total ?? 0;
+                if (current.pollType === PollType.Binary && totalApproved !== 2) {
+                    throw new ConflictError(
+                        "A binary round requires exactly 2 approved entries to proceed to voting.",
+                        ErrorCode.Conflict
+                    );
+                }
+                if (current.pollType === PollType.RankedChoice && (totalApproved < 2 || totalApproved > 5)) {
+                    throw new ConflictError(
+                        "A ranked-choice round requires between 2 and 5 approved entries to proceed to voting.",
+                        ErrorCode.Conflict
+                    );
+                }
             }
             if (input.pollType !== undefined && input.pollType !== current.pollType) {
                 if (current.status !== RoundStatus.Draft) {

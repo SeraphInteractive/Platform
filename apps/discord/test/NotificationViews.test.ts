@@ -250,7 +250,8 @@ describe("every notification", () => {
         { type: NotificationType.RoundCreated, occurredAt, round, actor: admin, opensAt: null, closesAt: occurredAt },
         { type: NotificationType.RoundUpdated, occurredAt, round, actor: admin, opensAt: null, closesAt: occurredAt },
         { type: NotificationType.RoundDeleted, occurredAt, round, actor: admin },
-        { type: NotificationType.RoundStatusChanged, occurredAt, round, from: RoundStatus.Closed, to: RoundStatus.Open, actor: admin },
+        { type: NotificationType.RoundStatusChanged, occurredAt, round, from: RoundStatus.Draft, to: RoundStatus.Open, actor: admin },
+        { type: NotificationType.RoundStatusChanged, occurredAt, round, from: RoundStatus.Open, to: RoundStatus.Voting, actor: admin },
         {
             type: NotificationType.RoundFinalized,
             occurredAt,
@@ -365,14 +366,26 @@ describe("every notification", () => {
         expect(texts(rendered?.message as V2Message).join("\n")).toContain("**Option Alpha** wins with 62.5% of the vote.");
     });
 
-    it("announces when a round is opened for voting", () => {
-        const sample = samples.find((s) => s.type === NotificationType.RoundStatusChanged);
-        expect(sample).toBeDefined();
-        const rendered = renderNotification(sample as PlatformNotification, context);
-        expect(rendered).toHaveLength(2);
-        const announcement = rendered.find((r) => r.purpose === ChannelPurpose.Announcements);
-        expect(announcement).toBeDefined();
-        expect(texts((announcement as RenderedNotification).message).join("\n")).toContain("## Voting is now open for Binary Test Round!");
+    it("announces when a round is opened for submissions and voting", () => {
+        const votingSample = samples.find(
+            (s) => s.type === NotificationType.RoundStatusChanged && (s as NotificationOf<NotificationType.RoundStatusChanged>).to === RoundStatus.Voting
+        );
+        expect(votingSample).toBeDefined();
+        const votingRendered = renderNotification(votingSample as PlatformNotification, context);
+        expect(votingRendered).toHaveLength(2);
+        const votingAnnouncement = votingRendered.find((r) => r.purpose === ChannelPurpose.Announcements);
+        expect(votingAnnouncement).toBeDefined();
+        expect(texts((votingAnnouncement as RenderedNotification).message).join("\n")).toContain("## Voting is now open for Binary Test Round!");
+
+        const openSample = samples.find(
+            (s) => s.type === NotificationType.RoundStatusChanged && (s as NotificationOf<NotificationType.RoundStatusChanged>).to === RoundStatus.Open
+        );
+        expect(openSample).toBeDefined();
+        const openRendered = renderNotification(openSample as PlatformNotification, context);
+        expect(openRendered).toHaveLength(2);
+        const openAnnouncement = openRendered.find((r) => r.purpose === ChannelPurpose.Announcements);
+        expect(openAnnouncement).toBeDefined();
+        expect(texts((openAnnouncement as RenderedNotification).message).join("\n")).toContain("## Submissions are now open for Binary Test Round!");
     });
 
     it("announces phase unlocks and step progress to announcements channel", () => {

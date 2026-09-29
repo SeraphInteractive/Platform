@@ -57,6 +57,13 @@
       "when": 1790680000000,
       "tag": "0007_ai_flags",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790780000000,
+      "tag": "0008_round_voting_status",
+      "breakpoints": true
     }
   ]
 }

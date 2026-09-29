@@ -178,16 +178,16 @@ describe("platform service integration", () => {
             });
         }
         await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/rounds/${round.id}`,
+            headers: supervisor.headers,
+            payload: { status: RoundStatus.Voting }
+        });
+        await context.application.inject({
             method: "PUT",
             url: `/api/v1/rounds/${round.id}/ballots/me`,
             headers: voter.headers,
             payload: { picks: [entryIds[0]] }
-        });
-        await context.application.inject({
-            method: "PATCH",
-            url: `/api/v1/rounds/${round.id}`,
-            headers: supervisor.headers,
-            payload: { status: RoundStatus.Closed }
         });
         await context.application.inject({ method: "POST", url: `/api/v1/rounds/${round.id}/finalize`, headers: supervisor.headers });
         await context.application.inject({

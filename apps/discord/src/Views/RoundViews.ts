@@ -45,7 +45,7 @@ export enum RoundView {
 const statusLabels: Readonly<Record<RoundStatus, string>> = {
     [RoundStatus.Draft]: "Draft",
     [RoundStatus.Open]: "Open",
-    [RoundStatus.Closed]: "Closed",
+    [RoundStatus.Voting]: "Voting",
     [RoundStatus.Finalized]: "Finalized"
 };
 
@@ -54,8 +54,11 @@ function pollLabel(pollType: PollType): string {
 }
 
 function schedule(round: RoundDto): string {
-    if (round.status === RoundStatus.Open && round.closesAt !== null) {
+    if (round.status === RoundStatus.Voting && round.closesAt !== null) {
         return `closes ${when(round.closesAt)}`;
+    }
+    if (round.status === RoundStatus.Open && round.closesAt !== null) {
+        return `submissions close ${when(round.closesAt)}`;
     }
     if (round.status === RoundStatus.Draft && round.opensAt !== null) {
         return `opens ${when(round.opensAt)}`;
@@ -65,8 +68,10 @@ function schedule(round: RoundDto): string {
 
 export function sortRounds(rounds: readonly RoundDto[]): RoundDto[] {
     return [...rounds].sort((a, b) => {
-        if ((a.status === RoundStatus.Open) !== (b.status === RoundStatus.Open)) {
-            return a.status === RoundStatus.Open ? -1 : 1;
+        const aActive = a.status === RoundStatus.Voting || a.status === RoundStatus.Open;
+        const bActive = b.status === RoundStatus.Voting || b.status === RoundStatus.Open;
+        if (aActive !== bActive) {
+            return aActive ? -1 : 1;
         }
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });

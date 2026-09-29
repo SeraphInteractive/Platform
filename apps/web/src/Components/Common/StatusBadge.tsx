@@ -30,9 +30,9 @@ export function ToneBadge({ tone, children }: { readonly tone: Tone; readonly ch
 
 const roundTones: Readonly<Record<RoundStatus, Tone>> = {
     [RoundStatus.Draft]: Tone.Neutral,
-    [RoundStatus.Open]: Tone.Positive,
-    [RoundStatus.Closed]: Tone.Warning,
-    [RoundStatus.Finalized]: Tone.Info
+    [RoundStatus.Open]: Tone.Info,
+    [RoundStatus.Voting]: Tone.Positive,
+    [RoundStatus.Finalized]: Tone.Neutral
 };
 
 const entryTones: Readonly<Record<EntryStatus, Tone>> = {

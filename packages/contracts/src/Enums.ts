@@ -85,7 +85,7 @@ export const selfSelectableSpecialties: readonly Specialty[] = [
 export enum RoundStatus {
     Draft = "draft",
     Open = "open",
-    Closed = "closed",
+    Voting = "voting",
     Finalized = "finalized"
 }
 

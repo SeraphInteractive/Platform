@@ -85,9 +85,9 @@ function describeSchedule(opensAt: string | null, closesAt: string | null): stri
 }
 
 const statusVerbs: Readonly<Record<RoundStatus, string>> = {
-    [RoundStatus.Draft]: "moved back to draft",
-    [RoundStatus.Open]: "is open for voting",
-    [RoundStatus.Closed]: "closed",
+    [RoundStatus.Draft]: "moved to draft",
+    [RoundStatus.Open]: "is open for submissions",
+    [RoundStatus.Voting]: "is open for voting",
     [RoundStatus.Finalized]: "was finalized"
 };
 
@@ -200,18 +200,28 @@ export function renderNotification(notification: PlatformNotification, context: 
             const posts: RenderedNotification[] = [
                 post(
                     telemetry,
-                    notification.to === RoundStatus.Open ? Accent.Success : null,
-                    `**${plain(notification.round.title)} ${notification.from === RoundStatus.Closed && notification.to === RoundStatus.Open ? "reopened" : statusVerbs[notification.to]}**`,
+                    notification.to === RoundStatus.Voting || notification.to === RoundStatus.Open ? Accent.Success : null,
+                    `**${plain(notification.round.title)} ${statusVerbs[notification.to]}**`,
                     `-# By ${person(notification.actor, isMember)}`
                 )
             ];
-            if (notification.to === RoundStatus.Open) {
+            if (notification.to === RoundStatus.Voting) {
                 posts.push(
                     post(
                         ChannelPurpose.Announcements,
                         Accent.Success,
                         `## Voting is now open for ${plain(notification.round.title)}!`,
                         `Cast your vote on the platform: ${notification.round.pollType === PollType.Binary ? "Binary vote" : "Ranked choice vote"}.`,
+                        `-# Opened by ${person(notification.actor, isMember)}`
+                    )
+                );
+            } else if (notification.to === RoundStatus.Open) {
+                posts.push(
+                    post(
+                        ChannelPurpose.Announcements,
+                        Accent.Success,
+                        `## Submissions are now open for ${plain(notification.round.title)}!`,
+                        `Submit your entries on the platform before voting begins.`,
                         `-# Opened by ${person(notification.actor, isMember)}`
                     )
                 );
