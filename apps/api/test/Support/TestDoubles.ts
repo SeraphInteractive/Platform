@@ -74,6 +74,11 @@ export class FakeObjectStorage implements ObjectStorage {
     public getPublicUrl(bucket: StorageBucket, key: string): string | null {
         return `https://media.test/${bucket}/${key}`;
     }
+
+    public deleteObject(bucket: StorageBucket, key: string): Promise<void> {
+        this.objects.delete(`${bucket}:${key}`);
+        return Promise.resolve();
+    }
 }
 
 export class RecordingNotifier extends StreamNotifier {

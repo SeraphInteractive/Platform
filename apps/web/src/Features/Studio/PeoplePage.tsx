@@ -21,7 +21,6 @@ import { PageHeader } from "@/Components/Common/PageHeader";
 import { Pagination } from "@/Components/Common/Pagination";
 import { EmptyState, ErrorState, LoadingRows, RequireRole } from "@/Components/Common/States";
 import { Tone, ToneBadge } from "@/Components/Common/StatusBadge";
-import { isAdminDiscordId, useSiteConfig } from "@/Components/SiteConfig";
 import { Avatar, AvatarFallback, AvatarImage } from "@/Components/Ui/avatar";
 import { RichTextInputField } from "@/Components/Common/FormField";
 import { MarkdownText } from "@/Components/Common/MarkdownText";
@@ -337,7 +336,6 @@ interface AssignDiscordRoleDialogProps {
 }
 
 function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProps): ReactNode {
-    const siteConfig = useSiteConfig();
     const queryClient = useQueryClient();
     const [open, setOpen] = useState(false);
     const [discordId, setDiscordId] = useState("");
@@ -346,7 +344,6 @@ function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProp
     const [secondaryRole, setSecondaryRole] = useState<string>("__none__");
 
     const roles = grantableRoles(actor);
-    const isSuperadmin = isAdminDiscordId(siteConfig, discordId);
     const validId = /^\d{17,20}$/u.test(discordId.trim());
 
     const assign = useMutation({
@@ -386,21 +383,12 @@ function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProp
                 </DialogHeader>
                 <form onSubmit={onSubmit} className="space-y-4">
                     <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                            <Label htmlFor="discord-snowflake">Discord Snowflake ID</Label>
-                            {isSuperadmin && <ToneBadge tone={Tone.Positive}>Configured Superadmin</ToneBadge>}
-                        </div>
+                        <Label htmlFor="discord-snowflake">Discord Snowflake ID</Label>
                         <Input
                             id="discord-snowflake"
                             placeholder="e.g. 965511204372086814"
                             value={discordId}
-                            onChange={(e) => {
-                                const val = e.target.value;
-                                setDiscordId(val);
-                                if (actor.role === Role.Admin && isAdminDiscordId(siteConfig, val)) {
-                                    setRole(Role.Admin);
-                                }
-                            }}
+                            onChange={(e) => setDiscordId(e.target.value)}
                             maxLength={20}
                         />
                         {discordId.length > 0 && !validId && (

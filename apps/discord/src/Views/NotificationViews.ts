@@ -60,13 +60,8 @@ function shotLink(shot: ShotReference, context: NotificationContext): string {
 }
 
 function describePicks(notification: NotificationOf<NotificationType.BallotSubmitted>): string {
-    const titles = notification.picks.map((pick) => plain(pick.title, 80));
-    const verb = notification.isChange ? "changed their vote to" : "voted for";
-    if (notification.round.pollType === PollType.Binary || titles.length === 1) {
-        return `${person(notification.voter)} ${verb} ${titles[0] ?? "an entry"}`;
-    }
-    const ranking = titles.map((title, index) => `${index + 1}. ${title}`).join("  ");
-    return `${person(notification.voter)} ${notification.isChange ? "changed their ranking to" : "ranked"} ${ranking}`;
+    const action = notification.isChange ? "updated their ballot." : "cast a ballot.";
+    return `${person(notification.voter)} ${action}`;
 }
 
 function describeRaid(notification: NotificationOf<NotificationType.RaidAlert>): string {

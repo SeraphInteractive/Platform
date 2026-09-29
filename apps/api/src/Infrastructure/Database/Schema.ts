@@ -321,6 +321,18 @@ export const documentRevisions = pgTable(
     (table) => [uniqueIndex("document_revisions_slug_revision").on(table.slug, table.revision)]
 );
 
+export const deletedStorageObjects = pgTable(
+    "deleted_storage_objects",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        bucket: varchar("bucket", { length: 32 }).notNull(),
+        objectKey: varchar("object_key", { length: 512 }).notNull(),
+        scheduledDeleteAt: timestamp("scheduled_delete_at", { withTimezone: true }).notNull(),
+        createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+    },
+    (table) => [index("deleted_storage_objects_scheduled_idx").on(table.scheduledDeleteAt)]
+);
+
 export type UserRecord = typeof users.$inferSelect;
 export type DocumentRecord = typeof documents.$inferSelect;
 export type DocumentRevisionRecord = typeof documentRevisions.$inferSelect;
@@ -333,3 +345,4 @@ export type ShotRecord = typeof shots.$inferSelect;
 export type SubmissionRecord = typeof submissions.$inferSelect;
 export type ShotThreadMapRecord = typeof shotThreadMaps.$inferSelect;
 export type PipelineProgressRecord = typeof pipelineProgress.$inferSelect;
+export type DeletedStorageObjectRecord = typeof deletedStorageObjects.$inferSelect;

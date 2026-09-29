@@ -1,4 +1,4 @@
-import { and, count, desc, eq, ne, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, inArray, ne, type SQL } from "drizzle-orm";
 import { ConflictError, ErrorCode, ForbiddenError, NotFoundError } from "../../Common/Errors/ApplicationError.js";
 import { createPage, offsetOf, type Page, type PaginationQuery } from "../../Common/Http/Schemas.js";
 import type { Actor, AuthenticatedUser } from "../../Common/Security/Principal.js";
@@ -6,7 +6,7 @@ import { EntryStatus, RoundStatus } from "../../Domain/Enums.js";
 import { hasAtLeast, Role } from "../../Domain/Roles.js";
 import type { StorageConfiguration } from "../../Configuration/ApplicationConfiguration.js";
 import { isForeignKeyViolation, type Database, type Transaction } from "../../Infrastructure/Database/Database.js";
-import { entries, users, votingRounds, type EntryRecord, type VotingRoundRecord } from "../../Infrastructure/Database/Schema.js";
+import { deletedStorageObjects, entries, users, votingRounds, type EntryRecord, type VotingRoundRecord } from "../../Infrastructure/Database/Schema.js";
 import {
     NotificationType,
     personOfActor,
@@ -98,6 +98,20 @@ export class EntriesService {
             const lockedRound = await this.requireRound(transaction, roundId, true);
             if (!submissionStatuses.includes(lockedRound.status)) {
                 throw new ConflictError("Entries can only be submitted once the round is open.", ErrorCode.RoundNotOpen);
+            }
+            const [existingActive] = await transaction
+                .select({ id: entries.id })
+                .from(entries)
+                .where(
+                    and(
+                        eq(entries.roundId, roundId),
+                        eq(entries.submittedBy, author.id),
+                        inArray(entries.status, [EntryStatus.PendingReview, EntryStatus.Approved])
+                    )
+                )
+                .limit(1);
+            if (existingActive !== undefined) {
+                throw new ConflictError("You already have an active entry for this round.", ErrorCode.Conflict);
             }
             const [created] = await transaction
                 .insert(entries)
@@ -238,6 +252,15 @@ export class EntriesService {
         }
         await this.leaderboardCache.invalidateRound(roundId);
         if (deletedEntry !== undefined && parentRound !== undefined) {
+            if (deletedEntry.mediaKey !== null) {
+                // hold orphaned media for 48h recovery buffer before bucket prune
+                const scheduledDeleteAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+                await this.database.insert(deletedStorageObjects).values({
+                    bucket: StorageBucket.Media,
+                    objectKey: deletedEntry.mediaKey,
+                    scheduledDeleteAt
+                });
+            }
             this.notifier.notify({
                 type: NotificationType.EntryDeleted,
                 round: roundReferenceOf(parentRound),

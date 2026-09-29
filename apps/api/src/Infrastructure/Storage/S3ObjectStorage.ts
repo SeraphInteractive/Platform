@@ -1,4 +1,4 @@
-import { GetObjectCommand, HeadObjectCommand, NotFound, PutObjectCommand, S3Client, S3ServiceException } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, NotFound, PutObjectCommand, S3Client, S3ServiceException } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { StorageConfiguration } from "../../Configuration/ApplicationConfiguration.js";
 import { ServiceUnavailableError } from "../../Common/Errors/ApplicationError.js";
@@ -81,6 +81,21 @@ export class S3ObjectStorage implements ObjectStorage {
         }
         const base = this.configuration.mediaPublicUrl.replace(/\/+$/u, "");
         return `${base}/${key.split("/").map(encodeURIComponent).join("/")}`;
+    }
+
+    public async deleteObject(bucket: StorageBucket, key: string): Promise<void> {
+        if (!this.isEnabled(bucket)) {
+            return;
+        }
+        const { client, name } = this.resolve(bucket);
+        try {
+            await client.send(new DeleteObjectCommand({ Bucket: name, Key: key }));
+        } catch (error: unknown) {
+            if (error instanceof NotFound || (error instanceof S3ServiceException && error.$metadata.httpStatusCode === 404)) {
+                return;
+            }
+            throw error;
+        }
     }
 
     private resolve(bucket: StorageBucket): { client: S3Client; name: string } {

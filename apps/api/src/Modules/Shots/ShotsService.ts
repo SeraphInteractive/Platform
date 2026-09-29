@@ -15,6 +15,7 @@ import { DeliverableKind, type DifficultyTier, ShotStatus } from "../../Domain/E
 import { hasAtLeast, rankOf, Role } from "../../Domain/Roles.js";
 import { isUniqueViolation, type Database, type Transaction } from "../../Infrastructure/Database/Database.js";
 import {
+    deletedStorageObjects,
     shots,
     submissions,
     users,
@@ -282,6 +283,17 @@ export class ShotsService {
         const [deleted] = await this.database.delete(shots).where(eq(shots.id, shotId)).returning();
         if (deleted === undefined) {
             throw new NotFoundError("Shot");
+        }
+        if (deleted.imageKeys && deleted.imageKeys.length > 0) {
+            // hold orphaned media for 48h recovery buffer before bucket prune
+            const scheduledDeleteAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+            await this.database.insert(deletedStorageObjects).values(
+                deleted.imageKeys.map((key) => ({
+                    bucket: StorageBucket.Media,
+                    objectKey: key,
+                    scheduledDeleteAt
+                }))
+            );
         }
         this.notifier.notify({ type: NotificationType.ShotDeleted, shot: shotReferenceOf(deleted) });
     }

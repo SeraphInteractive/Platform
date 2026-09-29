@@ -22,4 +22,5 @@ export interface ObjectStorage {
     getMetadata(bucket: StorageBucket, key: string): Promise<StoredObjectMetadata | null>;
     createDownloadUrl(bucket: StorageBucket, key: string): Promise<string>;
     getPublicUrl(bucket: StorageBucket, key: string): string | null;
+    deleteObject(bucket: StorageBucket, key: string): Promise<void>;
 }

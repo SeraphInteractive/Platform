@@ -156,11 +156,14 @@ describe("platform service integration", () => {
             payload: { status: RoundStatus.Open }
         });
         const entryIds: string[] = [];
-        for (const title of ["A", "B"]) {
+        const entryAuthors = [supervisor, voter];
+        for (let i = 0; i < 2; i++) {
+            const title = ["A", "B"][i]!;
+            const author = entryAuthors[i]!;
             const entry = await context.application.inject({
                 method: "POST",
                 url: `/api/v1/rounds/${round.id}/entries`,
-                headers: supervisor.headers,
+                headers: author.headers,
                 payload: { title }
             });
             const entryId = json<Envelope<{ id: string }>>(entry).data.id;

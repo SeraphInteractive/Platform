@@ -103,9 +103,12 @@ describe("voting rounds", () => {
         expect(await setRoundStatus(roundId, RoundStatus.Open)).toBe(200);
 
         const pendingId = await addEntry(roundId, community, "Community pitch");
-        const a = await addEntry(roundId, supervisor, "A");
-        const b = await addEntry(roundId, supervisor, "B");
-        const c = await addEntry(roundId, supervisor, "C");
+        const aAuthor = await context.createUser(Role.Voter);
+        const bAuthor = await context.createUser(Role.Voter);
+        const cAuthor = await context.createUser(Role.Voter);
+        const a = await addEntry(roundId, aAuthor, "A");
+        const b = await addEntry(roundId, bAuthor, "B");
+        const c = await addEntry(roundId, cAuthor, "C");
         await approveEntry(roundId, supervisor, a);
         await approveEntry(roundId, supervisor, b);
         await approveEntry(roundId, supervisor, c);
@@ -186,8 +189,10 @@ describe("voting rounds", () => {
     it("excludes blacklisted voters from live standings", async () => {
         const roundId = await createRound(PollType.Binary);
         await setRoundStatus(roundId, RoundStatus.Open);
-        const yes = await addEntry(roundId, supervisor, "Yes");
-        const no = await addEntry(roundId, supervisor, "No");
+        const yesAuthor = await context.createUser(Role.Voter);
+        const noAuthor = await context.createUser(Role.Voter);
+        const yes = await addEntry(roundId, yesAuthor, "Yes");
+        const no = await addEntry(roundId, noAuthor, "No");
         await approveEntry(roundId, supervisor, yes);
         await approveEntry(roundId, supervisor, no);
         const honest = await context.createUser(Role.Voter);
@@ -212,8 +217,10 @@ describe("voting rounds", () => {
     it("does not quarantine a popular binary option", async () => {
         const roundId = await createRound(PollType.Binary);
         await setRoundStatus(roundId, RoundStatus.Open);
-        const popular = await addEntry(roundId, supervisor, "Popular");
-        const other = await addEntry(roundId, supervisor, "Other");
+        const popularAuthor = await context.createUser(Role.Voter);
+        const otherAuthor = await context.createUser(Role.Voter);
+        const popular = await addEntry(roundId, popularAuthor, "Popular");
+        const other = await addEntry(roundId, otherAuthor, "Other");
         await approveEntry(roundId, supervisor, popular);
         await approveEntry(roundId, supervisor, other);
         for (let index = 0; index < 12; index++) {
@@ -248,8 +255,10 @@ describe("voting rounds", () => {
         });
         expect(json<Envelope<{ status: string }>>(approved).data.status).toBe(EntryStatus.Approved);
 
-        const b = await addEntry(roundId, supervisor, "B");
-        const c = await addEntry(roundId, supervisor, "C");
+        const bAuthor = await context.createUser(Role.Voter);
+        const cAuthor = await context.createUser(Role.Voter);
+        const b = await addEntry(roundId, bAuthor, "B");
+        const c = await addEntry(roundId, cAuthor, "C");
         await approveEntry(roundId, supervisor, b);
         await approveEntry(roundId, supervisor, c);
         expect(await vote(voter, roundId, [entryId, b, c])).toBe(200);
@@ -262,10 +271,19 @@ describe("voting rounds", () => {
         expect(deletion.statusCode).toBe(409);
         expect(json(deletion).code).toBe("ENTRY_HAS_BALLOTS");
 
-        const media = await context.application.inject({
+        const secondAttempt = await context.application.inject({
             method: "POST",
             url: `/api/v1/rounds/${roundId}/entries`,
             headers: voter.headers,
+            payload: { title: "Second entry" }
+        });
+        expect(secondAttempt.statusCode).toBe(409);
+
+        const otherVoter = await context.createUser(Role.Voter);
+        const media = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/rounds/${roundId}/entries`,
+            headers: otherVoter.headers,
             payload: { title: "Sneaky", mediaKey: `media/${admin.record.id}/00000000-0000-4000-8000-000000000000.png` }
         });
         expect(media.statusCode).toBe(422);
@@ -288,9 +306,9 @@ describe("voting rounds", () => {
     it("enforces a maximum of 5 approved entries per round", async () => {
         const roundId = await createRound(PollType.RankedChoice);
         await setRoundStatus(roundId, RoundStatus.Open);
-        const author = await context.createUser(Role.Voter);
         const entryIds: string[] = [];
         for (let i = 0; i < 6; i++) {
+            const author = await context.createUser(Role.Voter);
             entryIds.push(await addEntry(roundId, author, `Option ${i + 1}`));
         }
 

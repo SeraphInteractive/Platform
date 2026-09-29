@@ -4,13 +4,14 @@ import { ConflictError, ErrorCode, ForbiddenError, NotFoundError, UnprocessableE
 import { createPage, offsetOf, type Page, type PaginationQuery } from "../../Common/Http/Schemas.js";
 import type { AuthenticatedUser } from "../../Common/Security/Principal.js";
 import { hmacHex } from "../../Common/Security/Secrets.js";
-import { EntryStatus } from "../../Domain/Enums.js";
+import { EntryStatus, RoundStatus } from "../../Domain/Enums.js";
 import type { KeyValueStore } from "../../Infrastructure/Cache/KeyValueStore.js";
 import type { Database } from "../../Infrastructure/Database/Database.js";
 import { ballots, entries, users, votingRounds, type BallotRecord } from "../../Infrastructure/Database/Schema.js";
 import { RoundEventType, type EventBus } from "../../Infrastructure/Events/EventBus.js";
 import { NotificationType, personOfUser, roundReferenceOf, type Notifier } from "../../Infrastructure/Notifications/Notification.js";
 import { isAcceptingVotes } from "../Rounds/RoundPresenter.js";
+import { canSeeDrafts } from "../Rounds/RoundVisibility.js";
 import type { RaidMonitor } from "../Telemetry/RaidMonitor.js";
 
 export interface LedgerRow {
@@ -123,9 +124,13 @@ export class BallotsService {
         return ballot;
     }
 
-    public async ledger(roundId: string, query: PaginationQuery): Promise<Page<LedgerRow>> {
-        const [round] = await this.database.select({ id: votingRounds.id }).from(votingRounds).where(eq(votingRounds.id, roundId)).limit(1);
-        if (round === undefined) {
+    public async ledger(roundId: string, query: PaginationQuery, viewer: AuthenticatedUser | null = null): Promise<Page<LedgerRow>> {
+        const [round] = await this.database
+            .select({ id: votingRounds.id, status: votingRounds.status })
+            .from(votingRounds)
+            .where(eq(votingRounds.id, roundId))
+            .limit(1);
+        if (round === undefined || (round.status === RoundStatus.Draft && !canSeeDrafts(viewer))) {
             throw new NotFoundError("Round");
         }
         const filter = and(eq(ballots.roundId, roundId), eq(users.isBlacklisted, false));

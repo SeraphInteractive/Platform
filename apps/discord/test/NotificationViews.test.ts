@@ -103,7 +103,7 @@ describe("telemetry alerts", () => {
             picks: [{ id: "b1f3d5c7-1b2e-4c3d-8e9f-0a1b2c3d4e5f", title: "Option Alpha" }],
             isChange: false
         });
-        expect(text).toBe(["**Vote in Binary Test Round**", "<@215537065863938049> voted for Option Alpha"].join("\n"));
+        expect(text).toBe(["**Vote in Binary Test Round**", "<@215537065863938049> cast a ballot."].join("\n"));
     });
 
     it("renders ranked ballots and changed votes", () => {
@@ -115,7 +115,7 @@ describe("telemetry alerts", () => {
             picks: ["A", "B", "C"].map((title, index) => ({ id: `b1f3d5c7-1b2e-4c3d-8e9f-0a1b2c3d4e5${index}`, title })),
             isChange: true
         });
-        expect(text).toContain("changed their ranking to 1. A  2. B  3. C");
+        expect(text).toBe(["**Vote in Binary Test Round**", "<@215537065863938049> updated their ballot."].join("\n"));
     });
 
     it("renders a ban with actor and reason", () => {

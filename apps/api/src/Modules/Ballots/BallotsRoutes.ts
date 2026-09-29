@@ -2,7 +2,7 @@ import { ballotSchema, ledgerBallotSchema as ledgerRowSchema } from "@platform/c
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { dataEnvelope, errorResponses, pageEnvelope, paginationQuerySchema, toIso, uuidSchema } from "../../Common/Http/Schemas.js";
-import { currentUser, requireParticipant, requireUser } from "../../Common/Security/Authorization.js";
+import { currentUser, optionalUser, requireParticipant, requireUser } from "../../Common/Security/Authorization.js";
 import { Role } from "../../Domain/Roles.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
 import type { BallotRecord } from "../../Infrastructure/Database/Schema.js";
@@ -30,7 +30,7 @@ export const ballotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
             }
         },
         async (request) => {
-            const page = await ballotsService.ledger(request.params.roundId, request.query);
+            const page = await ballotsService.ledger(request.params.roundId, request.query, optionalUser(request));
             return {
                 data: page.data.map((row) => ({
                     voter: row.voter,
