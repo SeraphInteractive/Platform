@@ -308,9 +308,7 @@ export function InvarianceSummary({ items, totalBallots, totalPoints, isConserve
                 </div>
                 <div className="rounded border bg-card p-3">
                     <p className="text-[11px] text-muted-foreground">Max Invariance Shift</p>
-                    <p className="mt-1 font-mono text-sm font-semibold">
-                        {maxShift === 0 ? "0 ranks (stable)" : `±${maxShift} ranks`}
-                    </p>
+                    <p className="mt-1 font-mono text-sm font-semibold">{maxShift === 0 ? "0 ranks (stable)" : `±${maxShift} ranks`}</p>
                 </div>
             </div>
 
@@ -444,12 +442,9 @@ export function NetworkChart({ items, telemetryList = [], events = [], onSelectE
     }
 
     const activeNode = nodes.find((n) => n.item.entryId === hoveredId) ?? null;
-    const connectedEdges = activeNode !== null
-        ? edges.filter((e) => e.from.item.entryId === hoveredId || e.to.item.entryId === hoveredId)
-        : [];
-    const connectedNodeIds = new Set(
-        connectedEdges.flatMap((e) => [e.from.item.entryId, e.to.item.entryId])
-    );
+    const connectedEdges =
+        activeNode !== null ? edges.filter((e) => e.from.item.entryId === hoveredId || e.to.item.entryId === hoveredId) : [];
+    const connectedNodeIds = new Set(connectedEdges.flatMap((e) => [e.from.item.entryId, e.to.item.entryId]));
 
     return (
         <div className="w-full space-y-2">
@@ -459,26 +454,16 @@ export function NetworkChart({ items, telemetryList = [], events = [], onSelectE
 
                     {edges.map((edge) => {
                         const isConnected =
-                            activeNode === null ||
-                            edge.from.item.entryId === hoveredId ||
-                            edge.to.item.entryId === hoveredId;
+                            activeNode === null || edge.from.item.entryId === hoveredId || edge.to.item.entryId === hoveredId;
                         const normWeight = edge.weight / maxWeight;
-                        const strokeWidth = activeNode !== null && isConnected ? Math.max(1.8, normWeight * 3.5) : Math.max(0.6, normWeight * 2);
-                        const opacity = activeNode !== null
-                            ? isConnected
-                                ? 0.85
-                                : 0.08
-                            : Math.max(0.12, normWeight * 0.45);
+                        const strokeWidth =
+                            activeNode !== null && isConnected ? Math.max(1.8, normWeight * 3.5) : Math.max(0.6, normWeight * 2);
+                        const opacity = activeNode !== null ? (isConnected ? 0.85 : 0.08) : Math.max(0.12, normWeight * 0.45);
 
                         // bezier curve toward center
                         const qx = ((edge.from.x + edge.to.x) / 2) * 0.65 + centerX * 0.35;
                         const qy = ((edge.from.y + edge.to.y) / 2) * 0.65 + centerY * 0.35;
-                        const strokeColor =
-                            activeNode !== null && isConnected
-                                ? "#38bdf8"
-                                : normWeight > 0.6
-                                  ? "#818cf8"
-                                  : "#64748b";
+                        const strokeColor = activeNode !== null && isConnected ? "#38bdf8" : normWeight > 0.6 ? "#818cf8" : "#64748b";
 
                         return (
                             <path

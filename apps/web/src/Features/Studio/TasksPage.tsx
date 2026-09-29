@@ -123,12 +123,13 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
     const queryClient = useQueryClient();
     const [open, setOpen] = useState(false);
     const [draft, setDraft] = useState<ShotDraft>(() => draftOf(shot));
-    const [images, setImages] = useState<TaskImageItem[]>(() =>
-        shot?.imageUrls.map((url, i) => ({
-            id: `existing-${i}-${url}`,
-            previewUrl: url,
-            mediaKey: extractMediaKey(url)
-        })) ?? []
+    const [images, setImages] = useState<TaskImageItem[]>(
+        () =>
+            shot?.imageUrls.map((url, i) => ({
+                id: `existing-${i}-${url}`,
+                previewUrl: url,
+                mediaKey: extractMediaKey(url)
+            })) ?? []
     );
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
@@ -209,10 +210,7 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
                 if (item.mediaKey !== undefined) {
                     resolvedKeys.push(item.mediaKey);
                 } else if (item.file !== undefined) {
-                    const upload = await platformApi.requestMediaUpload(
-                        item.file.type as MediaContentType,
-                        item.file.size
-                    );
+                    const upload = await platformApi.requestMediaUpload(item.file.type as MediaContentType, item.file.size);
                     await uploadToStorage(upload, item.file, (fraction) => {
                         const overall = (uploaded + fraction) / filesToUpload.length;
                         setUploadProgress(overall);
@@ -429,11 +427,7 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
                 </form>
                 <DialogFooter>
                     <Button type="submit" form={formId} disabled={input === null || save.isPending}>
-                        {save.isPending
-                            ? "Saving…"
-                            : shot === undefined
-                              ? "Create"
-                              : "Save"}
+                        {save.isPending ? "Saving…" : shot === undefined ? "Create" : "Save"}
                     </Button>
                 </DialogFooter>
             </DialogContent>

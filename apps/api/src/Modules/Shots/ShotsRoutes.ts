@@ -179,10 +179,7 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
         async (request) => {
             await shotsService.update(request.params.shotId, request.body);
             return {
-                data: toShotResponse(
-                    await shotsService.getDetail(request.params.shotId, currentUser(request)),
-                    objectStorage
-                )
+                data: toShotResponse(await shotsService.getDetail(request.params.shotId, currentUser(request)), objectStorage)
             };
         }
     );

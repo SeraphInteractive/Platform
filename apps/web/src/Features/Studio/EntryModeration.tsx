@@ -158,9 +158,7 @@ export function ExamineEntryDialog({
                     <div className="flex flex-wrap items-center gap-2">
                         <EntryStatusBadge status={entry.status} />
                         {entry.isQuarantined && <ToneBadge tone={Tone.Negative}>Quarantined</ToneBadge>}
-                        <span className="text-muted-foreground ml-auto font-mono text-xs">
-                            ID: {entry.id.slice(0, 8)}
-                        </span>
+                        <span className="text-muted-foreground ml-auto font-mono text-xs">ID: {entry.id.slice(0, 8)}</span>
                     </div>
                     <DialogTitle className="text-base font-semibold leading-snug">{entry.title}</DialogTitle>
                     <DialogDescription className="text-xs">
@@ -453,9 +451,7 @@ export function EntryModeration({ roundId }: { readonly roundId: string }): Reac
         }
         setIsBulkOperating(true);
         try {
-            const results = await Promise.allSettled(
-                ids.map((id) => platformApi.reviewEntry(roundId, id, EntryStatus.Rejected))
-            );
+            const results = await Promise.allSettled(ids.map((id) => platformApi.reviewEntry(roundId, id, EntryStatus.Rejected)));
             const succeeded = results.filter((r) => r.status === "fulfilled").length;
             const failed = results.filter((r) => r.status === "rejected").length;
             refreshAll();
@@ -477,9 +473,7 @@ export function EntryModeration({ roundId }: { readonly roundId: string }): Reac
         }
         setIsBulkOperating(true);
         try {
-            const results = await Promise.allSettled(
-                ids.map((id) => platformApi.deleteEntry(roundId, id))
-            );
+            const results = await Promise.allSettled(ids.map((id) => platformApi.deleteEntry(roundId, id)));
             const succeeded = results.filter((r) => r.status === "fulfilled").length;
             const failed = results.filter((r) => r.status === "rejected").length;
             refreshAll();
@@ -518,11 +512,7 @@ export function EntryModeration({ roundId }: { readonly roundId: string }): Reac
                             <label htmlFor="select-all-entries" className="cursor-pointer select-none font-medium">
                                 Select all
                             </label>
-                            {selectedIds.size > 0 && (
-                                <span className="text-muted-foreground ml-1 font-mono">
-                                    ({selectedIds.size})
-                                </span>
-                            )}
+                            {selectedIds.size > 0 && <span className="text-muted-foreground ml-1 font-mono">({selectedIds.size})</span>}
                         </div>
                         {selectedIds.size > 0 && (
                             <>

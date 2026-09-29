@@ -6,7 +6,14 @@ import { EntryStatus, RoundStatus } from "../../Domain/Enums.js";
 import { hasAtLeast, Role } from "../../Domain/Roles.js";
 import type { StorageConfiguration } from "../../Configuration/ApplicationConfiguration.js";
 import { isForeignKeyViolation, type Database, type Transaction } from "../../Infrastructure/Database/Database.js";
-import { deletedStorageObjects, entries, users, votingRounds, type EntryRecord, type VotingRoundRecord } from "../../Infrastructure/Database/Schema.js";
+import {
+    deletedStorageObjects,
+    entries,
+    users,
+    votingRounds,
+    type EntryRecord,
+    type VotingRoundRecord
+} from "../../Infrastructure/Database/Schema.js";
 import {
     NotificationType,
     personOfActor,

@@ -11,15 +11,21 @@ export const reminderCommand: SlashCommand = {
             sub
                 .setName("set")
                 .setDescription("Set a new reminder")
-                .addStringOption((opt) => opt.setName("when").setDescription("When to remind (30m, 2h, 1d12h, or 2024-10-15 14:00)").setRequired(true))
-                .addStringOption((opt) => opt.setName("message").setDescription("What to remind you about").setRequired(true).setMaxLength(500))
+                .addStringOption((opt) =>
+                    opt.setName("when").setDescription("When to remind (30m, 2h, 1d12h, or 2024-10-15 14:00)").setRequired(true)
+                )
+                .addStringOption((opt) =>
+                    opt.setName("message").setDescription("What to remind you about").setRequired(true).setMaxLength(500)
+                )
         )
         .addSubcommand((sub) => sub.setName("list").setDescription("List your active reminders"))
         .addSubcommand((sub) =>
             sub
                 .setName("cancel")
                 .setDescription("Cancel a pending reminder")
-                .addStringOption((opt) => opt.setName("reminder").setDescription("The reminder to cancel").setRequired(true).setAutocomplete(true))
+                .addStringOption((opt) =>
+                    opt.setName("reminder").setDescription("The reminder to cancel").setRequired(true).setAutocomplete(true)
+                )
         )
         .toJSON(),
 

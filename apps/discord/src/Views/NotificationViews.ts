@@ -19,7 +19,8 @@ export interface RenderedNotification {
 }
 
 export interface NotificationContext {
-    threadFor(shotId: string): string | undefined;
+    readonly threadFor: (shotId: string) => string | undefined;
+    readonly isMember?: (discordId: string) => boolean;
 }
 
 type Line = string | MediaGalleryBuilder | null;
@@ -59,9 +60,9 @@ function shotLink(shot: ShotReference, context: NotificationContext): string {
     return thread === undefined ? shotName(shot) : `${shotName(shot)} (<#${thread}>)`;
 }
 
-function describePicks(notification: NotificationOf<NotificationType.BallotSubmitted>): string {
+function describeBallot(notification: NotificationOf<NotificationType.BallotSubmitted>, context: NotificationContext): string {
     const action = notification.isChange ? "updated their ballot." : "cast a ballot.";
-    return `${person(notification.voter)} ${action}`;
+    return `${person(notification.voter, context.isMember)} ${action}`;
 }
 
 function describeRaid(notification: NotificationOf<NotificationType.RaidAlert>): string {
@@ -111,16 +112,17 @@ export function describeWinner(notification: NotificationOf<NotificationType.Rou
 export function renderNotification(notification: PlatformNotification, context: NotificationContext): RenderedNotification[] {
     const telemetry = ChannelPurpose.Telemetry;
     const taskLogs = ChannelPurpose.TaskLogs;
+    const isMember = context.isMember;
     switch (notification.type) {
         case NotificationType.BallotSubmitted:
-            return [post(telemetry, null, `**Vote in ${plain(notification.round.title)}**`, describePicks(notification))];
+            return [post(telemetry, null, `**Vote in ${plain(notification.round.title)}**`, describeBallot(notification, context))];
         case NotificationType.BallotBlocked:
             return [
                 post(
                     telemetry,
                     Accent.Danger,
                     `**Blocked vote in ${plain(notification.round.title)}**`,
-                    `${person(notification.voter)} is banned from voting.`,
+                    `${person(notification.voter, isMember)} is banned from voting.`,
                     reason(notification.reason)
                 )
             ];
@@ -130,16 +132,23 @@ export function renderNotification(notification: PlatformNotification, context: 
                     telemetry,
                     Accent.Danger,
                     "**Banned from voting**",
-                    `${person(notification.user)}, by ${person(notification.actor)}`,
+                    `${person(notification.user, isMember)}, by ${person(notification.actor, isMember)}`,
                     reason(notification.reason)
                 )
             ];
         case NotificationType.UserReinstated:
             return [
-                post(telemetry, Accent.Success, "**Voting ban lifted**", `${person(notification.user)}, by ${person(notification.actor)}`)
+                post(
+                    telemetry,
+                    Accent.Success,
+                    "**Voting ban lifted**",
+                    `${person(notification.user, isMember)}, by ${person(notification.actor, isMember)}`
+                )
             ];
         case NotificationType.ContributorPromoted:
-            return [post(ChannelPurpose.Announcements, Accent.Success, `${person(notification.user)} is now a senior contributor.`)];
+            return [
+                post(ChannelPurpose.Announcements, Accent.Success, `${person(notification.user, isMember)} is now a senior contributor.`)
+            ];
         case NotificationType.RaidAlert:
             return [
                 post(
@@ -156,7 +165,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     Accent.Info,
                     `**New round: ${plain(notification.round.title)}**`,
                     `${notification.round.pollType === PollType.Binary ? "Binary" : "Ranked choice"}, ${describeSchedule(notification.opensAt, notification.closesAt)}`,
-                    `-# Created by ${person(notification.actor)}`
+                    `-# Created by ${person(notification.actor, isMember)}`
                 )
             ];
         case NotificationType.RoundUpdated:
@@ -166,7 +175,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     Accent.Info,
                     `**Round updated: ${plain(notification.round.title)}**`,
                     `${notification.round.pollType === PollType.Binary ? "Binary" : "Ranked choice"}, ${describeSchedule(notification.opensAt, notification.closesAt)}`,
-                    `-# Updated by ${person(notification.actor)}`
+                    `-# Updated by ${person(notification.actor, isMember)}`
                 )
             ];
         case NotificationType.RoundDeleted:
@@ -175,7 +184,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     telemetry,
                     Accent.Warning,
                     `**Round deleted: ${plain(notification.round.title)}**`,
-                    `-# Deleted by ${person(notification.actor)}`
+                    `-# Deleted by ${person(notification.actor, isMember)}`
                 )
             ];
         case NotificationType.RoundStatusChanged: {
@@ -184,7 +193,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     telemetry,
                     notification.to === RoundStatus.Open ? Accent.Success : null,
                     `**${plain(notification.round.title)} ${notification.from === RoundStatus.Closed && notification.to === RoundStatus.Open ? "reopened" : statusVerbs[notification.to]}**`,
-                    `-# By ${person(notification.actor)}`
+                    `-# By ${person(notification.actor, isMember)}`
                 )
             ];
             if (notification.to === RoundStatus.Open) {
@@ -194,7 +203,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                         Accent.Success,
                         `## Voting is now open for ${plain(notification.round.title)}!`,
                         `Cast your vote on the platform: ${notification.round.pollType === PollType.Binary ? "Binary vote" : "Ranked choice vote"}.`,
-                        `-# Opened by ${person(notification.actor)}`
+                        `-# Opened by ${person(notification.actor, isMember)}`
                     )
                 );
             }
@@ -217,7 +226,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     telemetry,
                     null,
                     `**New entry in ${plain(notification.round.title)}**`,
-                    `${plain(notification.entry.title)} by ${person(notification.author)}`,
+                    `${plain(notification.entry.title)} by ${person(notification.author, isMember)}`,
                     notification.status === EntryStatus.PendingReview ? "-# Waiting for review" : "-# Approved automatically",
                     preview(notification.entry.mediaUrl, notification.entry.title)
                 )
@@ -229,7 +238,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     Accent.Info,
                     `**Entry updated in ${plain(notification.round.title)}**`,
                     plain(notification.entry.title),
-                    `-# Updated by ${person(notification.actor)}`,
+                    `-# Updated by ${person(notification.actor, isMember)}`,
                     preview(notification.entry.mediaUrl, notification.entry.title)
                 )
             ];
@@ -240,7 +249,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     Accent.Warning,
                     `**Entry deleted in ${plain(notification.round.title)}**`,
                     plain(notification.entry.title),
-                    `-# Deleted by ${person(notification.actor)}`
+                    `-# Deleted by ${person(notification.actor, isMember)}`
                 )
             ];
         case NotificationType.EntryStatusChanged: {
@@ -251,7 +260,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     headline.accent,
                     `**${headline.title}**`,
                     `${plain(notification.entry.title)} in ${plain(notification.round.title)}`,
-                    `-# By ${person(notification.actor)}`,
+                    `-# By ${person(notification.actor, isMember)}`,
                     preview(notification.entry.mediaUrl, notification.entry.title)
                 )
             ];
@@ -263,7 +272,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     Accent.Success,
                     "**Entry reinstated**",
                     `${plain(notification.entry.title)} is back on the ballot in ${plain(notification.round.title)}.`,
-                    `-# By ${person(notification.actor)}`,
+                    `-# By ${person(notification.actor, isMember)}`,
                     preview(notification.entry.mediaUrl, notification.entry.title)
                 )
             ];
@@ -279,7 +288,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     taskLogs,
                     null,
                     `**Claimed:** ${shotLink(notification.shot, context)}`,
-                    `${person(notification.claimant)}, due ${when(notification.deadlineAt)}`
+                    `${person(notification.claimant, isMember)}, due ${when(notification.deadlineAt)}`
                 )
             ];
         case NotificationType.ShotReleased:
@@ -288,7 +297,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     taskLogs,
                     null,
                     `**Released:** ${shotLink(notification.shot, context)}`,
-                    `By ${person(notification.actor)}`,
+                    `By ${person(notification.actor, isMember)}`,
                     reason(notification.reason)
                 )
             ];
@@ -300,7 +309,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     `**Claim expired:** ${shotLink(notification.shot, context)}`,
                     notification.claimant === null
                         ? "The task is open again."
-                        : `${person(notification.claimant)} ran out of time. The task is open again.`
+                        : `${person(notification.claimant, isMember)} ran out of time. The task is open again.`
                 )
             ];
         case NotificationType.SubmissionCreated:
@@ -309,7 +318,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     taskLogs,
                     null,
                     `**Submitted:** ${shotLink(notification.shot, context)}, version ${notification.version}`,
-                    `By ${person(notification.contributor)}`,
+                    `By ${person(notification.contributor, isMember)}`,
                     notification.notes === null ? null : quote(notification.notes, 500)
                 )
             ];
@@ -320,7 +329,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     taskLogs,
                     approved ? Accent.Success : Accent.Warning,
                     `**${approved ? "Approved" : "Changes requested"}:** ${shotLink(notification.shot, context)}, version ${notification.version}`,
-                    `Reviewed by ${person(notification.reviewer)}`,
+                    `Reviewed by ${person(notification.reviewer, isMember)}`,
                     notification.notes === null ? null : quote(notification.notes, 600)
                 )
             ];
@@ -329,7 +338,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     post(
                         ChannelPurpose.Announcements,
                         Accent.Success,
-                        `**${shotName(notification.shot)} is finished.** Delivered by ${person(notification.contributor)}.`
+                        `**${shotName(notification.shot)} is finished.** Delivered by ${person(notification.contributor, isMember)}.`
                     )
                 );
             }
@@ -343,7 +352,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                         Accent.Success,
                         `## Phase ${notification.phaseNumber} Unlocked: ${plain(notification.phaseTitle)}`,
                         `Now entering **Step ${plain(notification.stepId)}: ${plain(notification.stepTitle)}** (${notification.progressPercent}% overall completed).`,
-                        `-# Updated by ${person(notification.actor)}`
+                        `-# Updated by ${person(notification.actor, isMember)}`
                     )
                 ];
             }
@@ -353,7 +362,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                     Accent.Info,
                     `**Pipeline Update: Step ${plain(notification.stepId)} - ${plain(notification.stepTitle)}**`,
                     `In **${plain(notification.phaseTitle)}** (${notification.progressPercent}% completed).`,
-                    `-# Updated by ${person(notification.actor)}`
+                    `-# Updated by ${person(notification.actor, isMember)}`
                 )
             ];
         }

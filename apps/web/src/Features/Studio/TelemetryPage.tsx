@@ -81,9 +81,7 @@ function TelemetryView(): ReactNode {
                             {roundList.map((r) => (
                                 <SelectItem key={r.id} value={r.id}>
                                     <span className="truncate">{r.title}</span>
-                                    <span className="text-muted-foreground ml-2 text-[11px]">
-                                        ({roundStatusLabels[r.status]})
-                                    </span>
+                                    <span className="text-muted-foreground ml-2 text-[11px]">({roundStatusLabels[r.status]})</span>
                                 </SelectItem>
                             ))}
                         </SelectContent>
@@ -111,10 +109,7 @@ function TelemetryView(): ReactNode {
 export function TelemetryPage(): ReactNode {
     return (
         <RequireRole role={Role.Moderator}>
-            <PageHeader
-                title="Telemetry"
-                description="Raid defense, Bayesian invariance and ballot co-occurrence network."
-            />
+            <PageHeader title="Telemetry" description="Raid defense, Bayesian invariance and ballot co-occurrence network." />
             <TelemetryView />
         </RequireRole>
     );

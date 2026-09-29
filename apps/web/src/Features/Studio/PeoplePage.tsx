@@ -1,14 +1,6 @@
 "use client";
 
-import {
-    fieldRules,
-    type ModeratedUserDto,
-    problemOf,
-    Role,
-    Specialty,
-    textLimits,
-    type UserDto
-} from "@platform/contracts";
+import { fieldRules, type ModeratedUserDto, problemOf, Role, Specialty, textLimits, type UserDto } from "@platform/contracts";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { UserPlus } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
@@ -391,9 +383,7 @@ function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProp
                             onChange={(e) => setDiscordId(e.target.value)}
                             maxLength={20}
                         />
-                        {discordId.length > 0 && !validId && (
-                            <p className="text-destructive text-xs">Must be a 17-20 digit Discord ID.</p>
-                        )}
+                        {discordId.length > 0 && !validId && <p className="text-destructive text-xs">Must be a 17-20 digit Discord ID.</p>}
                     </div>
                     <div className="space-y-1.5">
                         <Label htmlFor="discord-username">Username (optional hint)</Label>

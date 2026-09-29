@@ -269,7 +269,9 @@ export function RoundIntegrity({ roundId, live, defaultTab = "raid" }: RoundInte
                                                     <TableCell>
                                                         <SeverityBadge severity={row.severity} />
                                                     </TableCell>
-                                                    <TableCell className="text-right tabular-nums">{formatNumber(row.compositeScore)}</TableCell>
+                                                    <TableCell className="text-right tabular-nums">
+                                                        {formatNumber(row.compositeScore)}
+                                                    </TableCell>
                                                     <TableCell className="text-right tabular-nums">
                                                         {formatPercent(row.breakdown.topRankShare * 100)}
                                                     </TableCell>

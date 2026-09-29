@@ -2,7 +2,6 @@
 
 Hey, thanks for your interest in contributing to Project Stairway! This monorepo contains everything behind our studio's community and production tooling.
 
-
 ## Code of Conduct
 
 By participating, you agree to follow our [Code of Conduct](https://dev-app.seraphinteractive.com/legal/acceptable-use). Be kind, assume good faith, and keep discussion focused on the work.
@@ -18,7 +17,6 @@ Every line of code AI-generated or modified by AI must be read and understood by
 ### 2. AI must never make a commit in your place
 
 AI agents may edit files in your working tree, but they **must not** run `git commit`, `git push`, `git tag`, `git merge`, `git rebase`, amend commits, or open pull requests on your behalf. Commits made by an agent may be rejected, and you may be permanently barred from contributing.
-
 
 ### 3. You are responsible for the code your agents write
 

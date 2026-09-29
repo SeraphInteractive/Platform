@@ -63,9 +63,7 @@ describe("round schedule validation", () => {
         );
 
         const longClose = new Date(baseNow.getTime() + 35 * 86_400_000);
-        expect(validateRoundWindow(baseNow, longClose, { isDraft: true, now: baseNow })).toBe(
-            "Voting duration cannot exceed 28 days."
-        );
+        expect(validateRoundWindow(baseNow, longClose, { isDraft: true, now: baseNow })).toBe("Voting duration cannot exceed 28 days.");
     });
 
     it("accepts string ISO timestamps isomorphically", () => {
@@ -80,7 +78,9 @@ describe("round schedule validation", () => {
         expect(validateRoundWindow(opened, closedInPast, { isDraft: false, now: baseNow })).toBe("Closing time cannot be in the past.");
 
         const closedBeforeOpen = new Date(opened.getTime() - 3_600_000);
-        expect(validateRoundWindow(opened, closedBeforeOpen, { isDraft: false, now: baseNow })).toBe("Closing time must be after the start time.");
+        expect(validateRoundWindow(opened, closedBeforeOpen, { isDraft: false, now: baseNow })).toBe(
+            "Closing time must be after the start time."
+        );
 
         const validExtension = new Date(baseNow.getTime() + 48 * 3_600_000);
         expect(validateRoundWindow(opened, validExtension, { isDraft: false, now: baseNow })).toBeNull();

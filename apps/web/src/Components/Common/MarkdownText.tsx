@@ -20,7 +20,7 @@ const components: Components = {
 
 export function MarkdownText({ children, className }: { readonly children: string; readonly className?: string }): ReactNode {
     return (
-        <div className={cn("md-text", className)}>
+        <div className={cn("md-text min-w-0 break-words [overflow-wrap:anywhere]", className)}>
             <ReactMarkdown remarkPlugins={[remarkGfm]} allowedElements={allowedElements} unwrapDisallowed components={components}>
                 {children}
             </ReactMarkdown>

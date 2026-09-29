@@ -86,11 +86,7 @@ function Dashboard(): ReactNode {
               ? Tone.Warning
               : Tone.Positive;
     const telemetryLabel =
-        highestSeverity === RaidSeverity.CriticalRaid
-            ? "Critical"
-            : highestSeverity === RaidSeverity.Suspicious
-              ? "Suspicious"
-              : "Clean";
+        highestSeverity === RaidSeverity.CriticalRaid ? "Critical" : highestSeverity === RaidSeverity.Suspicious ? "Suspicious" : "Clean";
 
     return (
         <div className="space-y-8">

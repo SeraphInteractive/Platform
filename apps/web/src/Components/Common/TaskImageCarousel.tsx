@@ -37,12 +37,7 @@ export function TaskImageCarousel({ images, alt = "Task reference image", classN
         return (
             <div className={cn("overflow-hidden rounded-lg border bg-muted/20", className)}>
                 <div className="relative aspect-video w-full max-h-[420px] bg-black/40">
-                    <img
-                        src={images[0]}
-                        alt={alt}
-                        className="size-full object-contain"
-                        loading="lazy"
-                    />
+                    <img src={images[0]} alt={alt} className="size-full object-contain" loading="lazy" />
                 </div>
             </div>
         );

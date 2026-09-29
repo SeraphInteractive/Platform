@@ -313,9 +313,7 @@ function ShotDetail({ shot }: { readonly shot: ShotDetailDto }): ReactNode {
             />
             <div className="grid gap-10 lg:grid-cols-[1fr_18rem]">
                 <div className="space-y-10">
-                    {shot.imageUrls.length > 0 && (
-                        <TaskImageCarousel images={shot.imageUrls} alt={shot.title} />
-                    )}
+                    {shot.imageUrls.length > 0 && <TaskImageCarousel images={shot.imageUrls} alt={shot.title} />}
                     <Section title="The brief">
                         {shot.description === null ? (
                             <p className="text-muted-foreground text-sm">No brief.</p>

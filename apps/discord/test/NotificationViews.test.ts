@@ -94,28 +94,46 @@ describe("telemetry alerts", () => {
         expect(text).toBe(["**Entry rejected**", "Option Beta in Binary Test Round", "-# By <@364539598942240768>"].join("\n"));
     });
 
-    it("renders a ballot as a single sentence", () => {
+    it("renders a ballot as a single sentence with mention when in server", () => {
         const { text } = only({
             type: NotificationType.BallotSubmitted,
             occurredAt,
             round,
             voter,
-            picks: [{ id: "b1f3d5c7-1b2e-4c3d-8e9f-0a1b2c3d4e5f", title: "Option Alpha" }],
             isChange: false
         });
         expect(text).toBe(["**Vote in Binary Test Round**", "<@215537065863938049> cast a ballot."].join("\n"));
     });
 
-    it("renders ranked ballots and changed votes", () => {
+    it("renders a ballot with plain name when voter is not in server", () => {
+        const rendered = renderNotification(
+            {
+                type: NotificationType.BallotSubmitted,
+                occurredAt,
+                round,
+                voter,
+                isChange: false
+            },
+            { ...context, isMember: () => false }
+        );
+        expect(rendered).toHaveLength(1);
+        const first = rendered[0];
+        if (first === undefined) {
+            throw new Error("nothing rendered");
+        }
+        expect(texts(first.message).join("\n")).toBe(["**Vote in Binary Test Round**", "TestVoterBL cast a ballot."].join("\n"));
+    });
+
+    it("renders changed votes without revealing individual picks", () => {
         const { text } = only({
             type: NotificationType.BallotSubmitted,
             occurredAt,
             round: { ...round, pollType: PollType.RankedChoice },
             voter,
-            picks: ["A", "B", "C"].map((title, index) => ({ id: `b1f3d5c7-1b2e-4c3d-8e9f-0a1b2c3d4e5${index}`, title })),
             isChange: true
         });
         expect(text).toBe(["**Vote in Binary Test Round**", "<@215537065863938049> updated their ballot."].join("\n"));
+        expect(text).not.toMatch(/rank|pick|option|entry/iu);
     });
 
     it("renders a ban with actor and reason", () => {
@@ -171,7 +189,7 @@ describe("telemetry alerts", () => {
 
 describe("every notification", () => {
     const samples: PlatformNotification[] = [
-        { type: NotificationType.BallotSubmitted, occurredAt, round, voter, picks: [{ id: shot.id, title: "A" }], isChange: false },
+        { type: NotificationType.BallotSubmitted, occurredAt, round, voter, isChange: false },
         { type: NotificationType.BallotBlocked, occurredAt, round, voter, reason: null },
         { type: NotificationType.UserBlacklisted, occurredAt, user: voter, actor: admin, reason: null },
         { type: NotificationType.UserReinstated, occurredAt, user: voter, actor: admin },

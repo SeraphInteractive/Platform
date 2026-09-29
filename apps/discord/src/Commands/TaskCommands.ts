@@ -14,13 +14,7 @@ import {
 } from "discord.js";
 import { Accent, asEdit, buttons, capitalize, divider, ephemeral, linkButton, panel, plain, pluralize, text, when } from "../Discord/Ui.js";
 import { referenceOf } from "../Services/TaskForum.js";
-import {
-    claimButtonPrefix,
-    deliverableLinks,
-    deliverablesButtonPrefix,
-    reviewButtonPrefix,
-    reviewOutcome
-} from "../Views/TaskViews.js";
+import { claimButtonPrefix, deliverableLinks, deliverablesButtonPrefix, reviewButtonPrefix, reviewOutcome } from "../Views/TaskViews.js";
 import {
     actingAs,
     hasAtLeast,

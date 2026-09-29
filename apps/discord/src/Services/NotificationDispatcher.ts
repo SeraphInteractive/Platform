@@ -6,6 +6,18 @@ import { renderNotification } from "../Views/NotificationViews.js";
 import { reviewCard, threadUpdate } from "../Views/TaskViews.js";
 import type { TaskForum } from "./TaskForum.js";
 
+function collectDiscordIds(notification: PlatformNotification): string[] {
+    const ids: (string | null | undefined)[] = [];
+    const record = notification as Record<string, unknown>;
+    for (const key of ["voter", "user", "actor", "author", "claimant", "contributor", "reviewer"]) {
+        const value = record[key];
+        if (value !== null && typeof value === "object" && "discordId" in value) {
+            ids.push((value as { discordId?: string | null }).discordId);
+        }
+    }
+    return ids.filter((id): id is string => typeof id === "string" && id.length > 0);
+}
+
 export class NotificationDispatcher {
     public constructor(
         private readonly client: Client,
@@ -19,12 +31,42 @@ export class NotificationDispatcher {
         await this.applySideEffects(notification).catch((error: unknown) => {
             this.logger.warn({ err: error, type: notification.type }, "discord side effect failed");
         });
-        for (const rendered of renderNotification(notification, this.forum)) {
+        const memberIds = await this.resolveMembers(notification);
+        const context = {
+            threadFor: (shotId: string) => this.forum.threadFor(shotId),
+            isMember: (discordId: string) => memberIds.has(discordId)
+        };
+        for (const rendered of renderNotification(notification, context)) {
             const channel = await this.channel(rendered.purpose);
             if (channel !== null) {
                 await channel.send(rendered.message);
             }
         }
+    }
+
+    private async resolveMembers(notification: PlatformNotification): Promise<Set<string>> {
+        const ids = collectDiscordIds(notification);
+        if (ids.length === 0) {
+            return new Set();
+        }
+        const guild = await this.client.guilds.fetch(this.guildId).catch(() => null);
+        if (guild === null) {
+            return new Set();
+        }
+        const memberIds = new Set<string>();
+        await Promise.all(
+            ids.map(async (id) => {
+                if (guild.members.cache.has(id)) {
+                    memberIds.add(id);
+                    return;
+                }
+                const member = await guild.members.fetch(id).catch(() => null);
+                if (member !== null) {
+                    memberIds.add(id);
+                }
+            })
+        );
+        return memberIds;
     }
 
     private async applySideEffects(notification: PlatformNotification): Promise<void> {

@@ -37,6 +37,8 @@ interface RoundFormDialogProps {
 }
 
 export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): ReactNode {
+    const { user } = useSession();
+    const isAdmin = hasAtLeast(user, Role.Admin);
     const formId = useId();
     const router = useRouter();
     const queryClient = useQueryClient();
@@ -124,9 +126,14 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
                                 <SelectItem value={PollType.RankedChoice}>
                                     {pollTypeLabels[PollType.RankedChoice]}: rank top three
                                 </SelectItem>
-                                <SelectItem value={PollType.Binary}>{pollTypeLabels[PollType.Binary]}: pick one of two</SelectItem>
+                                {isAdmin && (
+                                    <SelectItem value={PollType.Binary}>{pollTypeLabels[PollType.Binary]}: pick one of two</SelectItem>
+                                )}
                             </SelectContent>
                         </Select>
+                        {!isAdmin && round === undefined && (
+                            <p className="text-muted-foreground text-xs">Binary voting rounds can only be initiated by administrators.</p>
+                        )}
                         {round !== undefined && round.status !== RoundStatus.Draft && (
                             <p className="text-muted-foreground text-xs">The poll type is locked once a round leaves draft.</p>
                         )}
@@ -143,9 +150,7 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
                                     setOpensAt(event.target.value);
                                 }}
                             />
-                            {!isDraft && (
-                                <p className="text-muted-foreground text-xs">Start date is locked once a round leaves draft.</p>
-                            )}
+                            {!isDraft && <p className="text-muted-foreground text-xs">Start date is locked once a round leaves draft.</p>}
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor={`${formId}-closes`}>Closes (optional)</Label>
@@ -183,8 +188,7 @@ export function RoundStatusSelect({ round }: { readonly round: RoundDto }): Reac
     };
 
     const update = useMutation({
-        mutationFn: (status: RoundStatus.Draft | RoundStatus.Open | RoundStatus.Closed) =>
-            platformApi.updateRound(round.id, { status }),
+        mutationFn: (status: RoundStatus.Draft | RoundStatus.Open | RoundStatus.Closed) => platformApi.updateRound(round.id, { status }),
         onSuccess: (updated) => {
             refresh();
             toast.success(`"${updated.title}" is now ${roundStatusLabels[updated.status].toLowerCase()}.`);

@@ -174,10 +174,10 @@
 
 @layer components {
     .md-text {
-        @apply space-y-2 break-words;
+        @apply space-y-2 break-words [overflow-wrap:anywhere] min-w-0;
     }
     .md-text a {
-        @apply decoration-muted-foreground hover:decoration-foreground underline underline-offset-4;
+        @apply decoration-muted-foreground hover:decoration-foreground underline underline-offset-4 break-all;
     }
     .md-text ul {
         @apply ml-5 list-[square] space-y-1;
@@ -186,9 +186,9 @@
         @apply ml-5 list-decimal space-y-1;
     }
     .md-text blockquote {
-        @apply border-l-2 pl-3;
+        @apply border-l-2 pl-3 break-words [overflow-wrap:anywhere];
     }
     .md-text code {
-        @apply bg-muted rounded px-1 py-0.5 font-mono text-[0.9em];
+        @apply bg-muted rounded px-1 py-0.5 font-mono text-[0.9em] break-all;
     }
 }

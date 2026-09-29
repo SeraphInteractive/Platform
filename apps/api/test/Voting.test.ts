@@ -30,7 +30,7 @@ describe("voting rounds", () => {
         const response = await context.application.inject({
             method: "POST",
             url: "/api/v1/rounds",
-            headers: supervisor.headers,
+            headers: pollType === PollType.Binary ? admin.headers : supervisor.headers,
             payload: { title: `Round ${pollType}`, pollType }
         });
         expect(response.statusCode).toBe(201);

@@ -1,10 +1,11 @@
 import { validateRoundWindow } from "@platform/contracts";
 import { and, count, desc, eq, ne, type SQL } from "drizzle-orm";
-import { ConflictError, ErrorCode, NotFoundError, UnprocessableError } from "../../Common/Errors/ApplicationError.js";
+import { ConflictError, ErrorCode, ForbiddenError, NotFoundError, UnprocessableError } from "../../Common/Errors/ApplicationError.js";
 import { createPage, offsetOf, toIso, type Page, type PaginationQuery } from "../../Common/Http/Schemas.js";
 import type { Actor, AuthenticatedUser, UserActor } from "../../Common/Security/Principal.js";
 import { canSeeDrafts } from "./RoundVisibility.js";
-import { EntryStatus, type PollType, RoundStatus } from "../../Domain/Enums.js";
+import { EntryStatus, PollType, RoundStatus } from "../../Domain/Enums.js";
+import { hasAtLeast, Role } from "../../Domain/Roles.js";
 import type { Database, DatabaseExecutor } from "../../Infrastructure/Database/Database.js";
 import { ballots, entries, users, votingRounds, type VotingRoundRecord } from "../../Infrastructure/Database/Schema.js";
 import { NotificationType, personOfActor, roundReferenceOf, type Notifier } from "../../Infrastructure/Notifications/Notification.js";
@@ -109,6 +110,7 @@ export class RoundsService {
     }
 
     public async create(actor: UserActor, input: CreateRoundInput): Promise<VotingRoundRecord> {
+        this.assertCanInitiate(actor, input.pollType);
         this.assertWindow(input.opensAt, input.closesAt, true);
         const [round] = await this.database
             .insert(votingRounds)
@@ -152,8 +154,14 @@ export class RoundsService {
                     ErrorCode.InvalidStatusTransition
                 );
             }
-            if (input.pollType !== undefined && input.pollType !== current.pollType && current.status !== RoundStatus.Draft) {
-                throw new ConflictError("The poll type can only be changed while the round is a draft.", ErrorCode.InvalidStatusTransition);
+            if (input.pollType !== undefined && input.pollType !== current.pollType) {
+                if (current.status !== RoundStatus.Draft) {
+                    throw new ConflictError(
+                        "The poll type can only be changed while the round is a draft.",
+                        ErrorCode.InvalidStatusTransition
+                    );
+                }
+                this.assertCanInitiate(actor, input.pollType);
             }
             if (
                 input.opensAt !== undefined &&
@@ -237,12 +245,16 @@ export class RoundsService {
         }
     }
 
+    private assertCanInitiate(actor: Actor, pollType: PollType): void {
+        if (pollType === PollType.Binary && !hasAtLeast(actor.role, Role.Admin)) {
+            throw new ForbiddenError("Binary voting rounds can only be initiated by administrators.");
+        }
+    }
+
     private assertWindow(opensAt: Date | null, closesAt: Date | null, isDraft: boolean): void {
         const problem = validateRoundWindow(opensAt, closesAt, { isDraft });
         if (problem !== null) {
-            throw new UnprocessableError(problem, ErrorCode.ValidationFailed, [
-                { path: "body.closesAt", message: problem }
-            ]);
+            throw new UnprocessableError(problem, ErrorCode.ValidationFailed, [{ path: "body.closesAt", message: problem }]);
         }
     }
 }

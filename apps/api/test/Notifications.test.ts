@@ -95,6 +95,7 @@ describe("platform service integration", () => {
     it("streams notifications to the service and resumes from Last-Event-ID", async () => {
         const address = await context.application.listen({ host: "127.0.0.1", port: 0 });
         const supervisor = await context.createUser(Role.Supervisor);
+        const admin = await context.createUser(Role.Admin);
         const baseline = await context.notificationLog.latestId();
 
         const denied = await fetch(`${address}/api/v1/notifications/stream`, { headers: supervisor.headers });
@@ -110,7 +111,7 @@ describe("platform service integration", () => {
         await context.application.inject({
             method: "POST",
             url: "/api/v1/rounds",
-            headers: supervisor.headers,
+            headers: admin.headers,
             payload: { title: "Streamed round", pollType: PollType.Binary }
         });
 
@@ -134,12 +135,13 @@ describe("platform service integration", () => {
 
     it("emits notifications that match the published contract", async () => {
         const supervisor = await context.createUser(Role.Supervisor);
+        const admin = await context.createUser(Role.Admin);
         const voter = await context.createUser(Role.Voter);
         const round = json<Envelope<{ id: string }>>(
             await context.application.inject({
                 method: "POST",
                 url: "/api/v1/rounds",
-                headers: supervisor.headers,
+                headers: admin.headers,
                 payload: { title: "Contract", pollType: PollType.Binary }
             })
         ).data;
@@ -220,12 +222,11 @@ describe("platform service integration", () => {
             progressPercent: 7
         });
 
-        const admin = await context.createUser(Role.Admin);
         const tempRound = json<Envelope<{ id: string }>>(
             await context.application.inject({
                 method: "POST",
                 url: "/api/v1/rounds",
-                headers: supervisor.headers,
+                headers: admin.headers,
                 payload: { title: "Temp Round", pollType: PollType.Binary }
             })
         ).data;

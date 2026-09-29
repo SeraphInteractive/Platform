@@ -44,7 +44,7 @@ export class BallotsService {
             throw new ForbiddenError("Your account is blacklisted from voting.", ErrorCode.UserBlacklisted);
         }
 
-        const { ballot, roundTitle, pollType, titles } = await this.database.transaction(async (transaction) => {
+        const { ballot, roundTitle, pollType } = await this.database.transaction(async (transaction) => {
             const [round] = await transaction.select().from(votingRounds).where(eq(votingRounds.id, roundId)).limit(1).for("share");
             if (round === undefined) {
                 throw new NotFoundError("Round");
@@ -54,7 +54,7 @@ export class BallotsService {
             }
 
             const eligible = await transaction
-                .select({ id: entries.id, title: entries.title })
+                .select({ id: entries.id })
                 .from(entries)
                 .where(and(eq(entries.roundId, roundId), eq(entries.status, EntryStatus.Approved), eq(entries.isQuarantined, false)));
             const scheme = getScoringScheme(round.pollType);
@@ -87,8 +87,7 @@ export class BallotsService {
             return {
                 ballot: saved,
                 roundTitle: round.title,
-                pollType: round.pollType,
-                titles: new Map(eligible.map((entry) => [entry.id, entry.title]))
+                pollType: round.pollType
             };
         });
 
@@ -106,7 +105,6 @@ export class BallotsService {
             type: NotificationType.BallotSubmitted,
             round: { id: roundId, title: roundTitle, pollType },
             voter: personOfUser(voter),
-            picks: picks.map((pick) => ({ id: pick, title: titles.get(pick) ?? pick })),
             isChange: ballot.createdAt.getTime() !== ballot.updatedAt.getTime()
         });
         return ballot;

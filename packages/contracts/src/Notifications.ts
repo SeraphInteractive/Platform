@@ -56,7 +56,6 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
     notification(NotificationType.BallotSubmitted, {
         round: roundReference,
         voter: notificationPersonSchema,
-        picks: z.array(entryReference),
         isChange: z.boolean()
     }),
     notification(NotificationType.BallotBlocked, {

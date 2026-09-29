@@ -17,9 +17,15 @@ export function AppFooter(): ReactNode {
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span>&copy; {new Date().getFullYear()} Project Stairway</span>
                     <span className="hidden sm:inline">·</span>
-                    <Link href="/legal/terms" className="hover:text-foreground">Terms</Link>
-                    <Link href="/legal/privacy" className="hover:text-foreground">Privacy</Link>
-                    <Link href="/legal/acceptable-use" className="hover:text-foreground">Acceptable use</Link>
+                    <Link href="/legal/terms" className="hover:text-foreground">
+                        Terms
+                    </Link>
+                    <Link href="/legal/privacy" className="hover:text-foreground">
+                        Privacy
+                    </Link>
+                    <Link href="/legal/acceptable-use" className="hover:text-foreground">
+                        Acceptable use
+                    </Link>
                 </div>
                 {/* <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     {partners.map((partner, i) => (
