@@ -47,7 +47,7 @@ describe("user management", () => {
         });
         expect(chosen.statusCode).toBe(200);
         const body = json<{ data: { specialties: string[]; isOnboarded: boolean } }>(chosen).data;
-        expect(body.specialties).toEqual([Specialty.Producer, Specialty.Animator]);
+        expect(body.specialties).toEqual([Specialty.Producer, Specialty.Animator, Specialty.Rigger]);
         expect(body.isOnboarded).toBe(true);
     });
 

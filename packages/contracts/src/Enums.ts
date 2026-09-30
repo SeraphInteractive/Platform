@@ -41,10 +41,11 @@ export enum Specialty {
     CfxVfxSupervisor = "cfx_vfx_supervisor",
     LightingCompositingSupervisor = "lighting_compositing_supervisor",
     SoundDirector = "sound_director",
-    Voter = "voter"
+    Voter = "voter",
+    MediaTeam = "media_team"
 }
 
-export const maximumSpecialties = 2;
+export const maximumSpecialties = 3;
 
 export const initialTermsVersion = "2026-09-27";
 

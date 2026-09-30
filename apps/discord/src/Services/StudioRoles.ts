@@ -67,6 +67,7 @@ export const studioRoles: readonly StudioRole[] = Object.freeze([
     },
     { name: "Sound Director", tier: StudioTier.Department, color: 0x00bcd4, specialty: Specialty.SoundDirector },
     { name: "Supervisor", tier: StudioTier.Department, color: 0x1abc9c },
+    { name: "Media Team", tier: StudioTier.Department, color: 0x9b59b6, specialty: Specialty.MediaTeam },
     { name: "Animators", tier: StudioTier.Contributor, color: 0x2980b9, specialty: Specialty.Animator },
     { name: "Layout Artists", tier: StudioTier.Contributor, color: 0x673ab7, specialty: Specialty.LayoutArtist },
     { name: "3D Modelers", tier: StudioTier.Contributor, color: 0x009688, specialty: Specialty.Modeler3d },
@@ -88,6 +89,9 @@ export const legacyStudioRoleNames: readonly string[] = Object.freeze(["Observer
 export const roleAliases: Readonly<Record<string, string>> = {
     supervisors: "Supervisor",
     supervisor: "Supervisor",
+    mediateam: "Media Team",
+    mediateams: "Media Team",
+    media: "Media Team",
     contributors: "General Contributors",
     contributor: "General Contributors",
     generalcontributors: "General Contributors",

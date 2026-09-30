@@ -263,4 +263,31 @@ describe("ServerProvisioner hierarchy", () => {
         expect(posMap.get("3")!).toBeGreaterThan(posMap.get("4")!);
         expect(posMap.get("4")!).toBeGreaterThan(posMap.get("5")!);
     });
+
+    it("orders Media Team under Supervisor and above Animators", async () => {
+        const setPositionsFn = vi.fn(async () => undefined);
+        const guildRoles = new Map<string, DiscordRole>([
+            ["1", createMockDiscordRole("1", "Supervisor")],
+            ["2", createMockDiscordRole("2", "Media Team")],
+            ["3", createMockDiscordRole("3", "Animators")]
+        ]);
+
+        const mockGuild = {
+            roles: {
+                fetch: vi.fn(async () => guildRoles),
+                setPositions: setPositionsFn
+            }
+        };
+
+        const settings = new SettingsStore("/tmp/test-settings-media-hierarchy");
+        const provisioner = new ServerProvisioner(settings, { warn: vi.fn(), info: vi.fn() } as any);
+
+        await provisioner.enforceRoleHierarchy(mockGuild as any);
+        const positions = setPositionsFn.mock.calls[0][0] as { role: string; position: number }[];
+        const posMap = new Map(positions.map((p) => [p.role, p.position]));
+
+        // supervisor > media team > animators
+        expect(posMap.get("1")!).toBeGreaterThan(posMap.get("2")!);
+        expect(posMap.get("2")!).toBeGreaterThan(posMap.get("3")!);
+    });
 });

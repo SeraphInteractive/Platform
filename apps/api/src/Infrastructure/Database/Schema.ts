@@ -62,7 +62,7 @@ export const users = pgTable(
     },
     (table) => [
         index("users_created_at_idx").on(table.createdAt),
-        check("users_specialties_limit", sql`cardinality(${table.specialties}) <= 2`)
+        check("users_specialties_limit", sql`cardinality(${table.specialties}) <= 3`)
     ]
 );
 
