@@ -10,7 +10,8 @@ import {
     TextInputStyle,
     type ButtonInteraction,
     type ChatInputCommandInteraction,
-    type ModalSubmitInteraction
+    type ModalSubmitInteraction,
+    type AutocompleteInteraction
 } from "discord.js";
 import { Accent, asEdit, buttons, capitalize, divider, ephemeral, linkButton, panel, plain, pluralize, text, when } from "../Discord/Ui.js";
 import { referenceOf } from "../Services/TaskForum.js";
@@ -39,12 +40,12 @@ async function resolveShotTarget(
         if (uuidPattern.test(raw)) {
             return context.api.getShot(raw);
         }
-        const all = await context.api.listAllShots();
-        const match = all.find((s) => s.shotCode.toLowerCase() === raw.toLowerCase() || s.id === raw);
-        if (!match) {
+        // direct lookup by shot code avoids paginating all shots
+        const byCode = await context.api.getShotByCode(raw);
+        if (byCode === null) {
             throw new UserFacingError(`No task found matching "${raw}".`);
         }
-        return context.api.getShot(match.id);
+        return context.api.getShot(byCode.id);
     }
     const channel = interaction.channel;
     const inForum = channel !== null && channel.isThread() && channel.parent?.type === ChannelType.GuildForum;
@@ -111,7 +112,7 @@ export const takeTaskCommand: SlashCommand = {
         .setName("take-task")
         .setDescription("Claim the task in this post or by code")
         .addStringOption((option) =>
-            option.setName("task").setDescription("Task code (e.g. SC01_A1B2), defaults to current post").setMaxLength(50)
+            option.setName("task").setDescription("Task code (e.g. SC01_A1B2), defaults to current post").setMaxLength(50).setAutocomplete(true)
         )
         .toJSON(),
     async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
@@ -123,6 +124,19 @@ export const takeTaskCommand: SlashCommand = {
         const shot = await actingAs(interaction, context).claimShot(target.id);
         const due = shot.deadlineAt === null ? "" : ` It's due ${when(shot.deadlineAt)}.`;
         await interaction.editReply(asEdit(ephemeral(panel(null, `It's yours.${due} Use /submit-task here when you're done.`))));
+    },
+    async autocomplete(interaction: AutocompleteInteraction, context: BotContext): Promise<void> {
+        const focused = interaction.options.getFocused().toLowerCase();
+        try {
+            const all = await context.api.listAllShots();
+            const matches = all
+                .filter((s) => s.shotCode.toLowerCase().includes(focused) || s.title.toLowerCase().includes(focused))
+                .slice(0, 10)
+                .map((s) => ({ name: `[${s.shotCode}] ${s.title}`.slice(0, 100), value: s.id }));
+            await interaction.respond(matches);
+        } catch {
+            await interaction.respond([]);
+        }
     }
 };
 
@@ -131,7 +145,7 @@ export const releaseTaskCommand: SlashCommand = {
         .setName("release-task")
         .setDescription("Give up your claim on the task in this post or by code")
         .addStringOption((option) =>
-            option.setName("task").setDescription("Task code (e.g. SC01_A1B2), defaults to current post").setMaxLength(50)
+            option.setName("task").setDescription("Task code (e.g. SC01_A1B2), defaults to current post").setMaxLength(50).setAutocomplete(true)
         )
         .addStringOption((option) => option.setName("reason").setDescription("Optional note for the team").setMaxLength(500))
         .toJSON(),
@@ -152,6 +166,19 @@ export const releaseTaskCommand: SlashCommand = {
         }
         await actingAs(interaction, context).releaseShot(shot.id, interaction.options.getString("reason")?.trim() ?? null);
         await interaction.editReply(asEdit(ephemeral(panel(null, `Released ${shot.shotCode}. The task is open for someone else.`))));
+    },
+    async autocomplete(interaction: AutocompleteInteraction, context: BotContext): Promise<void> {
+        const focused = interaction.options.getFocused().toLowerCase();
+        try {
+            const all = await context.api.listAllShots();
+            const matches = all
+                .filter((s) => s.shotCode.toLowerCase().includes(focused) || s.title.toLowerCase().includes(focused))
+                .slice(0, 10)
+                .map((s) => ({ name: `[${s.shotCode}] ${s.title}`.slice(0, 100), value: s.id }));
+            await interaction.respond(matches);
+        } catch {
+            await interaction.respond([]);
+        }
     }
 };
 
@@ -160,7 +187,7 @@ export const submitTaskCommand: SlashCommand = {
         .setName("submit-task")
         .setDescription("Submit deliverables for the task in this post or by code via Grab-Box UI")
         .addStringOption((option) =>
-            option.setName("task").setDescription("Task code (e.g. SC01_A1B2), defaults to current post").setMaxLength(50)
+            option.setName("task").setDescription("Task code (e.g. SC01_A1B2), defaults to current post").setMaxLength(50).setAutocomplete(true)
         )
         .toJSON(),
     async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
@@ -195,6 +222,19 @@ export const submitTaskCommand: SlashCommand = {
                 )
             )
         );
+    },
+    async autocomplete(interaction: AutocompleteInteraction, context: BotContext): Promise<void> {
+        const focused = interaction.options.getFocused().toLowerCase();
+        try {
+            const all = await context.api.listAllShots();
+            const matches = all
+                .filter((s) => s.shotCode.toLowerCase().includes(focused) || s.title.toLowerCase().includes(focused))
+                .slice(0, 10)
+                .map((s) => ({ name: `[${s.shotCode}] ${s.title}`.slice(0, 100), value: s.id }));
+            await interaction.respond(matches);
+        } catch {
+            await interaction.respond([]);
+        }
     }
 };
 

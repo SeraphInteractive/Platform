@@ -104,6 +104,23 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
     );
 
     application.get(
+        "/shots/by-code/:shotCode",
+        {
+            schema: {
+                tags: ["Shots"],
+                summary: "Get a shot by code.",
+                params: z.object({ shotCode: z.string().min(1).max(50) }),
+                response: { 200: dataEnvelope(shotSchema), ...errorResponses }
+            }
+        },
+        async (request, reply) => {
+            const item = await shotsService.getByCode(request.params.shotCode, optionalUser(request));
+            void reply.header("Cache-Control", "private, no-store");
+            return { data: toShotResponse(item, objectStorage) };
+        }
+    );
+
+    application.get(
         "/shots/:shotId",
         {
             schema: {

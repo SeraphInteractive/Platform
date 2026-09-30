@@ -56,7 +56,10 @@ export const documentsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer
                 response: { 200: dataEnvelope(legalAcceptanceSchema), ...errorResponses }
             }
         },
-        async () => ({ data: { version: await documentsService.currentAcceptanceVersion() } })
+        async (_request, reply) => {
+            void reply.header('Cache-Control', 'public, max-age=60');
+            return { data: { version: await documentsService.currentAcceptanceVersion() } };
+        }
     );
 
     application.get(
@@ -69,7 +72,10 @@ export const documentsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer
                 response: { 200: dataEnvelope(documentSchema), ...errorResponses }
             }
         },
-        async (request) => ({ data: presentDocument(await documentsService.get(request.params.slug)) })
+        async (request, reply) => {
+            void reply.header('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
+            return { data: presentDocument(await documentsService.get(request.params.slug)) };
+        }
     );
 
     application.put(

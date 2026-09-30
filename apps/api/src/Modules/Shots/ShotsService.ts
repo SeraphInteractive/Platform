@@ -226,6 +226,25 @@ export class ShotsService {
         };
     }
 
+    public async getByCode(shotCode: string, viewer: AuthenticatedUser | null): Promise<ShotListItem> {
+        const [row] = await this.database
+            .select({ shot: shots, claimer: userSummaryColumns })
+            .from(shots)
+            .leftJoin(users, eq(users.id, shots.claimedBy))
+            .where(eq(shots.shotCode, shotCode))
+            .limit(1);
+        if (row === undefined) {
+            throw new NotFoundError("Shot");
+        }
+
+        return {
+            shot: row.shot,
+            claimer: row.claimer,
+            latestSubmission: null,
+            isSeniorLocked: this.isSeniorLocked(row.shot, viewer, new Date())
+        };
+    }
+
     public async create(input: CreateShotInput): Promise<ShotRecord> {
         if (input.roundId !== null) {
             await this.requireRound(input.roundId);

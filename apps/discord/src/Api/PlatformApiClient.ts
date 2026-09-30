@@ -156,6 +156,17 @@ export class PlatformApiClient {
         return (await this.send(`/shots/${shotId}`, dataEnvelope(shotDetailSchema))).data;
     }
 
+    public async getShotByCode(shotCode: string): Promise<ShotDto | null> {
+        try {
+            return (await this.send(`/shots/by-code/${encodeURIComponent(shotCode)}`, dataEnvelope(shotSchema))).data;
+        } catch (error: unknown) {
+            if (error instanceof PlatformApiError && error.status === 404) {
+                return null;
+            }
+            throw error;
+        }
+    }
+
     public async isHealthy(): Promise<{ healthy: boolean; latencyMs: number }> {
         const started = performance.now();
         try {
