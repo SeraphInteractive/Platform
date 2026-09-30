@@ -79,11 +79,9 @@ export const studioRoles: readonly StudioRole[] = Object.freeze([
     { name: "Sound Designers", tier: StudioTier.Contributor, color: 0x17a2b8, specialty: Specialty.SoundDesigner },
     { name: "Video Editors", tier: StudioTier.Contributor, color: 0x6f42c1, specialty: Specialty.VideoEditor },
     { name: "General Contributors", tier: StudioTier.Contributor, color: 0x3498db, specialty: Specialty.GeneralContributor },
-    { name: "Voters", tier: StudioTier.Community, color: 0x34495e, specialty: Specialty.Voter },
-    { name: "Observer", tier: StudioTier.Community, color: 0x95a5a6 }
+    { name: "Voters", tier: StudioTier.Community, color: 0x34495e, specialty: Specialty.Voter }
 ]);
 
-export const observerRoleName = "Observer";
 export const contributorRoleName = "General Contributors";
 
 export function normalizeName(name: string): string {
@@ -104,7 +102,7 @@ export function platformRoleFor(tier: StudioTier): Role {
         case StudioTier.Contributor:
             return Role.Contributor;
         case StudioTier.Community:
-            return Role.Member;
+            return Role.Voter;
     }
 }
 
@@ -144,9 +142,8 @@ export function targetStudioRoleNames(role: Role, specialties: readonly Specialt
         names.add(contributorRoleName);
     } else if (role === Role.Voter) {
         names.add("Voters");
-    } else if (role === Role.Member) {
-        names.add(observerRoleName);
     }
+    // users with Role.Member receive no roles in Discord until they cast their first vote
 
     return names;
 }

@@ -2,9 +2,8 @@ import { emailCodeLength, emailVerificationSchema, textLimits } from "@platform/
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { dataEnvelope, errorResponses, toIso } from "../../Common/Http/Schemas.js";
-import { currentUser, requireParticipant } from "../../Common/Security/Authorization.js";
+import { currentUser, requireAcceptedTerms } from "../../Common/Security/Authorization.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
-import { Role } from "../../Domain/Roles.js";
 import { toUserResponse, userSchema } from "../Users/UserPresenter.js";
 
 export const verificationRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
@@ -14,7 +13,7 @@ export const verificationRoutes: FastifyPluginAsyncZod<{ services: ServiceContai
     application.post(
         "/verification/email",
         {
-            preHandler: requireParticipant(Role.Member, services.documentsService),
+            preHandler: requireAcceptedTerms(services.documentsService),
             config: { rateLimit: { max: 5, timeWindow: "1 minute" } },
             schema: {
                 tags: ["Verification"],
@@ -36,7 +35,7 @@ export const verificationRoutes: FastifyPluginAsyncZod<{ services: ServiceContai
     application.post(
         "/verification/email/confirm",
         {
-            preHandler: requireParticipant(Role.Member, services.documentsService),
+            preHandler: requireAcceptedTerms(services.documentsService),
             config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
             schema: {
                 tags: ["Verification"],

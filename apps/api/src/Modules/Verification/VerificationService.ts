@@ -13,7 +13,6 @@ import {
 } from "../../Common/Errors/ApplicationError.js";
 import type { AuthenticatedUser } from "../../Common/Security/Principal.js";
 import { constantTimeEquals, hmacHex } from "../../Common/Security/Secrets.js";
-import { Role } from "../../Domain/Roles.js";
 import type { KeyValueStore } from "../../Infrastructure/Cache/KeyValueStore.js";
 import type { CaptchaVerifier } from "../../Infrastructure/Captcha/CaptchaVerifier.js";
 import { isUniqueViolation, type Database } from "../../Infrastructure/Database/Database.js";
@@ -157,7 +156,7 @@ export class VerificationService {
                     .set({
                         verifiedEmailHash: pending.emailHash,
                         emailVerifiedAt: new Date(),
-                        role: current.role === Role.Member ? Role.Voter : current.role
+                        role: current.role
                     })
                     .where(and(eq(users.id, user.id), isNull(users.emailVerifiedAt)))
                     .returning();

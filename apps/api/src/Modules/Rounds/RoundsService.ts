@@ -166,9 +166,9 @@ export class RoundsService {
                         ErrorCode.Conflict
                     );
                 }
-                if (current.pollType === PollType.RankedChoice && (totalApproved < 2 || totalApproved > 5)) {
+                if (current.pollType === PollType.RankedChoice && totalApproved !== 5) {
                     throw new ConflictError(
-                        "A ranked-choice round requires between 2 and 5 approved entries to proceed to voting.",
+                        "A ranked-choice round requires exactly 5 approved entries to proceed to voting.",
                         ErrorCode.Conflict
                     );
                 }

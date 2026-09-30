@@ -107,12 +107,18 @@ describe("voting rounds", () => {
         const aAuthor = await context.createUser(Role.Voter);
         const bAuthor = await context.createUser(Role.Voter);
         const cAuthor = await context.createUser(Role.Voter);
+        const dAuthor = await context.createUser(Role.Voter);
+        const eAuthor = await context.createUser(Role.Voter);
         const a = await addEntry(roundId, aAuthor, "A");
         const b = await addEntry(roundId, bAuthor, "B");
         const c = await addEntry(roundId, cAuthor, "C");
+        const d = await addEntry(roundId, dAuthor, "D");
+        const e = await addEntry(roundId, eAuthor, "E");
         await approveEntry(roundId, supervisor, a);
         await approveEntry(roundId, supervisor, b);
         await approveEntry(roundId, supervisor, c);
+        await approveEntry(roundId, supervisor, d);
+        await approveEntry(roundId, supervisor, e);
 
         const voter = await context.createUser(Role.Voter);
 
@@ -316,10 +322,16 @@ describe("voting rounds", () => {
 
         const bAuthor = await context.createUser(Role.Voter);
         const cAuthor = await context.createUser(Role.Voter);
+        const dAuthor = await context.createUser(Role.Voter);
+        const eAuthor = await context.createUser(Role.Voter);
         const b = await addEntry(roundId, bAuthor, "B");
         const c = await addEntry(roundId, cAuthor, "C");
+        const d = await addEntry(roundId, dAuthor, "D");
+        const e = await addEntry(roundId, eAuthor, "E");
         await approveEntry(roundId, supervisor, b);
         await approveEntry(roundId, supervisor, c);
+        await approveEntry(roundId, supervisor, d);
+        await approveEntry(roundId, supervisor, e);
         expect(await setRoundStatus(roundId, RoundStatus.Voting)).toBe(200);
         expect(await vote(voter, roundId, [entryId, b, c])).toBe(200);
 

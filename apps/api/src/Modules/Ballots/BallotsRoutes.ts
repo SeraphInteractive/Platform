@@ -64,7 +64,7 @@ export const ballotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
     application.put(
         "/rounds/:roundId/ballots/me",
         {
-            preHandler: requireParticipant(Role.Voter, services.documentsService),
+            preHandler: requireParticipant(Role.Member, services.documentsService),
             config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
             schema: {
                 tags: ["Ballots"],

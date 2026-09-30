@@ -7,6 +7,7 @@ export interface AuthenticatedUser {
     readonly role: Role;
     readonly isBlacklisted: boolean;
     readonly termsVersion: string | null;
+    readonly isVerified: boolean;
 }
 
 export interface UserPrincipal {

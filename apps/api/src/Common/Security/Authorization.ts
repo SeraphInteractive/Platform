@@ -33,14 +33,26 @@ export function requireRole(role: Role): preHandlerAsyncHookHandler {
     };
 }
 
+export function requireAcceptedTerms(legal: LegalAcceptance): preHandlerAsyncHookHandler {
+    return async function (request: FastifyRequest): Promise<void> {
+        const { user } = userPrincipalOf(request);
+        if (user.termsVersion !== (await legal.currentAcceptanceVersion())) {
+            throw new ForbiddenError("Accept the current terms of service first.", ErrorCode.TermsNotAccepted);
+        }
+    };
+}
+
 export function requireParticipant(role: Role, legal: LegalAcceptance): preHandlerAsyncHookHandler {
     return async function (request: FastifyRequest): Promise<void> {
         const { user } = userPrincipalOf(request);
         if (user.termsVersion !== (await legal.currentAcceptanceVersion())) {
             throw new ForbiddenError("Accept the current terms of service first.", ErrorCode.TermsNotAccepted);
         }
-        if (!hasAtLeast(user.role, role)) {
+        if (!user.isVerified) {
             throw new ForbiddenError("Verify your email to take part.", ErrorCode.VerificationRequired);
+        }
+        if (!hasAtLeast(user.role, role)) {
+            throw new ForbiddenError(`This action requires the ${role} role or higher.`, ErrorCode.InsufficientRole);
         }
     };
 }

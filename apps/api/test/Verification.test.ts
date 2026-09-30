@@ -84,7 +84,7 @@ describe("member verification", () => {
         expect(context.emailSender.messages).toHaveLength(0);
     });
 
-    it("promotes a member to voter with the emailed code", async () => {
+    it("verifies a member with the emailed code so they are eligible to vote", async () => {
         const member = await context.createUser(Role.Member);
         expect((await send(member, "Real.Person@example.org")).statusCode).toBe(200);
         expect((await send(member, "Real.Person@example.org")).statusCode).toBe(429);
@@ -98,7 +98,7 @@ describe("member verification", () => {
 
         const verified = await confirm(member, code ?? "");
         expect(verified.statusCode).toBe(200);
-        expect(json<{ data: { role: string; isVerified: boolean } }>(verified).data).toMatchObject({ role: Role.Voter, isVerified: true });
+        expect(json<{ data: { role: string; isVerified: boolean } }>(verified).data).toMatchObject({ role: Role.Member, isVerified: true });
 
         expect((await confirm(member, code ?? "")).statusCode).toBe(409);
     });

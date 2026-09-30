@@ -5,7 +5,6 @@ import { NotificationDispatcher } from "../src/Services/NotificationDispatcher.j
 import { ServerProvisioner } from "../src/Services/ServerProvisioner.js";
 import {
     contributorRoleName,
-    observerRoleName,
     syncMemberStudioRoles,
     targetStudioRoleNames
 } from "../src/Services/StudioRoles.js";
@@ -59,9 +58,9 @@ function createMockMember(roleMap: Map<string, DiscordRole>, guildRoles: Map<str
 }
 
 describe("targetStudioRoleNames", () => {
-    it("returns Observer for unverified members", () => {
+    it("returns empty set for unvoted members until they vote", () => {
         const names = targetStudioRoleNames(Role.Member, []);
-        expect(names).toEqual(new Set([observerRoleName]));
+        expect(names).toEqual(new Set([]));
     });
 
     it("returns Voters for verified voters", () => {
@@ -97,11 +96,10 @@ describe("targetStudioRoleNames", () => {
 describe("syncMemberStudioRoles", () => {
     it("adds missing studio roles and strips obsolete ones without touching non-studio roles", async () => {
         const guildRoles = new Map<string, DiscordRole>([
-            ["1", createMockDiscordRole("1", "Observer")],
-            ["2", createMockDiscordRole("2", "Voters")],
-            ["3", createMockDiscordRole("3", "General Contributors")],
-            ["4", createMockDiscordRole("4", "Animators")],
-            ["5", createMockDiscordRole("5", "Riggers")],
+            ["1", createMockDiscordRole("1", "Voters")],
+            ["2", createMockDiscordRole("2", "General Contributors")],
+            ["3", createMockDiscordRole("3", "Animators")],
+            ["4", createMockDiscordRole("4", "Riggers")],
             ["99", createMockDiscordRole("99", "Server Booster")]
         ]);
 
@@ -115,7 +113,7 @@ describe("syncMemberStudioRoles", () => {
         await syncMemberStudioRoles(member, Role.Contributor, [Specialty.Animator]);
 
         expect(removed).toEqual(["1"]);
-        expect(added).toEqual(["3", "4"]);
+        expect(added).toEqual(["2", "3"]);
         expect(heldRoles.has("99")).toBe(true);
     });
 });
@@ -211,7 +209,7 @@ describe("ServerProvisioner hierarchy", () => {
             ["2", createMockDiscordRole("2", "Admin")],
             ["3", createMockDiscordRole("3", "Supervisor")],
             ["4", createMockDiscordRole("4", "Animators")],
-            ["5", createMockDiscordRole("5", "Observer")]
+            ["5", createMockDiscordRole("5", "Voters")]
         ]);
 
         const mockGuild = {
@@ -231,7 +229,7 @@ describe("ServerProvisioner hierarchy", () => {
         const positions = setPositionsFn.mock.calls[0][0] as { role: string; position: number }[];
         const posMap = new Map(positions.map((p) => [p.role, p.position]));
 
-        // Producer > Admin > Supervisor > Animators > Observer
+        // Producer > Admin > Supervisor > Animators > Voters
         expect(posMap.get("1")!).toBeGreaterThan(posMap.get("2")!);
         expect(posMap.get("2")!).toBeGreaterThan(posMap.get("3")!);
         expect(posMap.get("3")!).toBeGreaterThan(posMap.get("4")!);

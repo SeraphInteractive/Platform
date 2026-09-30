@@ -4,9 +4,10 @@ import { ConflictError, ErrorCode, ForbiddenError, NotFoundError, UnprocessableE
 import { createPage, offsetOf, type Page, type PaginationQuery } from "../../Common/Http/Schemas.js";
 import type { AuthenticatedUser } from "../../Common/Security/Principal.js";
 import { EntryStatus, RoundStatus } from "../../Domain/Enums.js";
+import { Role } from "../../Domain/Roles.js";
 import type { KeyValueStore } from "../../Infrastructure/Cache/KeyValueStore.js";
 import type { Database } from "../../Infrastructure/Database/Database.js";
-import { ballots, entries, users, votingRounds, type BallotRecord } from "../../Infrastructure/Database/Schema.js";
+import { ballots, entries, users, votingRounds, type BallotRecord, type UserRecord } from "../../Infrastructure/Database/Schema.js";
 import { RoundEventType, type EventBus } from "../../Infrastructure/Events/EventBus.js";
 import { NotificationType, personOfUser, roundReferenceOf, type Notifier } from "../../Infrastructure/Notifications/Notification.js";
 import { isAcceptingVotes } from "../Rounds/RoundPresenter.js";
@@ -43,7 +44,7 @@ export class BallotsService {
             throw new ForbiddenError("Your account is blacklisted from voting.", ErrorCode.UserBlacklisted);
         }
 
-        const { ballot, roundTitle, pollType } = await this.database.transaction(async (transaction) => {
+        const { ballot, roundTitle, pollType, promotedUser } = await this.database.transaction(async (transaction) => {
             const [round] = await transaction.select().from(votingRounds).where(eq(votingRounds.id, roundId)).limit(1).for("share");
             if (round === undefined) {
                 throw new NotFoundError("Round");
@@ -83,12 +84,34 @@ export class BallotsService {
             if (saved === undefined) {
                 throw new Error("Ballot upsert returned no row.");
             }
+
+            let promotedUser: UserRecord | undefined;
+            if (voter.role === Role.Member) {
+                const [updated] = await transaction
+                    .update(users)
+                    .set({ role: Role.Voter, updatedAt: new Date() })
+                    .where(and(eq(users.id, voter.id), eq(users.role, Role.Member)))
+                    .returning();
+                promotedUser = updated;
+            }
+
             return {
                 ballot: saved,
                 roundTitle: round.title,
-                pollType: round.pollType
+                pollType: round.pollType,
+                promotedUser
             };
         });
+
+        if (promotedUser !== undefined) {
+            this.notifier.notify({
+                type: NotificationType.UserRoleChanged,
+                user: personOfUser(promotedUser),
+                role: promotedUser.role,
+                specialties: promotedUser.specialties,
+                actor: personOfUser(promotedUser)
+            });
+        }
 
         this.raidMonitor.schedule(roundId, picks);
         await this.eventBus.publish({

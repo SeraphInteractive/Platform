@@ -17,7 +17,6 @@ import {
     contributorRoleName,
     findStudioRole,
     normalizeName,
-    observerRoleName,
     permissionsFor,
     studioRoles,
     StudioTier
@@ -81,9 +80,9 @@ export class ServerProvisioner {
     public async bindExisting(guild: Guild): Promise<void> {
         const [roles, channels] = await Promise.all([guild.roles.fetch(), guild.channels.fetch()]);
         await this.settings.update((settings) => {
-            const observer = roles.find((role) => normalizeName(role.name) === normalizeName(observerRoleName));
+            const voter = roles.find((role) => normalizeName(role.name) === "voters");
             const contributor = roles.find((role) => normalizeName(role.name) === normalizeName(contributorRoleName));
-            settings.roles[BoundRole.Observer] ??= observer?.id;
+            settings.roles[BoundRole.Voter] ??= voter?.id;
             settings.roles[BoundRole.Contributor] ??= contributor?.id;
             for (const [purpose, name] of Object.entries(channelNames) as [ChannelPurpose, string][]) {
                 const match = channels.find(
@@ -274,7 +273,7 @@ export class ServerProvisioner {
             settings.channels[ChannelPurpose.TaskSubmissions] = submissions.id;
             settings.channels[ChannelPurpose.TaskLogs] = logs.id;
             settings.channels[ChannelPurpose.TaskForum] = tagged.id;
-            settings.roles[BoundRole.Observer] = roleIds.get(observerRoleName)?.id;
+            settings.roles[BoundRole.Voter] = roleIds.get("Voters")?.id;
             settings.roles[BoundRole.Contributor] = roleIds.get(contributorRoleName)?.id;
         });
 

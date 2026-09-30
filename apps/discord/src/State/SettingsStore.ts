@@ -13,7 +13,7 @@ export enum ChannelPurpose {
 }
 
 export enum BoundRole {
-    Observer = "observer",
+    Voter = "voter",
     Contributor = "contributor"
 }
 

@@ -8,9 +8,9 @@ const roleRanks: Readonly<Record<Role, number>> = Object.freeze({
     [Role.Contributor]: 2,
     [Role.SeniorContributor]: 3,
     [Role.Moderator]: 4,
-    [Role.Supervisor]: 5,
-    [Role.Admin]: 6,
-    [Role.SuperAdmin]: 7
+    [Role.Supervisor]: 4,
+    [Role.Admin]: 5,
+    [Role.SuperAdmin]: 6
 });
 
 const specialtyRoles: ReadonlySet<Role> = new Set([
@@ -27,9 +27,6 @@ const specialtyRoles: ReadonlySet<Role> = new Set([
 export const maximumSuperAdmins = 2;
 
 export function settleRole(role: Role, isVerified: boolean, currentRole: Role | null): Role {
-    if (role === Role.Member && isVerified) {
-        return Role.Voter;
-    }
     if (role === Role.Voter && !isVerified && currentRole !== Role.Voter) {
         return Role.Member;
     }

@@ -11,7 +11,7 @@ import { ServerProvisioner } from "./Services/ServerProvisioner.js";
 import { syncMemberStudioRoles } from "./Services/StudioRoles.js";
 import { TaskForum } from "./Services/TaskForum.js";
 import { ReminderStore } from "./State/ReminderStore.js";
-import { BoundRole, SettingsStore } from "./State/SettingsStore.js";
+import { SettingsStore } from "./State/SettingsStore.js";
 
 async function main(): Promise<void> {
     const configuration = loadBotConfiguration();
@@ -76,12 +76,8 @@ async function main(): Promise<void> {
                 }
                 if (user !== null) {
                     await syncMemberStudioRoles(member, user.role, user.specialties, "Member joined/rejoined");
-                    return;
                 }
-                const roleId = settings.role(BoundRole.Observer);
-                if (roleId !== undefined) {
-                    await member.roles.add(roleId, "New member");
-                }
+                // users have no role until they have voted or received an assignment
             } catch (error: unknown) {
                 logger.warn({ err: error, member: member.id }, "failed to handle member add");
             }

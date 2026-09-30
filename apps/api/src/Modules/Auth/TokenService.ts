@@ -48,7 +48,8 @@ export class TokenService {
                 discordUsername: users.discordUsername,
                 role: users.role,
                 isBlacklisted: users.isBlacklisted,
-                termsVersion: users.termsVersion
+                termsVersion: users.termsVersion,
+                emailVerifiedAt: users.emailVerifiedAt
             })
             .from(accessTokens)
             .innerJoin(users, eq(users.id, accessTokens.userId))
@@ -79,7 +80,8 @@ export class TokenService {
                 discordUsername: row.discordUsername,
                 role: row.role,
                 isBlacklisted: row.isBlacklisted,
-                termsVersion: row.termsVersion
+                termsVersion: row.termsVersion,
+                isVerified: row.emailVerifiedAt !== null
             }
         };
     }
@@ -92,12 +94,28 @@ export class TokenService {
                 discordUsername: users.discordUsername,
                 role: users.role,
                 isBlacklisted: users.isBlacklisted,
-                termsVersion: users.termsVersion
+                termsVersion: users.termsVersion,
+                emailVerifiedAt: users.emailVerifiedAt
             })
             .from(users)
             .where(eq(users.discordId, discordId))
             .limit(1);
-        return user === undefined ? null : { kind: "user", tokenId: null, isDelegated: true, user };
+        return user === undefined
+            ? null
+            : {
+                  kind: "user",
+                  tokenId: null,
+                  isDelegated: true,
+                  user: {
+                      id: user.id,
+                      discordId: user.discordId,
+                      discordUsername: user.discordUsername,
+                      role: user.role,
+                      isBlacklisted: user.isBlacklisted,
+                      termsVersion: user.termsVersion,
+                      isVerified: user.emailVerifiedAt !== null
+                  }
+              };
     }
 
     public async revoke(tokenId: string): Promise<void> {
