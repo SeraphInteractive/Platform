@@ -46,9 +46,9 @@ describe("documents", () => {
         expect(json<{ data: { revision: number; sections: unknown[] } }>(response).data.revision).toBe(0);
     });
 
-    it("only lets super admins publish", async () => {
-        const admin = await context.createUser(Role.Admin);
-        expect((await publish(admin, DocumentSlug.Guidelines, body)).statusCode).toBe(403);
+    it("only lets supervisors and above publish", async () => {
+        const contributor = await context.createUser(Role.Contributor);
+        expect((await publish(contributor, DocumentSlug.Guidelines, body)).statusCode).toBe(403);
     });
 
     it("publishes sanitized revisions and rejects stale edits", async () => {

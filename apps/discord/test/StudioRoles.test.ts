@@ -2,6 +2,7 @@ import { NotificationType, Role, Specialty } from "@platform/contracts";
 import type { Collection, GuildMember, Role as DiscordRole } from "discord.js";
 import { describe, expect, it, vi } from "vitest";
 import { NotificationDispatcher } from "../src/Services/NotificationDispatcher.js";
+import { ServerProvisioner } from "../src/Services/ServerProvisioner.js";
 import {
     contributorRoleName,
     observerRoleName,
@@ -78,9 +79,18 @@ describe("targetStudioRoleNames", () => {
         expect(names).toEqual(new Set([contributorRoleName, "Riggers"]));
     });
 
-    it("returns executive and department roles based on specialty", () => {
-        const names = targetStudioRoleNames(Role.Admin, [Specialty.Producer]);
-        expect(names).toEqual(new Set(["Producer"]));
+    it("returns executive and department roles based on specialty plus base leadership roles", () => {
+        const adminNames = targetStudioRoleNames(Role.Admin, [Specialty.Producer]);
+        expect(adminNames).toEqual(new Set(["Admin", "Producer"]));
+
+        const supervisorNames = targetStudioRoleNames(Role.Supervisor, [Specialty.AnimationSupervisor]);
+        expect(supervisorNames).toEqual(new Set(["Supervisor", "Animation Supervisor"]));
+
+        const generalAdminNames = targetStudioRoleNames(Role.Admin, []);
+        expect(generalAdminNames).toEqual(new Set(["Admin"]));
+
+        const adminWithCraftSpecialty = targetStudioRoleNames(Role.Admin, [Specialty.Animator]);
+        expect(adminWithCraftSpecialty).toEqual(new Set(["Admin", "Animators"]));
     });
 });
 
@@ -190,5 +200,41 @@ describe("NotificationDispatcher moderation and role sync side effects", () => {
         });
 
         expect(unbanFn).toHaveBeenCalledWith("215537065863938049", "Reinstated on platform");
+    });
+});
+
+describe("ServerProvisioner hierarchy", () => {
+    it("sorts guild role positions from Executive down to Community", async () => {
+        const setPositionsFn = vi.fn(async () => undefined);
+        const guildRoles = new Map<string, DiscordRole>([
+            ["1", createMockDiscordRole("1", "Producer")],
+            ["2", createMockDiscordRole("2", "Admin")],
+            ["3", createMockDiscordRole("3", "Supervisor")],
+            ["4", createMockDiscordRole("4", "Animators")],
+            ["5", createMockDiscordRole("5", "Observer")]
+        ]);
+
+        const mockGuild = {
+            roles: {
+                fetch: vi.fn(async () => guildRoles),
+                setPositions: setPositionsFn
+            }
+        };
+
+        const settings = new SettingsStore("/tmp/test-settings-hierarchy");
+        const provisioner = new ServerProvisioner(settings, { warn: vi.fn(), info: vi.fn() } as any);
+
+        const count = await provisioner.enforceRoleHierarchy(mockGuild as any);
+        expect(count).toBe(5);
+        expect(setPositionsFn).toHaveBeenCalled();
+
+        const positions = setPositionsFn.mock.calls[0][0] as { role: string; position: number }[];
+        const posMap = new Map(positions.map((p) => [p.role, p.position]));
+
+        // Producer > Admin > Supervisor > Animators > Observer
+        expect(posMap.get("1")!).toBeGreaterThan(posMap.get("2")!);
+        expect(posMap.get("2")!).toBeGreaterThan(posMap.get("3")!);
+        expect(posMap.get("3")!).toBeGreaterThan(posMap.get("4")!);
+        expect(posMap.get("4")!).toBeGreaterThan(posMap.get("5")!);
     });
 });

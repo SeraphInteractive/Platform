@@ -45,7 +45,7 @@ function presentRevision({ record, author }: RevisionView): DocumentRevisionSumm
 export const documentsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
     const { documentsService } = services;
     const security = [{ bearer: [] }];
-    const editor = requireRole(Role.SuperAdmin);
+    const editor = requireRole(Role.Supervisor);
 
     application.get(
         "/legal/acceptance",

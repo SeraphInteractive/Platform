@@ -4,7 +4,7 @@ import { docsCommand, helpCommand, statusCommand } from "../Commands/InfoCommand
 import { assignRoleCommand, blacklistCommand } from "../Commands/ModerationCommands.js";
 import { reminderCommand } from "../Commands/ReminderCommands.js";
 import { entryPageHandler, roundCommands, roundSelectHandler } from "../Commands/RoundCommands.js";
-import { botSetupCommand, setChannelCommand, setupForumCommand } from "../Commands/SetupCommands.js";
+import { botSetupCommand, setChannelCommand, setupForumCommand, syncRolesCommand } from "../Commands/SetupCommands.js";
 import {
     availableTasksCommand,
     claimTaskButtonHandler,
@@ -34,6 +34,7 @@ export const slashCommands: readonly SlashCommand[] = [
     botSetupCommand,
     setupForumCommand,
     setChannelCommand,
+    syncRolesCommand,
     statusCommand,
     reminderCommand
 ];

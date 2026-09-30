@@ -49,6 +49,7 @@ export const studioRoles: readonly StudioRole[] = Object.freeze([
     { name: "Producer", tier: StudioTier.Executive, color: 0xe74c3c, specialty: Specialty.Producer },
     { name: "Creative Director", tier: StudioTier.Executive, color: 0x9b59b6, specialty: Specialty.CreativeDirector },
     { name: "Production Manager", tier: StudioTier.Executive, color: 0xc0392b, specialty: Specialty.ProductionManager },
+    { name: "Admin", tier: StudioTier.Executive, color: 0x992d22 },
     { name: "Technical Director", tier: StudioTier.Department, color: 0x3498db, specialty: Specialty.TechnicalDirector },
     { name: "Art Director", tier: StudioTier.Department, color: 0xe67e22, specialty: Specialty.ArtDirector },
     { name: "Editorial Supervisor", tier: StudioTier.Department, color: 0x8e44ad, specialty: Specialty.EditorialSupervisor },
@@ -65,6 +66,7 @@ export const studioRoles: readonly StudioRole[] = Object.freeze([
         specialty: Specialty.LightingCompositingSupervisor
     },
     { name: "Sound Director", tier: StudioTier.Department, color: 0x00bcd4, specialty: Specialty.SoundDirector },
+    { name: "Supervisor", tier: StudioTier.Department, color: 0x1abc9c },
     { name: "Animators", tier: StudioTier.Contributor, color: 0x2980b9, specialty: Specialty.Animator },
     { name: "Layout Artists", tier: StudioTier.Contributor, color: 0x673ab7, specialty: Specialty.LayoutArtist },
     { name: "3D Modelers", tier: StudioTier.Contributor, color: 0x009688, specialty: Specialty.Modeler3d },
@@ -124,6 +126,12 @@ export function permissionsFor(tier: StudioTier): readonly bigint[] {
 
 export function targetStudioRoleNames(role: Role, specialties: readonly Specialty[]): Set<string> {
     const names = new Set<string>();
+
+    if (role === Role.Admin || role === Role.SuperAdmin) {
+        names.add("Admin");
+    } else if (role === Role.Supervisor) {
+        names.add("Supervisor");
+    }
 
     for (const specialty of specialties) {
         const studio = studioRoles.find((r) => r.specialty === specialty);

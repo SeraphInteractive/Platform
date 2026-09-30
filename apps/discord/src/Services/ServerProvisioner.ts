@@ -115,6 +115,9 @@ export class ServerProvisioner {
         for (const definition of studioRoles) {
             const existing = existingRoles.find((role) => findStudioRole(role.name)?.name === definition.name);
             if (existing !== undefined) {
+                if (existing.hoist !== (definition.tier !== StudioTier.Community)) {
+                    await existing.setHoist(definition.tier !== StudioTier.Community, "Studio role setup").catch(() => undefined);
+                }
                 roleIds.set(definition.name, existing);
                 continue;
             }
@@ -129,6 +132,8 @@ export class ServerProvisioner {
             roleIds.set(definition.name, created);
             createdRoles.push(created.name);
         }
+
+        await this.enforceRoleHierarchy(guild);
 
         const staffRoles = studioRoles
             .filter((role) => role.tier <= StudioTier.Department)
@@ -365,5 +370,27 @@ export class ServerProvisioner {
             ],
             "Configure task forum permissions"
         );
+    }
+
+    public async enforceRoleHierarchy(guild: Guild): Promise<number> {
+        const guildRoles = await guild.roles.fetch();
+        const roleList: (DiscordRole | null)[] = Array.from(guildRoles.values());
+        const positions: { role: string; position: number }[] = [];
+
+        let position = 1;
+        const reversed = [...studioRoles].reverse();
+        for (const definition of reversed) {
+            const match = roleList.find((role) => role !== null && role !== undefined && normalizeName(role.name) === normalizeName(definition.name));
+            if (match !== undefined && match !== null) {
+                positions.push({ role: match.id, position });
+                position++;
+            }
+        }
+        if (positions.length > 0) {
+            await guild.roles.setPositions(positions).catch((err: unknown) => {
+                this.logger.warn({ err }, "failed to set role hierarchy positions");
+            });
+        }
+        return positions.length;
     }
 }

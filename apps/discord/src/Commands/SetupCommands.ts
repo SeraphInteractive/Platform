@@ -1,7 +1,9 @@
+import { Role } from "@platform/contracts";
 import { ChannelType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder, type ChatInputCommandInteraction } from "discord.js";
-import { asEdit, ephemeral, panel, pluralize } from "../Discord/Ui.js";
+import { Accent, asEdit, ephemeral, panel, pluralize } from "../Discord/Ui.js";
+import { syncMemberStudioRoles } from "../Services/StudioRoles.js";
 import { ChannelPurpose } from "../State/SettingsStore.js";
-import { requireManageGuild, UserFacingError, type BotContext, type SlashCommand } from "./Command.js";
+import { actingAs, requireManageGuild, requirePlatformRole, UserFacingError, type BotContext, type SlashCommand } from "./Command.js";
 
 export const botSetupCommand: SlashCommand = {
     definition: new SlashCommandBuilder()
@@ -121,5 +123,60 @@ export const setChannelCommand: SlashCommand = {
             .map((purpose) => (purpose === ChannelPurpose.Announcements ? "announcements" : "telemetry alerts"))
             .join(" and ");
         await interaction.reply(ephemeral(panel(null, `Posting ${what} in <#${channel.id}>.`)));
+    }
+};
+
+export const syncRolesCommand: SlashCommand = {
+    definition: new SlashCommandBuilder()
+        .setName("sync-roles")
+        .setDescription("Reorder server roles by hierarchy and reconcile member roles")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+        .toJSON(),
+    async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
+        if (interaction.guild === null) {
+            throw new UserFacingError("Run this inside the server.");
+        }
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+            await requirePlatformRole(interaction, context, Role.Supervisor);
+        }
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        const reorderedCount = await context.provisioner.enforceRoleHierarchy(interaction.guild);
+
+        const acting = actingAs(interaction, context);
+        let syncedMembers = 0;
+        let page = 1;
+        let hasMore = true;
+
+        while (hasMore) {
+            const result = await acting.listUsers({ page, perPage: 100 }).catch(() => null);
+            if (result === null || result.data.length === 0) {
+                break;
+            }
+            for (const user of result.data) {
+                if (user.discordId) {
+                    const member = await interaction.guild.members.fetch(user.discordId).catch(() => null);
+                    if (member !== null) {
+                        await syncMemberStudioRoles(member, user.role, user.specialties, "Platform role hierarchy sync").catch(
+                            () => undefined
+                        );
+                        syncedMembers++;
+                    }
+                }
+            }
+            if (page * 100 >= result.meta.total || result.data.length < 100) {
+                hasMore = false;
+            } else {
+                page++;
+            }
+        }
+
+        const lines = [
+            "## Role Hierarchy & Member Sync Complete",
+            `• Re-ordered **${reorderedCount}** studio roles by hierarchy (Executive > Supervisor > Contributor > Community).`,
+            `• Reconciled **${syncedMembers}** registered server member ${pluralize(syncedMembers, "profile")}.`
+        ];
+
+        await interaction.editReply(asEdit(ephemeral(panel(Accent.Success, lines.join("\n")))));
     }
 };

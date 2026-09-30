@@ -229,6 +229,10 @@ export class ActingApiClient {
         return (await this.request("/auth/me", dataEnvelope(userSchema))).data;
     }
 
+    public async listUsers(options: { page?: number; perPage?: number; role?: Role } = {}): Promise<Page<ModeratedUserDto>> {
+        return this.request("/users", pageEnvelope(moderatedUserSchema), { query: options as Record<string, string | number | undefined> });
+    }
+
     public async listRounds(status?: RoundStatus): Promise<Page<RoundDto>> {
         return this.request("/rounds", pageEnvelope(roundSchema), { query: { status, perPage: 100 } });
     }
