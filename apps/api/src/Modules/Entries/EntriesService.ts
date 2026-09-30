@@ -2,7 +2,7 @@ import { and, count, desc, eq, inArray, ne, type SQL } from "drizzle-orm";
 import { ConflictError, ErrorCode, ForbiddenError, NotFoundError } from "../../Common/Errors/ApplicationError.js";
 import { createPage, offsetOf, type Page, type PaginationQuery } from "../../Common/Http/Schemas.js";
 import type { Actor, AuthenticatedUser } from "../../Common/Security/Principal.js";
-import { EntryStatus, RoundStatus } from "../../Domain/Enums.js";
+import { EntryStatus, PollType, RoundStatus } from "../../Domain/Enums.js";
 import { hasAtLeast, Role } from "../../Domain/Roles.js";
 import type { StorageConfiguration } from "../../Configuration/ApplicationConfiguration.js";
 import { isForeignKeyViolation, type Database, type Transaction } from "../../Infrastructure/Database/Database.js";
@@ -115,19 +115,24 @@ export class EntriesService {
             if (!submissionStatuses.includes(lockedRound.status)) {
                 throw new ConflictError("Entries can only be submitted once the round is open.", ErrorCode.RoundNotOpen);
             }
-            const [existingActive] = await transaction
-                .select({ id: entries.id })
-                .from(entries)
-                .where(
-                    and(
-                        eq(entries.roundId, roundId),
-                        eq(entries.submittedBy, author.id),
-                        inArray(entries.status, [EntryStatus.PendingReview, EntryStatus.Approved])
+            if (lockedRound.pollType === PollType.Binary && !hasAtLeast(author.role, Role.Supervisor)) {
+                throw new ForbiddenError("Binary rounds do not accept public proposals.", ErrorCode.Forbidden);
+            }
+            if (!hasAtLeast(author.role, Role.Supervisor)) {
+                const [existingActive] = await transaction
+                    .select({ id: entries.id })
+                    .from(entries)
+                    .where(
+                        and(
+                            eq(entries.roundId, roundId),
+                            eq(entries.submittedBy, author.id),
+                            inArray(entries.status, [EntryStatus.PendingReview, EntryStatus.Approved])
+                        )
                     )
-                )
-                .limit(1);
-            if (existingActive !== undefined) {
-                throw new ConflictError("You already have an active entry for this round.", ErrorCode.Conflict);
+                    .limit(1);
+                if (existingActive !== undefined) {
+                    throw new ConflictError("You already have an active entry for this round.", ErrorCode.Conflict);
+                }
             }
             const [created] = await transaction
                 .insert(entries)

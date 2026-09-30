@@ -38,7 +38,7 @@ interface RoundFormDialogProps {
 
 export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): ReactNode {
     const { user } = useSession();
-    const isAdmin = hasAtLeast(user, Role.Admin);
+    const canCreateBinary = hasAtLeast(user, Role.Supervisor);
     const formId = useId();
     const router = useRouter();
     const queryClient = useQueryClient();
@@ -126,13 +126,13 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
                                 <SelectItem value={PollType.RankedChoice}>
                                     {pollTypeLabels[PollType.RankedChoice]}: rank top three
                                 </SelectItem>
-                                {isAdmin && (
+                                {canCreateBinary && (
                                     <SelectItem value={PollType.Binary}>{pollTypeLabels[PollType.Binary]}: pick one of two</SelectItem>
                                 )}
                             </SelectContent>
                         </Select>
-                        {!isAdmin && round === undefined && (
-                            <p className="text-muted-foreground text-xs">Binary voting rounds can only be initiated by administrators.</p>
+                        {!canCreateBinary && round === undefined && (
+                            <p className="text-muted-foreground text-xs">Binary voting rounds can only be initiated by supervisors and administrators.</p>
                         )}
                         {round !== undefined && round.status !== RoundStatus.Draft && (
                             <p className="text-muted-foreground text-xs">The poll type is locked once a round leaves draft.</p>

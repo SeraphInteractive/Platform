@@ -64,6 +64,13 @@
       "when": 1790780000000,
       "tag": "0008_round_voting_status",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790780000001,
+      "tag": "0009_migrate_closed_rounds",
+      "breakpoints": true
     }
   ]
 }

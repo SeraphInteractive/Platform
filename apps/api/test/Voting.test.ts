@@ -200,10 +200,8 @@ describe("voting rounds", () => {
     it("excludes blacklisted voters from live standings", async () => {
         const roundId = await createRound(PollType.Binary);
         await setRoundStatus(roundId, RoundStatus.Open);
-        const yesAuthor = await context.createUser(Role.Voter);
-        const noAuthor = await context.createUser(Role.Voter);
-        const yes = await addEntry(roundId, yesAuthor, "Yes");
-        const no = await addEntry(roundId, noAuthor, "No");
+        const yes = await addEntry(roundId, supervisor, "Yes");
+        const no = await addEntry(roundId, supervisor, "No");
         await approveEntry(roundId, supervisor, yes);
         await approveEntry(roundId, supervisor, no);
         expect(await setRoundStatus(roundId, RoundStatus.Voting)).toBe(200);
@@ -229,10 +227,8 @@ describe("voting rounds", () => {
     it("does not quarantine a popular binary option", async () => {
         const roundId = await createRound(PollType.Binary);
         await setRoundStatus(roundId, RoundStatus.Open);
-        const popularAuthor = await context.createUser(Role.Voter);
-        const otherAuthor = await context.createUser(Role.Voter);
-        const popular = await addEntry(roundId, popularAuthor, "Popular");
-        const other = await addEntry(roundId, otherAuthor, "Other");
+        const popular = await addEntry(roundId, supervisor, "Popular");
+        const other = await addEntry(roundId, supervisor, "Other");
         await approveEntry(roundId, supervisor, popular);
         await approveEntry(roundId, supervisor, other);
         expect(await setRoundStatus(roundId, RoundStatus.Voting)).toBe(200);
@@ -244,6 +240,19 @@ describe("voting rounds", () => {
         expect(telemetry?.severity).not.toBe(RaidSeverity.CriticalRaid);
         const [entry] = await context.database.select().from(entries).where(eq(entries.id, popular));
         expect(entry?.isQuarantined).toBe(false);
+    });
+
+    it("blocks public users from proposing entries in binary rounds", async () => {
+        const roundId = await createRound(PollType.Binary);
+        await setRoundStatus(roundId, RoundStatus.Open);
+        const voter = await context.createUser(Role.Voter);
+        const response = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/rounds/${roundId}/entries`,
+            headers: voter.headers,
+            payload: { title: "Public idea" }
+        });
+        expect(response.statusCode).toBe(403);
     });
 
     it("guards entry moderation and deletion", async () => {

@@ -132,15 +132,15 @@ function BallotEditor({ round, entries, savedPicks }: BallotEditorProps): ReactN
                     const position = picks.indexOf(entry.id);
                     const isPicked = position >= 0;
                     return (
-                        <li key={entry.id}>
-                            <Card className={cn("h-full", isPicked && "border-foreground")}>
-                                <CardHeader>
-                                    <CardTitle className="text-sm">{entry.title}</CardTitle>
+                        <li key={entry.id} className="min-w-0">
+                            <Card className={cn("h-full min-w-0 overflow-hidden", isPicked && "border-foreground")}>
+                                <CardHeader className="min-w-0 overflow-hidden break-words [overflow-wrap:anywhere]">
+                                    <CardTitle className="text-sm min-w-0 break-words [overflow-wrap:anywhere] [word-break:break-word]">{entry.title}</CardTitle>
                                     {entry.description !== null && (
-                                        <MarkdownText className="text-muted-foreground text-sm">{entry.description}</MarkdownText>
+                                        <MarkdownText className="text-muted-foreground text-sm min-w-0 break-words [overflow-wrap:anywhere] [word-break:break-word]">{entry.description}</MarkdownText>
                                     )}
                                 </CardHeader>
-                                <CardContent className="space-y-3">
+                                <CardContent className="space-y-3 min-w-0 break-words [overflow-wrap:anywhere] [word-break:break-word]">
                                     <EntryMedia url={entry.mediaUrl} title={entry.title} />
                                     <Button
                                         size="sm"

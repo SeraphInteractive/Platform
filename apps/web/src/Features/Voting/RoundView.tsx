@@ -1,6 +1,6 @@
 "use client";
 
-import { Role, RoundStatus, type EntryDto, type RoundDetailDto } from "@platform/contracts";
+import { PollType, Role, RoundStatus, type EntryDto, type RoundDetailDto } from "@platform/contracts";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import Link from "next/link";
@@ -43,15 +43,15 @@ function EntriesGrid({ roundId }: { readonly roundId: string }): ReactNode {
     return (
         <ul className="grid gap-4 sm:grid-cols-2">
             {entries.data.map((entry) => (
-                <li key={entry.id}>
-                    <Card className="h-full">
-                        <CardHeader>
-                            <CardTitle className="text-sm">{entry.title}</CardTitle>
+                <li key={entry.id} className="min-w-0">
+                    <Card className="h-full min-w-0 overflow-hidden">
+                        <CardHeader className="min-w-0 overflow-hidden break-words [overflow-wrap:anywhere]">
+                            <CardTitle className="text-sm min-w-0 break-words [overflow-wrap:anywhere] [word-break:break-word]">{entry.title}</CardTitle>
                             {entry.description !== null && (
-                                <MarkdownText className="text-muted-foreground text-sm">{entry.description}</MarkdownText>
+                                <MarkdownText className="text-muted-foreground text-sm min-w-0 break-words [overflow-wrap:anywhere] [word-break:break-word]">{entry.description}</MarkdownText>
                             )}
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="min-w-0 break-words [overflow-wrap:anywhere] [word-break:break-word]">
                             <EntryMedia url={entry.mediaUrl} title={entry.title} />
                             {entry.isQuarantined && <p className="text-warning mt-2 text-xs">Under review for suspicious voting.</p>}
                         </CardContent>
@@ -119,7 +119,7 @@ function RoundDetail({ round }: { readonly round: RoundDetailDto }): ReactNode {
     const { user } = useSession();
     const entries = useApprovedEntries(round.id);
     useBreadcrumbLabel(round.id, round.title);
-    const canPropose = user !== null && round.status === RoundStatus.Open;
+    const canPropose = user !== null && round.status === RoundStatus.Open && round.pollType !== PollType.Binary;
     const [tab, setTab] = useState(round.isAcceptingVotes ? "vote" : round.status === RoundStatus.Finalized ? "standings" : "entries");
 
     return (

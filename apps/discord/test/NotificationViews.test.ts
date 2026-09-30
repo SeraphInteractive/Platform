@@ -368,7 +368,7 @@ describe("every notification", () => {
 
     it("announces when a round is opened for submissions and voting", () => {
         const votingSample = samples.find(
-            (s) => s.type === NotificationType.RoundStatusChanged && (s as NotificationOf<NotificationType.RoundStatusChanged>).to === RoundStatus.Voting
+            (s) => s.type === NotificationType.RoundStatusChanged && s.to === RoundStatus.Voting
         );
         expect(votingSample).toBeDefined();
         const votingRendered = renderNotification(votingSample as PlatformNotification, context);
@@ -378,7 +378,7 @@ describe("every notification", () => {
         expect(texts((votingAnnouncement as RenderedNotification).message).join("\n")).toContain("## Voting is now open for Binary Test Round!");
 
         const openSample = samples.find(
-            (s) => s.type === NotificationType.RoundStatusChanged && (s as NotificationOf<NotificationType.RoundStatusChanged>).to === RoundStatus.Open
+            (s) => s.type === NotificationType.RoundStatusChanged && s.to === RoundStatus.Open
         );
         expect(openSample).toBeDefined();
         const openRendered = renderNotification(openSample as PlatformNotification, context);
