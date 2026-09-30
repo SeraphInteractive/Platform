@@ -89,7 +89,10 @@ describe("targetStudioRoleNames", () => {
         expect(generalAdminNames).toEqual(new Set(["Admin"]));
 
         const superAdminNames = targetStudioRoleNames(Role.SuperAdmin, []);
-        expect(superAdminNames).toEqual(new Set(["Producer", "Admin"]));
+        expect(superAdminNames).toEqual(new Set(["Admin"]));
+
+        const producerAdminNames = targetStudioRoleNames(Role.SuperAdmin, [Specialty.Producer]);
+        expect(producerAdminNames).toEqual(new Set(["Admin", "Producer"]));
 
         const adminWithCraftSpecialty = targetStudioRoleNames(Role.Admin, [Specialty.Animator]);
         expect(adminWithCraftSpecialty).toEqual(new Set(["Admin", "Animators"]));

@@ -80,8 +80,8 @@ export class ServerProvisioner {
     public async bindExisting(guild: Guild): Promise<void> {
         const [roles, channels] = await Promise.all([guild.roles.fetch(), guild.channels.fetch()]);
         await this.settings.update((settings) => {
-            const voter = roles.find((role) => normalizeName(role.name) === "voters");
-            const contributor = roles.find((role) => normalizeName(role.name) === normalizeName(contributorRoleName));
+            const voter = roles.find((role) => findStudioRole(role.name)?.name === "Voters");
+            const contributor = roles.find((role) => findStudioRole(role.name)?.name === contributorRoleName);
             settings.roles[BoundRole.Voter] ??= voter?.id;
             settings.roles[BoundRole.Contributor] ??= contributor?.id;
             for (const [purpose, name] of Object.entries(channelNames) as [ChannelPurpose, string][]) {
@@ -379,7 +379,7 @@ export class ServerProvisioner {
         let position = 1;
         const reversed = [...studioRoles].reverse();
         for (const definition of reversed) {
-            const match = roleList.find((role) => role !== null && role !== undefined && normalizeName(role.name) === normalizeName(definition.name));
+            const match = roleList.find((role) => role !== null && role !== undefined && findStudioRole(role.name)?.name === definition.name);
             if (match !== undefined && match !== null) {
                 positions.push({ role: match.id, position });
                 position++;
