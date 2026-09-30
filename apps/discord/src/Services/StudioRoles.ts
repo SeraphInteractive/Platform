@@ -177,7 +177,10 @@ export function permissionsFor(tier: StudioTier): readonly bigint[] {
 export function targetStudioRoleNames(role: Role, specialties: readonly Specialty[]): Set<string> {
     const names = new Set<string>();
 
-    if (role === Role.Admin || role === Role.SuperAdmin) {
+    if (role === Role.SuperAdmin) {
+        names.add("Producer");
+        names.add("Admin");
+    } else if (role === Role.Admin) {
         names.add("Admin");
     } else if (role === Role.Supervisor) {
         names.add("Supervisor");
