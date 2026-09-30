@@ -1,8 +1,9 @@
-import { initialTermsVersion, legalDocumentSlugs, type DocumentSectionDto, type DocumentSlug } from "@platform/contracts";
+import { initialTermsVersion, legalDocumentSlugs, NotificationType, type DocumentSectionDto, type DocumentSlug } from "@platform/contracts";
 import { and, desc, eq, inArray, max } from "drizzle-orm";
 import { BadRequestError, ConflictError, ErrorCode, NotFoundError } from "../../Common/Errors/ApplicationError.js";
 import type { UserActor } from "../../Common/Security/Principal.js";
 import type { Database } from "../../Infrastructure/Database/Database.js";
+import type { Notifier } from "../../Infrastructure/Notifications/Notification.js";
 import {
     documentRevisions,
     documents,
@@ -59,7 +60,10 @@ export function isLegalDocument(slug: DocumentSlug): boolean {
 export class DocumentsService implements LegalAcceptance {
     private cachedAcceptance: { readonly version: string; readonly expiresAt: number } | null = null;
 
-    public constructor(private readonly database: Database) {}
+    public constructor(
+        private readonly database: Database,
+        private readonly notifier?: Notifier
+    ) {}
 
     public async get(slug: DocumentSlug): Promise<DocumentView> {
         const [row] = await this.database
@@ -126,6 +130,15 @@ export class DocumentsService implements LegalAcceptance {
             this.cachedAcceptance = null;
         }
         const [author] = await this.database.select(authorColumns).from(users).where(eq(users.id, actor.userId)).limit(1);
+        this.notifier?.notify({
+            type: NotificationType.DocumentUpdated,
+            slug,
+            revision: published.revision,
+            title: published.title,
+            sections: published.sections.map((s) => ({ id: s.id, title: s.title, html: s.html })),
+            actor: { discordId: author?.discordId ?? null, username: author?.discordUsername ?? "SuperAdmin" },
+            note: update.note
+        });
         return this.toView(published, author ?? null);
     }
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DifficultyTier, EntryStatus, PollType, RaidFlag, RaidSeverity, ReviewDecision, Role, RoundStatus, Specialty } from "./Enums.js";
+import { DifficultyTier, DocumentSlug, EntryStatus, PollType, RaidFlag, RaidSeverity, ReviewDecision, Role, RoundStatus, Specialty } from "./Enums.js";
 import { snowflakeSchema, timestampSchema, uuidSchema } from "./Http.js";
 
 export enum NotificationType {
@@ -29,7 +29,8 @@ export enum NotificationType {
     SubmissionCreated = "submission.created",
     SubmissionReviewed = "submission.reviewed",
     PipelineUpdated = "pipeline.updated",
-    MediaFlaggedAi = "media.flagged_ai"
+    MediaFlaggedAi = "media.flagged_ai",
+    DocumentUpdated = "document.updated"
 }
 
 export const notificationPersonSchema = z.object({
@@ -193,6 +194,14 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
         author: notificationPersonSchema,
         flags: z.array(z.string()),
         snippet: z.string().nullable()
+    }),
+    notification(NotificationType.DocumentUpdated, {
+        slug: z.enum(DocumentSlug),
+        revision: z.number().int(),
+        title: z.string(),
+        sections: z.array(z.object({ id: z.string(), title: z.string(), html: z.string() })),
+        actor: notificationPersonSchema,
+        note: z.string().nullable()
     })
 ]);
 

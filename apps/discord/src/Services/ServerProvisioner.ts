@@ -37,6 +37,7 @@ const forumTagNames: Readonly<Record<ShotStatus, string>> = {
 };
 
 const channelNames: Readonly<Record<Exclude<ChannelPurpose, ChannelPurpose.TaskForum>, string>> = {
+    [ChannelPurpose.Rules]: "rules",
     [ChannelPurpose.Announcements]: "announcements",
     [ChannelPurpose.Telemetry]: "telemetry-alerts",
     [ChannelPurpose.TaskSubmissions]: "task-submissions",
@@ -44,16 +45,32 @@ const channelNames: Readonly<Record<Exclude<ChannelPurpose, ChannelPurpose.TaskF
 };
 
 const forumName = "tasks";
-const rulesChannelName = "studio-rules";
 
 export const studioRules = [
-    "## Studio rules",
-    "**Leadership seats hold one person.** Executive and department roles have a single seat. Assigning one with /assign-role moves it from the current holder.",
-    "**Assign roles through the bot.** /assign-role keeps Discord roles and platform permissions in sync. Manual role changes don't reach the platform.",
-    "**Reviews.** Department supervisors review submissions for their department. Approved work is locked and handed downstream.",
-    "**Contributor and community roles** have no seat limit.",
-    "**Disputes** go to the Producer and Creative Director."
-].join("\n\n");
+    "# 📜 Studio Guidelines & System Integrity",
+    "*Official community voting rules, mathematical invariants, and production workflow.*",
+    "",
+    "### 1. Community Philosophy & Roles",
+    "• **Voters (Community):** Democratic participation in film rounds and story pitches.",
+    "• **Contributors:** Claim 3D modeling, animation, layout, lighting, or sound tasks from the Grab-Box.",
+    "• **Supervisors & Admins:** Lead departments, QA deliverables, trigger binary polls, and audit integrity.",
+    "",
+    "### 2. Voting Math & Invariants",
+    "• **Ranked-Choice (3-2-1 Borda):** Top 3 choices receive 3, 2, and 1 point respectively (`6 points/ballot`).",
+    "• **Point Conservation Law:** `Total_Points = 6 × Total_Ballots` (strictly enforced by real-time invariants).",
+    "• **Bayesian Shrinkage (K=30):** Pulls low-sample spikes toward prior mean to prevent brigading takeovers.",
+    "",
+    "### 3. Anti-Cheat & Anomaly Telemetry",
+    "• **Velocity Z-Score (Z > 2.5):** Flags automated ballot surges within sliding 5-minute windows.",
+    "• **Shannon Rank Entropy (H < 0.35):** Detects coordinated bullet-voting rings.",
+    "• **Permanent Audit Ledger:** Certified election outcomes are signed and immutable.",
+    "",
+    "### 4. Contributor Grab-Box",
+    "• Claim tasks across 4 difficulty tiers.",
+    "• Deliverables require `.blend` scene source files and compressed video previews for supervisor review.",
+    "",
+    "-# Synced dynamically from web platform • [View Full Documentation](https://dev-api.seraphinteractive.com/documentation)"
+].join("\n");
 
 export class ServerProvisioner {
     public constructor(
@@ -215,7 +232,13 @@ export class ServerProvisioner {
             botAccess
         ]);
         const logs = await ensureText(channelNames[ChannelPurpose.TaskLogs], staff, "Task activity log.", privateOverwrites);
-        const rules = await ensureText(rulesChannelName, staff, "How roles and reviews work.", privateOverwrites);
+        const rules = await ensureText(
+            channelNames[ChannelPurpose.Rules],
+            platform,
+            "Community guidelines, voting invariants, and rules.",
+            readOnlyOverwrites
+        );
+        await rules.setPosition(0).catch(() => undefined);
 
         let forum = find(forumName, ChannelType.GuildForum) as ForumChannel | undefined;
         if (forum === undefined) {
@@ -233,12 +256,14 @@ export class ServerProvisioner {
         await this.ensureForumPermissions(forum);
         const tagged = await this.ensureForumTags(forum);
 
-        if ((await rules.messages.fetchPins()).items.length === 0) {
+        const pins = await rules.messages.fetchPinned().catch(() => null);
+        if (pins === null || pins.size === 0) {
             const posted = await rules.send(message(panel(null, studioRules)));
             await posted.pin().catch(() => undefined);
         }
 
         await this.settings.update((settings) => {
+            settings.channels[ChannelPurpose.Rules] = rules.id;
             settings.channels[ChannelPurpose.Announcements] = announcements.id;
             settings.channels[ChannelPurpose.Telemetry] = telemetry.id;
             settings.channels[ChannelPurpose.TaskSubmissions] = submissions.id;

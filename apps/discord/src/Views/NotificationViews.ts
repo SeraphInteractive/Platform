@@ -399,5 +399,65 @@ export function renderNotification(notification: PlatformNotification, context: 
                 )
             ];
         }
+        case NotificationType.DocumentUpdated: {
+            const noteText = notification.note !== null && notification.note.trim().length > 0 ? `\n-# Note: ${plain(notification.note, 200)}` : "";
+            return [
+                post(
+                    ChannelPurpose.TaskLogs,
+                    Accent.Info,
+                    `**Guidelines Updated (Rev #${notification.revision}): ${plain(notification.title)}**`,
+                    `Updated by ${person(notification.actor, isMember)}${noteText}`
+                ),
+                post(
+                    ChannelPurpose.Telemetry,
+                    Accent.Info,
+                    `**Document Published: ${plain(notification.title)} (Rev #${notification.revision})**`,
+                    `Published by ${person(notification.actor, isMember)}${noteText}`
+                )
+            ];
+        }
     }
+}
+
+export function htmlToDiscordMarkdown(html: string): string {
+    return html
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/p>\s*<p>/gi, "\n\n")
+        .replace(/<\/?p>/gi, "")
+        .replace(/<strong>(.*?)<\/strong>/gi, "**$1**")
+        .replace(/<b>(.*?)<\/b>/gi, "**$1**")
+        .replace(/<em>(.*?)<\/em>/gi, "*$1*")
+        .replace(/<i>(.*?)<\/i>/gi, "*$1*")
+        .replace(/<code>(.*?)<\/code>/gi, "`$1`")
+        .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/gi, "```\n$1\n```")
+        .replace(/<li>(.*?)<\/li>/gi, "• $1\n")
+        .replace(/<\/?ul>/gi, "\n")
+        .replace(/<\/?ol>/gi, "\n")
+        .replace(/<a\s+(?:[^>]*?\s+)?href="([^"]*)"[^>]*>(.*?)<\/a>/gi, "[$2]($1)")
+        .replace(/&gt;/gi, ">")
+        .replace(/&lt;/gi, "<")
+        .replace(/&amp;/gi, "&")
+        .replace(/&quot;/gi, '"')
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+}
+
+export function renderRulesMessage(notification: NotificationOf<NotificationType.DocumentUpdated>): V2Message {
+    const lines: string[] = [
+        `# 📜 ${notification.title}`,
+        `*Official guidelines, scoring invariants, and fair-play policies.*`,
+        ""
+    ];
+
+    for (const section of notification.sections) {
+        lines.push(`### ${section.title}`);
+        lines.push(htmlToDiscordMarkdown(section.html));
+        lines.push("");
+    }
+
+    lines.push(
+        `-# Revision ${notification.revision} • Synced automatically from web platform • [View Full Documentation](https://dev-api.seraphinteractive.com/documentation)`
+    );
+
+    return message(panel(Accent.Info, lines.join("\n").trim()));
 }

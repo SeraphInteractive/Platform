@@ -1,8 +1,8 @@
-import { EntryStatus, NotificationType, ReviewDecision, Role, ShotStatus, type PlatformNotification } from "@platform/contracts";
+import { DocumentSlug, EntryStatus, NotificationType, ReviewDecision, Role, ShotStatus, type PlatformNotification } from "@platform/contracts";
 import type { Client, SendableChannels } from "discord.js";
 import type { Logger } from "pino";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
-import { renderNotification } from "../Views/NotificationViews.js";
+import { renderNotification, renderRulesMessage } from "../Views/NotificationViews.js";
 import { reviewCard, threadUpdate } from "../Views/TaskViews.js";
 import { syncMemberStudioRoles } from "./StudioRoles.js";
 import type { TaskForum } from "./TaskForum.js";
@@ -170,6 +170,30 @@ export class NotificationDispatcher {
                     );
                 }
                 return;
+            case NotificationType.DocumentUpdated: {
+                if (notification.slug === DocumentSlug.Guidelines) {
+                    const rulesChannel = await this.channel(ChannelPurpose.Rules);
+                    if (rulesChannel !== null && "messages" in rulesChannel) {
+                        const existing = await rulesChannel.messages.fetch({ limit: 20 }).catch(() => null);
+                        if (existing !== null) {
+                            for (const msg of existing.values()) {
+                                if (msg.author.id === this.client.user?.id) {
+                                    await msg.delete().catch(() => undefined);
+                                }
+                            }
+                        }
+                        const posted = await rulesChannel.send(renderRulesMessage(notification)).catch((err) => {
+                            this.logger.error({ err }, "failed to post updated rules message");
+                            return null;
+                        });
+                        if (posted !== null) {
+                            await posted.pin().catch(() => undefined);
+                        }
+                        this.logger.info({ revision: notification.revision, slug: notification.slug }, "dynamically updated rules channel message");
+                    }
+                }
+                return;
+            }
             default:
                 return;
         }

@@ -1,5 +1,6 @@
 import {
     DifficultyTier,
+    DocumentSlug,
     EntryStatus,
     NotificationType,
     platformNotificationSchema,
@@ -16,7 +17,7 @@ import { MessageFlags } from "discord.js";
 import { describe, expect, it } from "vitest";
 import type { V2Message } from "../src/Discord/Ui.js";
 import { ChannelPurpose } from "../src/State/SettingsStore.js";
-import { renderNotification, type RenderedNotification } from "../src/Views/NotificationViews.js";
+import { htmlToDiscordMarkdown, renderNotification, renderRulesMessage, type RenderedNotification } from "../src/Views/NotificationViews.js";
 import { reviewCard, threadUpdate } from "../src/Views/TaskViews.js";
 
 const occurredAt = "2026-09-27T01:08:00.000Z";
@@ -338,6 +339,22 @@ describe("every notification", () => {
             author: voter,
             flags: ["Stable Diffusion generation parameters"],
             snippet: "A detailed 3d render"
+        },
+        {
+            type: NotificationType.DocumentUpdated,
+            occurredAt,
+            slug: DocumentSlug.Guidelines,
+            revision: 4,
+            title: "Community Guidelines & Invariants",
+            sections: [
+                {
+                    id: "voting-math",
+                    title: "Voting Math",
+                    html: "<p>3-2-1 Borda count with <code>6 * N</code> invariant.</p>"
+                }
+            ],
+            actor: admin,
+            note: "Updated Borda point conservation invariants"
         }
     ];
 
@@ -509,5 +526,42 @@ describe("task views", () => {
                 "-# Upload a new version with /submit-task when it's ready."
             ].join("\n")
         );
+    });
+});
+
+describe("rules views", () => {
+    it("converts rich html tags to discord markdown", () => {
+        const html = "<p>Rule <strong>one</strong>: <code>x &gt; 0</code> and <em>two</em>.</p><ul><li>Item A</li><li>Item B</li></ul>";
+        const converted = htmlToDiscordMarkdown(html);
+        expect(converted).toContain("**one**");
+        expect(converted).toContain("`x > 0`");
+        expect(converted).toContain("*two*");
+        expect(converted).toContain("• Item A");
+        expect(converted).toContain("• Item B");
+    });
+
+    it("renders dynamic rules message for single-message channel pins", () => {
+        const notification = {
+            type: NotificationType.DocumentUpdated as const,
+            occurredAt,
+            slug: DocumentSlug.Guidelines,
+            revision: 3,
+            title: "Studio Guidelines & Math",
+            sections: [
+                {
+                    id: "math",
+                    title: "Borda Count",
+                    html: "<p>Points = <code>6 * N</code></p>"
+                }
+            ],
+            actor: admin,
+            note: null
+        };
+        const rendered = renderRulesMessage(notification);
+        const text = texts(rendered).join("\n");
+        expect(text).toContain("# 📜 Studio Guidelines & Math");
+        expect(text).toContain("### Borda Count");
+        expect(text).toContain("Points = `6 * N`");
+        expect(text).toContain("Revision 3");
     });
 });

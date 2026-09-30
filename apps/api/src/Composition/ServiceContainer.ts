@@ -72,7 +72,7 @@ export function createServiceContainer(
     const { database, keyValueStore, eventBus, notifier, objectStorage } = infrastructure;
     const leaderboardCache = new LeaderboardCache(keyValueStore);
     const tokenService = new TokenService(database, configuration.security, logger);
-    const documentsService = new DocumentsService(database);
+    const documentsService = new DocumentsService(database, notifier);
     const raidMonitor = new RaidMonitor(database, keyValueStore, eventBus, notifier, leaderboardCache, logger, options.raidMonitor);
 
     return {

@@ -4,6 +4,7 @@ import { ShotStatus, enumValues, notificationStreamIdPattern } from "@platform/c
 import { z } from "zod";
 
 export enum ChannelPurpose {
+    Rules = "rules",
     Announcements = "announcements",
     Telemetry = "telemetry",
     TaskLogs = "taskLogs",
