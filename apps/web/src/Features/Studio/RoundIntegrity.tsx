@@ -17,7 +17,7 @@ import { useApprovedEntries } from "@/Features/Voting/UseApprovedEntries";
 import { StreamState, useRoundEvents, type RoundEvent } from "@/Hooks/UseRoundEvents";
 import { formatDateTime, formatNumber, formatPercent } from "@/Lib/Format";
 import { cn } from "@/Lib/Utils";
-import { InvarianceSummary, NetworkChart, ScatterChart } from "./TelemetryCharts";
+import { InvarianceSummary, NetworkMonitor, ScatterChart } from "./TelemetryCharts";
 
 const severityTones: Readonly<Record<RaidSeverity, Tone>> = {
     [RaidSeverity.Normal]: Tone.Neutral,
@@ -310,22 +310,8 @@ export function RoundIntegrity({ roundId, live, defaultTab = "raid" }: RoundInte
                 </TabsContent>
 
                 <TabsContent value="network" className="space-y-6">
-                    <Section title="Ballot Co-Occurrence & Flow Network">
-                        {leaderboard.isPending ? (
-                            <LoadingRows rows={4} />
-                        ) : leaderboard.isError ? (
-                            <ErrorState error={leaderboard.error} onRetry={() => void leaderboard.refetch()} />
-                        ) : (
-                            <NetworkChart
-                                items={leaderboard.data?.items ?? []}
-                                telemetryList={telemetry.data ?? []}
-                                events={roundEvents.events}
-                                onSelectEntry={(entryId) => {
-                                    const match = (telemetry.data ?? []).find((t) => t.entryId === entryId);
-                                    if (match) setSelected(match);
-                                }}
-                            />
-                        )}
+                    <Section title="API & Infrastructure Responsiveness Monitor">
+                        <NetworkMonitor />
                     </Section>
                 </TabsContent>
             </Tabs>
