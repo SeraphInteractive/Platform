@@ -12,18 +12,23 @@ export const defaultDocuments: Readonly<Record<DocumentSlug, DefaultDocument>> =
         sections: [
             {
                 id: "overview",
-                title: "Overview",
-                html: "<p>Project Stairway is a community-made animated film. Vote on the story, claim production tasks and follow the roadmap.</p>"
+                title: "Overview & Roles",
+                html: "<p>Project Stairway is a collaborative community-driven animated film. Decisions are made through verified community voting and executed by skilled contributors.</p><ul><li><strong>Voters (Community):</strong> Participate in democratic election rounds and pitch concept proposals.</li><li><strong>Contributors:</strong> Claim production tasks (3D modeling, animation, layout, lighting, sound) from the grab-box.</li><li><strong>Supervisors & Admins:</strong> Curate submissions, QA deliverables, trigger quick polls, and audit integrity.</li></ul>"
             },
             {
-                id: "voting",
-                title: "Voting",
-                html: "<p>Verify your email to become a voter. One person, one account, one ballot per round.</p>"
+                id: "voting-math",
+                title: "Voting Math & Point Invariance",
+                html: "<p>Creative elections use a 3-2-1 positional Borda count where voters rank their top 3 favorites (1st = 3 pts, 2nd = 2 pts, 3rd = 1 pt). Every election obeys the total point conservation invariant: <code>Total_Points = 6 × Total_Ballots</code>. To prevent early-vote volatility and small-sample brigading, scores are regularized via Bayesian shrinkage with prior weight K = 30.</p>"
             },
             {
-                id: "contributing",
-                title: "Contributing",
-                html: '<p>Contributors claim tasks from the <a href="/grabbox">grab-box</a> and submit work for review.</p>'
+                id: "anti-cheat",
+                title: "Anti-Cheat & Anomaly Telemetry",
+                html: "<p>Active elections run continuous statistical telemetry. Coordinated botting or brigading is detected in real time using <strong>Velocity Z-Scores</strong> (flagging sudden ballot arrival spikes with Z > 2.5), <strong>Shannon Rank Entropy</strong> (flagging collapsed bullet-voting rings with H < 0.35), and co-occurrence graph clustering. Once certified, election outcomes are cryptographically signed into the permanent ledger.</p>"
+            },
+            {
+                id: "pipeline",
+                title: "Contributor Grab-Box & QA Pipeline",
+                html: '<p>Contributors claim production shots from the <a href="/grabbox">grab-box</a> across 4 difficulty tiers. Deliverables require inspectable <code>.blend</code> source project files and compressed video previews. Submissions undergo supervisor quality assurance, AI heuristic screening, and direct feedback in linked Discord threads.</p>'
             }
         ]
     },
