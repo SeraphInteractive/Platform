@@ -96,7 +96,7 @@ export function createServiceContainer(
         roundsService: new RoundsService(database, notifier, leaderboardCache),
         leaderboardService: new LeaderboardService(database, leaderboardCache, eventBus, notifier, objectStorage),
         entriesService: new EntriesService(database, notifier, objectStorage, configuration.storage, leaderboardCache),
-        ballotsService: new BallotsService(database, keyValueStore, eventBus, notifier, raidMonitor, configuration.security.appKey),
+        ballotsService: new BallotsService(database, keyValueStore, eventBus, notifier, raidMonitor),
         raidMonitor,
         shotsService: new ShotsService(database, notifier, objectStorage, configuration.storage),
         reviewsService: new ReviewsService(database, notifier, objectStorage),

@@ -81,20 +81,22 @@ function Ledger({ roundId, entries }: { readonly roundId: string; readonly entri
     }
     return (
         <div className="space-y-2">
-            <p className="text-muted-foreground text-xs">Every counted ballot under a pseudonym, so anyone can re-tally the result.</p>
+            <p className="text-muted-foreground text-xs">Supervisor audit ledger displaying recorded voter Discord IDs and picks.</p>
             <div className="overflow-x-auto border">
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Voter</TableHead>
+                            <TableHead>Discord User</TableHead>
+                            <TableHead>Discord ID</TableHead>
                             <TableHead>Picks</TableHead>
                             <TableHead className="text-right">Cast</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {ledger.data.data.map((row) => (
-                            <TableRow key={row.voter}>
-                                <TableCell className="text-muted-foreground max-w-32 truncate">{row.voter}</TableCell>
+                            <TableRow key={`${row.discordId}-${row.castAt}`}>
+                                <TableCell className="font-medium truncate max-w-40">@{row.discordUsername}</TableCell>
+                                <TableCell className="text-muted-foreground font-mono text-xs">{row.discordId}</TableCell>
                                 <TableCell className="max-w-96">
                                     <ol className="space-y-0.5">
                                         {row.picks.map((pick, index) => (
@@ -120,6 +122,7 @@ function RoundDetail({ round }: { readonly round: RoundDetailDto }): ReactNode {
     const entries = useApprovedEntries(round.id);
     useBreadcrumbLabel(round.id, round.title);
     const canPropose = user !== null && round.status === RoundStatus.Open && round.pollType !== PollType.Binary;
+    const isSupervisor = hasAtLeast(user, Role.Supervisor);
     const [tab, setTab] = useState(round.isAcceptingVotes ? "vote" : round.status === RoundStatus.Finalized ? "standings" : "entries");
 
     return (
@@ -168,7 +171,7 @@ function RoundDetail({ round }: { readonly round: RoundDetailDto }): ReactNode {
                     <TabsTrigger value="vote">{round.isAcceptingVotes ? "Your vote" : "Vote"}</TabsTrigger>
                     <TabsTrigger value="entries">Entries</TabsTrigger>
                     <TabsTrigger value="standings">{round.status === RoundStatus.Finalized ? "Results" : "Standings"}</TabsTrigger>
-                    <TabsTrigger value="ledger">Ledger</TabsTrigger>
+                    {isSupervisor && <TabsTrigger value="ledger">Ledger</TabsTrigger>}
                 </TabsList>
                 <TabsContent value="vote">
                     <BallotPanel round={round} />
@@ -179,9 +182,11 @@ function RoundDetail({ round }: { readonly round: RoundDetailDto }): ReactNode {
                 <TabsContent value="standings">
                     <Standings round={round} />
                 </TabsContent>
-                <TabsContent value="ledger">
-                    <Ledger roundId={round.id} entries={entries.data ?? []} />
-                </TabsContent>
+                {isSupervisor && (
+                    <TabsContent value="ledger">
+                        <Ledger roundId={round.id} entries={entries.data ?? []} />
+                    </TabsContent>
+                )}
             </Tabs>
         </>
     );

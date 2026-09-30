@@ -108,7 +108,8 @@ export const ballotSchema = z
 
 export const ledgerBallotSchema = z
     .object({
-        voter: z.string().describe("Pseudonymous voter identifier, stable within a round."),
+        discordId: z.string().describe("Voter Discord Snowflake ID."),
+        discordUsername: z.string().describe("Voter current Discord username."),
         picks: z.array(uuidSchema),
         castAt: timestampSchema,
         updatedAt: timestampSchema

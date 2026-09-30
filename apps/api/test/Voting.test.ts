@@ -166,10 +166,36 @@ describe("voting rounds", () => {
         expect(leaderboard.isConserved).toBe(true);
         expect(leaderboard.items[0]).toMatchObject({ entryId: b, rawScore: 6 });
 
-        const ledger = await context.application.inject({ method: "GET", url: `/api/v1/rounds/${roundId}/ballots` });
-        const ledgerBody = ledger.body;
-        expect(ledgerBody).not.toContain(voter.record.id);
-        expect(json<{ data: { voter: string }[] }>(ledger).data).toHaveLength(2);
+        // public / non-supervisor cannot access ledger
+        const unauthed = await context.application.inject({ method: "GET", url: `/api/v1/rounds/${roundId}/ballots` });
+        expect(unauthed.statusCode).toBe(401);
+
+        const voterLedger = await context.application.inject({
+            method: "GET",
+            url: `/api/v1/rounds/${roundId}/ballots`,
+            headers: voter.headers
+        });
+        expect(voterLedger.statusCode).toBe(403);
+
+        const ledger = await context.application.inject({
+            method: "GET",
+            url: `/api/v1/rounds/${roundId}/ballots`,
+            headers: supervisor.headers
+        });
+        expect(ledger.statusCode).toBe(200);
+        const ledgerData = json<{ data: { discordId: string; discordUsername: string; picks: string[] }[] }>(ledger).data;
+        expect(ledgerData).toHaveLength(2);
+        expect(ledgerData.some((row) => row.discordId === voter.record.discordId && row.discordUsername === voter.record.discordUsername)).toBe(true);
+
+        // updates dynamically if user changes discord username
+        await context.database.update(users).set({ discordUsername: "renamed_voter" }).where(eq(users.id, voter.record.id));
+        const updatedLedger = await context.application.inject({
+            method: "GET",
+            url: `/api/v1/rounds/${roundId}/ballots`,
+            headers: supervisor.headers
+        });
+        const updatedData = json<{ data: { discordId: string; discordUsername: string }[] }>(updatedLedger).data;
+        expect(updatedData.some((row) => row.discordId === voter.record.discordId && row.discordUsername === "renamed_voter")).toBe(true);
 
         // cannot backtrack state from voting to open
         expect(await setRoundStatus(roundId, RoundStatus.Open)).toBe(409);
@@ -222,6 +248,17 @@ describe("voting rounds", () => {
         ).data;
         expect(leaderboard.totalBallots).toBe(1);
         expect(leaderboard.items[0]).toMatchObject({ entryId: yes, voteSharePercentage: 100 });
+
+        const binaryLedger = await context.application.inject({
+            method: "GET",
+            url: `/api/v1/rounds/${roundId}/ballots`,
+            headers: supervisor.headers
+        });
+        expect(binaryLedger.statusCode).toBe(200);
+        const binaryData = json<{ data: { discordId: string; picks: string[] }[] }>(binaryLedger).data;
+        expect(binaryData).toHaveLength(1);
+        expect(binaryData[0]?.discordId).toBe(honest.record.discordId);
+        expect(binaryData[0]?.picks).toEqual([yes]);
     });
 
     it("does not quarantine a popular binary option", async () => {

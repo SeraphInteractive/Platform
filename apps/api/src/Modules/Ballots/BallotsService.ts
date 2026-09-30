@@ -3,7 +3,6 @@ import { and, asc, count, eq } from "drizzle-orm";
 import { ConflictError, ErrorCode, ForbiddenError, NotFoundError, UnprocessableError } from "../../Common/Errors/ApplicationError.js";
 import { createPage, offsetOf, type Page, type PaginationQuery } from "../../Common/Http/Schemas.js";
 import type { AuthenticatedUser } from "../../Common/Security/Principal.js";
-import { hmacHex } from "../../Common/Security/Secrets.js";
 import { EntryStatus, RoundStatus } from "../../Domain/Enums.js";
 import type { KeyValueStore } from "../../Infrastructure/Cache/KeyValueStore.js";
 import type { Database } from "../../Infrastructure/Database/Database.js";
@@ -15,7 +14,8 @@ import { canSeeDrafts } from "../Rounds/RoundVisibility.js";
 import type { RaidMonitor } from "../Telemetry/RaidMonitor.js";
 
 export interface LedgerRow {
-    readonly voter: string;
+    readonly discordId: string;
+    readonly discordUsername: string;
     readonly picks: readonly string[];
     readonly castAt: Date;
     readonly updatedAt: Date;
@@ -34,8 +34,7 @@ export class BallotsService {
         private readonly store: KeyValueStore,
         private readonly eventBus: EventBus,
         private readonly notifier: Notifier,
-        private readonly raidMonitor: RaidMonitor,
-        private readonly pseudonymKey: string
+        private readonly raidMonitor: RaidMonitor
     ) {}
 
     public async cast(voter: AuthenticatedUser, roundId: string, picks: readonly string[]): Promise<BallotRecord> {
@@ -135,7 +134,8 @@ export class BallotsService {
         const [rows, totals] = await Promise.all([
             this.database
                 .select({
-                    voterId: ballots.voterId,
+                    discordId: users.discordId,
+                    discordUsername: users.discordUsername,
                     rank1EntryId: ballots.rank1EntryId,
                     rank2EntryId: ballots.rank2EntryId,
                     rank3EntryId: ballots.rank3EntryId,
@@ -152,7 +152,8 @@ export class BallotsService {
         ]);
         return createPage(
             rows.map((row) => ({
-                voter: hmacHex(this.pseudonymKey, `${roundId}:${row.voterId}`, 32),
+                discordId: row.discordId,
+                discordUsername: row.discordUsername,
                 picks: picksOf(row),
                 castAt: row.createdAt,
                 updatedAt: row.updatedAt
