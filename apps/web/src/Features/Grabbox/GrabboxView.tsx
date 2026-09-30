@@ -63,7 +63,7 @@ export function GrabboxView(): ReactNode {
         }
     }, [legacyShotId, router]);
 
-    const [status, setStatus] = useState<ShotStatus | typeof anyValue>(ShotStatus.Available);
+    const [status, setStatus] = useState<ShotStatus | typeof anyValue>(anyValue);
     const [difficulty, setDifficulty] = useState<DifficultyTier | typeof anyValue>(anyValue);
     const [scene, setScene] = useState("");
     const [page, setPage] = useState(1);
