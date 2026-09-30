@@ -83,6 +83,46 @@ export const studioRoles: readonly StudioRole[] = Object.freeze([
 ]);
 
 export const contributorRoleName = "General Contributors";
+export const legacyStudioRoleNames: readonly string[] = Object.freeze(["Observer", "observer", "Unverified", "unverified"]);
+
+export const roleAliases: Readonly<Record<string, string>> = {
+    supervisors: "Supervisor",
+    supervisor: "Supervisor",
+    contributors: "General Contributors",
+    contributor: "General Contributors",
+    generalcontributors: "General Contributors",
+    generalcontributor: "General Contributors",
+    voter: "Voters",
+    voters: "Voters",
+    animator: "Animators",
+    animators: "Animators",
+    layoutartist: "Layout Artists",
+    layoutartists: "Layout Artists",
+    "3dmodeler": "3D Modelers",
+    "3dmodelers": "3D Modelers",
+    modeler: "3D Modelers",
+    modelers: "3D Modelers",
+    rigger: "Riggers",
+    riggers: "Riggers",
+    surfacetextureartist: "Surface / Texture Artists",
+    surfacetextureartists: "Surface / Texture Artists",
+    lightingartist: "Lighting Artists",
+    lightingartists: "Lighting Artists",
+    vfxartist: "VFX Artists",
+    vfxartists: "VFX Artists",
+    conceptartist: "Concept Artists",
+    conceptartists: "Concept Artists",
+    voiceactor: "Voice Actors",
+    voiceactors: "Voice Actors",
+    sounddesigner: "Sound Designers",
+    sounddesigners: "Sound Designers",
+    videoeditor: "Video Editors",
+    videoeditors: "Video Editors",
+    producer: "Producer",
+    producers: "Producer",
+    admin: "Admin",
+    admins: "Admin"
+};
 
 export function normalizeName(name: string): string {
     return name.toLowerCase().replace(/[^a-z0-9]/gu, "");
@@ -90,7 +130,19 @@ export function normalizeName(name: string): string {
 
 export function findStudioRole(name: string): StudioRole | undefined {
     const normalized = normalizeName(name);
+    const alias = roleAliases[normalized];
+    if (alias !== undefined) {
+        return studioRoles.find((role) => role.name === alias);
+    }
     return studioRoles.find((role) => normalizeName(role.name) === normalized);
+}
+
+export function isStudioOrLegacyRole(name: string): boolean {
+    if (findStudioRole(name) !== undefined) {
+        return true;
+    }
+    const norm = normalizeName(name);
+    return legacyStudioRoleNames.some((legacy) => normalizeName(legacy) === norm);
 }
 
 export function platformRoleFor(tier: StudioTier): Role {
@@ -156,22 +208,48 @@ export async function syncMemberStudioRoles(
 ): Promise<void> {
     const targetNames = targetStudioRoleNames(role, specialties);
     const guildRoles = await member.guild.roles.fetch();
+    const rolesList = Array.from(guildRoles.values());
 
     const toAdd: string[] = [];
     const toRemove: string[] = [];
 
-    for (const [, guildRole] of guildRoles) {
-        const studio = findStudioRole(guildRole.name);
-        if (studio === undefined) {
+    // identify target studio roles to add
+    for (const targetName of targetNames) {
+        const guildRole = rolesList.find((r) => findStudioRole(r.name)?.name === targetName);
+        if (guildRole !== undefined) {
+            if (!member.roles.cache.has(guildRole.id)) {
+                toAdd.push(guildRole.id);
+            }
+        } else {
+            // auto-create role if missing from server
+            const definition = studioRoles.find((r) => r.name === targetName);
+            if (definition !== undefined) {
+                const created = await member.guild.roles.create({
+                    name: definition.name,
+                    colors: { primaryColor: definition.color },
+                    hoist: definition.tier !== StudioTier.Community,
+                    mentionable: definition.tier !== StudioTier.Community,
+                    permissions: [...permissionsFor(definition.tier)],
+                    reason: "Studio role auto-provision"
+                }).catch(() => null);
+                if (created !== null) {
+                    toAdd.push(created.id);
+                }
+            }
+        }
+    }
+
+    // strip obsolete studio roles and legacy roles
+    for (const guildRole of rolesList) {
+        if (!isStudioOrLegacyRole(guildRole.name)) {
             continue;
         }
 
-        const shouldHave = targetNames.has(studio.name);
+        const studio = findStudioRole(guildRole.name);
+        const shouldHave = studio !== undefined && targetNames.has(studio.name);
         const hasRole = member.roles.cache.has(guildRole.id);
 
-        if (shouldHave && !hasRole) {
-            toAdd.push(guildRole.id);
-        } else if (!shouldHave && hasRole) {
+        if (!shouldHave && hasRole) {
             toRemove.push(guildRole.id);
         }
     }

@@ -113,7 +113,29 @@ describe("syncMemberStudioRoles", () => {
         await syncMemberStudioRoles(member, Role.Contributor, [Specialty.Animator]);
 
         expect(removed).toEqual(["1"]);
-        expect(added).toEqual(["2", "3"]);
+        expect(new Set(added)).toEqual(new Set(["2", "3"]));
+        expect(heldRoles.has("99")).toBe(true);
+    });
+
+    it("strips legacy Observer role and supports alias matching", async () => {
+        const guildRoles = new Map<string, DiscordRole>([
+            ["10", createMockDiscordRole("10", "Observer")],
+            ["20", createMockDiscordRole("20", "Supervisors")],
+            ["30", createMockDiscordRole("30", "Animator")],
+            ["99", createMockDiscordRole("99", "VIP")]
+        ]);
+
+        const heldRoles = new Map<string, DiscordRole>([
+            ["10", guildRoles.get("10")!],
+            ["99", guildRoles.get("99")!]
+        ]);
+
+        const { member, added, removed } = createMockMember(heldRoles, guildRoles);
+
+        await syncMemberStudioRoles(member, Role.Supervisor, [Specialty.Animator]);
+
+        expect(removed).toEqual(["10"]);
+        expect(new Set(added)).toEqual(new Set(["20", "30"]));
         expect(heldRoles.has("99")).toBe(true);
     });
 });
