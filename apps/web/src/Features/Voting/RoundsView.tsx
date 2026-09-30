@@ -45,16 +45,18 @@ function Schedule({ round }: { readonly round: RoundDto }): ReactNode {
 }
 
 export function RoundsView(): ReactNode {
-    const { user } = useSession();
+    const { user, isLoading } = useSession();
+    const isSupervisor = !isLoading && hasAtLeast(user, Role.Supervisor);
     const [status, setStatus] = useState<RoundStatus>(RoundStatus.Open);
     const [page, setPage] = useState(1);
-    const query = { status, page, perPage: 25 };
+    const activeStatus = !isSupervisor && status === RoundStatus.Draft ? RoundStatus.Open : status;
+    const query = { status: activeStatus, page, perPage: 25 };
     const rounds = useQuery({
         queryKey: queryKeys.rounds(query),
         queryFn: () => platformApi.rounds(query),
         placeholderData: keepPreviousData
     });
-    const filters = hasAtLeast(user, Role.Moderator) ? filterOrder : filterOrder.filter((item) => item !== RoundStatus.Draft);
+    const filters = isSupervisor ? filterOrder : filterOrder.filter((item) => item !== RoundStatus.Draft);
 
     return (
         <>
@@ -76,7 +78,7 @@ export function RoundsView(): ReactNode {
                 <ToggleGroup
                     type="single"
                     size="sm"
-                    value={status}
+                    value={activeStatus}
                     onValueChange={(value) => {
                         if (value !== "") {
                             setStatus(value as RoundStatus);

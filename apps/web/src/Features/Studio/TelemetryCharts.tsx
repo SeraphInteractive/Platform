@@ -372,8 +372,7 @@ import {
     Radio,
     Vote,
     Briefcase,
-    ShieldCheck,
-    FileText
+    ShieldCheck
 } from "lucide-react";
 import { useEffect, useRef, useCallback } from "react";
 import { Button } from "@/Components/Ui/button";
@@ -471,15 +470,6 @@ const INITIAL_ENDPOINTS: readonly Omit<
         tag: "AUTH & IDENTITY",
         description: "Cookie token validation & user profile",
         icon: ShieldCheck
-    },
-    {
-        id: "legal-docs",
-        name: "Legal Documents",
-        group: "public",
-        path: "/api/v1/documents/terms",
-        tag: "STATIC CACHE",
-        description: "Guidelines & terms publication outlet",
-        icon: FileText
     }
 ];
 
@@ -763,9 +753,6 @@ export function NetworkMonitor(): ReactNode {
                                 {endpoints.length} OUTLETS
                             </span>
                         </div>
-                        <p className="text-muted-foreground text-xs">
-                            Continuous 2.5s streaming diagnostic of cluster infrastructure and public HTTP outlets.
-                        </p>
                     </div>
                 </div>
 
@@ -812,12 +799,9 @@ export function NetworkMonitor(): ReactNode {
 
             {/* group 1: deep infrastructure */}
             <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Database className="text-muted-foreground size-4" />
-                        <h3 className="text-sm font-semibold text-foreground">Deep Infrastructure</h3>
-                    </div>
-                    <span className="text-muted-foreground text-xs font-mono">Kernel, Datastore & Cache</span>
+                <div className="flex items-center gap-2">
+                    <Database className="text-muted-foreground size-4" />
+                    <h3 className="text-sm font-semibold text-foreground">Deep Infrastructure</h3>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -897,12 +881,9 @@ export function NetworkMonitor(): ReactNode {
 
             {/* group 2: public outlets */}
             <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Radio className="text-muted-foreground size-4" />
-                        <h3 className="text-sm font-semibold text-foreground">Public Outlets & Gateways</h3>
-                    </div>
-                    <span className="text-muted-foreground text-xs font-mono">Client-facing HTTP Endpoints</span>
+                <div className="flex items-center gap-2">
+                    <Radio className="text-muted-foreground size-4" />
+                    <h3 className="text-sm font-semibold text-foreground">Public Outlets & Gateways</h3>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

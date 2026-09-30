@@ -195,6 +195,7 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
             api.get("/openapi.json", { schema: { hide: true }, preHandler: requireRole(Role.Moderator) }, async () =>
                 application.swagger()
             );
+            await api.register(healthRoutes, { services });
             await api.register(authRoutes, { services });
             await api.register(usersRoutes, { services });
             await api.register(roundsRoutes, { services });
