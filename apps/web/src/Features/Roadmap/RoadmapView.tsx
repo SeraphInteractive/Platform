@@ -36,6 +36,7 @@ export function PipelineSummary({ progress }: { readonly progress: PipelineProgr
 }
 
 function UpdateProgress({ progress }: { readonly progress: PipelineProgressDto }): ReactNode {
+    const { user } = useSession();
     const queryClient = useQueryClient();
     const [selected, setSelected] = useState(String(progress.stepIndex));
     const step = pipelineSteps[Number(selected)];
@@ -47,7 +48,7 @@ function UpdateProgress({ progress }: { readonly progress: PipelineProgressDto }
             toast.success(`The roadmap now shows step ${updated.stepId}, ${updated.stepTitle}.`);
         }
     });
-    if (step === undefined) {
+    if (!hasAtLeast(user, Role.Supervisor) || step === undefined) {
         return null;
     }
     const isPhaseTransition = step.phaseNumber !== currentPhase && step.index > progress.stepIndex;
@@ -169,7 +170,7 @@ function Timeline({ currentIndex }: { readonly currentIndex: number }): ReactNod
 }
 
 export function RoadmapView(): ReactNode {
-    const { user } = useSession();
+    const { user, isLoading } = useSession();
     const pipeline = useQuery({ queryKey: queryKeys.pipeline, queryFn: () => platformApi.pipeline() });
 
     return (
@@ -191,7 +192,7 @@ export function RoadmapView(): ReactNode {
                             )}
                         </CardContent>
                     </Card>
-                    {hasAtLeast(user, Role.Supervisor) && <UpdateProgress key={pipeline.data.stepIndex} progress={pipeline.data} />}
+                    {!isLoading && hasAtLeast(user, Role.Supervisor) && <UpdateProgress key={pipeline.data.stepIndex} progress={pipeline.data} />}
                     <Timeline currentIndex={pipeline.data.stepIndex} />
                 </div>
             )}
