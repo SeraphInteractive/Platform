@@ -2,7 +2,7 @@
 
 import { PollType, Role, type EntryDto, type RoundDetailDto } from "@platform/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Check, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, GripVertical, X } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -16,7 +16,7 @@ import { Button } from "@/Components/Ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/Components/Ui/card";
 import { useSession } from "@/Hooks/UseSession";
 import { formatDateTime } from "@/Lib/Format";
-import { movePick, samePicks, togglePick } from "@/Lib/Ranking";
+import { insertPickAt, movePick, samePicks, togglePick } from "@/Lib/Ranking";
 import { hasAtLeast } from "@/Lib/Roles";
 import { cn } from "@/Lib/Utils";
 import { EntryMedia } from "./EntryMedia";
@@ -44,6 +44,8 @@ function BallotEditor({ round, entries, savedPicks }: BallotEditorProps): ReactN
     const required = requiredPicks[round.pollType];
     const eligibleIds = useMemo(() => new Set(entries.map((entry) => entry.id)), [entries]);
     const [picks, setPicks] = useState<string[]>(() => (savedPicks ?? []).filter((pick) => eligibleIds.has(pick)));
+    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+    const [draggedEntryId, setDraggedEntryId] = useState<string | null>(null);
     const entriesById = useMemo(() => new Map(entries.map((entry) => [entry.id, entry])), [entries]);
 
     const cast = useMutation({
@@ -71,21 +73,67 @@ function BallotEditor({ round, entries, savedPicks }: BallotEditorProps): ReactN
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-sm">Your ranking</CardTitle>
-                        <CardDescription>Pick exactly {required} entries, best first.</CardDescription>
+                        <CardDescription>Drag and drop entries into rank slots or pick exactly {required} entries, best first.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <ol className="space-y-2">
                             {Array.from({ length: required }, (_, index) => {
                                 const pick = picks[index];
                                 const entry = pick === undefined ? undefined : entriesById.get(pick);
+                                const isHovered = dragOverIndex === index;
                                 return (
-                                    <li key={index} className="flex items-center gap-2 border px-3 py-2 text-sm">
+                                    <li
+                                        key={index}
+                                        draggable={pick !== undefined && !cast.isPending}
+                                        onDragStart={(e) => {
+                                            if (!pick) return;
+                                            e.dataTransfer.setData("application/x-project-stairway-entry", pick);
+                                            e.dataTransfer.effectAllowed = "move";
+                                            setDraggedEntryId(pick);
+                                        }}
+                                        onDragEnd={() => {
+                                            setDraggedEntryId(null);
+                                            setDragOverIndex(null);
+                                        }}
+                                        onDragOver={(e) => {
+                                            e.preventDefault();
+                                            e.dataTransfer.dropEffect = "move";
+                                        }}
+                                        onDragEnter={(e) => {
+                                            e.preventDefault();
+                                            setDragOverIndex(index);
+                                        }}
+                                        onDragLeave={(e) => {
+                                            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                                                setDragOverIndex((curr) => (curr === index ? null : curr));
+                                            }
+                                        }}
+                                        onDrop={(e) => {
+                                            e.preventDefault();
+                                            const entryId = e.dataTransfer.getData("application/x-project-stairway-entry");
+                                            if (entryId && eligibleIds.has(entryId)) {
+                                                setPicks((current) => insertPickAt(current, entryId, index, required));
+                                            }
+                                            setDragOverIndex(null);
+                                            setDraggedEntryId(null);
+                                        }}
+                                        className={cn(
+                                            "flex items-center gap-2 border px-3 py-2 text-sm transition-colors",
+                                            pick !== undefined && "cursor-grab active:cursor-grabbing",
+                                            isHovered ? "border-primary bg-primary/10 border-dashed" : "border-border",
+                                            draggedEntryId === pick && "opacity-50"
+                                        )}
+                                    >
                                         <span className="text-muted-foreground w-6 tabular-nums">#{index + 1}</span>
                                         <span className={cn("flex-1 truncate", entry === undefined && "text-muted-foreground")}>
-                                            {entry?.title ?? "Empty"}
+                                            {isHovered ? (
+                                                <span className="text-primary font-medium">Drop to set #{index + 1}</span>
+                                            ) : (
+                                                (entry?.title ?? "Empty")
+                                            )}
                                         </span>
                                         {pick !== undefined && (
-                                            <div className="flex gap-1">
+                                            <div className="flex items-center gap-1">
                                                 <Button
                                                     size="icon-xs"
                                                     variant="ghost"
@@ -133,9 +181,33 @@ function BallotEditor({ round, entries, savedPicks }: BallotEditorProps): ReactN
                     const isPicked = position >= 0;
                     return (
                         <li key={entry.id} className="min-w-0">
-                            <Card className={cn("h-full min-w-0 overflow-hidden", isPicked && "border-foreground")}>
+                            <Card
+                                draggable={!cast.isPending}
+                                onDragStart={(e) => {
+                                    e.dataTransfer.setData("application/x-project-stairway-entry", entry.id);
+                                    e.dataTransfer.effectAllowed = "copyMove";
+                                    setDraggedEntryId(entry.id);
+                                }}
+                                onDragEnd={() => {
+                                    setDraggedEntryId(null);
+                                    setDragOverIndex(null);
+                                }}
+                                className={cn(
+                                    "h-full min-w-0 overflow-hidden transition-all",
+                                    round.pollType === PollType.RankedChoice && "cursor-grab active:cursor-grabbing",
+                                    isPicked && "border-foreground",
+                                    draggedEntryId === entry.id && "opacity-50"
+                                )}
+                            >
                                 <CardHeader className="min-w-0 overflow-hidden break-words [overflow-wrap:anywhere]">
-                                    <CardTitle className="text-sm min-w-0 break-words [overflow-wrap:anywhere] [word-break:break-word]">{entry.title}</CardTitle>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <CardTitle className="text-sm min-w-0 break-words [overflow-wrap:anywhere] [word-break:break-word]">
+                                            {entry.title}
+                                        </CardTitle>
+                                        {round.pollType === PollType.RankedChoice && (
+                                            <GripVertical className="text-muted-foreground/60 h-4 w-4 shrink-0" />
+                                        )}
+                                    </div>
                                     {entry.description !== null && (
                                         <MarkdownText className="text-muted-foreground text-sm min-w-0 break-words [overflow-wrap:anywhere] [word-break:break-word]">{entry.description}</MarkdownText>
                                     )}

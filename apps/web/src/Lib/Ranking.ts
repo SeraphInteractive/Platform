@@ -21,6 +21,15 @@ export function movePick(picks: readonly string[], index: number, offset: number
     return next;
 }
 
+export function insertPickAt(picks: readonly string[], entryId: string, targetIndex: number, maxPicks: number): string[] {
+    // remove existing occurrence if already picked
+    const withoutEntry = picks.filter((pick) => pick !== entryId);
+    const clampedIndex = Math.max(0, Math.min(targetIndex, withoutEntry.length));
+    const next = [...withoutEntry];
+    next.splice(clampedIndex, 0, entryId);
+    return next.slice(0, maxPicks);
+}
+
 export function samePicks(left: readonly string[] | null, right: readonly string[]): boolean {
     return left !== null && left.length === right.length && left.every((pick, index) => right[index] === pick);
 }

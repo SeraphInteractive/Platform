@@ -11,7 +11,7 @@ import {
     toLocalInputValue
 } from "@/Lib/Format";
 import { pipelineSteps, progressPercentFor } from "@/Lib/Pipeline";
-import { movePick, samePicks, togglePick } from "@/Lib/Ranking";
+import { insertPickAt, movePick, samePicks, togglePick } from "@/Lib/Ranking";
 import { hasAtLeast, outranks, rolesByRank } from "@/Lib/Roles";
 
 function user(role: Role): UserDto {
@@ -54,10 +54,19 @@ describe("ballot ranking", () => {
         expect(movePick(["a"], 5, -1)).toEqual(["a"]);
     });
 
+    it("inserts and shifts picks on drop", () => {
+        expect(insertPickAt(["a", "b", "c"], "d", 0, 3)).toEqual(["d", "a", "b"]);
+        expect(insertPickAt(["a", "b", "c"], "d", 1, 3)).toEqual(["a", "d", "b"]);
+        expect(insertPickAt(["a", "b", "c"], "b", 0, 3)).toEqual(["b", "a", "c"]);
+        expect(insertPickAt(["a", "b", "c"], "a", 2, 3)).toEqual(["b", "c", "a"]);
+        expect(insertPickAt([], "a", 2, 3)).toEqual(["a"]);
+    });
+
     it("never mutates its input", () => {
         const picks = Object.freeze(["a", "b"]);
         expect(() => togglePick(picks, "c", 3)).not.toThrow();
         expect(() => movePick(picks, 1, -1)).not.toThrow();
+        expect(() => insertPickAt(picks, "c", 0, 3)).not.toThrow();
     });
 
     it("compares saved ballots by order", () => {
