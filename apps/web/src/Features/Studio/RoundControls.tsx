@@ -51,7 +51,8 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
     const opens = fromLocalInputValue(opensAt);
     const closes = fromLocalInputValue(closesAt);
     const isDraft = round === undefined || round.status === RoundStatus.Draft;
-    const scheduleProblem = validateRoundWindow(opens, closes, { isDraft });
+    const canEditLockedFields = isDraft || hasAtLeast(user, Role.Admin);
+    const scheduleProblem = validateRoundWindow(opens, closes, { isDraft: canEditLockedFields });
     const problem = problemOf(fieldRules.roundTitle, title) ?? scheduleProblem;
 
     const save = useMutation({
@@ -64,7 +65,7 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
                 title: title.trim(),
                 opensAt: opens,
                 closesAt: closes,
-                ...(round.status === RoundStatus.Draft ? { pollType } : {})
+                ...(canEditLockedFields ? { pollType } : {})
             };
             return platformApi.updateRound(round.id, input);
         },
@@ -95,7 +96,11 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
                 <DialogHeader>
                     <DialogTitle>{round === undefined ? "New round" : "Edit round"}</DialogTitle>
                     <DialogDescription>
-                        {round === undefined ? "Starts as a draft." : "Changes are visible to voters immediately."}
+                        {round === undefined
+                            ? "Starts as a draft."
+                            : round.status === RoundStatus.Finalized
+                              ? "Editing finalized round (Admin override)."
+                              : "Changes are visible to voters immediately."}
                     </DialogDescription>
                 </DialogHeader>
                 <form id={formId} onSubmit={onSubmit} className="space-y-4">
@@ -114,7 +119,7 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
                         <Label htmlFor={`${formId}-poll`}>Poll type</Label>
                         <Select
                             value={pollType}
-                            disabled={round !== undefined && round.status !== RoundStatus.Draft}
+                            disabled={round !== undefined && !canEditLockedFields}
                             onValueChange={(value) => {
                                 setPollType(value as PollType);
                             }}
@@ -134,7 +139,7 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
                         {!canCreateBinary && round === undefined && (
                             <p className="text-muted-foreground text-xs">Binary voting rounds can only be initiated by supervisors and administrators.</p>
                         )}
-                        {round !== undefined && round.status !== RoundStatus.Draft && (
+                        {round !== undefined && !canEditLockedFields && (
                             <p className="text-muted-foreground text-xs">The poll type is locked once a round leaves draft.</p>
                         )}
                     </div>
@@ -145,12 +150,12 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
                                 id={`${formId}-opens`}
                                 type="datetime-local"
                                 value={opensAt}
-                                disabled={!isDraft}
+                                disabled={!canEditLockedFields}
                                 onChange={(event) => {
                                     setOpensAt(event.target.value);
                                 }}
                             />
-                            {!isDraft && <p className="text-muted-foreground text-xs">Start date is locked once a round leaves draft.</p>}
+                            {!canEditLockedFields && <p className="text-muted-foreground text-xs">Start date is locked once a round leaves draft.</p>}
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor={`${formId}-closes`}>Closes (optional)</Label>
@@ -181,6 +186,7 @@ export function RoundStatusSelect({ round }: { readonly round: RoundDto }): Reac
     const { user } = useSession();
     const queryClient = useQueryClient();
     const isSupervisor = hasAtLeast(user, Role.Supervisor);
+    const isAdmin = hasAtLeast(user, Role.Admin);
 
     const refresh = (): void => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.roundsAll });
@@ -188,7 +194,7 @@ export function RoundStatusSelect({ round }: { readonly round: RoundDto }): Reac
     };
 
     const update = useMutation({
-        mutationFn: (status: RoundStatus.Draft | RoundStatus.Open | RoundStatus.Voting) => platformApi.updateRound(round.id, { status }),
+        mutationFn: (status: RoundStatus) => platformApi.updateRound(round.id, { status }),
         onSuccess: (updated) => {
             refresh();
             toast.success(`"${updated.title}" is now ${roundStatusLabels[updated.status].toLowerCase()}.`);
@@ -198,23 +204,24 @@ export function RoundStatusSelect({ round }: { readonly round: RoundDto }): Reac
         }
     });
 
-    if (!isSupervisor || round.status === RoundStatus.Finalized) {
+    if (!isSupervisor || (round.status === RoundStatus.Finalized && !isAdmin)) {
         return <RoundStatusBadge status={round.status} />;
     }
 
-    const allowedOptions: RoundStatus[] =
-        round.status === RoundStatus.Draft
-            ? [RoundStatus.Draft, RoundStatus.Open]
-            : round.status === RoundStatus.Open
-              ? [RoundStatus.Open, RoundStatus.Voting]
-              : [RoundStatus.Voting];
+    const allowedOptions: RoundStatus[] = isAdmin
+        ? [RoundStatus.Draft, RoundStatus.Open, RoundStatus.Voting, RoundStatus.Finalized]
+        : round.status === RoundStatus.Draft
+          ? [RoundStatus.Draft, RoundStatus.Open]
+          : round.status === RoundStatus.Open
+            ? [RoundStatus.Open, RoundStatus.Voting]
+            : [RoundStatus.Voting];
 
     return (
         <Select
             value={round.status}
             disabled={update.isPending}
             onValueChange={(val) => {
-                const nextStatus = val as RoundStatus.Draft | RoundStatus.Open | RoundStatus.Voting;
+                const nextStatus = val as RoundStatus;
                 if (nextStatus !== round.status) {
                     update.mutate(nextStatus);
                 }
@@ -274,12 +281,13 @@ export function RoundActions({ round, compact = false }: { readonly round: Round
     if (!hasAtLeast(user, Role.Supervisor)) {
         return null;
     }
+    const isAdmin = hasAtLeast(user, Role.Admin);
     const busy = update.isPending || finalize.isPending || remove.isPending;
     const size = compact ? "xs" : "sm";
 
     return (
         <div className="flex flex-wrap justify-end gap-1.5">
-            {round.status !== RoundStatus.Finalized && (
+            {(round.status !== RoundStatus.Finalized || isAdmin) && (
                 <RoundFormDialog
                     round={round}
                     trigger={
@@ -337,11 +345,21 @@ export function RoundActions({ round, compact = false }: { readonly round: Round
                     Finalize
                 </ConfirmButton>
             )}
-            {round.status !== RoundStatus.Finalized && (
+            {(round.status !== RoundStatus.Finalized || isAdmin) && (
                 <ConfirmButton
                     title={`Delete "${round.title}"?`}
-                    description="Deletes the round, its entries and ballots."
+                    description={
+                        round.status === RoundStatus.Finalized
+                            ? "This will delete the finalized round, certified results, all entries and ballots."
+                            : "Deletes the round, its entries and ballots."
+                    }
                     confirmLabel="Delete round"
+                    requireCheckbox={round.status === RoundStatus.Finalized}
+                    checkboxLabel={
+                        round.status === RoundStatus.Finalized
+                            ? "I confirm that I want to delete this finalized round and all certified results."
+                            : undefined
+                    }
                     destructive
                     size={size}
                     variant="ghost"

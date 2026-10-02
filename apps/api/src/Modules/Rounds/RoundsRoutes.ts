@@ -20,7 +20,7 @@ import { roundDetailSchema, roundSchema, toRoundResponse } from "./RoundPresente
 
 const roundParams = z.object({ roundId: uuidSchema });
 const dateInput = timestampSchema.transform((value) => new Date(value));
-const editableStatus = z.enum([RoundStatus.Draft, RoundStatus.Open, RoundStatus.Voting]);
+const editableStatus = z.enum(RoundStatus);
 
 function toRoundResultResponse(result: RoundResultRecord): RoundResultResponse {
     return {

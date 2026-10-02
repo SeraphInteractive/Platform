@@ -227,6 +227,23 @@ describe("voting rounds", () => {
             headers: supervisor.headers
         });
         expect(deletion.statusCode).toBe(409);
+
+        // admin can edit finalized round
+        const adminUpdate = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/rounds/${roundId}`,
+            headers: admin.headers,
+            payload: { title: "Updated Finalized Title" }
+        });
+        expect(adminUpdate.statusCode).toBe(200);
+
+        // admin can delete finalized round
+        const adminDeletion = await context.application.inject({
+            method: "DELETE",
+            url: `/api/v1/rounds/${roundId}`,
+            headers: admin.headers
+        });
+        expect(adminDeletion.statusCode).toBe(204);
     });
 
     it("excludes blacklisted voters from live standings", async () => {

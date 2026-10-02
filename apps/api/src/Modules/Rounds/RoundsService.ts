@@ -7,7 +7,7 @@ import { canSeeDrafts } from "./RoundVisibility.js";
 import { EntryStatus, PollType, RoundStatus } from "../../Domain/Enums.js";
 import { hasAtLeast, Role } from "../../Domain/Roles.js";
 import type { Database, DatabaseExecutor } from "../../Infrastructure/Database/Database.js";
-import { ballots, entries, users, votingRounds, type VotingRoundRecord } from "../../Infrastructure/Database/Schema.js";
+import { ballots, entries, roundResults, users, votingRounds, type VotingRoundRecord } from "../../Infrastructure/Database/Schema.js";
 import { NotificationType, personOfActor, roundReferenceOf, type Notifier } from "../../Infrastructure/Notifications/Notification.js";
 import type { LeaderboardCache } from "../Leaderboards/LeaderboardCache.js";
 
@@ -25,7 +25,7 @@ export interface CreateRoundInput {
 export interface UpdateRoundInput {
     readonly title?: string;
     readonly pollType?: PollType;
-    readonly status?: RoundStatus.Draft | RoundStatus.Open | RoundStatus.Voting;
+    readonly status?: RoundStatus;
     readonly opensAt?: Date | null;
     readonly closesAt?: Date | null;
 }
@@ -141,7 +141,7 @@ export class RoundsService {
             if (current === undefined) {
                 throw new NotFoundError("Round");
             }
-            if (current.status === RoundStatus.Finalized) {
+            if (current.status === RoundStatus.Finalized && !hasAtLeast(actor.role, Role.Admin)) {
                 throw new ConflictError("Finalized rounds cannot be modified.", ErrorCode.RoundFinalized);
             }
             if (
@@ -149,10 +149,16 @@ export class RoundsService {
                 input.status !== current.status &&
                 !allowedTransitions[current.status].includes(input.status)
             ) {
-                throw new ConflictError(
-                    `A round cannot move from ${current.status} to ${input.status}. Backtracking round states is not allowed.`,
-                    ErrorCode.InvalidStatusTransition
-                );
+                if (!hasAtLeast(actor.role, Role.Admin)) {
+                    throw new ConflictError(
+                        `A round cannot move from ${current.status} to ${input.status}. Backtracking round states is not allowed.`,
+                        ErrorCode.InvalidStatusTransition
+                    );
+                }
+            }
+            if (current.status === RoundStatus.Finalized && input.status !== undefined && input.status !== RoundStatus.Finalized) {
+                // remove stale certified results when un-finalizing
+                await transaction.delete(roundResults).where(eq(roundResults.roundId, roundId));
             }
             if (input.status === RoundStatus.Voting && current.status === RoundStatus.Open) {
                 const [approvedCount] = await transaction
@@ -174,7 +180,7 @@ export class RoundsService {
                 }
             }
             if (input.pollType !== undefined && input.pollType !== current.pollType) {
-                if (current.status !== RoundStatus.Draft) {
+                if (current.status !== RoundStatus.Draft && !hasAtLeast(actor.role, Role.Admin)) {
                     throw new ConflictError(
                         "The poll type can only be changed while the round is a draft.",
                         ErrorCode.InvalidStatusTransition
@@ -187,11 +193,13 @@ export class RoundsService {
                 current.status !== RoundStatus.Draft &&
                 input.opensAt?.getTime() !== current.opensAt?.getTime()
             ) {
-                throw new ConflictError("Start date cannot be modified once a round leaves draft.", ErrorCode.InvalidStatusTransition);
+                if (!hasAtLeast(actor.role, Role.Admin)) {
+                    throw new ConflictError("Start date cannot be modified once a round leaves draft.", ErrorCode.InvalidStatusTransition);
+                }
             }
             const opensAt = input.opensAt === undefined ? current.opensAt : input.opensAt;
             const closesAt = input.closesAt === undefined ? current.closesAt : input.closesAt;
-            this.assertWindow(opensAt, closesAt, current.status === RoundStatus.Draft);
+            this.assertWindow(opensAt, closesAt, current.status === RoundStatus.Draft || hasAtLeast(actor.role, Role.Admin));
 
             const [updated] = await transaction
                 .update(votingRounds)
@@ -245,7 +253,7 @@ export class RoundsService {
             if (current === undefined) {
                 throw new NotFoundError("Round");
             }
-            if (current.status === RoundStatus.Finalized) {
+            if (current.status === RoundStatus.Finalized && !hasAtLeast(actor.role, Role.Admin)) {
                 throw new ConflictError(
                     "Finalized rounds are part of the permanent record and cannot be deleted.",
                     ErrorCode.RoundFinalized
