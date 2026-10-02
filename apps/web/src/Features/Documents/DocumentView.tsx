@@ -18,9 +18,9 @@ import { documentNames, documentPaths, editorPath } from "./DocumentLinks";
 
 export function DocumentSections({ document }: { readonly document: Pick<DocumentDto, "sections"> }): ReactNode {
     return (
-        <article className="max-w-[70ch] space-y-12">
+        <article className="max-w-[70ch] space-y-12 min-w-0 w-full">
             {document.sections.map((section) => (
-                <section key={section.id} id={section.id} className="scroll-mt-20 space-y-4">
+                <section key={section.id} id={section.id} className="scroll-mt-20 space-y-4 min-w-0">
                     <h2 className="text-lg font-semibold tracking-tight">{section.title}</h2>
                     <div className="doc-prose" dangerouslySetInnerHTML={{ __html: section.html }} />
                 </section>
@@ -93,7 +93,7 @@ export function DocumentView({ slug }: { readonly slug: DocumentSlug }): ReactNo
                     ) : undefined
                 }
             />
-            <div className="grid gap-10 lg:grid-cols-[12rem_1fr]">
+            <div className="grid gap-10 lg:grid-cols-[12rem_1fr] min-w-0">
                 <Contents document={data} />
                 <DocumentSections document={data} />
             </div>

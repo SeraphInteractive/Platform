@@ -72,6 +72,14 @@ async function main(): Promise<void> {
             consumer.start();
             reminderScheduler.start();
             roleScheduler.start();
+            if (client.ws.ping >= 0) {
+                void api.sendHeartbeat(client.ws.ping);
+            }
+            heartbeatTimer = setInterval(() => {
+                if (client.ws.ping >= 0) {
+                    void api.sendHeartbeat(client.ws.ping);
+                }
+            }, 10_000);
         })();
     });
 
@@ -105,6 +113,7 @@ async function main(): Promise<void> {
         logger.error({ err: error }, "discord client error");
     });
 
+    let heartbeatTimer: NodeJS.Timeout | undefined;
     let stopping = false;
     const shutdown = (signal: string): void => {
         if (stopping) {
@@ -112,6 +121,9 @@ async function main(): Promise<void> {
         }
         stopping = true;
         logger.info({ signal }, "shutting down");
+        if (heartbeatTimer !== undefined) {
+            clearInterval(heartbeatTimer);
+        }
         consumer.stop();
         reminderScheduler.stop();
         roleScheduler.stop();

@@ -36,6 +36,10 @@ const detailedHealthSchema = z.object({
         status: z.enum(["ok", "error"]),
         latencyMs: z.number()
     }),
+    discord: z.object({
+        status: z.enum(["ok", "error"]),
+        latencyMs: z.number().nullable()
+    }),
     timestamp: z.string()
 });
 
@@ -95,6 +99,30 @@ export const healthRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }>
         }
     );
 
+    application.post(
+        "/health/bot-heartbeat",
+        {
+            config: { rateLimit: false },
+            logLevel: "warn",
+            schema: {
+                tags: ["Health"],
+                summary: "Heartbeat check-in from the Discord bot.",
+                body: z.object({
+                    wsPingMs: z.number().min(0).max(60000)
+                }),
+                response: { 200: z.object({ status: z.literal("ok") }) }
+            }
+        },
+        async (request) => {
+            const data = JSON.stringify({
+                wsPingMs: request.body.wsPingMs,
+                recordedAt: Date.now()
+            });
+            await services.keyValueStore.set("health:bot-heartbeat", data, 60);
+            return { status: "ok" as const };
+        }
+    );
+
     application.get(
         "/health/detailed",
         {
@@ -107,11 +135,30 @@ export const healthRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }>
             }
         },
         async (_request, reply) => {
-            const [dbResult, redisResult] = await Promise.all([
+            const [dbResult, redisResult, botHeartbeatRaw] = await Promise.all([
                 timedProbe(services.databasePing),
-                timedProbe(() => services.keyValueStore.ping())
+                timedProbe(() => services.keyValueStore.ping()),
+                services.keyValueStore.get("health:bot-heartbeat").catch(() => null)
             ]);
-            const isAllOk = dbResult.status === "ok" && redisResult.status === "ok";
+
+            let discordResult: { status: "ok" | "error"; latencyMs: number | null } = {
+                status: "error",
+                latencyMs: null
+            };
+
+            if (botHeartbeatRaw !== null) {
+                try {
+                    const parsed = JSON.parse(botHeartbeatRaw) as { wsPingMs?: number; recordedAt?: number };
+                    const isFresh = typeof parsed.recordedAt === "number" && Date.now() - parsed.recordedAt < 30_000;
+                    if (isFresh && typeof parsed.wsPingMs === "number") {
+                        discordResult = { status: "ok", latencyMs: parsed.wsPingMs };
+                    }
+                } catch {
+                    // fall back to error status on corrupted cache value
+                }
+            }
+
+            const isAllOk = dbResult.status === "ok" && redisResult.status === "ok" && discordResult.status === "ok";
             const isAnyOk = dbResult.status === "ok" || redisResult.status === "ok";
             const overallStatus = isAllOk ? "ok" : isAnyOk ? "degraded" : "unavailable";
 
@@ -120,6 +167,7 @@ export const healthRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }>
                 uptimeSeconds: Math.floor(process.uptime()),
                 database: dbResult,
                 redis: redisResult,
+                discord: discordResult,
                 timestamp: new Date().toISOString()
             };
 

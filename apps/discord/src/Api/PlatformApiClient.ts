@@ -191,6 +191,17 @@ export class PlatformApiClient {
         }
     }
 
+    public async sendHeartbeat(wsPingMs: number): Promise<void> {
+        try {
+            await this.send("/health/bot-heartbeat", z.object({ status: z.literal("ok") }), {
+                method: "POST",
+                body: { wsPingMs: Math.max(0, Math.round(wsPingMs)) }
+            });
+        } catch (error: unknown) {
+            this.logger.debug({ err: error }, "failed to send bot heartbeat");
+        }
+    }
+
     public openNotificationStream(lastEventId: string | null, signal: AbortSignal): Promise<Response> {
         const headers: Record<string, string> = { Authorization: `Bearer ${this.serviceToken}`, Accept: "text/event-stream" };
         if (lastEventId !== null) {

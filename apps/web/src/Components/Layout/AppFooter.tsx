@@ -14,9 +14,8 @@ export function AppFooter(): ReactNode {
     return (
         <footer className="mt-auto border-t text-xs text-muted-foreground">
             <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-3 sm:px-6">
+                <span>&copy; {new Date().getFullYear()} Seraph Interactive, Inc.</span>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span>&copy; {new Date().getFullYear()} Project Stairway</span>
-                    <span className="hidden sm:inline">·</span>
                     <Link href="/legal/terms" className="hover:text-foreground">
                         Terms
                     </Link>

@@ -122,40 +122,43 @@
 
 @layer components {
     .doc-prose {
-        @apply text-foreground/90 space-y-3 text-sm leading-relaxed text-pretty;
+        @apply text-foreground/90 space-y-3 text-sm leading-relaxed text-pretty min-w-0 max-w-full break-words [overflow-wrap:anywhere];
     }
     .doc-prose h3 {
-        @apply text-foreground pt-2 text-[15px] font-semibold;
+        @apply text-foreground pt-2 text-[15px] font-semibold min-w-0 break-words [overflow-wrap:anywhere];
     }
     .doc-prose h4 {
-        @apply text-foreground pt-1 font-semibold;
+        @apply text-foreground pt-1 font-semibold min-w-0 break-words [overflow-wrap:anywhere];
     }
     .doc-prose a {
-        @apply decoration-muted-foreground hover:decoration-foreground underline underline-offset-4;
+        @apply decoration-muted-foreground hover:decoration-foreground underline underline-offset-4 break-words [overflow-wrap:anywhere];
     }
     .doc-prose ul {
-        @apply ml-5 list-[square] space-y-1.5;
+        @apply ml-5 list-[square] space-y-1.5 min-w-0;
     }
     .doc-prose ol {
-        @apply ml-5 list-decimal space-y-1.5;
+        @apply ml-5 list-decimal space-y-1.5 min-w-0;
+    }
+    .doc-prose li {
+        @apply min-w-0 break-words [overflow-wrap:anywhere];
     }
     .doc-prose blockquote {
-        @apply text-muted-foreground border-l-2 pl-4;
+        @apply text-muted-foreground border-l-2 pl-4 min-w-0 break-words [overflow-wrap:anywhere];
     }
     .doc-prose code {
-        @apply bg-muted rounded px-1 py-0.5 font-mono text-[0.9em];
+        @apply bg-muted rounded px-1 py-0.5 font-mono text-[0.9em] break-words [overflow-wrap:anywhere];
     }
     .doc-prose pre {
-        @apply bg-muted overflow-x-auto p-3;
+        @apply bg-muted overflow-x-auto p-3 max-w-full rounded;
     }
     .doc-prose pre code {
-        @apply bg-transparent p-0;
+        @apply bg-transparent p-0 break-normal [overflow-wrap:normal];
     }
     .doc-prose hr {
         @apply my-6;
     }
     .doc-prose table {
-        @apply w-full border-collapse border text-left;
+        @apply w-full border-collapse border text-left block max-w-full overflow-x-auto;
     }
     .doc-prose th,
     .doc-prose td {
