@@ -99,7 +99,9 @@ export function RichTextField({
             }
         },
         onUpdate: ({ editor: current }) => {
-            onChange(current.isEmpty ? "" : current.getMarkdown().trim());
+            if (!current.isDestroyed) {
+                onChange(current.isEmpty ? "" : current.getMarkdown().trim());
+            }
         }
     });
 
@@ -108,8 +110,12 @@ export function RichTextField({
     }, [editor, disabled]);
 
     useEffect(() => {
-        if (editor !== null && value !== (editor.isEmpty ? "" : editor.getMarkdown().trim())) {
-            editor.commands.setContent(value, { contentType: "markdown", emitUpdate: false });
+        if (editor !== null && !editor.isDestroyed && value !== (editor.isEmpty ? "" : editor.getMarkdown().trim())) {
+            if (value === "") {
+                editor.commands.clearContent(false);
+            } else {
+                editor.commands.setContent(value, { contentType: "markdown", emitUpdate: false });
+            }
         }
     }, [editor, value]);
 

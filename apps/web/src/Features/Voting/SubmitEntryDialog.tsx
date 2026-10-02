@@ -43,7 +43,14 @@ export function SubmitEntryDialog({ round }: { readonly round: RoundDetailDto })
     const queryClient = useQueryClient();
     const [open, setOpen] = useState(false);
     const [draft, setDraft] = useState<EntryDraft>({ title: "", description: "", file: null });
+    const [formKey, setFormKey] = useState(0);
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+
+    const resetForm = (): void => {
+        setDraft({ title: "", description: "", file: null });
+        setUploadProgress(null);
+        setFormKey((k) => k + 1);
+    };
 
     const submit = useMutation({
         mutationFn: async (input: EntryDraft) => {
@@ -66,7 +73,7 @@ export function SubmitEntryDialog({ round }: { readonly round: RoundDetailDto })
             toast.success(
                 entry.status === EntryStatus.Approved ? "Entry added to the ballot." : "Entry submitted. A supervisor will review it."
             );
-            setDraft({ title: "", description: "", file: null });
+            resetForm();
             setOpen(false);
         },
         onError: (error) => {
@@ -77,6 +84,16 @@ export function SubmitEntryDialog({ round }: { readonly round: RoundDetailDto })
         }
     });
 
+    const handleOpenChange = (next: boolean): void => {
+        if (submit.isPending) {
+            return;
+        }
+        if (next) {
+            resetForm();
+        }
+        setOpen(next);
+    };
+
     const problem = validate(draft);
     const onSubmit = (event: SubmitEvent<HTMLFormElement>): void => {
         event.preventDefault();
@@ -86,14 +103,7 @@ export function SubmitEntryDialog({ round }: { readonly round: RoundDetailDto })
     };
 
     return (
-        <Dialog
-            open={open}
-            onOpenChange={(next) => {
-                if (!submit.isPending) {
-                    setOpen(next);
-                }
-            }}
-        >
+        <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
                 <Button size="sm">
                     <Plus />
@@ -105,7 +115,7 @@ export function SubmitEntryDialog({ round }: { readonly round: RoundDetailDto })
                     <DialogTitle>Propose an entry</DialogTitle>
                     <DialogDescription>Entries are reviewed before they appear on the ballot.</DialogDescription>
                 </DialogHeader>
-                <form id={formId} onSubmit={onSubmit} className="space-y-4">
+                <form key={formKey} id={formId} onSubmit={onSubmit} className="space-y-4">
                     <TextInputField
                         id={`${formId}-title`}
                         label="Title"

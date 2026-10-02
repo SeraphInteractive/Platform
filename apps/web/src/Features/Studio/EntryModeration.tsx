@@ -31,6 +31,7 @@ function EditEntryDialog({ roundId, entry }: { readonly roundId: string; readonl
     const [open, setOpen] = useState(false);
     const [title, setTitle] = useState(entry.title);
     const [description, setDescription] = useState(entry.description ?? "");
+    const [formKey, setFormKey] = useState(0);
     const problem = problemOf(fieldRules.entryTitle, title) ?? problemOf(fieldRules.entryDescription, description);
     const save = useMutation({
         mutationFn: () => {
@@ -43,6 +44,19 @@ function EditEntryDialog({ roundId, entry }: { readonly roundId: string; readonl
             setOpen(false);
         }
     });
+
+    const onOpenChange = (next: boolean): void => {
+        if (save.isPending) {
+            return;
+        }
+        if (next) {
+            setTitle(entry.title);
+            setDescription(entry.description ?? "");
+            setFormKey((k) => k + 1);
+        }
+        setOpen(next);
+    };
+
     const onSubmit = (event: SubmitEvent<HTMLFormElement>): void => {
         event.preventDefault();
         if (problem === null && !save.isPending) {
@@ -50,7 +64,7 @@ function EditEntryDialog({ roundId, entry }: { readonly roundId: string; readonl
         }
     };
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogTrigger asChild>
                 <Button size="xs" variant="ghost">
                     Edit
@@ -61,7 +75,7 @@ function EditEntryDialog({ roundId, entry }: { readonly roundId: string; readonl
                     <DialogTitle>Edit entry</DialogTitle>
                     <DialogDescription>Visible to voters immediately.</DialogDescription>
                 </DialogHeader>
-                <form id={formId} onSubmit={onSubmit} className="space-y-4">
+                <form key={formKey} id={formId} onSubmit={onSubmit} className="space-y-4">
                     <TextInputField
                         id={`${formId}-title`}
                         label="Title"
