@@ -249,8 +249,8 @@ describe("voting rounds", () => {
     it("excludes blacklisted voters from live standings", async () => {
         const roundId = await createRound(PollType.Binary);
         await setRoundStatus(roundId, RoundStatus.Open);
-        const yes = await addEntry(roundId, supervisor, "Yes");
-        const no = await addEntry(roundId, supervisor, "No");
+        const yes = await addEntry(roundId, admin, "Yes");
+        const no = await addEntry(roundId, admin, "No");
         await approveEntry(roundId, supervisor, yes);
         await approveEntry(roundId, supervisor, no);
         expect(await setRoundStatus(roundId, RoundStatus.Voting)).toBe(200);
@@ -287,8 +287,8 @@ describe("voting rounds", () => {
     it("does not quarantine a popular binary option", async () => {
         const roundId = await createRound(PollType.Binary);
         await setRoundStatus(roundId, RoundStatus.Open);
-        const popular = await addEntry(roundId, supervisor, "Popular");
-        const other = await addEntry(roundId, supervisor, "Other");
+        const popular = await addEntry(roundId, admin, "Popular");
+        const other = await addEntry(roundId, admin, "Other");
         await approveEntry(roundId, supervisor, popular);
         await approveEntry(roundId, supervisor, other);
         expect(await setRoundStatus(roundId, RoundStatus.Voting)).toBe(200);
@@ -460,5 +460,59 @@ describe("voting rounds", () => {
             expect(aiNotif.mediaKind).toBe("entry");
             expect(aiNotif.flags).toContain("PNG parameters chunk (Stable Diffusion / WebUI)");
         }
+    });
+
+    it("enforces single entry limit for non-admin users and allows multiple entries for admins", async () => {
+        const roundId = await createRound(PollType.RankedChoice);
+        await setRoundStatus(roundId, RoundStatus.Open);
+        const voter = await context.createUser(Role.Voter);
+
+        const first = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/rounds/${roundId}/entries`,
+            headers: voter.headers,
+            payload: { title: "Voter Entry 1" }
+        });
+        expect(first.statusCode).toBe(201);
+
+        const second = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/rounds/${roundId}/entries`,
+            headers: voter.headers,
+            payload: { title: "Voter Entry 2" }
+        });
+        expect(second.statusCode).toBe(409);
+
+        const supFirst = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/rounds/${roundId}/entries`,
+            headers: supervisor.headers,
+            payload: { title: "Supervisor Entry 1" }
+        });
+        expect(supFirst.statusCode).toBe(201);
+
+        const supSecond = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/rounds/${roundId}/entries`,
+            headers: supervisor.headers,
+            payload: { title: "Supervisor Entry 2" }
+        });
+        expect(supSecond.statusCode).toBe(409);
+
+        const adminFirst = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/rounds/${roundId}/entries`,
+            headers: admin.headers,
+            payload: { title: "Admin Entry 1" }
+        });
+        expect(adminFirst.statusCode).toBe(201);
+
+        const adminSecond = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/rounds/${roundId}/entries`,
+            headers: admin.headers,
+            payload: { title: "Admin Entry 2" }
+        });
+        expect(adminSecond.statusCode).toBe(201);
     });
 });

@@ -158,7 +158,7 @@ describe("platform service integration", () => {
             payload: { status: RoundStatus.Open }
         });
         const entryIds: string[] = [];
-        const entryAuthors = [supervisor, supervisor];
+        const entryAuthors = [admin, admin];
         for (let i = 0; i < 2; i++) {
             const title = ["A", "B"][i]!;
             const author = entryAuthors[i]!;

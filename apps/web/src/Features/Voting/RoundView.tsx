@@ -348,6 +348,9 @@ function RoundDetail({ round }: { readonly round: RoundDetailDto }): ReactNode {
         setTab("entries");
     };
 
+    const isAdmin = user !== null && hasAtLeast(user, Role.Admin);
+    const hasAlreadySubmitted = !isAdmin && user !== null && (entries.data?.some((e) => e.submittedBy === user.id) ?? false);
+
     return (
         <>
             <PageHeader
@@ -367,7 +370,11 @@ function RoundDetail({ round }: { readonly round: RoundDetailDto }): ReactNode {
                     </span>
                 }
                 actions={
-                    !canPropose ? undefined : hasAtLeast(user, Role.Voter) ? (
+                    !canPropose ? undefined : hasAlreadySubmitted ? (
+                        <Button size="sm" variant="outline" disabled title="You can only submit one entry per round.">
+                            Entry submitted
+                        </Button>
+                    ) : hasAtLeast(user, Role.Voter) ? (
                         <SubmitEntryDialog round={round} />
                     ) : (
                         <Button asChild size="sm" variant="outline">

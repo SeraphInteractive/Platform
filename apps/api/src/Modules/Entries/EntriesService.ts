@@ -153,7 +153,7 @@ export class EntriesService {
             if (lockedRound.pollType === PollType.Binary && !hasAtLeast(author.role, Role.Supervisor)) {
                 throw new ForbiddenError("Binary rounds do not accept public proposals.", ErrorCode.Forbidden);
             }
-            if (!hasAtLeast(author.role, Role.Supervisor)) {
+            if (!hasAtLeast(author.role, Role.Admin)) {
                 const [existingActive] = await transaction
                     .select({ id: entries.id })
                     .from(entries)
