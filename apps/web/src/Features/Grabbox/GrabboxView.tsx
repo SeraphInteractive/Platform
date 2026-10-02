@@ -109,9 +109,6 @@ function ShotCard({ shot }: { readonly shot: ShotDto }): ReactNode {
                     </span>
                 </div>
                 <div className="absolute top-2 right-2 flex items-center gap-1.5">
-                    {shot.status === ShotStatus.Claimed && shot.deadlineAt !== null && (
-                        <CountdownTimer targetDate={shot.deadlineAt} prefix="Due" />
-                    )}
                     {shot.isSeniorLocked && shot.seniorPriorityUntil !== null && (
                         <CountdownTimer targetDate={shot.seniorPriorityUntil} prefix="Lock" icon="lock" />
                     )}

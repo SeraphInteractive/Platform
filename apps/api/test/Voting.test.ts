@@ -352,11 +352,14 @@ describe("voting rounds", () => {
         const initialEntries = await context.database
             .select()
             .from(entries)
-            .where(eq(entries.roundId, roundId))
-            .orderBy(entries.createdAt, entries.id);
+            .where(eq(entries.roundId, roundId));
         expect(initialEntries).toHaveLength(2);
-        expect(initialEntries[0]?.title).toBe("Original Option A");
-        expect(initialEntries[0]?.status).toBe(EntryStatus.Approved);
+        const optA = initialEntries.find((e) => e.title === "Original Option A");
+        const optB = initialEntries.find((e) => e.title === "Original Option B");
+        expect(optA).toBeDefined();
+        expect(optB).toBeDefined();
+        expect(optA?.status).toBe(EntryStatus.Approved);
+        expect(optB?.status).toBe(EntryStatus.Approved);
 
         // supervisor updates binary entries while in Draft
         const draftUpdate = await context.application.inject({
@@ -365,8 +368,8 @@ describe("voting rounds", () => {
             headers: supervisor.headers,
             payload: {
                 binaryEntries: [
-                    { id: initialEntries[0]?.id, title: "Updated Option A", description: "New A description" },
-                    { id: initialEntries[1]?.id, title: "Updated Option B", description: "New B description" }
+                    { id: optA?.id, title: "Updated Option A", description: "New A description" },
+                    { id: optB?.id, title: "Updated Option B", description: "New B description" }
                 ]
             }
         });
@@ -388,8 +391,8 @@ describe("voting rounds", () => {
             headers: supervisor.headers,
             payload: {
                 binaryEntries: [
-                    { id: initialEntries[0]?.id, title: "Live Option A" },
-                    { id: initialEntries[1]?.id, title: "Live Option B" }
+                    { id: optA?.id, title: "Live Option A" },
+                    { id: optB?.id, title: "Live Option B" }
                 ]
             }
         });
