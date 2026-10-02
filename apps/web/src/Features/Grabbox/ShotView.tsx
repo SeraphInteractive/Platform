@@ -343,7 +343,7 @@ function ShotDetail({ shot }: { readonly shot: ShotDetailDto }): ReactNode {
                         <Fact label="Difficulty">{difficultyLabels[shot.difficultyTier]}</Fact>
                         <Fact label="Time to deliver">{pluralize(shot.tierDays, "day")}</Fact>
                         <Fact label="Claimed by">{shot.claimer?.username ?? "Nobody yet"}</Fact>
-                        <Fact label="Due">{shot.deadlineAt === null ? "—" : <CountdownTimer targetDate={shot.deadlineAt} prefix="Due in" />}</Fact>
+                        <Fact label="Due">{shot.deadlineAt === null ? "—" : <RelativeTime value={shot.deadlineAt} />}</Fact>
                     </dl>
                 </aside>
             </div>
