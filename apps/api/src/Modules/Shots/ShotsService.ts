@@ -430,7 +430,7 @@ export class ShotsService {
         const detection = inspectMediaAiSignatures(buffer);
         const aiFlags = detection.flagged ? [...detection.flags] : [];
 
-        const { submission, shot } = await this.database.transaction(async (transaction) => {
+        const { submission, shot, promotedUser } = await this.database.transaction(async (transaction) => {
             const locked = await this.lockShot(transaction, shotId);
             this.assertActiveClaim(locked, user);
             const [latest] = await transaction
@@ -452,15 +452,31 @@ export class ShotsService {
                 })
                 .returning();
             await transaction.update(shots).set({ status: ShotStatus.Submitted }).where(eq(shots.id, shotId));
+            let promotedUser: UserRecord | undefined;
             if (rankOf(user.role) < rankOf(Role.Contributor)) {
                 // submitting work earns contributor standing
-                await transaction.update(users).set({ role: Role.Contributor }).where(eq(users.id, user.id));
+                const [updated] = await transaction
+                    .update(users)
+                    .set({ role: Role.Contributor, updatedAt: new Date() })
+                    .where(eq(users.id, user.id))
+                    .returning();
+                promotedUser = updated;
             }
             if (created === undefined) {
                 throw new Error("Submission insert returned no row.");
             }
-            return { submission: created, shot: locked };
+            return { submission: created, shot: locked, promotedUser };
         });
+
+        if (promotedUser !== undefined) {
+            this.notifier.notify({
+                type: NotificationType.UserRoleChanged,
+                user: personOfUser(promotedUser),
+                role: promotedUser.role,
+                specialties: promotedUser.specialties,
+                actor: personOfUser(promotedUser)
+            });
+        }
 
         this.notifier.notify({
             type: NotificationType.SubmissionCreated,
