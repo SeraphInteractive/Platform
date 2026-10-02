@@ -15,6 +15,8 @@ import { PlatformApiError, type ActingApiClient, type DiscordIdentity, type Plat
 import type { BotConfiguration } from "../Configuration/BotConfiguration.js";
 import { Accent, notice } from "../Discord/Ui.js";
 import type { ReminderScheduler } from "../Services/ReminderScheduler.js";
+import type { RoleReconciliationService } from "../Services/RoleReconciliationService.js";
+import type { RoleSyncScheduler } from "../Services/RoleSyncScheduler.js";
 import type { ServerProvisioner } from "../Services/ServerProvisioner.js";
 import type { TaskForum } from "../Services/TaskForum.js";
 import type { ReminderStore } from "../State/ReminderStore.js";
@@ -29,6 +31,8 @@ export interface BotContext {
     readonly consumer: NotificationConsumer;
     readonly reminders: ReminderStore;
     readonly reminderScheduler: ReminderScheduler;
+    readonly roleReconciler: RoleReconciliationService;
+    readonly roleScheduler: RoleSyncScheduler;
     readonly logger: Logger;
 }
 

@@ -7,6 +7,8 @@ import { ConfigurationError, loadBotConfiguration } from "./Configuration/BotCon
 import { InteractionRouter, slashCommands } from "./Interactions/InteractionRouter.js";
 import { NotificationDispatcher } from "./Services/NotificationDispatcher.js";
 import { ReminderScheduler } from "./Services/ReminderScheduler.js";
+import { RoleReconciliationService } from "./Services/RoleReconciliationService.js";
+import { RoleSyncScheduler } from "./Services/RoleSyncScheduler.js";
 import { ServerProvisioner } from "./Services/ServerProvisioner.js";
 import { syncMemberStudioRoles } from "./Services/StudioRoles.js";
 import { TaskForum } from "./Services/TaskForum.js";
@@ -28,7 +30,21 @@ async function main(): Promise<void> {
     const reminders = new ReminderStore(configuration.dataDirectory);
     await reminders.load();
     const reminderScheduler = new ReminderScheduler(client, reminders, logger);
-    const context: BotContext = { configuration, api, settings, forum, provisioner, consumer, reminders, reminderScheduler, logger };
+    const roleReconciler = new RoleReconciliationService(api, provisioner, settings, client, logger);
+    const roleScheduler = new RoleSyncScheduler(roleReconciler, configuration.guildId, client, logger);
+    const context: BotContext = {
+        configuration,
+        api,
+        settings,
+        forum,
+        provisioner,
+        consumer,
+        reminders,
+        reminderScheduler,
+        roleReconciler,
+        roleScheduler,
+        logger
+    };
     const router = new InteractionRouter(context);
 
     await new REST({ version: "10" })
@@ -55,6 +71,7 @@ async function main(): Promise<void> {
             });
             consumer.start();
             reminderScheduler.start();
+            roleScheduler.start();
         })();
     });
 
@@ -97,6 +114,7 @@ async function main(): Promise<void> {
         logger.info({ signal }, "shutting down");
         consumer.stop();
         reminderScheduler.stop();
+        roleScheduler.stop();
         void client.destroy().finally(() => process.exit(0));
     };
     process.once("SIGTERM", () => {

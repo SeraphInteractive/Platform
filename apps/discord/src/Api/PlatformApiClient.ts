@@ -152,6 +152,18 @@ export class PlatformApiClient {
         return shots;
     }
 
+    public async listAllUsers(): Promise<readonly ModeratedUserDto[]> {
+        const users: ModeratedUserDto[] = [];
+        for (let page = 1; page <= 100; page++) {
+            const result = await this.send("/users", pageEnvelope(moderatedUserSchema), { query: { page, perPage: 100 } });
+            users.push(...result.data);
+            if (page >= result.meta.totalPages) {
+                break;
+            }
+        }
+        return users;
+    }
+
     public async getShot(shotId: string): Promise<ShotDetailDto> {
         return (await this.send(`/shots/${shotId}`, dataEnvelope(shotDetailSchema))).data;
     }

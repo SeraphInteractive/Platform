@@ -1,9 +1,8 @@
 import { Role } from "@platform/contracts";
 import { ChannelType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder, type ChatInputCommandInteraction } from "discord.js";
 import { Accent, asEdit, ephemeral, panel, pluralize } from "../Discord/Ui.js";
-import { syncMemberStudioRoles } from "../Services/StudioRoles.js";
 import { ChannelPurpose } from "../State/SettingsStore.js";
-import { actingAs, requireManageGuild, requirePlatformRole, UserFacingError, type BotContext, type SlashCommand } from "./Command.js";
+import { requireManageGuild, requirePlatformRole, UserFacingError, type BotContext, type SlashCommand } from "./Command.js";
 
 export const botSetupCommand: SlashCommand = {
     definition: new SlashCommandBuilder()
@@ -141,42 +140,16 @@ export const syncRolesCommand: SlashCommand = {
         }
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        const reorderedCount = await context.provisioner.enforceRoleHierarchy(interaction.guild);
-
-        const acting = actingAs(interaction, context);
-        let syncedMembers = 0;
-        let page = 1;
-        let hasMore = true;
-
-        while (hasMore) {
-            const result = await acting.listUsers({ page, perPage: 100 }).catch(() => null);
-            if (result === null || result.data.length === 0) {
-                break;
-            }
-            for (const user of result.data) {
-                if (user.discordId) {
-                    const member = await interaction.guild.members.fetch(user.discordId).catch(() => null);
-                    if (member !== null) {
-                        await syncMemberStudioRoles(member, user.role, user.specialties, "Platform role hierarchy sync").catch(
-                            () => undefined
-                        );
-                        syncedMembers++;
-                    }
-                }
-            }
-            if (page * 100 >= result.meta.total || result.data.length < 100) {
-                hasMore = false;
-            } else {
-                page++;
-            }
-        }
+        const summary = await context.roleReconciler.reconcile(interaction.guild, "manual");
 
         const lines = [
             "## Role Hierarchy & Member Sync Complete",
-            `• Re-ordered **${reorderedCount}** studio roles by hierarchy (Executive > Supervisor > Contributor > Community).`,
-            `• Reconciled **${syncedMembers}** registered server member ${pluralize(syncedMembers, "profile")}.`
-        ];
+            `• Positioned **${summary.reorderedRoles}** studio roles by hierarchy (Executive > Supervisor > Contributor > Community).`,
+            `• Checked **${summary.totalUsersChecked}** registered users, reconciled **${summary.driftedMembersSynced}** drifted ${pluralize(summary.driftedMembersSynced, "member")}.`,
+            summary.errors.length > 0 ? `⚠️ Encountered ${summary.errors.length} error(s) during sync.` : null
+        ].filter((line): line is string => line !== null);
 
-        await interaction.editReply(asEdit(ephemeral(panel(Accent.Success, lines.join("\n")))));
+        const accent = summary.errors.length > 0 ? Accent.Warning : Accent.Success;
+        await interaction.editReply(asEdit(ephemeral(panel(accent, lines.join("\n")))));
     }
 };

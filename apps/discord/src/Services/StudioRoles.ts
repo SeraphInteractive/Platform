@@ -204,12 +204,18 @@ export function targetStudioRoleNames(role: Role, specialties: readonly Specialt
     return names;
 }
 
+export interface MemberRoleSyncResult {
+    readonly modified: boolean;
+    readonly added: readonly string[];
+    readonly removed: readonly string[];
+}
+
 export async function syncMemberStudioRoles(
     member: GuildMember,
     role: Role,
     specialties: readonly Specialty[],
     reason: string = "Platform role sync"
-): Promise<void> {
+): Promise<MemberRoleSyncResult> {
     const targetNames = targetStudioRoleNames(role, specialties);
     const guildRoles = await member.guild.roles.fetch();
     const rolesList = Array.from(guildRoles.values());
@@ -264,5 +270,11 @@ export async function syncMemberStudioRoles(
     if (toAdd.length > 0) {
         await member.roles.add(toAdd, reason.slice(0, 400));
     }
+
+    return {
+        modified: toAdd.length > 0 || toRemove.length > 0,
+        added: toAdd,
+        removed: toRemove
+    };
 }
 
