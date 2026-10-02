@@ -1,21 +1,109 @@
 "use client";
 
 import { RaidSeverity, type LeaderboardItemDto, type RaidTelemetryDto } from "@platform/contracts";
-import { Bot, Database, Layers, Pause, Play, RefreshCw } from "lucide-react";
+import { Bot, Database, Layers, Pause, Play, RefreshCw, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/Components/Ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/Ui/table";
 import { formatNumber } from "@/Lib/Format";
 import { cn } from "@/Lib/Utils";
 
+function useSvgPanZoom(width: number, height: number) {
+    const [transform, setTransform] = useState<{ zoom: number; panX: number; panY: number }>({
+        zoom: 1,
+        panX: 0,
+        panY: 0
+    });
+    const isDraggingRef = useRef(false);
+    const startMouseRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+    const startPanRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+    const svgRef = useRef<SVGSVGElement | null>(null);
+
+    // non-passive wheel event for smooth zoom centered at cursor
+    useEffect(() => {
+        const svg = svgRef.current;
+        if (!svg) return;
+
+        const onWheel = (e: WheelEvent) => {
+            e.preventDefault();
+            const rect = svg.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const svgX = (mouseX / rect.width) * width;
+            const svgY = (mouseY / rect.height) * height;
+
+            setTransform((prev) => {
+                const factor = e.deltaY < 0 ? 1.15 : 0.87;
+                const nextZoom = Math.min(8, Math.max(1, prev.zoom * factor));
+                if (nextZoom === 1) {
+                    return { zoom: 1, panX: 0, panY: 0 };
+                }
+                const scale = nextZoom / prev.zoom;
+                const nextPanX = svgX - (svgX - prev.panX) * scale;
+                const nextPanY = svgY - (svgY - prev.panY) * scale;
+                return { zoom: nextZoom, panX: nextPanX, panY: nextPanY };
+            });
+        };
+
+        svg.addEventListener("wheel", onWheel, { passive: false });
+        return () => svg.removeEventListener("wheel", onWheel);
+    }, [width, height]);
+
+    const onMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+        if (e.button !== 0) return;
+        isDraggingRef.current = true;
+        startMouseRef.current = { x: e.clientX, y: e.clientY };
+        startPanRef.current = { x: transform.panX, y: transform.panY };
+    };
+
+    const onMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+        if (!isDraggingRef.current || !svgRef.current) return;
+        const rect = svgRef.current.getBoundingClientRect();
+        const scale = width / rect.width;
+        const dx = (e.clientX - startMouseRef.current.x) * scale;
+        const dy = (e.clientY - startMouseRef.current.y) * scale;
+        setTransform((prev) => ({
+            ...prev,
+            panX: startPanRef.current.x + dx,
+            panY: startPanRef.current.y + dy
+        }));
+    };
+
+    const onMouseUp = () => {
+        isDraggingRef.current = false;
+    };
+
+    const resetZoom = () => {
+        setTransform({ zoom: 1, panX: 0, panY: 0 });
+    };
+
+    return {
+        svgRef,
+        transform,
+        onMouseDown,
+        onMouseMove,
+        onMouseUp,
+        onMouseLeave: onMouseUp,
+        onDoubleClick: resetZoom,
+        resetZoom
+    };
+}
+
 interface ScatterChartProps {
     readonly telemetryList: readonly RaidTelemetryDto[];
     readonly leaderboardItems?: readonly LeaderboardItemDto[];
+    readonly titleOf?: (entryId: string) => string;
     readonly onHover?: (item: RaidTelemetryDto | null) => void;
     readonly hovered?: RaidTelemetryDto | null;
 }
 
-export function ScatterChart({ telemetryList, leaderboardItems = [], onHover, hovered }: ScatterChartProps): ReactNode {
+export function ScatterChart({
+    telemetryList,
+    leaderboardItems = [],
+    titleOf,
+    onHover,
+    hovered
+}: ScatterChartProps): ReactNode {
     const [localHovered, setLocalHovered] = useState<RaidTelemetryDto | null>(null);
     const activeHover = hovered !== undefined ? hovered : localHovered;
     const setActiveHover = onHover ?? setLocalHovered;
@@ -28,10 +116,18 @@ export function ScatterChart({ telemetryList, leaderboardItems = [], onHover, ho
     const minY = 0.0;
     const maxY = 1.0;
 
+    const { svgRef, transform, onMouseDown, onMouseMove, onMouseUp, onMouseLeave, onDoubleClick, resetZoom } =
+        useSvgPanZoom(width, height);
+
     const scaleX = (val: number): number => padding + ((val - minX) / (maxX - minX)) * (width - 2 * padding);
     const scaleY = (val: number): number => height - padding - ((val - minY) / (maxY - minY)) * (height - 2 * padding);
 
-    // fallback synthetic points from leaderboard when telemetry records have not triggered yet
+    const titlesById = new Map(leaderboardItems.map((i) => [i.entryId, i.title]));
+    const getTitle = (entryId: string): string => {
+        if (titleOf !== undefined) return titleOf(entryId);
+        return titlesById.get(entryId) ?? `Entry #${entryId.slice(0, 6)}`;
+    };
+
     const points: readonly RaidTelemetryDto[] =
         telemetryList.length > 0
             ? telemetryList
@@ -55,28 +151,116 @@ export function ScatterChart({ telemetryList, leaderboardItems = [], onHover, ho
 
     return (
         <div className="w-full space-y-2">
-            <div className="overflow-x-auto rounded-md border bg-card p-2">
-                <svg viewBox={`0 0 ${width} ${height}`} className="h-auto max-h-64 w-full select-none">
-                    {/* threat zone box */}
-                    <rect
-                        x={scaleX(2.5)}
-                        y={scaleY(0.35)}
-                        width={scaleX(maxX) - scaleX(2.5)}
-                        height={scaleY(0.0) - scaleY(0.35)}
-                        className="fill-destructive/15 stroke-destructive/40"
-                        strokeDasharray="3 3"
-                    />
-                    <text
-                        x={scaleX(maxX) - 6}
-                        y={scaleY(0.0) - 8}
-                        textAnchor="end"
-                        fontSize="9"
-                        className="fill-destructive font-mono font-semibold"
+            <div className="relative overflow-hidden rounded-md border bg-card p-2">
+                {transform.zoom > 1 && (
+                    <button
+                        type="button"
+                        onClick={resetZoom}
+                        className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded border bg-background/90 px-2 py-0.5 text-[10px] font-mono text-muted-foreground shadow-sm backdrop-blur hover:text-foreground"
                     >
-                        THREAT ZONE (Z &gt; 2.5, H &lt; 0.35)
-                    </text>
+                        <RotateCcw className="size-2.5" />
+                        <span>{transform.zoom.toFixed(1)}x · Reset</span>
+                    </button>
+                )}
 
-                    {/* axes */}
+                <svg
+                    ref={svgRef}
+                    viewBox={`0 0 ${width} ${height}`}
+                    onMouseDown={onMouseDown}
+                    onMouseMove={onMouseMove}
+                    onMouseUp={onMouseUp}
+                    onMouseLeave={onMouseLeave}
+                    onDoubleClick={onDoubleClick}
+                    className={cn(
+                        "h-auto max-h-64 w-full select-none",
+                        transform.zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"
+                    )}
+                >
+                    <defs>
+                        <clipPath id="scatter-plot-clip">
+                            <rect
+                                x={padding}
+                                y={padding}
+                                width={width - 2 * padding}
+                                height={height - 2 * padding}
+                            />
+                        </clipPath>
+                    </defs>
+
+                    {/* zoomable plot area */}
+                    <g clipPath="url(#scatter-plot-clip)">
+                        <g transform={`translate(${transform.panX}, ${transform.panY}) scale(${transform.zoom})`}>
+                            {/* threat zone box */}
+                            <rect
+                                x={scaleX(2.5)}
+                                y={scaleY(0.35)}
+                                width={scaleX(maxX) - scaleX(2.5)}
+                                height={scaleY(0.0) - scaleY(0.35)}
+                                className="fill-destructive/15 stroke-destructive/40"
+                                strokeDasharray="3 3"
+                            />
+                            <text
+                                x={scaleX(maxX) - 6}
+                                y={scaleY(0.0) - 8}
+                                textAnchor="end"
+                                fontSize="9"
+                                className="fill-destructive font-mono font-semibold"
+                            >
+                                THREAT ZONE (Z &gt; 2.5, H &lt; 0.35)
+                            </text>
+
+                            {/* points */}
+                            {points.map((p) => {
+                                const cx = scaleX(p.velocityZScore);
+                                const cy = scaleY(p.rankEntropy);
+                                const isSelected = activeHover?.entryId === p.entryId;
+                                const fillColor =
+                                    p.severity === RaidSeverity.CriticalRaid
+                                        ? "#ef4444"
+                                        : p.severity === RaidSeverity.Suspicious
+                                          ? "#f59e0b"
+                                          : "#10b981";
+                                const title = getTitle(p.entryId);
+                                const shortId = p.entryId.slice(0, 6);
+                                const displayLabel = title.length > 18 ? `${title.slice(0, 18)}… #${shortId}` : `${title} #${shortId}`;
+
+                                return (
+                                    <g
+                                        key={p.id}
+                                        onMouseEnter={() => setActiveHover(p)}
+                                        onMouseLeave={() => setActiveHover(null)}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveHover(p);
+                                        }}
+                                        className="cursor-pointer"
+                                    >
+                                        <circle
+                                            cx={cx}
+                                            cy={cy}
+                                            r={isSelected ? 6 : 4}
+                                            fill={fillColor}
+                                            stroke="#1e293b"
+                                            strokeWidth={isSelected ? 2 : 1}
+                                        />
+                                        <text
+                                            x={cx + 7}
+                                            y={cy + 3}
+                                            fontSize="9"
+                                            className={cn(
+                                                "font-mono transition-opacity",
+                                                isSelected ? "fill-foreground font-semibold" : "fill-foreground/80"
+                                            )}
+                                        >
+                                            {displayLabel}
+                                        </text>
+                                    </g>
+                                );
+                            })}
+                        </g>
+                    </g>
+
+                    {/* static axes frame */}
                     <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} className="stroke-border" />
                     <line x1={padding} y1={padding} x2={padding} y2={height - padding} className="stroke-border" />
 
@@ -124,7 +308,7 @@ export function ScatterChart({ telemetryList, leaderboardItems = [], onHover, ho
                         </g>
                     ))}
 
-                    <text x={width / 2} y={height - 4} fontSize="10" textAnchor="middle" className="fill-muted-foreground">
+                    <text x={width / 2} y={height - 4} fontSize="10" textAnchor="middle" className="fill-muted-foreground font-mono">
                         Velocity Z-Score &rarr;
                     </text>
                     <text
@@ -133,53 +317,19 @@ export function ScatterChart({ telemetryList, leaderboardItems = [], onHover, ho
                         transform="rotate(-90)"
                         fontSize="10"
                         textAnchor="middle"
-                        className="fill-muted-foreground"
+                        className="fill-muted-foreground font-mono"
                     >
                         Rank Entropy (H) &rarr;
                     </text>
-
-                    {/* points */}
-                    {points.map((p) => {
-                        const cx = scaleX(p.velocityZScore);
-                        const cy = scaleY(p.rankEntropy);
-                        const isSelected = activeHover?.entryId === p.entryId;
-                        const fillColor =
-                            p.severity === RaidSeverity.CriticalRaid
-                                ? "#ef4444"
-                                : p.severity === RaidSeverity.Suspicious
-                                  ? "#f59e0b"
-                                  : "#10b981";
-
-                        return (
-                            <g
-                                key={p.id}
-                                onMouseEnter={() => {
-                                    setActiveHover(p);
-                                }}
-                                onMouseLeave={() => {
-                                    setActiveHover(null);
-                                }}
-                                className="cursor-pointer transition-transform"
-                            >
-                                <circle
-                                    cx={cx}
-                                    cy={cy}
-                                    r={isSelected ? 6 : 4}
-                                    fill={fillColor}
-                                    stroke="#1e293b"
-                                    strokeWidth={isSelected ? 2 : 1}
-                                />
-                                <text x={cx + 7} y={cy + 3} fontSize="9" className="fill-foreground font-mono">
-                                    {p.entryId.slice(0, 6)}
-                                </text>
-                            </g>
-                        );
-                    })}
                 </svg>
             </div>
+
             {activeHover !== null && (
-                <div className="flex flex-wrap items-center gap-3 rounded border bg-muted/30 px-3 py-1.5 text-xs">
-                    <span className="font-mono font-medium">Entry: {activeHover.entryId.slice(0, 8)}</span>
+                <div className="flex flex-wrap items-center gap-3 rounded border bg-muted/30 px-3 py-1.5 text-xs font-mono">
+                    <span className="font-semibold text-foreground">
+                        {getTitle(activeHover.entryId)} (#{activeHover.entryId.slice(0, 6)})
+                    </span>
+                    <span className="text-muted-foreground">·</span>
                     <span>Z: {formatNumber(activeHover.velocityZScore)}</span>
                     <span>H: {formatNumber(activeHover.rankEntropy, 3)}</span>
                     <span>Skew: {formatNumber(activeHover.skewRatio)}</span>
@@ -195,13 +345,17 @@ interface ShrinkageChartProps {
 }
 
 export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
-    if (items.length === 0) {
-        return <p className="text-muted-foreground text-xs">No entries to display.</p>;
-    }
-
+    const [hoveredEntryId, setHoveredEntryId] = useState<string | null>(null);
     const width = 640;
     const height = 220;
     const padding = 38;
+
+    const { svgRef, transform, onMouseDown, onMouseMove, onMouseUp, onMouseLeave, onDoubleClick, resetZoom } =
+        useSvgPanZoom(width, height);
+
+    if (items.length === 0) {
+        return <p className="text-muted-foreground text-xs">No entries to display.</p>;
+    }
 
     const maxRaw = Math.max(...items.map((i) => i.rawScore), 10);
     const maxReg = Math.max(...items.map((i) => i.regularizedMeanScore ?? i.rawScore), 10);
@@ -210,25 +364,110 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
     const scaleX = (val: number): number => padding + (val / maxVal) * (width - 2 * padding);
     const scaleY = (val: number): number => height - padding - (val / maxVal) * (height - 2 * padding);
 
+    const activeItem = items.find((i) => i.entryId === hoveredEntryId) ?? null;
+
     return (
         <div className="w-full space-y-2">
-            <div className="overflow-x-auto rounded-md border bg-card p-2">
-                <svg viewBox={`0 0 ${width} ${height}`} className="h-auto max-h-60 w-full select-none">
-                    {/* parity 45-degree line */}
-                    <line
-                        x1={scaleX(0)}
-                        y1={scaleY(0)}
-                        x2={scaleX(maxVal)}
-                        y2={scaleY(maxVal)}
-                        className="stroke-muted-foreground/40"
-                        strokeDasharray="3 3"
-                    />
+            <div className="relative overflow-hidden rounded-md border bg-card p-2">
+                {transform.zoom > 1 && (
+                    <button
+                        type="button"
+                        onClick={resetZoom}
+                        className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded border bg-background/90 px-2 py-0.5 text-[10px] font-mono text-muted-foreground shadow-sm backdrop-blur hover:text-foreground"
+                    >
+                        <RotateCcw className="size-2.5" />
+                        <span>{transform.zoom.toFixed(1)}x · Reset</span>
+                    </button>
+                )}
 
-                    {/* axes */}
+                <svg
+                    ref={svgRef}
+                    viewBox={`0 0 ${width} ${height}`}
+                    onMouseDown={onMouseDown}
+                    onMouseMove={onMouseMove}
+                    onMouseUp={onMouseUp}
+                    onMouseLeave={onMouseLeave}
+                    onDoubleClick={onDoubleClick}
+                    className={cn(
+                        "h-auto max-h-60 w-full select-none",
+                        transform.zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"
+                    )}
+                >
+                    <defs>
+                        <clipPath id="shrinkage-plot-clip">
+                            <rect
+                                x={padding}
+                                y={padding}
+                                width={width - 2 * padding}
+                                height={height - 2 * padding}
+                            />
+                        </clipPath>
+                    </defs>
+
+                    {/* zoomable plot area */}
+                    <g clipPath="url(#shrinkage-plot-clip)">
+                        <g transform={`translate(${transform.panX}, ${transform.panY}) scale(${transform.zoom})`}>
+                            {/* parity 45-degree line */}
+                            <line
+                                x1={scaleX(0)}
+                                y1={scaleY(0)}
+                                x2={scaleX(maxVal)}
+                                y2={scaleY(maxVal)}
+                                className="stroke-muted-foreground/40"
+                                strokeDasharray="3 3"
+                            />
+
+                            {items.map((item) => {
+                                const x = scaleX(item.rawScore);
+                                const reg = item.regularizedMeanScore ?? item.rawScore;
+                                const y = scaleY(reg);
+                                const parityY = scaleY(item.rawScore);
+                                const isSelected = hoveredEntryId === item.entryId;
+                                const shortId = item.entryId.slice(0, 6);
+                                const label = item.title.length > 18 ? `${item.title.slice(0, 18)}… #${shortId}` : `${item.title} #${shortId}`;
+
+                                return (
+                                    <g
+                                        key={item.entryId}
+                                        onMouseEnter={() => setHoveredEntryId(item.entryId)}
+                                        onMouseLeave={() => setHoveredEntryId(null)}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setHoveredEntryId(item.entryId);
+                                        }}
+                                        className="cursor-pointer"
+                                    >
+                                        <line x1={x} y1={parityY} x2={x} y2={y} stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="2 2" />
+                                        <circle
+                                            cx={x}
+                                            cy={y}
+                                            r={isSelected ? 6 : 4.5}
+                                            fill="#10b981"
+                                            stroke="#1e293b"
+                                            strokeWidth={isSelected ? 2 : 1}
+                                        />
+                                        <text
+                                            x={x + 7}
+                                            y={y + 3}
+                                            fontSize="9"
+                                            className={cn(
+                                                "font-mono transition-opacity",
+                                                isSelected ? "fill-foreground font-semibold" : "fill-foreground/80"
+                                            )}
+                                        >
+                                            {label}
+                                        </text>
+                                    </g>
+                                );
+                            })}
+                        </g>
+                    </g>
+
+                    {/* static axes frame */}
                     <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} className="stroke-border" />
                     <line x1={padding} y1={padding} x2={padding} y2={height - padding} className="stroke-border" />
 
-                    <text x={width / 2} y={height - 4} fontSize="10" textAnchor="middle" className="fill-muted-foreground">
+                    <text x={width / 2} y={height - 4} fontSize="10" textAnchor="middle" className="fill-muted-foreground font-mono">
                         Raw Points &rarr;
                     </text>
                     <text
@@ -237,33 +476,23 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
                         transform="rotate(-90)"
                         fontSize="10"
                         textAnchor="middle"
-                        className="fill-muted-foreground"
+                        className="fill-muted-foreground font-mono"
                     >
                         Regularized Score &rarr;
                     </text>
-
-                    {items.map((item) => {
-                        const x = scaleX(item.rawScore);
-                        const reg = item.regularizedMeanScore ?? item.rawScore;
-                        const y = scaleY(reg);
-                        const parityY = scaleY(item.rawScore);
-
-                        return (
-                            <g key={item.entryId}>
-                                {/* shrinkage vertical drop line to parity */}
-                                <line x1={x} y1={parityY} x2={x} y2={y} stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="2 2" />
-                                <circle cx={x} cy={y} r={4.5} fill="#10b981" stroke="#1e293b" strokeWidth="1" />
-                                <text x={x + 6} y={y + 3} fontSize="9" className="fill-foreground font-mono">
-                                    {item.title.length > 14 ? `${item.title.slice(0, 14)}..` : item.title}
-                                </text>
-                            </g>
-                        );
-                    })}
                 </svg>
             </div>
-            <p className="text-muted-foreground text-[11px]">
-                Dashed vertical lines depict Bayesian shrinkage toward the prior mean to mitigate small-sample volatility.
-            </p>
+
+            {activeItem !== null && (
+                <div className="flex flex-wrap items-center gap-3 rounded border bg-muted/30 px-3 py-1.5 text-xs font-mono">
+                    <span className="font-semibold text-foreground">
+                        {activeItem.title} (#{activeItem.entryId.slice(0, 6)})
+                    </span>
+                    <span className="text-muted-foreground">·</span>
+                    <span>Raw: {formatNumber(activeItem.rawScore)} pts (#{activeItem.position})</span>
+                    <span>Regularized: {formatNumber(activeItem.regularizedTotalScore ?? activeItem.rawScore)}</span>
+                </div>
+            )}
         </div>
     );
 }

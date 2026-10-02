@@ -230,6 +230,7 @@ export function RoundIntegrity({ roundId, live, defaultTab = "raid" }: RoundInte
                         <ScatterChart
                             telemetryList={telemetry.data ?? []}
                             leaderboardItems={leaderboard.data?.items ?? []}
+                            titleOf={titleOf}
                             onHover={setSelected}
                             hovered={selected}
                         />
