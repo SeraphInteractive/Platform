@@ -2,7 +2,7 @@
 
 import { RaidFlag, RaidSeverity, type RaidTelemetryDto } from "@platform/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Network, Scale, ShieldAlert } from "lucide-react";
+import { Activity, Scale, ShieldAlert } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
@@ -219,8 +219,8 @@ export function RoundIntegrity({ roundId, live, defaultTab = "raid" }: RoundInte
                         <span>Invariance</span>
                     </TabsTrigger>
                     <TabsTrigger value="network" className="flex items-center gap-1.5">
-                        <Network className="size-3.5" />
-                        <span>Network</span>
+                        <Activity className="size-3.5" />
+                        <span>Responsiveness</span>
                     </TabsTrigger>
                 </TabsList>
 
@@ -310,7 +310,7 @@ export function RoundIntegrity({ roundId, live, defaultTab = "raid" }: RoundInte
                 </TabsContent>
 
                 <TabsContent value="network" className="space-y-6">
-                    <Section title="API & Infrastructure Responsiveness Monitor">
+                    <Section title="Responsiveness Monitor">
                         <NetworkMonitor />
                     </Section>
                 </TabsContent>

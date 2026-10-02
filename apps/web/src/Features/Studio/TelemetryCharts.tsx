@@ -488,26 +488,20 @@ export function NetworkMonitor(): ReactNode {
 
     const services = [
         {
-            id: "postgres",
-            name: "PostgreSQL Database",
-            tag: "PRIMARY DATASTORE",
-            type: "Direct Query Ping",
+            id: "database",
+            name: "Database",
             icon: Database,
             state: dbState
         },
         {
             id: "redis",
-            name: "Redis Store",
-            tag: "KEY-VALUE & SESSIONS",
-            type: "PING Command",
+            name: "Redis",
             icon: Layers,
             state: redisState
         },
         {
             id: "discord",
-            name: "Discord Gateway",
-            tag: "BOT WEBSOCKET",
-            type: "Heartbeat Ping",
+            name: "Discord WebSocket",
             icon: Bot,
             state: discordState
         }
@@ -543,7 +537,7 @@ export function NetworkMonitor(): ReactNode {
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-semibold text-foreground">{overallLabel}</span>
                             <span className="rounded-full border px-2 py-0.5 text-[10px] font-mono text-muted-foreground">
-                                3 CORE SERVICES
+                                3 TARGETS
                             </span>
                         </div>
                         {uptime !== null && (
@@ -595,12 +589,11 @@ export function NetworkMonitor(): ReactNode {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Service</TableHead>
+                            <TableHead>Target</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead className="text-right">Latency</TableHead>
                             <TableHead className="text-right">Avg</TableHead>
                             <TableHead className="text-right">Min / Max</TableHead>
-                            <TableHead className="text-right">Check Type</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -630,10 +623,7 @@ export function NetworkMonitor(): ReactNode {
                                     <TableCell>
                                         <div className="flex items-center gap-2">
                                             <Icon className="text-muted-foreground size-4 shrink-0" />
-                                            <div>
-                                                <div className="text-sm font-medium text-foreground">{service.name}</div>
-                                                <div className="text-[10px] font-mono text-muted-foreground">{service.tag}</div>
-                                            </div>
+                                            <span className="font-medium text-foreground text-sm">{service.name}</span>
                                         </div>
                                     </TableCell>
                                     <TableCell>
@@ -653,9 +643,6 @@ export function NetworkMonitor(): ReactNode {
                                     </TableCell>
                                     <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">
                                         {min !== null && max !== null ? `${min} / ${max} ms` : "–"}
-                                    </TableCell>
-                                    <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                                        {service.type}
                                     </TableCell>
                                 </TableRow>
                             );
