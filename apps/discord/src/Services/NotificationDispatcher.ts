@@ -79,7 +79,7 @@ export class NotificationDispatcher {
                 await this.forum.rename(notification.shot);
                 return;
             case NotificationType.ShotDeleted:
-                await this.forum.remove(notification.shot.id);
+                await this.forum.remove(notification.shot);
                 return;
             case NotificationType.ShotClaimed:
                 await this.forum.setStatus(notification.shot.id, ShotStatus.Claimed);

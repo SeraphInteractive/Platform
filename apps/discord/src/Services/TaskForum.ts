@@ -148,15 +148,62 @@ export class TaskForum {
         await thread.send(content);
     }
 
-    public async remove(shotId: string): Promise<void> {
-        const thread = await this.thread(shotId);
-        if (thread !== null) {
-            await thread.delete("Task deleted");
+    public async remove(target: string | ShotReference): Promise<void> {
+        const shotId = typeof target === "string" ? target : target.id;
+        const shotCode = typeof target === "string" ? undefined : target.code;
+        let thread = await this.thread(shotId);
+
+        // search forum if binding is missing from memory cache
+        if (thread === null && shotCode !== undefined) {
+            const forum = await this.forum();
+            if (forum !== null) {
+                const active = await forum.threads.fetchActive().catch(() => null);
+                if (active !== null) {
+                    for (const [, t] of active.threads) {
+                        if (
+                            t.parentId === forum.id &&
+                            (t.name === shotCode || t.name.startsWith(`${shotCode} - `) || t.name.startsWith(`${shotCode}: `))
+                        ) {
+                            thread = t;
+                            break;
+                        }
+                    }
+                }
+                if (thread === null) {
+                    const archived = await forum.threads.fetchArchived({ limit: 100 }).catch(() => null);
+                    if (archived !== null) {
+                        for (const [, t] of archived.threads) {
+                            if (
+                                t.parentId === forum.id &&
+                                (t.name === shotCode || t.name.startsWith(`${shotCode} - `) || t.name.startsWith(`${shotCode}: `))
+                            ) {
+                                thread = t;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
         }
+
+        if (thread !== null) {
+            try {
+                await thread.delete("Task deleted");
+            } catch (error: unknown) {
+                this.logger.warn({ err: error, threadId: thread.id }, "failed to delete thread, falling back to lock and archive");
+                // fallback to lock and archive when delete fails (e.g. missing permissions)
+                await thread.setLocked(true, "Task deleted").catch(() => undefined);
+                await thread.setArchived(true, "Task deleted").catch(() => undefined);
+            }
+        }
+
         const threadId = this.threadsByShot.get(shotId);
         this.threadsByShot.delete(shotId);
         if (threadId !== undefined) {
             this.shotsByThread.delete(threadId);
+        }
+        if (thread !== null) {
+            this.shotsByThread.delete(thread.id);
         }
         await this.api.unbindThread(shotId).catch((error: unknown) => {
             this.logger.warn({ err: error, shotId }, "failed to unbind thread");

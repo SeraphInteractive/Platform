@@ -518,7 +518,9 @@ function TaskRowActions({
                 <ConfirmDialog
                     title={confirm === "delete" ? `Delete ${shot.shotCode}?` : `Unlink the thread from ${shot.shotCode}?`}
                     description={
-                        confirm === "delete" ? "Deletes the task and all its submissions." : "The bot stops posting updates to that thread."
+                        confirm === "delete"
+                            ? "Deletes the task, its submissions, and cleans up the Discord forum thread."
+                            : "The bot stops posting updates to that thread."
                     }
                     confirmLabel={confirm === "delete" ? "Delete" : "Unlink"}
                     destructive={confirm === "delete"}
