@@ -2,25 +2,27 @@
 
 import {
     fieldRules,
+    MediaContentType,
     PollType,
     problemOf,
     Role,
     RoundStatus,
-    scheduleLimits,
     textLimits,
     validateRoundWindow,
     type RoundDto
 } from "@platform/contracts";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { Pencil } from "lucide-react";
-import { useId, useState, type ReactNode, type SubmitEvent } from "react";
+import { useEffect, useId, useState, type ReactNode, type SubmitEvent } from "react";
 import { toast } from "sonner";
-import { platformApi, type CreateRoundInput, type UpdateRoundInput } from "@/Api/PlatformApi";
+import { platformApi, type BinaryChoiceInput, type CreateRoundInput, type UpdateRoundInput } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
+import { uploadToStorage } from "@/Api/Uploads";
 import { ConfirmButton } from "@/Components/Common/ConfirmButton";
-import { TextInputField } from "@/Components/Common/FormField";
+import { FilePicker } from "@/Components/Common/FilePicker";
+import { RichTextInputField, TextInputField } from "@/Components/Common/FormField";
 import { Button } from "@/Components/Ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/Components/Ui/dialog";
 import { Input } from "@/Components/Ui/input";
@@ -30,6 +32,23 @@ import { useSession } from "@/Hooks/UseSession";
 import { fromLocalInputValue, pollTypeLabels, roundStatusLabels, toLocalInputValue } from "@/Lib/Format";
 import { hasAtLeast } from "@/Lib/Roles";
 import { RoundStatusBadge } from "@/Components/Common/StatusBadge";
+
+const acceptedMediaTypes: readonly string[] = Object.values(MediaContentType);
+
+function fileProblem(file: File | null): string | null {
+    return file !== null && !acceptedMediaTypes.includes(file.type)
+        ? "Media must be a PNG, JPEG, GIF or WebP image, or an MP4, WebM or MOV video."
+        : null;
+}
+
+interface ChoiceDraft {
+    readonly id?: string;
+    readonly title: string;
+    readonly description: string;
+    readonly file: File | null;
+    readonly existingMediaUrl?: string | null;
+    readonly mediaKey?: string | null;
+}
 
 interface RoundFormDialogProps {
     readonly round?: RoundDto;
@@ -47,31 +66,126 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
     const [pollType, setPollType] = useState<PollType>(round?.pollType ?? PollType.RankedChoice);
     const [opensAt, setOpensAt] = useState(toLocalInputValue(round?.opensAt ?? null));
     const [closesAt, setClosesAt] = useState(toLocalInputValue(round?.closesAt ?? null));
+    const [choiceA, setChoiceA] = useState<ChoiceDraft>({ title: "", description: "", file: null });
+    const [choiceB, setChoiceB] = useState<ChoiceDraft>({ title: "", description: "", file: null });
+
+    const existingEntries = useQuery({
+        queryKey: queryKeys.entriesAll(round?.id ?? ""),
+        queryFn: () => platformApi.entries(round?.id ?? "", { perPage: 10 }),
+        enabled: round !== undefined && round.pollType === PollType.Binary && open
+    });
+
+    useEffect(() => {
+        if (open) {
+            setTitle(round?.title ?? "");
+            setPollType(round?.pollType ?? PollType.RankedChoice);
+            setOpensAt(toLocalInputValue(round?.opensAt ?? null));
+            setClosesAt(toLocalInputValue(round?.closesAt ?? null));
+            if (round?.pollType === PollType.Binary && existingEntries.data?.data && existingEntries.data.data.length >= 2) {
+                const [first, second] = existingEntries.data.data;
+                if (first) {
+                    setChoiceA({
+                        id: first.id,
+                        title: first.title,
+                        description: first.description ?? "",
+                        file: null,
+                        existingMediaUrl: first.mediaUrl,
+                        mediaKey: null
+                    });
+                }
+                if (second) {
+                    setChoiceB({
+                        id: second.id,
+                        title: second.title,
+                        description: second.description ?? "",
+                        file: null,
+                        existingMediaUrl: second.mediaUrl,
+                        mediaKey: null
+                    });
+                }
+            } else if (round === undefined) {
+                setChoiceA({ title: "", description: "", file: null });
+                setChoiceB({ title: "", description: "", file: null });
+            }
+        }
+    }, [open, round, existingEntries.data]);
 
     const opens = fromLocalInputValue(opensAt);
     const closes = fromLocalInputValue(closesAt);
     const isDraft = round === undefined || round.status === RoundStatus.Draft;
     const canEditLockedFields = isDraft || hasAtLeast(user, Role.Admin);
+    const canEditBinaryEntries = round === undefined || round.status !== RoundStatus.Finalized || hasAtLeast(user, Role.Admin);
     const scheduleProblem = validateRoundWindow(opens, closes, { isDraft: canEditLockedFields });
-    const problem = problemOf(fieldRules.roundTitle, title) ?? scheduleProblem;
+
+    const binaryProblem =
+        pollType === PollType.Binary
+            ? (problemOf(fieldRules.entryTitle, choiceA.title) ? `Option A: ${problemOf(fieldRules.entryTitle, choiceA.title)}` : null) ??
+              problemOf(fieldRules.entryDescription, choiceA.description) ??
+              fileProblem(choiceA.file) ??
+              (problemOf(fieldRules.entryTitle, choiceB.title) ? `Option B: ${problemOf(fieldRules.entryTitle, choiceB.title)}` : null) ??
+              problemOf(fieldRules.entryDescription, choiceB.description) ??
+              fileProblem(choiceB.file)
+            : null;
+
+    const problem = problemOf(fieldRules.roundTitle, title) ?? scheduleProblem ?? binaryProblem;
 
     const save = useMutation({
-        mutationFn: (): Promise<RoundDto> => {
+        mutationFn: async (): Promise<RoundDto> => {
+            let binaryEntries: [BinaryChoiceInput, BinaryChoiceInput] | undefined;
+            if (pollType === PollType.Binary) {
+                let mediaKeyA: string | null | undefined = undefined;
+                if (choiceA.file !== null) {
+                    const uploadA = await platformApi.requestMediaUpload(choiceA.file.type as MediaContentType, choiceA.file.size);
+                    await uploadToStorage(uploadA, choiceA.file);
+                    mediaKeyA = uploadA.key;
+                }
+                let mediaKeyB: string | null | undefined = undefined;
+                if (choiceB.file !== null) {
+                    const uploadB = await platformApi.requestMediaUpload(choiceB.file.type as MediaContentType, choiceB.file.size);
+                    await uploadToStorage(uploadB, choiceB.file);
+                    mediaKeyB = uploadB.key;
+                }
+                const descA = choiceA.description.trim();
+                const descB = choiceB.description.trim();
+                binaryEntries = [
+                    {
+                        ...(choiceA.id ? { id: choiceA.id } : {}),
+                        title: choiceA.title.trim(),
+                        description: descA.length === 0 ? null : descA,
+                        ...(mediaKeyA !== undefined ? { mediaKey: mediaKeyA } : {})
+                    },
+                    {
+                        ...(choiceB.id ? { id: choiceB.id } : {}),
+                        title: choiceB.title.trim(),
+                        description: descB.length === 0 ? null : descB,
+                        ...(mediaKeyB !== undefined ? { mediaKey: mediaKeyB } : {})
+                    }
+                ];
+            }
+
             if (round === undefined) {
-                const input: CreateRoundInput = { title: title.trim(), pollType, opensAt: opens, closesAt: closes };
+                const input: CreateRoundInput = {
+                    title: title.trim(),
+                    pollType,
+                    opensAt: opens,
+                    closesAt: closes,
+                    ...(binaryEntries ? { binaryEntries } : {})
+                };
                 return platformApi.createRound(input);
             }
             const input: UpdateRoundInput = {
                 title: title.trim(),
                 opensAt: opens,
                 closesAt: closes,
-                ...(canEditLockedFields ? { pollType } : {})
+                ...(canEditLockedFields ? { pollType } : {}),
+                ...(binaryEntries && canEditBinaryEntries ? { binaryEntries } : {})
             };
             return platformApi.updateRound(round.id, input);
         },
         onSuccess: (saved) => {
             void queryClient.invalidateQueries({ queryKey: queryKeys.roundsAll });
             void queryClient.invalidateQueries({ queryKey: queryKeys.round(saved.id) });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.entriesAll(saved.id) });
             setOpen(false);
             if (round === undefined) {
                 toast.success("Round created.");
@@ -79,6 +193,9 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
             } else {
                 toast.success("Round updated.");
             }
+        },
+        onError: (err) => {
+            toast.error(err instanceof Error ? err.message : "Failed to save round.");
         }
     });
 
@@ -92,7 +209,7 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>{trigger}</DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
                 <DialogHeader>
                     <DialogTitle>{round === undefined ? "New round" : "Edit round"}</DialogTitle>
                     <DialogDescription>
@@ -171,10 +288,98 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
                         </div>
                     </div>
                     {scheduleProblem !== null && <p className="text-destructive text-xs">{scheduleProblem}</p>}
+
+                    {pollType === PollType.Binary && (
+                        <div className="space-y-4 pt-3 border-t">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                    Binary choices (required)
+                                </span>
+                            </div>
+
+                            <div className="space-y-3 rounded-lg border p-3.5 bg-muted/10">
+                                <div className="text-xs font-semibold text-foreground">Choice A</div>
+                                <TextInputField
+                                    id={`${formId}-optA-title`}
+                                    label="Title"
+                                    value={choiceA.title}
+                                    rule={fieldRules.entryTitle}
+                                    limit={textLimits.entryTitle}
+                                    placeholder="Option A title"
+                                    required
+                                    autoComplete="off"
+                                    disabled={!canEditBinaryEntries || save.isPending}
+                                    onValueChange={(t) => setChoiceA((prev) => ({ ...prev, title: t }))}
+                                />
+                                <RichTextInputField
+                                    id={`${formId}-optA-desc`}
+                                    label="Description (optional)"
+                                    value={choiceA.description}
+                                    rule={fieldRules.entryDescription}
+                                    limit={textLimits.entryDescription}
+                                    disabled={!canEditBinaryEntries || save.isPending}
+                                    onValueChange={(d) => setChoiceA((prev) => ({ ...prev, description: d }))}
+                                />
+                                <div className="space-y-1.5">
+                                    <Label htmlFor={`${formId}-optA-media`}>Media image (optional)</Label>
+                                    {choiceA.existingMediaUrl && !choiceA.file && (
+                                        <p className="text-muted-foreground text-xs">Current media attached. Uploading a file will replace it.</p>
+                                    )}
+                                    <FilePicker
+                                        id={`${formId}-optA-media`}
+                                        file={choiceA.file}
+                                        accept={acceptedMediaTypes.join(",")}
+                                        disabled={!canEditBinaryEntries || save.isPending}
+                                        invalid={fileProblem(choiceA.file) !== null}
+                                        onChange={(file) => setChoiceA((prev) => ({ ...prev, file }))}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-3 rounded-lg border p-3.5 bg-muted/10">
+                                <div className="text-xs font-semibold text-foreground">Choice B</div>
+                                <TextInputField
+                                    id={`${formId}-optB-title`}
+                                    label="Title"
+                                    value={choiceB.title}
+                                    rule={fieldRules.entryTitle}
+                                    limit={textLimits.entryTitle}
+                                    placeholder="Option B title"
+                                    required
+                                    autoComplete="off"
+                                    disabled={!canEditBinaryEntries || save.isPending}
+                                    onValueChange={(t) => setChoiceB((prev) => ({ ...prev, title: t }))}
+                                />
+                                <RichTextInputField
+                                    id={`${formId}-optB-desc`}
+                                    label="Description (optional)"
+                                    value={choiceB.description}
+                                    rule={fieldRules.entryDescription}
+                                    limit={textLimits.entryDescription}
+                                    disabled={!canEditBinaryEntries || save.isPending}
+                                    onValueChange={(d) => setChoiceB((prev) => ({ ...prev, description: d }))}
+                                />
+                                <div className="space-y-1.5">
+                                    <Label htmlFor={`${formId}-optB-media`}>Media image (optional)</Label>
+                                    {choiceB.existingMediaUrl && !choiceB.file && (
+                                        <p className="text-muted-foreground text-xs">Current media attached. Uploading a file will replace it.</p>
+                                    )}
+                                    <FilePicker
+                                        id={`${formId}-optB-media`}
+                                        file={choiceB.file}
+                                        accept={acceptedMediaTypes.join(",")}
+                                        disabled={!canEditBinaryEntries || save.isPending}
+                                        invalid={fileProblem(choiceB.file) !== null}
+                                        onChange={(file) => setChoiceB((prev) => ({ ...prev, file }))}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </form>
                 <DialogFooter>
                     <Button type="submit" form={formId} disabled={problem !== null || save.isPending}>
-                        {round === undefined ? "Create draft" : "Save changes"}
+                        {save.isPending ? "Saving…" : round === undefined ? "Create draft" : "Save changes"}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -210,11 +415,15 @@ export function RoundStatusSelect({ round }: { readonly round: RoundDto }): Reac
 
     const allowedOptions: RoundStatus[] = isAdmin
         ? [RoundStatus.Draft, RoundStatus.Open, RoundStatus.Voting, RoundStatus.Finalized]
-        : round.status === RoundStatus.Draft
-          ? [RoundStatus.Draft, RoundStatus.Open]
-          : round.status === RoundStatus.Open
-            ? [RoundStatus.Open, RoundStatus.Voting]
-            : [RoundStatus.Voting];
+        : round.pollType === PollType.Binary
+          ? round.status === RoundStatus.Draft
+              ? [RoundStatus.Draft, RoundStatus.Voting]
+              : [RoundStatus.Voting]
+          : round.status === RoundStatus.Draft
+            ? [RoundStatus.Draft, RoundStatus.Open]
+            : round.status === RoundStatus.Open
+              ? [RoundStatus.Open, RoundStatus.Voting]
+              : [RoundStatus.Voting];
 
     return (
         <Select
@@ -298,7 +507,22 @@ export function RoundActions({ round, compact = false }: { readonly round: Round
                     }
                 />
             )}
-            {round.status === RoundStatus.Draft && (
+            {round.status === RoundStatus.Draft && round.pollType === PollType.Binary && (
+                <ConfirmButton
+                    title={`Start voting for "${round.title}"?`}
+                    description="Voters can begin casting ballots for the two options immediately."
+                    confirmLabel="Start Voting"
+                    size={size}
+                    variant={compact ? "outline" : "default"}
+                    disabled={busy}
+                    onConfirm={() => {
+                        update.mutate(RoundStatus.Voting);
+                    }}
+                >
+                    Start Voting
+                </ConfirmButton>
+            )}
+            {round.status === RoundStatus.Draft && round.pollType !== PollType.Binary && (
                 <ConfirmButton
                     title={`Open "${round.title}" for submissions?`}
                     description="Community members can begin submitting proposal entries."

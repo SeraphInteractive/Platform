@@ -147,11 +147,11 @@ export class EntriesService {
         }
         const { entry, round } = await this.database.transaction(async (transaction) => {
             const lockedRound = await this.requireRound(transaction, roundId, true);
+            if (lockedRound.pollType === PollType.Binary) {
+                throw new ForbiddenError("Binary rounds do not accept external entry proposals.", ErrorCode.Forbidden);
+            }
             if (!submissionStatuses.includes(lockedRound.status)) {
                 throw new ConflictError("Entries can only be submitted once the round is open.", ErrorCode.RoundNotOpen);
-            }
-            if (lockedRound.pollType === PollType.Binary && !hasAtLeast(author.role, Role.Supervisor)) {
-                throw new ForbiddenError("Binary rounds do not accept public proposals.", ErrorCode.Forbidden);
             }
             if (!hasAtLeast(author.role, Role.Admin)) {
                 const [existingActive] = await transaction
@@ -327,7 +327,13 @@ export class EntriesService {
         let deletedEntry: EntryRecord | undefined;
         let parentRound: VotingRoundRecord | undefined;
         try {
-            const result = await this.mutate(roundId, entryId, async (transaction) => {
+            const result = await this.mutate(roundId, entryId, async (transaction, round) => {
+                if (round.pollType === PollType.Binary) {
+                    throw new ConflictError(
+                        "Entries cannot be individually deleted from binary rounds. Edit the options or delete the round.",
+                        ErrorCode.Conflict
+                    );
+                }
                 const [target] = await transaction.select().from(entries).where(eq(entries.id, entryId)).limit(1);
                 const [deleted] = await transaction.delete(entries).where(eq(entries.id, entryId)).returning();
                 return target ?? deleted;
@@ -378,7 +384,7 @@ export class EntriesService {
     private async mutate(
         roundId: string,
         entryId: string,
-        operation: (transaction: Transaction) => Promise<EntryRecord | undefined>
+        operation: (transaction: Transaction, round: VotingRoundRecord) => Promise<EntryRecord | undefined>
     ): Promise<{ entry: EntryRecord; round: VotingRoundRecord }> {
         return this.database.transaction(async (transaction) => {
             const round = await this.requireRound(transaction, roundId, true);
@@ -386,7 +392,7 @@ export class EntriesService {
                 throw new ConflictError("Entries of a finalized round cannot be changed.", ErrorCode.RoundFinalized);
             }
             await this.requireEntry(transaction, roundId, entryId);
-            const entry = await operation(transaction);
+            const entry = await operation(transaction, round);
             if (entry === undefined) {
                 throw new NotFoundError("Entry");
             }

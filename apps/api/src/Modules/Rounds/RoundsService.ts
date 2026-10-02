@@ -15,11 +15,25 @@ export interface RoundListQuery extends PaginationQuery {
     readonly status?: RoundStatus;
 }
 
+export interface BinaryEntryInput {
+    readonly title: string;
+    readonly description?: string | null;
+    readonly mediaKey?: string | null;
+}
+
+export interface BinaryEntryUpdateInput {
+    readonly id?: string;
+    readonly title: string;
+    readonly description?: string | null;
+    readonly mediaKey?: string | null;
+}
+
 export interface CreateRoundInput {
     readonly title: string;
     readonly pollType: PollType;
     readonly opensAt: Date | null;
     readonly closesAt: Date | null;
+    readonly binaryEntries?: readonly [BinaryEntryInput, BinaryEntryInput];
 }
 
 export interface UpdateRoundInput {
@@ -28,6 +42,7 @@ export interface UpdateRoundInput {
     readonly status?: RoundStatus;
     readonly opensAt?: Date | null;
     readonly closesAt?: Date | null;
+    readonly binaryEntries?: readonly [BinaryEntryUpdateInput, BinaryEntryUpdateInput];
 }
 
 export interface RoundDetail {
@@ -37,12 +52,18 @@ export interface RoundDetail {
     readonly warnings: readonly string[];
 }
 
-const allowedTransitions: Readonly<Record<RoundStatus, readonly RoundStatus[]>> = {
-    [RoundStatus.Draft]: [RoundStatus.Open],
-    [RoundStatus.Open]: [RoundStatus.Voting],
-    [RoundStatus.Voting]: [RoundStatus.Finalized],
-    [RoundStatus.Finalized]: []
-};
+function isAllowedTransition(pollType: PollType, from: RoundStatus, to: RoundStatus): boolean {
+    if (pollType === PollType.Binary) {
+        if (from === RoundStatus.Draft && (to === RoundStatus.Voting || to === RoundStatus.Open)) return true;
+        if (from === RoundStatus.Open && to === RoundStatus.Voting) return true;
+        if (from === RoundStatus.Voting && to === RoundStatus.Finalized) return true;
+        return false;
+    }
+    if (from === RoundStatus.Draft && to === RoundStatus.Open) return true;
+    if (from === RoundStatus.Open && to === RoundStatus.Voting) return true;
+    if (from === RoundStatus.Voting && to === RoundStatus.Finalized) return true;
+    return false;
+}
 
 const recommendedMaximumEntries = 5;
 
@@ -112,19 +133,41 @@ export class RoundsService {
     public async create(actor: UserActor, input: CreateRoundInput): Promise<VotingRoundRecord> {
         this.assertCanInitiate(actor, input.pollType);
         this.assertWindow(input.opensAt, input.closesAt, true);
-        const [round] = await this.database
-            .insert(votingRounds)
-            .values({
-                title: input.title,
-                pollType: input.pollType,
-                opensAt: input.opensAt,
-                closesAt: input.closesAt,
-                createdBy: actor.userId
-            })
-            .returning();
-        if (round === undefined) {
-            throw new Error("Round insert returned no row.");
+        if (input.pollType === PollType.Binary) {
+            if (!input.binaryEntries || input.binaryEntries.length !== 2) {
+                throw new UnprocessableError("Binary rounds require exactly 2 entries upon creation.", ErrorCode.ValidationFailed);
+            }
         }
+        const round = await this.database.transaction(async (transaction) => {
+            const [created] = await transaction
+                .insert(votingRounds)
+                .values({
+                    title: input.title,
+                    pollType: input.pollType,
+                    opensAt: input.opensAt,
+                    closesAt: input.closesAt,
+                    createdBy: actor.userId
+                })
+                .returning();
+            if (created === undefined) {
+                throw new Error("Round insert returned no row.");
+            }
+            if (input.pollType === PollType.Binary && input.binaryEntries) {
+                for (const choice of input.binaryEntries) {
+                    await transaction.insert(entries).values({
+                        roundId: created.id,
+                        title: choice.title,
+                        description: choice.description ?? null,
+                        mediaKey: choice.mediaKey ?? null,
+                        submittedBy: actor.userId,
+                        status: EntryStatus.Approved,
+                        isQuarantined: false
+                    });
+                }
+            }
+            return created;
+        });
+
         this.notifier.notify({
             type: NotificationType.RoundCreated,
             round: roundReferenceOf(round),
@@ -147,7 +190,7 @@ export class RoundsService {
             if (
                 input.status !== undefined &&
                 input.status !== current.status &&
-                !allowedTransitions[current.status].includes(input.status)
+                !isAllowedTransition(current.pollType, current.status, input.status)
             ) {
                 if (!hasAtLeast(actor.role, Role.Admin)) {
                     throw new ConflictError(
@@ -160,7 +203,7 @@ export class RoundsService {
                 // remove stale certified results when un-finalizing
                 await transaction.delete(roundResults).where(eq(roundResults.roundId, roundId));
             }
-            if (input.status === RoundStatus.Voting && current.status === RoundStatus.Open) {
+            if (input.status === RoundStatus.Voting && (current.status === RoundStatus.Open || current.status === RoundStatus.Draft)) {
                 const [approvedCount] = await transaction
                     .select({ total: count() })
                     .from(entries)
@@ -200,6 +243,37 @@ export class RoundsService {
             const opensAt = input.opensAt === undefined ? current.opensAt : input.opensAt;
             const closesAt = input.closesAt === undefined ? current.closesAt : input.closesAt;
             this.assertWindow(opensAt, closesAt, current.status === RoundStatus.Draft || hasAtLeast(actor.role, Role.Admin));
+
+            if (input.binaryEntries !== undefined) {
+                if (current.pollType !== PollType.Binary) {
+                    throw new ConflictError("Option pairs can only be updated for binary rounds.", ErrorCode.Conflict);
+                }
+                if (current.status === RoundStatus.Finalized && !hasAtLeast(actor.role, Role.Admin)) {
+                    throw new ConflictError("Finalized rounds cannot be modified.", ErrorCode.RoundFinalized);
+                }
+                const currentEntries = await transaction
+                    .select()
+                    .from(entries)
+                    .where(eq(entries.roundId, roundId))
+                    .orderBy(entries.createdAt, entries.id);
+
+                if (currentEntries.length === 2) {
+                    for (let i = 0; i < 2; i++) {
+                        const entryRecord = currentEntries[i];
+                        const updateItem = input.binaryEntries[i];
+                        if (entryRecord && updateItem) {
+                            await transaction
+                                .update(entries)
+                                .set({
+                                    title: updateItem.title,
+                                    description: updateItem.description ?? null,
+                                    ...(updateItem.mediaKey !== undefined ? { mediaKey: updateItem.mediaKey } : {})
+                                })
+                                .where(eq(entries.id, updateItem.id ?? entryRecord.id));
+                        }
+                    }
+                }
+            }
 
             const [updated] = await transaction
                 .update(votingRounds)
@@ -273,8 +347,8 @@ export class RoundsService {
     }
 
     private assertCanInitiate(actor: Actor, pollType: PollType): void {
-        if (pollType === PollType.Binary && !hasAtLeast(actor.role, Role.Admin)) {
-            throw new ForbiddenError("Binary voting rounds can only be initiated by administrators.");
+        if (pollType === PollType.Binary && !hasAtLeast(actor.role, Role.Supervisor)) {
+            throw new ForbiddenError("Binary voting rounds can only be initiated by supervisors and administrators.");
         }
     }
 

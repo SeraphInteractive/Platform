@@ -1,7 +1,9 @@
 import { actingUserHeader, NotificationType, platformNotificationSchema } from "@platform/contracts";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { EntryStatus, PollType, RoundStatus } from "../src/Domain/Enums.js";
+import { PollType, RoundStatus } from "../src/Domain/Enums.js";
 import { Role } from "../src/Domain/Roles.js";
+import { entries } from "../src/Infrastructure/Database/Schema.js";
 import { createTestContext, json, nextSnowflake, serviceToken, type TestContext } from "./Support/TestApplication.js";
 
 interface Envelope<T> {
@@ -112,7 +114,11 @@ describe("platform service integration", () => {
             method: "POST",
             url: "/api/v1/rounds",
             headers: admin.headers,
-            payload: { title: "Streamed round", pollType: PollType.Binary }
+            payload: {
+                title: "Streamed round",
+                pollType: PollType.Binary,
+                binaryEntries: [{ title: "Choice 1" }, { title: "Choice 2" }]
+            }
         });
 
         const reader = response.body?.getReader();
@@ -142,7 +148,11 @@ describe("platform service integration", () => {
                 method: "POST",
                 url: "/api/v1/rounds",
                 headers: admin.headers,
-                payload: { title: "Contract", pollType: PollType.Binary }
+                payload: {
+                    title: "Contract",
+                    pollType: PollType.Binary,
+                    binaryEntries: [{ title: "A" }, { title: "B" }]
+                }
             })
         ).data;
         await context.application.inject({
@@ -151,32 +161,12 @@ describe("platform service integration", () => {
             headers: supervisor.headers,
             payload: { title: "Contract Renamed" }
         });
-        await context.application.inject({
-            method: "PATCH",
-            url: `/api/v1/rounds/${round.id}`,
-            headers: supervisor.headers,
-            payload: { status: RoundStatus.Open }
-        });
-        const entryIds: string[] = [];
-        const entryAuthors = [admin, admin];
-        for (let i = 0; i < 2; i++) {
-            const title = ["A", "B"][i]!;
-            const author = entryAuthors[i]!;
-            const entry = await context.application.inject({
-                method: "POST",
-                url: `/api/v1/rounds/${round.id}/entries`,
-                headers: author.headers,
-                payload: { title }
-            });
-            const entryId = json<Envelope<{ id: string }>>(entry).data.id;
-            entryIds.push(entryId);
-            await context.application.inject({
-                method: "PATCH",
-                url: `/api/v1/rounds/${round.id}/entries/${entryId}/status`,
-                headers: supervisor.headers,
-                payload: { status: EntryStatus.Approved }
-            });
-        }
+        const roundEntries = await context.database
+            .select()
+            .from(entries)
+            .where(eq(entries.roundId, round.id))
+            .orderBy(entries.createdAt, entries.id);
+        const entryIds = roundEntries.map((e) => e.id);
         await context.application.inject({
             method: "PATCH",
             url: `/api/v1/rounds/${round.id}`,
@@ -187,7 +177,7 @@ describe("platform service integration", () => {
             method: "PUT",
             url: `/api/v1/rounds/${round.id}/ballots/me`,
             headers: voter.headers,
-            payload: { picks: [entryIds[0]] }
+            payload: { picks: [entryIds[0]!] }
         });
         await context.application.inject({ method: "POST", url: `/api/v1/rounds/${round.id}/finalize`, headers: supervisor.headers });
         await context.application.inject({
@@ -227,7 +217,7 @@ describe("platform service integration", () => {
                 method: "POST",
                 url: "/api/v1/rounds",
                 headers: admin.headers,
-                payload: { title: "Temp Round", pollType: PollType.Binary }
+                payload: { title: "Temp Round", pollType: PollType.RankedChoice }
             })
         ).data;
         await context.application.inject({

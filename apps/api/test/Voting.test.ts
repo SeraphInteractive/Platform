@@ -27,12 +27,16 @@ describe("voting rounds", () => {
         await context.close();
     });
 
-    async function createRound(pollType: PollType): Promise<string> {
+    async function createRound(pollType: PollType, binaryEntries?: [{ title: string }, { title: string }]): Promise<string> {
+        const payload: Record<string, unknown> = { title: `Round ${pollType}`, pollType };
+        if (pollType === PollType.Binary) {
+            payload.binaryEntries = binaryEntries ?? [{ title: "Option A" }, { title: "Option B" }];
+        }
         const response = await context.application.inject({
             method: "POST",
             url: "/api/v1/rounds",
-            headers: pollType === PollType.Binary ? admin.headers : supervisor.headers,
-            payload: { title: `Round ${pollType}`, pollType }
+            headers: supervisor.headers,
+            payload
         });
         expect(response.statusCode).toBe(201);
         return json<Envelope<{ id: string }>>(response).data.id;
@@ -247,12 +251,14 @@ describe("voting rounds", () => {
     });
 
     it("excludes blacklisted voters from live standings", async () => {
-        const roundId = await createRound(PollType.Binary);
-        await setRoundStatus(roundId, RoundStatus.Open);
-        const yes = await addEntry(roundId, admin, "Yes");
-        const no = await addEntry(roundId, admin, "No");
-        await approveEntry(roundId, supervisor, yes);
-        await approveEntry(roundId, supervisor, no);
+        const roundId = await createRound(PollType.Binary, [{ title: "Yes" }, { title: "No" }]);
+        const roundEntries = await context.database
+            .select()
+            .from(entries)
+            .where(eq(entries.roundId, roundId))
+            .orderBy(entries.createdAt, entries.id);
+        const yes = roundEntries[0]!.id;
+        const no = roundEntries[1]!.id;
         expect(await setRoundStatus(roundId, RoundStatus.Voting)).toBe(200);
         const honest = await context.createUser(Role.Voter);
         const brigader = await context.createUser(Role.Voter);
@@ -285,12 +291,13 @@ describe("voting rounds", () => {
     });
 
     it("does not quarantine a popular binary option", async () => {
-        const roundId = await createRound(PollType.Binary);
-        await setRoundStatus(roundId, RoundStatus.Open);
-        const popular = await addEntry(roundId, admin, "Popular");
-        const other = await addEntry(roundId, admin, "Other");
-        await approveEntry(roundId, supervisor, popular);
-        await approveEntry(roundId, supervisor, other);
+        const roundId = await createRound(PollType.Binary, [{ title: "Popular" }, { title: "Other" }]);
+        const roundEntries = await context.database
+            .select()
+            .from(entries)
+            .where(eq(entries.roundId, roundId))
+            .orderBy(entries.createdAt, entries.id);
+        const popular = roundEntries[0]!.id;
         expect(await setRoundStatus(roundId, RoundStatus.Voting)).toBe(200);
         for (let index = 0; index < 12; index++) {
             const voter = await context.createUser(Role.Voter);
@@ -304,7 +311,6 @@ describe("voting rounds", () => {
 
     it("blocks public users from proposing entries in binary rounds", async () => {
         const roundId = await createRound(PollType.Binary);
-        await setRoundStatus(roundId, RoundStatus.Open);
         const voter = await context.createUser(Role.Voter);
         const response = await context.application.inject({
             method: "POST",
@@ -313,6 +319,89 @@ describe("voting rounds", () => {
             payload: { title: "Public idea" }
         });
         expect(response.statusCode).toBe(403);
+    });
+
+    it("requires exactly two choices when creating a binary round and allows updating them", async () => {
+        // missing binaryEntries
+        const invalidCreation = await context.application.inject({
+            method: "POST",
+            url: "/api/v1/rounds",
+            headers: supervisor.headers,
+            payload: { title: "Binary Missing Options", pollType: PollType.Binary }
+        });
+        expect(invalidCreation.statusCode).toBe(400);
+
+        // supervisor creates binary round with Option A and Option B
+        const validCreation = await context.application.inject({
+            method: "POST",
+            url: "/api/v1/rounds",
+            headers: supervisor.headers,
+            payload: {
+                title: "Binary Choice Round",
+                pollType: PollType.Binary,
+                binaryEntries: [
+                    { title: "Original Option A", description: "First choice" },
+                    { title: "Original Option B", description: "Second choice" }
+                ]
+            }
+        });
+        expect(validCreation.statusCode).toBe(201);
+        const roundId = json<Envelope<{ id: string }>>(validCreation).data.id;
+
+        // verify the 2 entries exist and are approved
+        const initialEntries = await context.database
+            .select()
+            .from(entries)
+            .where(eq(entries.roundId, roundId))
+            .orderBy(entries.createdAt, entries.id);
+        expect(initialEntries).toHaveLength(2);
+        expect(initialEntries[0]?.title).toBe("Original Option A");
+        expect(initialEntries[0]?.status).toBe(EntryStatus.Approved);
+
+        // supervisor updates binary entries while in Draft
+        const draftUpdate = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/rounds/${roundId}`,
+            headers: supervisor.headers,
+            payload: {
+                binaryEntries: [
+                    { id: initialEntries[0]?.id, title: "Updated Option A", description: "New A description" },
+                    { id: initialEntries[1]?.id, title: "Updated Option B", description: "New B description" }
+                ]
+            }
+        });
+        expect(draftUpdate.statusCode).toBe(200);
+
+        // supervisor transitions directly Draft -> Voting
+        const votingTransition = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/rounds/${roundId}`,
+            headers: supervisor.headers,
+            payload: { status: RoundStatus.Voting }
+        });
+        expect(votingTransition.statusCode).toBe(200);
+
+        // supervisor updates binary entries during Voting
+        const votingUpdate = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/rounds/${roundId}`,
+            headers: supervisor.headers,
+            payload: {
+                binaryEntries: [
+                    { id: initialEntries[0]?.id, title: "Live Option A" },
+                    { id: initialEntries[1]?.id, title: "Live Option B" }
+                ]
+            }
+        });
+        expect(votingUpdate.statusCode).toBe(200);
+
+        // cannot delete single entry from binary round
+        const entryDeletion = await context.application.inject({
+            method: "DELETE",
+            url: `/api/v1/rounds/${roundId}/entries/${initialEntries[0]!.id}`,
+            headers: admin.headers
+        });
+        expect(entryDeletion.statusCode).toBe(409);
     });
 
     it("guards entry moderation and deletion", async () => {

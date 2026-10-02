@@ -81,6 +81,23 @@ export const roundDetailSchema = roundSchema
     })
     .meta({ id: "RoundDetail" });
 
+export const binaryChoiceInputSchema = z
+    .object({
+        title: fieldRules.entryTitle,
+        description: fieldRules.entryDescription.default(null),
+        mediaKey: z.string().max(255).nullable().default(null)
+    })
+    .meta({ id: "BinaryChoiceInput" });
+
+export const binaryChoiceUpdateInputSchema = z
+    .object({
+        id: uuidSchema.optional(),
+        title: fieldRules.entryTitle,
+        description: fieldRules.entryDescription.default(null),
+        mediaKey: z.string().max(255).nullable().optional()
+    })
+    .meta({ id: "BinaryChoiceUpdateInput" });
+
 export const entrySchema = z
     .object({
         id: uuidSchema,
@@ -292,6 +309,8 @@ export type PresignedUploadDto = z.infer<typeof presignedUploadSchema>;
 export type ShotThreadMapDto = z.infer<typeof shotThreadMapSchema>;
 export type ReclaimResultDto = z.infer<typeof reclaimResultSchema>;
 export type PipelineProgressDto = z.infer<typeof pipelineProgressSchema>;
+export type BinaryChoiceInputDto = z.infer<typeof binaryChoiceInputSchema>;
+export type BinaryChoiceUpdateInputDto = z.infer<typeof binaryChoiceUpdateInputSchema>;
 
 export const emailVerificationSchema = z
     .object({

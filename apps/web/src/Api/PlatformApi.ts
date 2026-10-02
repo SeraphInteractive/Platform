@@ -74,11 +74,25 @@ export interface PageQuery {
     readonly perPage?: number;
 }
 
+export interface BinaryChoiceInput {
+    readonly title: string;
+    readonly description?: string | null;
+    readonly mediaKey?: string | null;
+}
+
+export interface BinaryChoiceUpdateInput {
+    readonly id?: string;
+    readonly title: string;
+    readonly description?: string | null;
+    readonly mediaKey?: string | null;
+}
+
 export interface CreateRoundInput {
     readonly title: string;
     readonly pollType: PollType;
     readonly opensAt: string | null;
     readonly closesAt: string | null;
+    readonly binaryEntries?: readonly [BinaryChoiceInput, BinaryChoiceInput];
 }
 
 export interface UpdateRoundInput {
@@ -87,6 +101,7 @@ export interface UpdateRoundInput {
     readonly status?: RoundStatus;
     readonly opensAt?: string | null;
     readonly closesAt?: string | null;
+    readonly binaryEntries?: readonly [BinaryChoiceUpdateInput, BinaryChoiceUpdateInput];
 }
 
 export interface EntryInput {
