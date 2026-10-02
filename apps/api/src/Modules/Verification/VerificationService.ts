@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
-import { emailCodeLength } from "@platform/contracts";
+import { emailCodeLength, Role } from "@platform/contracts";
 import {
     ApplicationError,
     BadRequestError,
@@ -156,7 +156,7 @@ export class VerificationService {
                     .set({
                         verifiedEmailHash: pending.emailHash,
                         emailVerifiedAt: new Date(),
-                        role: current.role
+                        role: current.role === Role.Member ? Role.Voter : current.role
                     })
                     .where(and(eq(users.id, user.id), isNull(users.emailVerifiedAt)))
                     .returning();

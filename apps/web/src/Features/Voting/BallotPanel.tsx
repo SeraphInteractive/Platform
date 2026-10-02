@@ -283,7 +283,7 @@ export function BallotPanel({ round }: { readonly round: RoundDetailDto }): Reac
             </Alert>
         );
     }
-    if (!hasAtLeast(user, Role.Voter)) {
+    if (!user.isVerified && !hasAtLeast(user, Role.Voter)) {
         return (
             <EmptyState title="Verify to vote">
                 <span className="block">Verify your email once to vote in every round.</span>
