@@ -312,7 +312,7 @@ export class ActingApiClient {
 
     public async submitWork(
         shotId: string,
-        input: { videoKey: string; blendKey: string | null; notes: string | null }
+        input: { videoKey: string; blendKey: string; notes: string | null }
     ): Promise<SubmissionDto> {
         return (await this.request(`/shots/${shotId}/submissions`, dataEnvelope(submissionSchema), { method: "POST", body: input })).data;
     }

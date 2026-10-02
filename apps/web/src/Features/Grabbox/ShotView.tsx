@@ -70,7 +70,7 @@ function ClaimDialog({ shot }: { readonly shot: ShotDetailDto }): ReactNode {
                     </DialogDescription>
                 </DialogHeader>
                 <ul className="text-muted-foreground list-inside list-[square] space-y-1.5 text-sm">
-                    <li>Deliver a rendered video, and the .blend file if you can, before the deadline.</li>
+                    <li>Deliver a rendered video and the .blend project file before the deadline.</li>
                     <li>Follow the brief. Ask in the task&apos;s Discord thread if something is unclear.</li>
                     <li>If you get blocked, release the task so someone else can pick it up.</li>
                 </ul>
@@ -155,6 +155,14 @@ function ActionPanel({ shot, user }: { readonly shot: ShotDetailDto; readonly us
                         .
                     </p>
                     {isStaff && <ReleaseButton shot={shot} isClaimant={false} />}
+                </div>
+            );
+        }
+        if (user.isBlacklisted) {
+            return (
+                <div className="space-y-3">
+                    <p className="text-sm text-destructive">Your account has been blacklisted and cannot submit work on this task. Reach out to a moderator on Discord.</p>
+                    <ReleaseButton shot={shot} isClaimant />
                 </div>
             );
         }
@@ -300,9 +308,6 @@ function ShotDetail({ shot }: { readonly shot: ShotDetailDto }): ReactNode {
                 description={
                     <span className="flex items-center gap-2 flex-wrap">
                         <ShotStatusBadge status={shot.status} />
-                        {shot.status === ShotStatus.Claimed && shot.deadlineAt !== null && (
-                            <CountdownTimer targetDate={shot.deadlineAt} prefix="Due in" />
-                        )}
                         {shot.isSeniorLocked && shot.seniorPriorityUntil !== null && (
                             <CountdownTimer targetDate={shot.seniorPriorityUntil} prefix="Senior lock:" icon="lock" />
                         )}

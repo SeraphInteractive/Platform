@@ -74,20 +74,30 @@ describe("shot grab-box", () => {
         const { key } = json<Envelope<{ key: string }>>(upload).data;
         expect(key).toMatch(new RegExp(`^shots/${shotId}/${voter.record.id}/[0-9a-f-]{36}-final_cut\\.mp4$`, "u"));
 
+        const blendUpload = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${shotId}/uploads`,
+            headers: voter.headers,
+            payload: { kind: "blend", fileName: "project.blend", contentType: "application/octet-stream", sizeBytes: 2048 }
+        });
+        expect(blendUpload.statusCode).toBe(201);
+        const blendKey = json<Envelope<{ key: string }>>(blendUpload).data.key;
+
         const missing = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${shotId}/submissions`,
             headers: voter.headers,
-            payload: { videoKey: key }
+            payload: { videoKey: key, blendKey }
         });
         expect(json(missing).code).toBe("UPLOAD_MISSING");
 
         context.storage.store(StorageBucket.Deliverables, key, 1024, "video/mp4");
+        context.storage.store(StorageBucket.Deliverables, blendKey, 2048, "application/octet-stream");
         const submitted = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${shotId}/submissions`,
             headers: voter.headers,
-            payload: { videoKey: key, notes: "v1" }
+            payload: { videoKey: key, blendKey, notes: "v1" }
         });
         expect(submitted.statusCode).toBe(201);
         const submission = json<Envelope<{ id: string; version: number; videoUrl: string | null }>>(submitted).data;
@@ -135,13 +145,22 @@ describe("shot grab-box", () => {
                 payload: { kind: "video", fileName: "a.mp4", contentType: "video/mp4", sizeBytes: 10 }
             })
         ).data;
+        const blendUpload = json<Envelope<{ key: string }>>(
+            await context.application.inject({
+                method: "POST",
+                url: `/api/v1/shots/${shotId}/uploads`,
+                headers: worker.headers,
+                payload: { kind: "blend", fileName: "a.blend", contentType: "application/octet-stream", sizeBytes: 10 }
+            })
+        ).data;
         context.storage.store(StorageBucket.Deliverables, upload.key, 10, "video/mp4");
+        context.storage.store(StorageBucket.Deliverables, blendUpload.key, 10, "application/octet-stream");
         const submission = json<Envelope<{ id: string }>>(
             await context.application.inject({
                 method: "POST",
                 url: `/api/v1/shots/${shotId}/submissions`,
                 headers: worker.headers,
-                payload: { videoKey: upload.key }
+                payload: { videoKey: upload.key, blendKey: blendUpload.key }
             })
         ).data;
         const review = await context.application.inject({
@@ -293,13 +312,15 @@ describe("shot grab-box", () => {
         const mp4Buf = Buffer.concat([ftyp, atomLen, Buffer.from("moov", "ascii"), moovPayload]);
 
         const videoKey = `shots/${shotId}/${worker.record.id}/11111111-2222-3333-4444-555555555555-video_ai.mp4`;
+        const blendKey = `shots/${shotId}/${worker.record.id}/11111111-2222-3333-4444-555555555555-project.blend`;
         context.storage.store(StorageBucket.Deliverables, videoKey, mp4Buf.length, "video/mp4", mp4Buf);
+        context.storage.store(StorageBucket.Deliverables, blendKey, 100, "application/octet-stream");
 
         const submitted = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${shotId}/submissions`,
             headers: worker.headers,
-            payload: { videoKey, notes: "AI generated test shot" }
+            payload: { videoKey, blendKey, notes: "AI generated test shot" }
         });
         expect(submitted.statusCode).toBe(201);
         const submission = json<Envelope<{ id: string; aiFlags: string[] }>>(submitted).data;
@@ -314,5 +335,28 @@ describe("shot grab-box", () => {
             expect(aiNotif.mediaKind).toBe("task_submission");
             expect(aiNotif.flags).toContain("Runway AI video signature");
         }
+    });
+
+    it("prevents blacklisted users from claiming or submitting tasks", async () => {
+        const shotId = await createShot("SC08-010");
+        const worker = await context.createUser(Role.Contributor);
+        await context.database.update(users).set({ isBlacklisted: true }).where(eq(users.id, worker.record.id));
+
+        const claimAttempt = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${shotId}/claim`,
+            headers: worker.headers
+        });
+        expect(claimAttempt.statusCode).toBe(403);
+        expect(json(claimAttempt).code).toBe("USER_BLACKLISTED");
+
+        const submitAttempt = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${shotId}/submissions`,
+            headers: worker.headers,
+            payload: { videoKey: "dummy-video", blendKey: "dummy-blend", notes: null }
+        });
+        expect(submitAttempt.statusCode).toBe(403);
+        expect(json(submitAttempt).code).toBe("USER_BLACKLISTED");
     });
 });

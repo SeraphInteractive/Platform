@@ -29,12 +29,18 @@ function videoProblem(video: File | null): string | null {
 }
 
 function blendProblem(blend: File | null): string | null {
-    return blend !== null && !blend.name.toLowerCase().endsWith(".blend") ? "The project file must be a .blend file." : null;
+    if (blend === null) {
+        return "Attach the .blend project file.";
+    }
+    return !blend.name.toLowerCase().endsWith(".blend") ? "The project file must be a .blend file." : null;
 }
 
 function validate(draft: WorkDraft): string | null {
     if (draft.video === null) {
         return "Attach the rendered video.";
+    }
+    if (draft.blend === null) {
+        return "Attach the .blend project file.";
     }
     return videoProblem(draft.video) ?? blendProblem(draft.blend) ?? problemOf(fieldRules.workNotes, draft.notes);
 }
@@ -59,21 +65,20 @@ export function SubmitWorkForm({ shot, onSubmitted }: { readonly shot: ShotDetai
             await uploadToStorage(videoUpload, input.video, (value) => {
                 setProgress({ label: "Uploading video", value });
             });
-            let blendKey: string | null = null;
-            if (input.blend !== null) {
-                const blendUpload = await platformApi.requestDeliverableUpload(shot.id, {
-                    kind: DeliverableKind.Blend,
-                    fileName: input.blend.name,
-                    contentType: blendContentType,
-                    sizeBytes: input.blend.size
-                });
-                await uploadToStorage(blendUpload, input.blend, (value) => {
-                    setProgress({ label: "Uploading project file", value });
-                });
-                blendKey = blendUpload.key;
+            if (input.blend === null) {
+                throw new Error("Missing project file (.blend).");
             }
+            const blendUpload = await platformApi.requestDeliverableUpload(shot.id, {
+                kind: DeliverableKind.Blend,
+                fileName: input.blend.name,
+                contentType: blendContentType,
+                sizeBytes: input.blend.size
+            });
+            await uploadToStorage(blendUpload, input.blend, (value) => {
+                setProgress({ label: "Uploading project file", value });
+            });
             const notes = input.notes.trim();
-            return platformApi.submitWork(shot.id, { videoKey: videoUpload.key, blendKey, notes: notes.length === 0 ? null : notes });
+            return platformApi.submitWork(shot.id, { videoKey: videoUpload.key, blendKey: blendUpload.key, notes: notes.length === 0 ? null : notes });
         },
         onSuccess: (submission) => {
             void queryClient.invalidateQueries({ queryKey: queryKeys.shot(shot.id) });
@@ -116,13 +121,14 @@ export function SubmitWorkForm({ shot, onSubmitted }: { readonly shot: ShotDetai
                 />
             </div>
             <div className="space-y-2">
-                <Label htmlFor={`${formId}-blend`}>Project file (.blend, optional)</Label>
+                <Label htmlFor={`${formId}-blend`}>Project file (.blend)</Label>
                 <FilePicker
                     id={`${formId}-blend`}
                     file={draft.blend}
+                    required
                     accept=".blend"
                     disabled={submit.isPending}
-                    invalid={blendProblem(draft.blend) !== null}
+                    invalid={draft.blend !== null && blendProblem(draft.blend) !== null}
                     onChange={(blend) => {
                         setDraft((current) => ({ ...current, blend }));
                     }}
@@ -145,7 +151,7 @@ export function SubmitWorkForm({ shot, onSubmitted }: { readonly shot: ShotDetai
                     <Progress value={progress.value * 100} aria-label={progress.label} />
                 </div>
             )}
-            {problem !== null && draft.video !== null && <p className="text-destructive text-xs">{problem}</p>}
+            {problem !== null && (draft.video !== null || draft.blend !== null) && <p className="text-destructive text-xs">{problem}</p>}
             <Button type="submit" disabled={problem !== null || submit.isPending}>
                 {submit.isPending ? "Submitting…" : "Submit for review"}
             </Button>

@@ -297,7 +297,7 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
                 params: shotParams,
                 body: z.object({
                     videoKey: z.string().min(1).max(512),
-                    blendKey: z.string().min(1).max(512).nullable().default(null),
+                    blendKey: z.string().min(1).max(512),
                     notes: fieldRules.workNotes.default(null)
                 }),
                 response: { 201: dataEnvelope(submissionSchema), ...errorResponses }

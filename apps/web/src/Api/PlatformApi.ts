@@ -122,7 +122,7 @@ export interface ShotQuery extends PageQuery {
 
 export interface SubmitWorkInput {
     readonly videoKey: string;
-    readonly blendKey: string | null;
+    readonly blendKey: string;
     readonly notes: string | null;
 }
 

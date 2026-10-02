@@ -26,12 +26,5 @@ export function ClaimantText({ shot }: { readonly shot: ShotDto }): ReactNode {
     if (shot.claimer === null) {
         return <span className="text-muted-foreground">—</span>;
     }
-    return (
-        <span className="inline-flex items-center gap-1.5 flex-wrap">
-            <span>{shot.claimer.username}</span>
-            {shot.deadlineAt !== null && (
-                <CountdownTimer targetDate={shot.deadlineAt} prefix="Due in" />
-            )}
-        </span>
-    );
+    return <span>{shot.claimer.username}</span>;
 }

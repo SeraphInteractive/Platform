@@ -93,7 +93,7 @@ export interface DeliverableUploadInput {
 
 export interface SubmitWorkInput {
     readonly videoKey: string;
-    readonly blendKey: string | null;
+    readonly blendKey: string;
     readonly notes: string | null;
 }
 
@@ -319,6 +319,9 @@ export class ShotsService {
     }
 
     public async claim(user: AuthenticatedUser, shotId: string): Promise<ShotRecord> {
+        if (user.isBlacklisted) {
+            throw new ForbiddenError("Your account cannot claim tasks.", ErrorCode.UserBlacklisted);
+        }
         const now = new Date();
         let claimed: ShotRecord;
         try {
@@ -395,6 +398,9 @@ export class ShotsService {
     }
 
     public async createDeliverableUpload(user: AuthenticatedUser, shotId: string, input: DeliverableUploadInput): Promise<PresignedUpload> {
+        if (user.isBlacklisted) {
+            throw new ForbiddenError("Your account cannot upload task deliverables.", ErrorCode.UserBlacklisted);
+        }
         if (!this.storage.isEnabled(StorageBucket.Deliverables)) {
             throw new ServiceUnavailableError("Deliverable uploads are not configured on this server.");
         }
@@ -420,11 +426,12 @@ export class ShotsService {
     }
 
     public async submit(user: AuthenticatedUser, shotId: string, input: SubmitWorkInput): Promise<SubmissionRecord> {
+        if (user.isBlacklisted) {
+            throw new ForbiddenError("Your account cannot submit tasks.", ErrorCode.UserBlacklisted);
+        }
         const maxBytes = this.storageConfiguration.deliverableMaxBytes;
         await assertDeliverable(this.storage, input.videoKey, DeliverableKind.Video, shotId, user.id, maxBytes, "videoKey");
-        if (input.blendKey !== null) {
-            await assertDeliverable(this.storage, input.blendKey, DeliverableKind.Blend, shotId, user.id, maxBytes, "blendKey");
-        }
+        await assertDeliverable(this.storage, input.blendKey, DeliverableKind.Blend, shotId, user.id, maxBytes, "blendKey");
 
         const buffer = await this.storage.getObject(StorageBucket.Deliverables, input.videoKey, 524288);
         const detection = inspectMediaAiSignatures(buffer);
