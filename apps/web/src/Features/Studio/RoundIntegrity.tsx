@@ -1,21 +1,20 @@
 "use client";
 
-import { RaidFlag, RaidSeverity, type RaidTelemetryDto } from "@platform/contracts";
+import { RaidFlag, RaidSeverity } from "@platform/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Scale, ShieldAlert } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
 import { RelativeTime } from "@/Components/Common/RelativeTime";
 import { Section } from "@/Components/Common/Section";
 import { EmptyState, ErrorState, LoadingRows } from "@/Components/Common/States";
 import { Tone, ToneBadge } from "@/Components/Common/StatusBadge";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/Components/Ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/Ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/Components/Ui/tabs";
 import { useApprovedEntries } from "@/Features/Voting/UseApprovedEntries";
 import { StreamState, useRoundEvents, type RoundEvent } from "@/Hooks/UseRoundEvents";
-import { formatDateTime, formatNumber, formatPercent } from "@/Lib/Format";
+import { formatNumber, formatPercent } from "@/Lib/Format";
 import { cn } from "@/Lib/Utils";
 import { InvarianceSummary, NetworkMonitor, ScatterChart } from "./TelemetryCharts";
 
@@ -47,72 +46,6 @@ const streamLabels: Readonly<Record<StreamState, string>> = {
 
 function SeverityBadge({ severity }: { readonly severity: RaidSeverity }): ReactNode {
     return <ToneBadge tone={severityTones[severity]}>{severityLabels[severity]}</ToneBadge>;
-}
-
-interface EntryHistoryProps {
-    readonly roundId: string;
-    readonly entryId: string | null;
-    readonly title: string;
-    readonly onClose: () => void;
-}
-
-function EntryHistory({ roundId, entryId, title, onClose }: EntryHistoryProps): ReactNode {
-    const history = useQuery({
-        queryKey: queryKeys.entryTelemetry(roundId, entryId ?? ""),
-        queryFn: () => platformApi.entryTelemetry(roundId, entryId ?? "", 50),
-        enabled: entryId !== null
-    });
-    return (
-        <Sheet
-            open={entryId !== null}
-            onOpenChange={(open) => {
-                if (!open) {
-                    onClose();
-                }
-            }}
-        >
-            <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
-                <SheetHeader>
-                    <SheetTitle className="truncate">{title}</SheetTitle>
-                    <SheetDescription>Last 50 checks</SheetDescription>
-                </SheetHeader>
-                <div className="px-4 pb-4">
-                    {history.isPending ? (
-                        <LoadingRows rows={4} />
-                    ) : history.isError ? (
-                        <ErrorState error={history.error} onRetry={() => void history.refetch()} />
-                    ) : history.data.length === 0 ? (
-                        <EmptyState title="No checks yet" />
-                    ) : (
-                        <div className="overflow-x-auto border">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Time</TableHead>
-                                        <TableHead>Severity</TableHead>
-                                        <TableHead className="text-right">Score</TableHead>
-                                        <TableHead className="text-right">Velocity z</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {history.data.map((row) => (
-                                        <TableRow key={row.id}>
-                                            <TableCell className="text-xs whitespace-nowrap">{formatDateTime(row.createdAt)}</TableCell>
-                                            <TableCell>
-                                                <SeverityBadge severity={row.severity} />
-                                            </TableCell>
-                                            <TableCell className="text-right tabular-nums">{formatNumber(row.compositeScore)}</TableCell>
-                                            <TableCell className="text-right tabular-nums">{formatNumber(row.velocityZScore)}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    )}
-                </div>
-            </SheetContent>
-        </Sheet>
-    );
 }
 
 function describeEvent(event: RoundEvent, titleOf: (entryId: string) => string): string {
@@ -178,7 +111,6 @@ export interface RoundIntegrityProps {
 }
 
 export function RoundIntegrity({ roundId, live, defaultTab = "raid" }: RoundIntegrityProps): ReactNode {
-    const [selected, setSelected] = useState<RaidTelemetryDto | null>(null);
     const queryClient = useQueryClient();
     const roundEvents = useRoundEvents(roundId, live);
     const lastRefresh = useRef(0);
@@ -231,8 +163,6 @@ export function RoundIntegrity({ roundId, live, defaultTab = "raid" }: RoundInte
                             telemetryList={telemetry.data ?? []}
                             leaderboardItems={leaderboard.data?.items ?? []}
                             titleOf={titleOf}
-                            onHover={setSelected}
-                            hovered={selected}
                         />
                     </Section>
                     <Section title="Anomaly Checks">
@@ -259,13 +189,7 @@ export function RoundIntegrity({ roundId, live, defaultTab = "raid" }: RoundInte
                                         {[...telemetry.data]
                                             .sort((left, right) => right.compositeScore - left.compositeScore)
                                             .map((row) => (
-                                                <TableRow
-                                                    key={row.id}
-                                                    className="cursor-pointer"
-                                                    onClick={() => {
-                                                        setSelected(row);
-                                                    }}
-                                                >
+                                                <TableRow key={row.id}>
                                                     <TableCell className="max-w-56 truncate">{titleOf(row.entryId)}</TableCell>
                                                     <TableCell>
                                                         <SeverityBadge severity={row.severity} />
@@ -316,15 +240,6 @@ export function RoundIntegrity({ roundId, live, defaultTab = "raid" }: RoundInte
                     </Section>
                 </TabsContent>
             </Tabs>
-
-            <EntryHistory
-                roundId={roundId}
-                entryId={selected?.entryId ?? null}
-                title={selected === null ? "" : titleOf(selected.entryId)}
-                onClose={() => {
-                    setSelected(null);
-                }}
-            />
         </div>
     );
 }
