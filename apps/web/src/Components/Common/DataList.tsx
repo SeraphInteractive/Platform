@@ -3,11 +3,21 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { cn } from "@/Lib/Utils";
 
-export function Toolbar({ children, trailing }: { readonly children: ReactNode; readonly trailing?: ReactNode }): ReactNode {
+export function Toolbar({
+    children,
+    trailing,
+    className
+}: {
+    readonly children: ReactNode;
+    readonly trailing?: ReactNode;
+    readonly className?: string;
+}): ReactNode {
     return (
-        <div className="bg-card mb-4 flex min-h-12 flex-wrap items-center gap-2 rounded-md border px-2 py-[7px]">
-            {children}
-            {trailing !== undefined && <div className="ml-auto flex items-center gap-2">{trailing}</div>}
+        <div className={cn("bg-card mb-4 flex min-h-12 max-w-full flex-wrap items-center justify-between gap-2 rounded-md border p-1.5 sm:px-2 sm:py-[7px]", className)}>
+            <div className="flex min-w-0 max-w-full flex-1 items-center gap-2 overflow-x-auto py-0.5 no-scrollbar">
+                {children}
+            </div>
+            {trailing !== undefined && <div className="ml-auto flex shrink-0 items-center gap-2 pl-1">{trailing}</div>}
         </div>
     );
 }

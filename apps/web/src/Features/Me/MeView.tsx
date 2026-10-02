@@ -257,7 +257,7 @@ function ActiveAndUpcomingRoundsSection(): ReactNode {
                                 {round.title}
                             </CardTitle>
                             <CardDescription className="text-xs">
-                                {pollTypeLabels[round.pollType]} · {round.ballotCount} ballots cast
+                                {pollTypeLabels[round.pollType]}
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="pt-0">

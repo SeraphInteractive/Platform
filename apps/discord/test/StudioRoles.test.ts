@@ -231,7 +231,7 @@ describe("NotificationDispatcher moderation and role sync side effects", () => {
 
 describe("ServerProvisioner hierarchy", () => {
     it("sorts guild role positions from Executive down to Community", async () => {
-        const setPositionsFn = vi.fn(async () => undefined);
+        const setPositionsFn = vi.fn(async (_positions: { role: string; position: number }[]) => undefined);
         const guildRoles = new Map<string, DiscordRole>([
             ["1", createMockDiscordRole("1", "Producer")],
             ["2", createMockDiscordRole("2", "Admin")],
@@ -254,7 +254,7 @@ describe("ServerProvisioner hierarchy", () => {
         expect(count).toBe(5);
         expect(setPositionsFn).toHaveBeenCalled();
 
-        const positions = setPositionsFn.mock.calls[0][0] as { role: string; position: number }[];
+        const positions = setPositionsFn.mock.calls[0]![0] as { role: string; position: number }[];
         const posMap = new Map(positions.map((p) => [p.role, p.position]));
 
         // Producer > Admin > Supervisor > Animators > Voters
@@ -265,7 +265,7 @@ describe("ServerProvisioner hierarchy", () => {
     });
 
     it("orders Media Team under Supervisor and above Animators", async () => {
-        const setPositionsFn = vi.fn(async () => undefined);
+        const setPositionsFn = vi.fn(async (_positions: { role: string; position: number }[]) => undefined);
         const guildRoles = new Map<string, DiscordRole>([
             ["1", createMockDiscordRole("1", "Supervisor")],
             ["2", createMockDiscordRole("2", "Media Team")],
@@ -283,7 +283,7 @@ describe("ServerProvisioner hierarchy", () => {
         const provisioner = new ServerProvisioner(settings, { warn: vi.fn(), info: vi.fn() } as any);
 
         await provisioner.enforceRoleHierarchy(mockGuild as any);
-        const positions = setPositionsFn.mock.calls[0][0] as { role: string; position: number }[];
+        const positions = setPositionsFn.mock.calls[0]![0] as { role: string; position: number }[];
         const posMap = new Map(positions.map((p) => [p.role, p.position]));
 
         // supervisor > media team > animators

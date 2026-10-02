@@ -165,7 +165,7 @@ function EmptyTabState({
                     There are no voting or submission rounds running at the moment. Check past results or check back soon!
                 </p>
                 <div className="mt-4 flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => onSwitchTab(RoundStatus.Finalized)}>
+                    <Button size="sm" variant="outline" onClick={() => { onSwitchTab(RoundStatus.Finalized); }}>
                         <Trophy className="size-4 mr-1.5" />
                         View past results
                     </Button>
@@ -184,11 +184,11 @@ function EmptyTabState({
                     No rounds are currently accepting ballots. You can check open submissions or explore past results.
                 </p>
                 <div className="mt-4 flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => onSwitchTab(RoundStatus.Open)}>
+                    <Button size="sm" variant="outline" onClick={() => { onSwitchTab(RoundStatus.Open); }}>
                         <Sparkles className="size-4 mr-1.5" />
                         Check submissions
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => onSwitchTab(RoundStatus.Finalized)}>
+                    <Button size="sm" variant="outline" onClick={() => { onSwitchTab(RoundStatus.Finalized); }}>
                         <Trophy className="size-4 mr-1.5" />
                         Past results
                     </Button>
@@ -207,7 +207,7 @@ function EmptyTabState({
                     No rounds are currently accepting new entries or pitches.
                 </p>
                 <div className="mt-4 flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => onSwitchTab(RoundStatus.Voting)}>
+                    <Button size="sm" variant="outline" onClick={() => { onSwitchTab(RoundStatus.Voting); }}>
                         <Vote className="size-4 mr-1.5" />
                         View live voting
                     </Button>
@@ -254,7 +254,7 @@ export function RoundsView(): ReactNode {
             <Toolbar
                 trailing={
                     rounds.data === undefined ? undefined : (
-                        <span className="text-muted-foreground text-xs">
+                        <span className="text-muted-foreground text-xs shrink-0">
                             {displayedRounds.length} {displayedRounds.length === 1 ? "round" : "rounds"}
                         </span>
                     )
@@ -270,9 +270,10 @@ export function RoundsView(): ReactNode {
                             setPage(1);
                         }
                     }}
+                    className="flex-nowrap shrink-0"
                 >
                     {filters.map((item) => (
-                        <ToggleGroupItem key={item} value={item} className="px-3">
+                        <ToggleGroupItem key={item} value={item} className="px-2.5 sm:px-3 text-xs sm:text-sm whitespace-nowrap shrink-0">
                             {filterLabels[item]}
                         </ToggleGroupItem>
                     ))}
@@ -283,7 +284,7 @@ export function RoundsView(): ReactNode {
             ) : rounds.isError ? (
                 <ErrorState error={rounds.error} onRetry={() => void rounds.refetch()} />
             ) : displayedRounds.length === 0 ? (
-                <EmptyTabState tab={activeTab} onSwitchTab={(newTab) => setTab(newTab)} />
+                <EmptyTabState tab={activeTab} onSwitchTab={(newTab) => { setTab(newTab); }} />
             ) : (
                 <>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
