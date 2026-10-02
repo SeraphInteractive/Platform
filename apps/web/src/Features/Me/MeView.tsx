@@ -1,6 +1,6 @@
 "use client";
 
-import { Role, type EntryDto, type ShotDto, type UserDto } from "@platform/contracts";
+import { type EntryDto, type ShotDto, type UserDto } from "@platform/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Sparkles } from "lucide-react";
 import type { Route } from "next";
@@ -22,7 +22,7 @@ import { useMyShots } from "@/Features/Grabbox/UseMyShots";
 import { EntryMedia } from "@/Features/Voting/EntryMedia";
 import { useSession } from "@/Hooks/UseSession";
 import { formatDate, specialtyLabel } from "@/Lib/Format";
-import { hasAtLeast, roleLabels } from "@/Lib/Roles";
+import { roleLabels } from "@/Lib/Roles";
 import { safeHttpUrl } from "@/Lib/SafeUrl";
 
 function Profile({ user }: { readonly user: UserDto }): ReactNode {
@@ -220,31 +220,7 @@ export function MeView(): ReactNode {
                         </AlertDescription>
                     </Alert>
                 )}
-                {hasAtLeast(user, Role.Contributor) ? (
-                    <ContributorWork user={user} />
-                ) : (
-                    <div className="space-y-10">
-                        <Section title="Want to help make the film?">
-                            <Card>
-                                <CardContent className="space-y-3 text-sm">
-                                    <p>
-                                        Right now you can vote in every open round and pitch your own ideas. If you&apos;d like to animate,
-                                        model, design sound or anything else, ask in the Discord to become a contributor.
-                                    </p>
-                                    <div className="flex flex-wrap gap-2">
-                                        <Button asChild size="sm">
-                                            <Link href="/voting">Go vote</Link>
-                                        </Button>
-                                        <Button asChild size="sm" variant="outline">
-                                            <Link href="/guidelines#grab-box">How contributing works</Link>
-                                        </Button>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </Section>
-                        <UserEntriesSection />
-                    </div>
-                )}
+                <ContributorWork user={user} />
             </div>
         </>
     );

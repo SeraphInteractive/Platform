@@ -1,6 +1,6 @@
 "use client";
 
-import { PollType, Role, type EntryDto, type RoundDetailDto } from "@platform/contracts";
+import { PollType, type EntryDto, type RoundDetailDto } from "@platform/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Check, GripVertical, X } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
@@ -17,7 +17,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/Com
 import { useSession } from "@/Hooks/UseSession";
 import { formatDateTime } from "@/Lib/Format";
 import { insertPickAt, movePick, samePicks, togglePick } from "@/Lib/Ranking";
-import { hasAtLeast } from "@/Lib/Roles";
 import { cn } from "@/Lib/Utils";
 import { EntryMedia } from "./EntryMedia";
 import { isEligible, requiredPicks, useApprovedEntries } from "./UseApprovedEntries";
@@ -283,7 +282,7 @@ export function BallotPanel({ round }: { readonly round: RoundDetailDto }): Reac
             </Alert>
         );
     }
-    if (!user.isVerified && !hasAtLeast(user, Role.Voter)) {
+    if (!user.isVerified) {
         return (
             <EmptyState title="Verify to vote">
                 <span className="block">Verify your email once to vote in every round.</span>

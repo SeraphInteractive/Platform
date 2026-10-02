@@ -34,7 +34,7 @@ const shotIdSchema = z.uuid();
 
 function ActiveClaimBanner(): ReactNode {
     const { user } = useSession();
-    const myShots = useMyShots(user !== null && hasAtLeast(user, Role.Contributor) ? user.id : null);
+    const myShots = useMyShots(user !== null ? user.id : null);
     const active = myShots.active;
     if (active === null) {
         return null;

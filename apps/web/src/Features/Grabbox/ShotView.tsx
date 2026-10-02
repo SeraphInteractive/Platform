@@ -202,9 +202,6 @@ function ActionPanel({ shot, user }: { readonly shot: ShotDetailDto; readonly us
             </div>
         );
     }
-    if (!hasAtLeast(user, Role.Contributor)) {
-        return <p className="text-sm">Tasks are claimed by contributors. Ask in the Discord if you&apos;d like to become one.</p>;
-    }
     if (user.isBlacklisted) {
         return <p className="text-sm">Your account can&apos;t claim tasks right now. Reach out to a moderator on Discord.</p>;
     }

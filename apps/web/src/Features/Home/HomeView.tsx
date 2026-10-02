@@ -1,6 +1,6 @@
 "use client";
 
-import { Role, RoundStatus, ShotStatus, type RoundDto } from "@platform/contracts";
+import { RoundStatus, ShotStatus, type RoundDto } from "@platform/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import type { Route } from "next";
@@ -19,7 +19,6 @@ import { useMyShots } from "@/Features/Grabbox/UseMyShots";
 import { PipelineSummary } from "@/Features/Roadmap/RoadmapView";
 import { useSession } from "@/Hooks/UseSession";
 import { pollTypeLabels } from "@/Lib/Format";
-import { hasAtLeast } from "@/Lib/Roles";
 
 function RoundRow({ round }: { readonly round: RoundDto }): ReactNode {
     return (
@@ -50,7 +49,7 @@ export function HomeView(): ReactNode {
     const rounds = useQuery({ queryKey: queryKeys.rounds(roundsQuery), queryFn: () => platformApi.rounds(roundsQuery) });
     const shotsQuery = { status: ShotStatus.Available, page: 1, perPage: 1 };
     const shots = useQuery({ queryKey: queryKeys.shots(shotsQuery), queryFn: () => platformApi.shots(shotsQuery) });
-    const myShots = useMyShots(user !== null && hasAtLeast(user, Role.Contributor) ? user.id : null);
+    const myShots = useMyShots(user !== null ? user.id : null);
     const active = myShots.active;
 
     return (
