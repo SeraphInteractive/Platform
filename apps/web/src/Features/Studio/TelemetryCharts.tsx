@@ -89,6 +89,111 @@ function useSvgPanZoom(width: number, height: number) {
     };
 }
 
+interface LayoutPoint<T> {
+    readonly data: T;
+    readonly id: string;
+    readonly cx: number;
+    readonly cy: number;
+    readonly label: string;
+}
+
+interface PositionedLayoutItem<T> {
+    readonly data: T;
+    readonly id: string;
+    readonly cx: number;
+    readonly cy: number;
+    readonly label: string;
+    readonly labelX: number;
+    readonly labelY: number;
+    readonly badgeWidth: number;
+    readonly badgeHeight: number;
+    readonly hasOffset: boolean;
+}
+
+// compute screen-space clustering and vertical fan-out for overlapping points
+function computeAntiCollisionLayout<T>(
+    items: readonly LayoutPoint<T>[],
+    zoom: number,
+    threshold: number = 26
+): PositionedLayoutItem<T>[] {
+    const n = items.length;
+    if (n === 0) return [];
+
+    const adj: number[][] = Array.from({ length: n }, () => []);
+    for (let i = 0; i < n; i++) {
+        const itemI = items[i];
+        if (!itemI) continue;
+        for (let j = i + 1; j < n; j++) {
+            const itemJ = items[j];
+            if (!itemJ) continue;
+            const dist = Math.hypot(itemI.cx - itemJ.cx, itemI.cy - itemJ.cy) * zoom;
+            if (dist < threshold) {
+                adj[i]?.push(j);
+                adj[j]?.push(i);
+            }
+        }
+    }
+
+    const visited = new Set<number>();
+    const result: PositionedLayoutItem<T>[] = [];
+
+    for (let i = 0; i < n; i++) {
+        if (visited.has(i)) continue;
+
+        const cluster: number[] = [];
+        const queue: number[] = [i];
+        visited.add(i);
+
+        while (queue.length > 0) {
+            const curr = queue.shift();
+            if (curr === undefined) break;
+            cluster.push(curr);
+            const neighbors = adj[curr] ?? [];
+            for (const neighbor of neighbors) {
+                if (!visited.has(neighbor)) {
+                    visited.add(neighbor);
+                    queue.push(neighbor);
+                }
+            }
+        }
+
+        cluster.sort((a, b) => {
+            const itemA = items[a];
+            const itemB = items[b];
+            if (!itemA || !itemB) return 0;
+            return itemA.cy - itemB.cy || itemA.cx - itemB.cx;
+        });
+        const clusterSize = cluster.length;
+        const verticalSpacing = 16;
+
+        cluster.forEach((itemIdx, idxInCluster) => {
+            const item = items[itemIdx];
+            if (!item) return;
+            const offsetY = clusterSize > 1 ? (idxInCluster - (clusterSize - 1) / 2) * verticalSpacing : 0;
+            const labelX = item.cx + 8;
+            const labelY = item.cy + offsetY;
+            const approxCharWidth = 5.6;
+            const badgeWidth = Math.max(36, item.label.length * approxCharWidth + 8);
+            const badgeHeight = 14;
+
+            result.push({
+                data: item.data,
+                id: item.id,
+                cx: item.cx,
+                cy: item.cy,
+                label: item.label,
+                labelX,
+                labelY,
+                badgeWidth,
+                badgeHeight,
+                hasOffset: Math.abs(offsetY) > 1 || clusterSize > 1
+            });
+        });
+    }
+
+    return result;
+}
+
 interface ScatterChartProps {
     readonly telemetryList: readonly RaidTelemetryDto[];
     readonly leaderboardItems?: readonly LeaderboardItemDto[];
@@ -209,54 +314,95 @@ export function ScatterChart({
                                 THREAT ZONE (Z &gt; 2.5, H &lt; 0.35)
                             </text>
 
-                            {/* points */}
-                            {points.map((p) => {
-                                const cx = scaleX(p.velocityZScore);
-                                const cy = scaleY(p.rankEntropy);
-                                const isSelected = activeHover?.entryId === p.entryId;
-                                const fillColor =
-                                    p.severity === RaidSeverity.CriticalRaid
-                                        ? "#ef4444"
-                                        : p.severity === RaidSeverity.Suspicious
-                                          ? "#f59e0b"
-                                          : "#10b981";
-                                const title = getTitle(p.entryId);
-                                const shortId = p.entryId.slice(0, 6);
-                                const displayLabel = title.length > 18 ? `${title.slice(0, 18)}… #${shortId}` : `${title} #${shortId}`;
-
-                                return (
-                                    <g
-                                        key={p.id}
-                                        onMouseEnter={() => setActiveHover(p)}
-                                        onMouseLeave={() => setActiveHover(null)}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActiveHover(p);
-                                        }}
-                                        className="cursor-pointer"
-                                    >
-                                        <circle
-                                            cx={cx}
-                                            cy={cy}
-                                            r={isSelected ? 6 : 4}
-                                            fill={fillColor}
-                                            stroke="#1e293b"
-                                            strokeWidth={isSelected ? 2 : 1}
-                                        />
-                                        <text
-                                            x={cx + 7}
-                                            y={cy + 3}
-                                            fontSize="9"
-                                            className={cn(
-                                                "font-mono transition-opacity",
-                                                isSelected ? "fill-foreground font-semibold" : "fill-foreground/80"
-                                            )}
-                                        >
-                                            {displayLabel}
-                                        </text>
-                                    </g>
+                            {/* points with anti-collision fan-out */}
+                            {(() => {
+                                const layoutItems = computeAntiCollisionLayout(
+                                    points.map((p) => {
+                                        const title = getTitle(p.entryId);
+                                        const shortId = p.entryId.slice(0, 6);
+                                        const displayLabel = title.length > 18 ? `${title.slice(0, 18)}… #${shortId}` : `${title} #${shortId}`;
+                                        return {
+                                            data: p,
+                                            id: p.id,
+                                            cx: scaleX(p.velocityZScore),
+                                            cy: scaleY(p.rankEntropy),
+                                            label: displayLabel
+                                        };
+                                    }),
+                                    transform.zoom
                                 );
-                            })}
+
+                                // render hovered point on top layer
+                                const sortedPoints = [...layoutItems].sort((a, b) => {
+                                    const aSel = activeHover?.entryId === a.data.entryId ? 1 : 0;
+                                    const bSel = activeHover?.entryId === b.data.entryId ? 1 : 0;
+                                    return aSel - bSel;
+                                });
+
+                                return sortedPoints.map((item) => {
+                                    const p = item.data;
+                                    const isSelected = activeHover?.entryId === p.entryId;
+                                    const fillColor =
+                                        p.severity === RaidSeverity.CriticalRaid
+                                            ? "#ef4444"
+                                            : p.severity === RaidSeverity.Suspicious
+                                              ? "#f59e0b"
+                                              : "#10b981";
+
+                                    return (
+                                        <g
+                                            key={p.id}
+                                            onMouseEnter={() => setActiveHover(p)}
+                                            onMouseLeave={() => setActiveHover(null)}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setActiveHover(p);
+                                            }}
+                                            className="cursor-pointer"
+                                        >
+                                            {item.hasOffset && (
+                                                <path
+                                                    d={`M ${item.cx} ${item.cy} Q ${item.cx + 4} ${item.labelY} ${item.labelX} ${item.labelY}`}
+                                                    stroke={isSelected ? "#3b82f6" : "rgba(148, 163, 184, 0.45)"}
+                                                    strokeWidth={isSelected ? 1.5 : 1}
+                                                    strokeDasharray="2 2"
+                                                    fill="none"
+                                                />
+                                            )}
+                                            <rect
+                                                x={item.labelX}
+                                                y={item.labelY - 9}
+                                                width={item.badgeWidth}
+                                                height={item.badgeHeight}
+                                                rx="3"
+                                                fill="#020817"
+                                                fillOpacity={isSelected ? 0.95 : 0.7}
+                                                stroke={isSelected ? "#3b82f6" : undefined}
+                                                strokeWidth={isSelected ? 1 : 0}
+                                            />
+                                            <text
+                                                x={item.labelX + 4}
+                                                y={item.labelY + 2}
+                                                fontSize="9"
+                                                className={cn(
+                                                    "font-mono select-none pointer-events-none transition-colors",
+                                                    isSelected ? "fill-foreground font-semibold" : "fill-foreground/85"
+                                                )}
+                                            >
+                                                {item.label}
+                                            </text>
+                                            <circle
+                                                cx={item.cx}
+                                                cy={item.cy}
+                                                r={isSelected ? 6 : 4}
+                                                fill={fillColor}
+                                                stroke="#1e293b"
+                                                strokeWidth={isSelected ? 2 : 1}
+                                            />
+                                        </g>
+                                    );
+                                });
+                            })()}
                         </g>
                     </g>
 
@@ -417,49 +563,100 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
                                 strokeDasharray="3 3"
                             />
 
-                            {items.map((item) => {
-                                const x = scaleX(item.rawScore);
-                                const reg = item.regularizedMeanScore ?? item.rawScore;
-                                const y = scaleY(reg);
-                                const parityY = scaleY(item.rawScore);
-                                const isSelected = hoveredEntryId === item.entryId;
-                                const shortId = item.entryId.slice(0, 6);
-                                const label = item.title.length > 18 ? `${item.title.slice(0, 18)}… #${shortId}` : `${item.title} #${shortId}`;
-
-                                return (
-                                    <g
-                                        key={item.entryId}
-                                        onMouseEnter={() => setHoveredEntryId(item.entryId)}
-                                        onMouseLeave={() => setHoveredEntryId(null)}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setHoveredEntryId(item.entryId);
-                                        }}
-                                        className="cursor-pointer"
-                                    >
-                                        <line x1={x} y1={parityY} x2={x} y2={y} stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="2 2" />
-                                        <circle
-                                            cx={x}
-                                            cy={y}
-                                            r={isSelected ? 6 : 4.5}
-                                            fill="#10b981"
-                                            stroke="#1e293b"
-                                            strokeWidth={isSelected ? 2 : 1}
-                                        />
-                                        <text
-                                            x={x + 7}
-                                            y={y + 3}
-                                            fontSize="9"
-                                            className={cn(
-                                                "font-mono transition-opacity",
-                                                isSelected ? "fill-foreground font-semibold" : "fill-foreground/80"
-                                            )}
-                                        >
-                                            {label}
-                                        </text>
-                                    </g>
+                            {/* items with anti-collision fan-out */}
+                            {(() => {
+                                const layoutItems = computeAntiCollisionLayout(
+                                    items.map((item) => {
+                                        const shortId = item.entryId.slice(0, 6);
+                                        const label = item.title.length > 18 ? `${item.title.slice(0, 18)}… #${shortId}` : `${item.title} #${shortId}`;
+                                        const reg = item.regularizedMeanScore ?? item.rawScore;
+                                        return {
+                                            data: item,
+                                            id: item.entryId,
+                                            cx: scaleX(item.rawScore),
+                                            cy: scaleY(reg),
+                                            label
+                                        };
+                                    }),
+                                    transform.zoom
                                 );
-                            })}
+
+                                // render hovered item on top layer
+                                const sortedItems = [...layoutItems].sort((a, b) => {
+                                    const aSel = hoveredEntryId === a.data.entryId ? 1 : 0;
+                                    const bSel = hoveredEntryId === b.data.entryId ? 1 : 0;
+                                    return aSel - bSel;
+                                });
+
+                                return sortedItems.map((item) => {
+                                    const datum = item.data;
+                                    const parityY = scaleY(datum.rawScore);
+                                    const isSelected = hoveredEntryId === datum.entryId;
+
+                                    return (
+                                        <g
+                                            key={datum.entryId}
+                                            onMouseEnter={() => setHoveredEntryId(datum.entryId)}
+                                            onMouseLeave={() => setHoveredEntryId(null)}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setHoveredEntryId(datum.entryId);
+                                            }}
+                                            className="cursor-pointer"
+                                        >
+                                            <line
+                                                x1={item.cx}
+                                                y1={parityY}
+                                                x2={item.cx}
+                                                y2={item.cy}
+                                                stroke="#3b82f6"
+                                                strokeWidth={isSelected ? 2 : 1.5}
+                                                strokeDasharray="2 2"
+                                                opacity={isSelected ? 1 : 0.7}
+                                            />
+                                            {item.hasOffset && (
+                                                <path
+                                                    d={`M ${item.cx} ${item.cy} Q ${item.cx + 4} ${item.labelY} ${item.labelX} ${item.labelY}`}
+                                                    stroke={isSelected ? "#3b82f6" : "rgba(148, 163, 184, 0.45)"}
+                                                    strokeWidth={isSelected ? 1.5 : 1}
+                                                    strokeDasharray="2 2"
+                                                    fill="none"
+                                                />
+                                            )}
+                                            <rect
+                                                x={item.labelX}
+                                                y={item.labelY - 9}
+                                                width={item.badgeWidth}
+                                                height={item.badgeHeight}
+                                                rx="3"
+                                                fill="#020817"
+                                                fillOpacity={isSelected ? 0.95 : 0.7}
+                                                stroke={isSelected ? "#3b82f6" : undefined}
+                                                strokeWidth={isSelected ? 1 : 0}
+                                            />
+                                            <text
+                                                x={item.labelX + 4}
+                                                y={item.labelY + 2}
+                                                fontSize="9"
+                                                className={cn(
+                                                    "font-mono select-none pointer-events-none transition-colors",
+                                                    isSelected ? "fill-foreground font-semibold" : "fill-foreground/85"
+                                                )}
+                                            >
+                                                {item.label}
+                                            </text>
+                                            <circle
+                                                cx={item.cx}
+                                                cy={item.cy}
+                                                r={isSelected ? 6 : 4.5}
+                                                fill="#10b981"
+                                                stroke="#1e293b"
+                                                strokeWidth={isSelected ? 2 : 1}
+                                            />
+                                        </g>
+                                    );
+                                });
+                            })()}
                         </g>
                     </g>
 
