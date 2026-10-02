@@ -1,7 +1,6 @@
 import type { ShotDto } from "@platform/contracts";
-import { Lock } from "lucide-react";
 import type { ReactNode } from "react";
-import { RelativeTime } from "@/Components/Common/RelativeTime";
+import { CountdownTimer } from "@/Components/Common/CountdownTimer";
 import { difficultyLabels, pluralize } from "@/Lib/Format";
 
 export function DifficultyText({ shot }: { readonly shot: ShotDto }): ReactNode {
@@ -17,11 +16,8 @@ export function SeniorLock({ shot }: { readonly shot: ShotDto }): ReactNode {
         return null;
     }
     return (
-        <span className="text-warning inline-flex items-center gap-1 text-xs">
-            <Lock className="size-3" aria-hidden="true" />
-            <span>
-                Senior priority, opens <RelativeTime value={shot.seniorPriorityUntil} />
-            </span>
+        <span className="text-warning inline-flex items-center gap-1.5 text-xs">
+            <CountdownTimer targetDate={shot.seniorPriorityUntil} prefix="Senior lock:" icon="lock" />
         </span>
     );
 }
@@ -31,13 +27,10 @@ export function ClaimantText({ shot }: { readonly shot: ShotDto }): ReactNode {
         return <span className="text-muted-foreground">—</span>;
     }
     return (
-        <span>
-            {shot.claimer.username}
+        <span className="inline-flex items-center gap-1.5 flex-wrap">
+            <span>{shot.claimer.username}</span>
             {shot.deadlineAt !== null && (
-                <span className="text-muted-foreground">
-                    {" · "}
-                    <RelativeTime value={shot.deadlineAt} prefix="due" />
-                </span>
+                <CountdownTimer targetDate={shot.deadlineAt} prefix="Due in" />
             )}
         </span>
     );

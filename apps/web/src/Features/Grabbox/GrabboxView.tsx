@@ -10,6 +10,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { z } from "zod";
 import { platformApi, type ShotQuery } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
+import { CountdownTimer } from "@/Components/Common/CountdownTimer";
 import { Toolbar } from "@/Components/Common/DataList";
 import { PageHeader } from "@/Components/Common/PageHeader";
 import { Pagination } from "@/Components/Common/Pagination";
@@ -46,8 +47,8 @@ function ActiveClaimBanner(): ReactNode {
                 <span className="font-medium text-foreground">{active.title}</span>
             </span>
             {active.deadlineAt !== null && (
-                <span className="text-muted-foreground hidden text-xs sm:inline">
-                    <RelativeTime value={active.deadlineAt} prefix="due" />
+                <span className="hidden sm:inline-flex">
+                    <CountdownTimer targetDate={active.deadlineAt} prefix="Due in" />
                 </span>
             )}
             <Button asChild size="xs">
@@ -107,7 +108,13 @@ function ShotCard({ shot }: { readonly shot: ShotDto }): ReactNode {
                         {shot.shotCode}
                     </span>
                 </div>
-                <div className="absolute top-2 right-2">
+                <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                    {shot.status === ShotStatus.Claimed && shot.deadlineAt !== null && (
+                        <CountdownTimer targetDate={shot.deadlineAt} prefix="Due" />
+                    )}
+                    {shot.isSeniorLocked && shot.seniorPriorityUntil !== null && (
+                        <CountdownTimer targetDate={shot.seniorPriorityUntil} prefix="Lock" icon="lock" />
+                    )}
                     <ShotStatusBadge status={shot.status} />
                 </div>
                 {shot.imageUrls.length > 1 && (

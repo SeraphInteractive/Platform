@@ -10,6 +10,7 @@ import { ApiError } from "@/Api/ApiClient";
 import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
 import { ConfirmButton } from "@/Components/Common/ConfirmButton";
+import { CountdownTimer } from "@/Components/Common/CountdownTimer";
 import { PageHeader } from "@/Components/Common/PageHeader";
 import { RelativeTime } from "@/Components/Common/RelativeTime";
 import { Section } from "@/Components/Common/Section";
@@ -299,7 +300,17 @@ function ShotDetail({ shot }: { readonly shot: ShotDetailDto }): ReactNode {
             <PageHeader
                 eyebrow={`${shot.shotCode} · Scene ${shot.sceneNumber}`}
                 title={shot.title}
-                description={<ShotStatusBadge status={shot.status} />}
+                description={
+                    <span className="flex items-center gap-2 flex-wrap">
+                        <ShotStatusBadge status={shot.status} />
+                        {shot.status === ShotStatus.Claimed && shot.deadlineAt !== null && (
+                            <CountdownTimer targetDate={shot.deadlineAt} prefix="Due in" />
+                        )}
+                        {shot.isSeniorLocked && shot.seniorPriorityUntil !== null && (
+                            <CountdownTimer targetDate={shot.seniorPriorityUntil} prefix="Senior lock:" icon="lock" />
+                        )}
+                    </span>
+                }
                 actions={
                     threadUrl === null ? undefined : (
                         <Button asChild variant="outline" size="sm">
@@ -335,7 +346,7 @@ function ShotDetail({ shot }: { readonly shot: ShotDetailDto }): ReactNode {
                         <Fact label="Difficulty">{difficultyLabels[shot.difficultyTier]}</Fact>
                         <Fact label="Time to deliver">{pluralize(shot.tierDays, "day")}</Fact>
                         <Fact label="Claimed by">{shot.claimer?.username ?? "Nobody yet"}</Fact>
-                        <Fact label="Due">{shot.deadlineAt === null ? "—" : <RelativeTime value={shot.deadlineAt} />}</Fact>
+                        <Fact label="Due">{shot.deadlineAt === null ? "—" : <CountdownTimer targetDate={shot.deadlineAt} prefix="Due in" />}</Fact>
                     </dl>
                 </aside>
             </div>

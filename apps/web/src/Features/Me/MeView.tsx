@@ -8,6 +8,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
+import { CountdownTimer } from "@/Components/Common/CountdownTimer";
 import { PageHeader } from "@/Components/Common/PageHeader";
 import { RelativeTime } from "@/Components/Common/RelativeTime";
 import { Section } from "@/Components/Common/Section";
@@ -156,9 +157,9 @@ function ContributorWork({ user }: { readonly user: UserDto }): ReactNode {
                                     {myShots.active.shotCode} · {myShots.active.title}
                                 </p>
                                 {myShots.active.deadlineAt !== null && (
-                                    <p className="text-muted-foreground text-sm">
-                                        <RelativeTime value={myShots.active.deadlineAt} prefix="Due" />
-                                    </p>
+                                    <div className="mt-1">
+                                        <CountdownTimer targetDate={myShots.active.deadlineAt} prefix="Due in" />
+                                    </div>
                                 )}
                             </div>
                             <Button asChild size="sm">

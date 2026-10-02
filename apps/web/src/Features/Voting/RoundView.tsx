@@ -9,6 +9,7 @@ import { useState, type ReactNode } from "react";
 import { ApiError } from "@/Api/ApiClient";
 import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
+import { CountdownTimer } from "@/Components/Common/CountdownTimer";
 import { MarkdownText } from "@/Components/Common/MarkdownText";
 import { PageHeader } from "@/Components/Common/PageHeader";
 import { Pagination } from "@/Components/Common/Pagination";
@@ -362,10 +363,13 @@ function RoundDetail({ round }: { readonly round: RoundDetailDto }): ReactNode {
                         <span>{pluralize(round.ballotCount, "ballot")}</span>
                         <span>{pluralize(round.eligibleEntryCount, "entry", "entries")} on the ballot</span>
                         {round.status === RoundStatus.Open && round.closesAt !== null && (
-                            <RelativeTime value={round.closesAt} prefix="Closes" />
+                            <CountdownTimer targetDate={round.closesAt} prefix="Submissions close in" />
+                        )}
+                        {round.status === RoundStatus.Voting && round.closesAt !== null && (
+                            <CountdownTimer targetDate={round.closesAt} prefix="Voting closes in" />
                         )}
                         {round.status === RoundStatus.Draft && round.opensAt !== null && (
-                            <RelativeTime value={round.opensAt} prefix="Opens" />
+                            <CountdownTimer targetDate={round.opensAt} prefix="Opens in" />
                         )}
                     </span>
                 }
