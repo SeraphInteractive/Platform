@@ -43,10 +43,15 @@ export function toModeratedUserResponse(user: UserRecord): ModeratedUserDto {
     };
 }
 
-export function toUserSummary(user: Pick<UserRecord, "id" | "discordId" | "discordUsername" | "discordAvatar">): UserSummaryDto {
+export function toUserSummary(user: {
+    readonly id: string;
+    readonly discordId: string | null;
+    readonly discordUsername: string;
+    readonly discordAvatar: string | null;
+}): UserSummaryDto {
     return {
         id: user.id,
         username: user.discordUsername,
-        avatarUrl: avatarUrlOf(user.discordId, user.discordAvatar)
+        avatarUrl: user.discordId !== null ? avatarUrlOf(user.discordId, user.discordAvatar) : null
     };
 }

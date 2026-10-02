@@ -92,6 +92,7 @@ export const entrySchema = z
         mediaUrl: z.url().nullable(),
         aiFlags: z.array(z.string()).default([]),
         submittedBy: uuidSchema.nullable(),
+        author: userSummarySchema.nullable().default(null),
         createdAt: timestampSchema,
         updatedAt: timestampSchema
     })

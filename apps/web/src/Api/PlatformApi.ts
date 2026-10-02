@@ -215,6 +215,10 @@ export class PlatformApi {
         return (await request(`/rounds/${segment(roundId)}/ballots/me`, dataEnvelope(ballotSchema))).data;
     }
 
+    public async myEntries(): Promise<readonly EntryDto[]> {
+        return (await request("/users/me/entries", dataEnvelope(z.array(entrySchema)))).data;
+    }
+
     public async castBallot(roundId: string, picks: readonly string[]): Promise<BallotDto> {
         return (await request(`/rounds/${segment(roundId)}/ballots/me`, dataEnvelope(ballotSchema), { method: "PUT", body: { picks } }))
             .data;

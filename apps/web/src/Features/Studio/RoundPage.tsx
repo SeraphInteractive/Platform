@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ApiError } from "@/Api/ApiClient";
 import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
@@ -28,6 +28,7 @@ import { RoundIntegrity } from "./RoundIntegrity";
 function RoundDetail({ round }: { readonly round: RoundDetailDto }): ReactNode {
     const { user } = useSession();
     useBreadcrumbLabel(round.id, round.title);
+    const [tab, setTab] = useState("entries");
 
     return (
         <>
@@ -68,7 +69,7 @@ function RoundDetail({ round }: { readonly round: RoundDetailDto }): ReactNode {
                     </AlertDescription>
                 </Alert>
             )}
-            <Tabs defaultValue="entries">
+            <Tabs value={tab} onValueChange={setTab}>
                 <TabsList className="mb-6">
                     <TabsTrigger value="entries">Entries</TabsTrigger>
                     <TabsTrigger value="standings">{round.status === RoundStatus.Finalized ? "Results" : "Standings"}</TabsTrigger>
@@ -78,7 +79,7 @@ function RoundDetail({ round }: { readonly round: RoundDetailDto }): ReactNode {
                     <EntryModeration roundId={round.id} />
                 </TabsContent>
                 <TabsContent value="standings">
-                    <Standings round={round} />
+                    <Standings round={round} onSelectEntry={() => setTab("entries")} />
                 </TabsContent>
                 <TabsContent value="integrity">
                     <RoundIntegrity roundId={round.id} live={round.status === RoundStatus.Open} />

@@ -25,19 +25,20 @@ interface EntryMediaProps {
     readonly url: string | null;
     readonly title: string;
     readonly className?: string;
+    readonly controls?: boolean;
 }
 
-export function EntryMedia({ url, title, className }: EntryMediaProps): ReactNode {
+export function EntryMedia({ url, title, className, controls = true }: EntryMediaProps): ReactNode {
     if (url === null) {
         return null;
     }
     const kind = mediaKind(url);
-    const frame = cn("bg-muted aspect-video w-full overflow-hidden border object-contain", className);
+    const frame = cn("bg-muted aspect-video w-full overflow-hidden border object-cover", className);
     if (kind === "image") {
         return <img src={url} alt={title} loading="lazy" decoding="async" referrerPolicy="no-referrer" className={frame} />;
     }
     if (kind === "video") {
-        return <video src={url} controls preload="metadata" playsInline className={frame} aria-label={title} />;
+        return <video src={url} controls={controls} preload="metadata" playsInline className={frame} aria-label={title} />;
     }
     return null;
 }

@@ -11,7 +11,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatDateTime, formatNumber, formatPercent, pluralize } from "@/Lib/Format";
 import { cn } from "@/Lib/Utils";
 
-function StandingsTable({ items }: { readonly items: readonly LeaderboardItemDto[] }): ReactNode {
+function StandingsTable({
+    items,
+    onSelectEntry
+}: {
+    readonly items: readonly LeaderboardItemDto[];
+    readonly onSelectEntry?: (entryId: string) => void;
+}): ReactNode {
     if (items.length === 0) {
         return <EmptyState title="No votes yet" />;
     }
@@ -31,10 +37,23 @@ function StandingsTable({ items }: { readonly items: readonly LeaderboardItemDto
                 </TableHeader>
                 <TableBody>
                     {items.map((item) => (
-                        <TableRow key={item.entryId}>
+                        <TableRow
+                            key={item.entryId}
+                            className={cn("transition-colors", onSelectEntry !== undefined && "cursor-pointer hover:bg-muted/60")}
+                            onClick={onSelectEntry !== undefined ? () => onSelectEntry(item.entryId) : undefined}
+                        >
                             <TableCell className="tabular-nums">{item.position}</TableCell>
                             <TableCell className="min-w-48">
-                                <span className="block max-w-80 truncate">{item.title}</span>
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className={cn("block max-w-80 truncate", onSelectEntry !== undefined && "font-medium hover:text-primary transition-colors")}>
+                                        {item.title}
+                                    </span>
+                                    {onSelectEntry !== undefined && (
+                                        <span className="text-[11px] text-muted-foreground/70 shrink-0 hidden sm:inline">
+                                            View &rarr;
+                                        </span>
+                                    )}
+                                </div>
                                 <span className="bg-muted mt-1.5 block h-1.5 w-full max-w-80 overflow-hidden" aria-hidden="true">
                                     <span
                                         className={cn("block h-full", item.position === 1 ? "bg-foreground" : "bg-foreground/40")}
@@ -58,7 +77,13 @@ function StandingsTable({ items }: { readonly items: readonly LeaderboardItemDto
     );
 }
 
-function LiveStandings({ roundId }: { readonly roundId: string }): ReactNode {
+function LiveStandings({
+    roundId,
+    onSelectEntry
+}: {
+    readonly roundId: string;
+    readonly onSelectEntry?: (entryId: string) => void;
+}): ReactNode {
     const leaderboard = useQuery({
         queryKey: queryKeys.leaderboard(roundId),
         queryFn: () => platformApi.leaderboard(roundId),
@@ -75,12 +100,18 @@ function LiveStandings({ roundId }: { readonly roundId: string }): ReactNode {
             <p className="text-muted-foreground text-xs">
                 {pluralize(leaderboard.data.totalBallots, "ballot")} · updated {formatDateTime(leaderboard.data.computedAt)}
             </p>
-            <StandingsTable items={leaderboard.data.items} />
+            <StandingsTable items={leaderboard.data.items} onSelectEntry={onSelectEntry} />
         </div>
     );
 }
 
-function CertifiedResults({ roundId }: { readonly roundId: string }): ReactNode {
+function CertifiedResults({
+    roundId,
+    onSelectEntry
+}: {
+    readonly roundId: string;
+    readonly onSelectEntry?: (entryId: string) => void;
+}): ReactNode {
     const results = useQuery({ queryKey: queryKeys.results(roundId), queryFn: () => platformApi.results(roundId), staleTime: Infinity });
     if (results.isPending) {
         return <LoadingRows rows={4} />;
@@ -93,10 +124,33 @@ function CertifiedResults({ roundId }: { readonly roundId: string }): ReactNode 
     return (
         <div className="space-y-4">
             {winner !== undefined && (
-                <div className="border-foreground/40 border p-4">
-                    <p className="text-muted-foreground text-xs tracking-wider uppercase">
-                        {first?.status === SeparationStatus.StatisticalTie ? "Top of the count" : "Winner"}
-                    </p>
+                <div
+                    role={onSelectEntry !== undefined ? "button" : undefined}
+                    tabIndex={onSelectEntry !== undefined ? 0 : undefined}
+                    onClick={onSelectEntry !== undefined ? () => onSelectEntry(winner.entryId) : undefined}
+                    onKeyDown={
+                        onSelectEntry !== undefined
+                            ? (e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                      e.preventDefault();
+                                      onSelectEntry(winner.entryId);
+                                  }
+                              }
+                            : undefined
+                    }
+                    className={cn(
+                        "border-foreground/40 border p-4 transition-colors",
+                        onSelectEntry !== undefined && "cursor-pointer hover:border-primary/60 hover:bg-muted/20"
+                    )}
+                >
+                    <div className="flex items-center justify-between gap-2">
+                        <p className="text-muted-foreground text-xs tracking-wider uppercase">
+                            {first?.status === SeparationStatus.StatisticalTie ? "Top of the count" : "Winner"}
+                        </p>
+                        {onSelectEntry !== undefined && (
+                            <span className="text-xs text-primary font-medium">View entry &rarr;</span>
+                        )}
+                    </div>
                     <p className="mt-1 text-lg font-semibold text-balance">{winner.title}</p>
                     <p className="text-muted-foreground text-sm">
                         {formatPercent(winner.voteSharePercentage)} of the points
@@ -115,11 +169,21 @@ function CertifiedResults({ roundId }: { readonly roundId: string }): ReactNode 
                         <ToneBadge tone={Tone.Warning}>Statistical tie at the top</ToneBadge>
                     ))}
             </div>
-            <StandingsTable items={results.data.leaderboard} />
+            <StandingsTable items={results.data.leaderboard} onSelectEntry={onSelectEntry} />
         </div>
     );
 }
 
-export function Standings({ round }: { readonly round: RoundDetailDto }): ReactNode {
-    return round.status === RoundStatus.Finalized ? <CertifiedResults roundId={round.id} /> : <LiveStandings roundId={round.id} />;
+export function Standings({
+    round,
+    onSelectEntry
+}: {
+    readonly round: RoundDetailDto;
+    readonly onSelectEntry?: (entryId: string) => void;
+}): ReactNode {
+    return round.status === RoundStatus.Finalized ? (
+        <CertifiedResults roundId={round.id} onSelectEntry={onSelectEntry} />
+    ) : (
+        <LiveStandings roundId={round.id} onSelectEntry={onSelectEntry} />
+    );
 }

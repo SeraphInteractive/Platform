@@ -2,6 +2,7 @@ import type { PageQuery, ShotQuery } from "./PlatformApi";
 
 export const queryKeys = {
     me: ["me"] as const,
+    myEntries: ["my-entries"] as const,
     pipeline: ["pipeline"] as const,
     rounds: (query: PageQuery & { readonly status?: string }) => ["rounds", query] as const,
     roundsAll: ["rounds"] as const,

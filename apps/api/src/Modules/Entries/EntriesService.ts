@@ -46,6 +46,23 @@ export interface UpdateEntryInput {
 const submissionStatuses: readonly RoundStatus[] = [RoundStatus.Open];
 const maxApprovedEntriesPerRound = 5;
 
+export interface EntryWithAuthor {
+    readonly entry: EntryRecord;
+    readonly author: {
+        readonly id: string;
+        readonly discordId: string | null;
+        readonly discordUsername: string;
+        readonly discordAvatar: string | null;
+    } | null;
+}
+
+const authorColumns = {
+    id: users.id,
+    discordId: users.discordId,
+    discordUsername: users.discordUsername,
+    discordAvatar: users.discordAvatar
+};
+
 export class EntriesService {
     public constructor(
         private readonly database: Database,
@@ -55,7 +72,7 @@ export class EntriesService {
         private readonly leaderboardCache: LeaderboardCache
     ) {}
 
-    public async list(roundId: string, query: EntryListQuery, viewer: AuthenticatedUser | null): Promise<Page<EntryRecord>> {
+    public async list(roundId: string, query: EntryListQuery, viewer: AuthenticatedUser | null): Promise<Page<EntryWithAuthor>> {
         const round = await this.requireRound(this.database, roundId);
         if (round.status === RoundStatus.Draft && !canSeeDrafts(viewer)) {
             throw new NotFoundError("Round");
@@ -70,8 +87,9 @@ export class EntriesService {
         const filter = and(...conditions);
         const [rows, totals] = await Promise.all([
             this.database
-                .select()
+                .select({ entry: entries, author: authorColumns })
                 .from(entries)
+                .leftJoin(users, eq(users.id, entries.submittedBy))
                 .where(filter)
                 .orderBy(desc(entries.createdAt), desc(entries.id))
                 .limit(query.perPage)
@@ -81,18 +99,35 @@ export class EntriesService {
         return createPage(rows, totals[0]?.total ?? 0, query);
     }
 
-    public async get(roundId: string, entryId: string, viewer: AuthenticatedUser | null): Promise<EntryRecord> {
+    public async get(roundId: string, entryId: string, viewer: AuthenticatedUser | null): Promise<EntryWithAuthor> {
         const round = await this.requireRound(this.database, roundId);
-        const entry = await this.requireEntry(this.database, roundId, entryId);
+        const [row] = await this.database
+            .select({ entry: entries, author: authorColumns })
+            .from(entries)
+            .leftJoin(users, eq(users.id, entries.submittedBy))
+            .where(and(eq(entries.roundId, roundId), eq(entries.id, entryId)))
+            .limit(1);
+        if (row === undefined) {
+            throw new NotFoundError("Entry");
+        }
         const isVisible =
-            (entry.status === EntryStatus.Approved &&
-                !entry.isQuarantined &&
+            (row.entry.status === EntryStatus.Approved &&
+                !row.entry.isQuarantined &&
                 (round.status !== RoundStatus.Draft || canSeeDrafts(viewer))) ||
-            (viewer !== null && (hasAtLeast(viewer.role, Role.Moderator) || entry.submittedBy === viewer.id));
+            (viewer !== null && (hasAtLeast(viewer.role, Role.Moderator) || row.entry.submittedBy === viewer.id));
         if (!isVisible) {
             throw new NotFoundError("Entry");
         }
-        return entry;
+        return row;
+    }
+
+    public async listByAuthor(userId: string): Promise<EntryWithAuthor[]> {
+        return this.database
+            .select({ entry: entries, author: authorColumns })
+            .from(entries)
+            .leftJoin(users, eq(users.id, entries.submittedBy))
+            .where(eq(entries.submittedBy, userId))
+            .orderBy(desc(entries.createdAt));
     }
 
     public async create(author: AuthenticatedUser, roundId: string, input: CreateEntryInput): Promise<EntryRecord> {

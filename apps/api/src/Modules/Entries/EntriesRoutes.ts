@@ -2,12 +2,14 @@ import { entrySchema, fieldRules } from "@platform/contracts";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { dataEnvelope, errorResponses, pageEnvelope, paginationQuerySchema, toIso, uuidSchema } from "../../Common/Http/Schemas.js";
-import { actorOf, currentUser, optionalUser, requireParticipant, requireRole } from "../../Common/Security/Authorization.js";
+import { actorOf, currentUser, optionalUser, requireParticipant, requireRole, requireUser } from "../../Common/Security/Authorization.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
 import { EntryStatus } from "../../Domain/Enums.js";
 import { Role } from "../../Domain/Roles.js";
 import type { EntryRecord } from "../../Infrastructure/Database/Schema.js";
 import { StorageBucket, type ObjectStorage } from "../../Infrastructure/Storage/ObjectStorage.js";
+import { toUserSummary } from "../Users/UserPresenter.js";
+import type { EntryWithAuthor } from "./EntriesService.js";
 
 const roundParams = z.object({ roundId: uuidSchema });
 const entryParams = z.object({ roundId: uuidSchema, entryId: uuidSchema });
@@ -19,7 +21,7 @@ const descriptionSchema = fieldRules.entryDescription;
 export const entriesRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
     const { entriesService, objectStorage } = services;
     const security = [{ bearer: [] }];
-    const present = (entry: EntryRecord): z.infer<typeof entrySchema> => toEntryResponse(entry, objectStorage);
+    const present = (entry: EntryWithAuthor | EntryRecord): z.infer<typeof entrySchema> => toEntryResponse(entry, objectStorage);
 
     application.get(
         "/rounds/:roundId/entries",
@@ -155,9 +157,32 @@ export const entriesRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
             return reply.status(204).send(null);
         }
     );
+
+    application.get(
+        "/users/me/entries",
+        {
+            preHandler: requireUser(),
+            schema: {
+                tags: ["Entries"],
+                summary: "List all entries submitted by the authenticated user across rounds.",
+                security,
+                response: { 200: dataEnvelope(z.array(entrySchema)), ...errorResponses }
+            }
+        },
+        async (request) => {
+            const user = currentUser(request);
+            const rows = await entriesService.listByAuthor(user.id);
+            return { data: rows.map(present) };
+        }
+    );
 };
 
-export function toEntryResponse(entry: EntryRecord, storage: ObjectStorage): z.infer<typeof entrySchema> {
+export function toEntryResponse(
+    item: EntryWithAuthor | EntryRecord,
+    storage: ObjectStorage
+): z.infer<typeof entrySchema> {
+    const entry = "entry" in item ? item.entry : item;
+    const author = "author" in item && item.author !== null ? toUserSummary(item.author) : null;
     return {
         id: entry.id,
         roundId: entry.roundId,
@@ -168,6 +193,7 @@ export function toEntryResponse(entry: EntryRecord, storage: ObjectStorage): z.i
         mediaUrl: entry.mediaKey === null ? null : storage.getPublicUrl(StorageBucket.Media, entry.mediaKey),
         aiFlags: entry.aiFlags ?? [],
         submittedBy: entry.submittedBy,
+        author,
         createdAt: toIso(entry.createdAt),
         updatedAt: toIso(entry.updatedAt)
     };

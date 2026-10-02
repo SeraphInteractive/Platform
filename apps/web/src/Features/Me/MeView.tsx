@@ -1,20 +1,24 @@
 "use client";
 
-import { Role, type ShotDto, type UserDto } from "@platform/contracts";
-import { ArrowRight } from "lucide-react";
+import { Role, type EntryDto, type ShotDto, type UserDto } from "@platform/contracts";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowRight, Sparkles } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { platformApi } from "@/Api/PlatformApi";
+import { queryKeys } from "@/Api/QueryKeys";
 import { PageHeader } from "@/Components/Common/PageHeader";
 import { RelativeTime } from "@/Components/Common/RelativeTime";
 import { Section } from "@/Components/Common/Section";
 import { ErrorState, LoadingRows, SignInPrompt } from "@/Components/Common/States";
-import { ShotStatusBadge, Tone, ToneBadge } from "@/Components/Common/StatusBadge";
+import { EntryStatusBadge, ShotStatusBadge, Tone, ToneBadge } from "@/Components/Common/StatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/Components/Ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/Components/Ui/avatar";
 import { Button } from "@/Components/Ui/button";
 import { Card, CardContent } from "@/Components/Ui/card";
 import { useMyShots } from "@/Features/Grabbox/UseMyShots";
+import { EntryMedia } from "@/Features/Voting/EntryMedia";
 import { useSession } from "@/Hooks/UseSession";
 import { formatDate, specialtyLabel } from "@/Lib/Format";
 import { hasAtLeast, roleLabels } from "@/Lib/Roles";
@@ -49,7 +53,7 @@ function ShotRow({ shot }: { readonly shot: ShotDto }): ReactNode {
         <li>
             <Link href={`/grabbox/${shot.id}` as Route} className="hover:bg-accent/50 flex items-center justify-between gap-4 px-4 py-3">
                 <span className="min-w-0">
-                    <span className="block truncate text-sm">
+                    <span className="block truncate text-sm font-medium">
                         {shot.shotCode} · {shot.title}
                     </span>
                     <span className="text-muted-foreground text-xs">
@@ -59,6 +63,65 @@ function ShotRow({ shot }: { readonly shot: ShotDto }): ReactNode {
                 <ShotStatusBadge status={shot.status} />
             </Link>
         </li>
+    );
+}
+
+function UserEntriesSection(): ReactNode {
+    const myEntries = useQuery({
+        queryKey: queryKeys.myEntries,
+        queryFn: () => platformApi.myEntries()
+    });
+
+    if (myEntries.isPending) {
+        return <LoadingRows rows={2} />;
+    }
+    if (myEntries.isError || myEntries.data.length === 0) {
+        return null;
+    }
+
+    return (
+        <Section title="My proposed round entries">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {myEntries.data.map((entry: EntryDto) => (
+                    <Link
+                        key={entry.id}
+                        href={`/voting/${entry.roundId}` as Route}
+                        className="group bg-card text-card-foreground hover:border-primary/50 flex flex-col overflow-hidden rounded-xl border shadow-xs transition-all hover:shadow-md"
+                    >
+                        <div className="relative aspect-video w-full overflow-hidden bg-muted/40 border-b">
+                            {entry.mediaUrl !== null ? (
+                                <EntryMedia url={entry.mediaUrl} title={entry.title} controls={false} className="size-full object-cover" />
+                            ) : (
+                                <div className="flex size-full flex-col items-center justify-center gap-1 text-muted-foreground/40 bg-muted/20">
+                                    <Sparkles className="size-6 stroke-[1.25]" aria-hidden="true" />
+                                    <span className="text-[10px] font-medium">Pitch Idea</span>
+                                </div>
+                            )}
+                            <div className="absolute top-2 left-2">
+                                <span className="bg-primary/95 text-primary-foreground shadow-xs backdrop-blur-xs rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide border border-primary/40">
+                                    Your Submission
+                                </span>
+                            </div>
+                            <div className="absolute top-2 right-2">
+                                <EntryStatusBadge status={entry.status} />
+                            </div>
+                        </div>
+                        <div className="flex flex-1 flex-col p-3 gap-1.5">
+                            <h4 className="line-clamp-2 text-sm font-semibold group-hover:text-primary transition-colors">
+                                {entry.title}
+                            </h4>
+                            {entry.description !== null && (
+                                <p className="line-clamp-2 text-xs text-muted-foreground/80 leading-relaxed">{entry.description}</p>
+                            )}
+                            <div className="mt-auto pt-2 border-t flex items-center justify-between text-xs text-muted-foreground">
+                                <span>View voting round</span>
+                                <RelativeTime value={entry.createdAt} />
+                            </div>
+                        </div>
+                    </Link>
+                ))}
+            </div>
+        </Section>
     );
 }
 
@@ -130,6 +193,7 @@ function ContributorWork({ user }: { readonly user: UserDto }): ReactNode {
                     </ul>
                 )}
             </Section>
+            <UserEntriesSection />
         </div>
     );
 }
@@ -158,24 +222,27 @@ export function MeView(): ReactNode {
                 {hasAtLeast(user, Role.Contributor) ? (
                     <ContributorWork user={user} />
                 ) : (
-                    <Section title="Want to help make the film?">
-                        <Card>
-                            <CardContent className="space-y-3 text-sm">
-                                <p>
-                                    Right now you can vote in every open round and pitch your own ideas. If you&apos;d like to animate,
-                                    model, design sound or anything else, ask in the Discord to become a contributor.
-                                </p>
-                                <div className="flex flex-wrap gap-2">
-                                    <Button asChild size="sm">
-                                        <Link href="/voting">Go vote</Link>
-                                    </Button>
-                                    <Button asChild size="sm" variant="outline">
-                                        <Link href="/guidelines#grab-box">How contributing works</Link>
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </Section>
+                    <div className="space-y-10">
+                        <Section title="Want to help make the film?">
+                            <Card>
+                                <CardContent className="space-y-3 text-sm">
+                                    <p>
+                                        Right now you can vote in every open round and pitch your own ideas. If you&apos;d like to animate,
+                                        model, design sound or anything else, ask in the Discord to become a contributor.
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button asChild size="sm">
+                                            <Link href="/voting">Go vote</Link>
+                                        </Button>
+                                        <Button asChild size="sm" variant="outline">
+                                            <Link href="/guidelines#grab-box">How contributing works</Link>
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </Section>
+                        <UserEntriesSection />
+                    </div>
                 )}
             </div>
         </>
