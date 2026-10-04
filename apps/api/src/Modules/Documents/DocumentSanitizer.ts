@@ -23,6 +23,7 @@ const options: sanitizeHtml.IOptions = {
         "ol",
         "li",
         "a",
+        "img",
         "hr",
         "table",
         "thead",
@@ -35,12 +36,14 @@ const options: sanitizeHtml.IOptions = {
     ],
     allowedAttributes: {
         a: ["href", "target", "rel"],
+        img: ["src", "alt", "title", "class", "width", "height"],
+        p: ["class"],
         ol: ["start"],
         th: ["colspan", "rowspan"],
         td: ["colspan", "rowspan"]
     },
     allowedSchemes: ["http", "https", "mailto"],
-    allowedSchemesAppliedToAttributes: ["href"],
+    allowedSchemesAppliedToAttributes: ["href", "src"],
     allowProtocolRelative: false,
     disallowedTagsMode: "discard",
     enforceHtmlBoundary: false,
@@ -54,6 +57,19 @@ const options: sanitizeHtml.IOptions = {
             }
             if (externalLink.test(href)) {
                 return { tagName, attribs: { href, target: "_blank", rel: "noopener noreferrer nofollow" } };
+            }
+            return { tagName: "span", attribs: {} };
+        },
+        img: (tagName, attributes): sanitizeHtml.Tag => {
+            const src = (attributes.src ?? "").trim();
+            if (internalLink.test(src) || externalLink.test(src)) {
+                const attribs: Record<string, string> = { src };
+                if (attributes.alt !== undefined) attribs.alt = attributes.alt;
+                if (attributes.title !== undefined) attribs.title = attributes.title;
+                if (attributes.class !== undefined) attribs.class = attributes.class;
+                if (attributes.width !== undefined) attribs.width = attributes.width;
+                if (attributes.height !== undefined) attribs.height = attributes.height;
+                return { tagName, attribs };
             }
             return { tagName: "span", attribs: {} };
         }

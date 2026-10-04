@@ -15,6 +15,9 @@ describe("document sanitizer", () => {
         expect(sanitizeDocumentHtml('<a href="https://example.org">x</a>')).toBe(
             '<a href="https://example.org" target="_blank" rel="noopener noreferrer nofollow">x</a>'
         );
+        expect(sanitizeDocumentHtml('<p><img src="/branding/banner.png" alt="Banner" class="max-w-md"></p>')).toBe(
+            '<p><img src="/branding/banner.png" alt="Banner" class="max-w-md" /></p>'
+        );
     });
 });
 

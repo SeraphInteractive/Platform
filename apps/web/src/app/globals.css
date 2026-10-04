@@ -157,6 +157,9 @@
     .doc-prose hr {
         @apply my-6;
     }
+    .doc-prose img {
+        @apply max-w-full h-auto;
+    }
     .doc-prose table {
         @apply w-full border-collapse border text-left block max-w-full overflow-x-auto;
     }
