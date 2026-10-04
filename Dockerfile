@@ -79,6 +79,7 @@ CMD ["node", "apps/api/dist/Main.js"]
 FROM runtime AS web
 ENV HOSTNAME=0.0.0.0     PORT=3000     NEXT_TELEMETRY_DISABLED=1
 COPY --from=web-build /app/apps/web/.next/standalone ./
+COPY --from=web-build /app/apps/web/public apps/web/public
 COPY --from=web-build /app/apps/web/.next/static apps/web/.next/static
 USER node
 EXPOSE 3000
