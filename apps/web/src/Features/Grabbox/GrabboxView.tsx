@@ -112,7 +112,7 @@ function ShotCard({ shot }: { readonly shot: ShotDto }): ReactNode {
                     {shot.isSeniorLocked && shot.seniorPriorityUntil !== null && (
                         <CountdownTimer targetDate={shot.seniorPriorityUntil} prefix="Lock" icon="lock" />
                     )}
-                    <ShotStatusBadge status={shot.status} />
+                    {shot.status !== ShotStatus.Available && <ShotStatusBadge status={shot.status} />}
                 </div>
                 {shot.imageUrls.length > 1 && (
                     <span className="bg-background/80 text-muted-foreground shadow-xs backdrop-blur-xs absolute bottom-2 right-2 rounded px-1.5 py-0.5 text-[10px] font-medium border border-border/40 flex items-center gap-1">
