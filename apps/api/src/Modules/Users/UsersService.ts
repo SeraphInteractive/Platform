@@ -67,8 +67,8 @@ export class UsersService {
     public async changeRole(actor: Actor, reference: UserReference, change: RoleChange, createIfMissing: boolean): Promise<UserRecord> {
         const user = await this.database.transaction(async (transaction) => {
             const { actor: current, target } = await this.lockParticipants(transaction, actor, reference);
-            this.assertCanGrant(current, change.role);
             if (target === null) {
+                this.assertCanGrant(current, change.role);
                 if (!createIfMissing || reference.kind !== "discord") {
                     throw new NotFoundError("User");
                 }
@@ -88,7 +88,12 @@ export class UsersService {
                 return created;
             }
 
-            this.assertCanManage(current, target);
+            if (change.role !== target.role) {
+                this.assertCanGrant(current, change.role);
+                this.assertCanManage(current, target);
+            } else {
+                this.assertCanManageSecondary(current, target);
+            }
             const role = settleRole(change.role, target.emailVerifiedAt !== null, target.role);
             const specialties = normalizeSpecialties(role, change.specialties ?? target.specialties);
             const [updated] = await transaction
@@ -257,6 +262,13 @@ export class UsersService {
         if (!isHigherThan(actor.role, target.role)) {
             throw new ForbiddenError("You can only manage users ranked below you.");
         }
+    }
+
+    private assertCanManageSecondary(actor: Actor, target: UserRecord): void {
+        if (hasAtLeast(actor.role, Role.Admin)) {
+            return;
+        }
+        this.assertCanManage(actor, target);
     }
 
     private required(user: UserRecord | undefined): UserRecord {

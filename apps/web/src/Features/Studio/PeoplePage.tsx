@@ -37,6 +37,10 @@ function canManage(actor: UserDto, target: ModeratedUserDto): boolean {
     return actor.id !== target.id && hasAtLeast(actor, Role.Supervisor) && outranks(actor.role, target.role);
 }
 
+function canManageSecondary(actor: UserDto, target: ModeratedUserDto): boolean {
+    return hasAtLeast(actor, Role.Admin) || canManage(actor, target);
+}
+
 function BlacklistDialog({ target, onDone }: { readonly target: ModeratedUserDto; readonly onDone: () => void }): ReactNode {
     const reasonId = useId();
     const [open, setOpen] = useState(false);
@@ -128,6 +132,7 @@ function UserRow({ actor, target }: UserRowProps): ReactNode {
         }
     });
     const manageable = canManage(actor, target);
+    const manageableSecondary = canManageSecondary(actor, target);
     const busy = setPrimaryRole.isPending || setSecondaryRole.isPending || promote.isPending || lift.isPending;
     const avatar = safeHttpUrl(target.avatarUrl);
     const currentSpecialty = target.specialties[0] ?? "__none__";
@@ -171,7 +176,7 @@ function UserRow({ actor, target }: UserRowProps): ReactNode {
                 )}
             </TableCell>
             <TableCell>
-                {manageable ? (
+                {manageableSecondary ? (
                     <Select
                         value={currentSpecialty}
                         disabled={busy}

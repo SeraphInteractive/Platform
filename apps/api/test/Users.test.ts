@@ -231,4 +231,78 @@ describe("user management", () => {
             specialties: [Specialty.Animator]
         });
     });
+
+    it("allows admins to manage secondary roles for themselves and peer admins while preventing primary role self-mutation", async () => {
+        const admin1 = await context.createUser(Role.Admin, { specialties: [Specialty.Producer] });
+        const admin2 = await context.createUser(Role.Admin);
+        const supervisor1 = await context.createUser(Role.Supervisor);
+        const supervisor2 = await context.createUser(Role.Supervisor);
+        const contributor = await context.createUser(Role.Contributor);
+
+        // admin updating their own secondary role
+        const selfSpecialty = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${admin1.record.id}/role`,
+            headers: admin1.headers,
+            payload: { role: Role.Admin, specialties: [Specialty.CreativeDirector] }
+        });
+        expect(selfSpecialty.statusCode).toBe(200);
+        expect(json<{ data: { specialties: string[] } }>(selfSpecialty).data.specialties).toEqual([Specialty.CreativeDirector]);
+
+        // admin cannot modify their own primary role
+        const selfPrimary = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${admin1.record.id}/role`,
+            headers: admin1.headers,
+            payload: { role: Role.Contributor }
+        });
+        expect(selfPrimary.statusCode).toBe(403);
+
+        // admin updating peer admin's secondary role
+        const peerSpecialty = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${admin2.record.id}/role`,
+            headers: admin1.headers,
+            payload: { role: Role.Admin, specialties: [Specialty.Producer] }
+        });
+        expect(peerSpecialty.statusCode).toBe(200);
+        expect(json<{ data: { specialties: string[] } }>(peerSpecialty).data.specialties).toEqual([Specialty.Producer]);
+
+        // admin cannot modify peer admin's primary role
+        const peerPrimary = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${admin2.record.id}/role`,
+            headers: admin1.headers,
+            payload: { role: Role.Contributor }
+        });
+        expect(peerPrimary.statusCode).toBe(403);
+
+        // supervisor cannot change own secondary role
+        const supervisorSelf = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${supervisor1.record.id}/role`,
+            headers: supervisor1.headers,
+            payload: { role: Role.Supervisor, specialties: [Specialty.Producer] }
+        });
+        expect(supervisorSelf.statusCode).toBe(403);
+
+        // supervisor cannot change peer supervisor's secondary role
+        const supervisorPeer = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${supervisor2.record.id}/role`,
+            headers: supervisor1.headers,
+            payload: { role: Role.Supervisor, specialties: [Specialty.Producer] }
+        });
+        expect(supervisorPeer.statusCode).toBe(403);
+
+        // supervisor can change subordinate's secondary role
+        const supervisorSubordinate = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${contributor.record.id}/role`,
+            headers: supervisor1.headers,
+            payload: { role: Role.Contributor, specialties: [Specialty.LightingArtist] }
+        });
+        expect(supervisorSubordinate.statusCode).toBe(200);
+        expect(json<{ data: { specialties: string[] } }>(supervisorSubordinate).data.specialties).toEqual([Specialty.LightingArtist]);
+    });
 });
