@@ -79,8 +79,8 @@ export const studioRoles: readonly StudioRole[] = Object.freeze([
     { name: "Voice Actors", tier: StudioTier.Contributor, color: 0x0097a7, specialty: Specialty.VoiceActor },
     { name: "Sound Designers", tier: StudioTier.Contributor, color: 0x17a2b8, specialty: Specialty.SoundDesigner },
     { name: "Video Editors", tier: StudioTier.Contributor, color: 0x6f42c1, specialty: Specialty.VideoEditor },
-    { name: "General Contributors", tier: StudioTier.Contributor, color: 0x3498db, specialty: Specialty.GeneralContributor },
-    { name: "Voters", tier: StudioTier.Community, color: 0x34495e, specialty: Specialty.Voter }
+    { name: "General Contributors", tier: StudioTier.Contributor, color: 0x3498db },
+    { name: "Voters", tier: StudioTier.Community, color: 0x34495e }
 ]);
 
 export const contributorRoleName = "General Contributors";

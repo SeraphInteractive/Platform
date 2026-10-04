@@ -43,11 +43,11 @@ describe("user management", () => {
             method: "PUT",
             url: "/api/v1/users/me/specialties",
             headers: user.headers,
-            payload: { specialties: [Specialty.Animator, Specialty.Rigger] }
+            payload: { specialties: [Specialty.Animator] }
         });
         expect(chosen.statusCode).toBe(200);
         const body = json<{ data: { specialties: string[]; isOnboarded: boolean } }>(chosen).data;
-        expect(body.specialties).toEqual([Specialty.Producer, Specialty.Animator, Specialty.Rigger]);
+        expect(body.specialties).toEqual([Specialty.Producer, Specialty.Animator]);
         expect(body.isOnboarded).toBe(true);
     });
 

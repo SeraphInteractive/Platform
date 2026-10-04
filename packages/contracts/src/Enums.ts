@@ -45,7 +45,7 @@ export enum Specialty {
     MediaTeam = "media_team"
 }
 
-export const maximumSpecialties = 3;
+export const maximumSpecialties = 2;
 
 export const initialTermsVersion = "2026-09-27";
 
@@ -78,9 +78,7 @@ export const selfSelectableSpecialties: readonly Specialty[] = [
     Specialty.Screenwriter,
     Specialty.VoiceActor,
     Specialty.SoundDesigner,
-    Specialty.VideoEditor,
-    Specialty.GeneralContributor,
-    Specialty.Voter
+    Specialty.VideoEditor
 ];
 
 export enum RoundStatus {

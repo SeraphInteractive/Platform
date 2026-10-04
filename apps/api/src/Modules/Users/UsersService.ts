@@ -6,6 +6,7 @@ import {
     hasAtLeast,
     isGrantable,
     isHigherThan,
+    maximumSpecialties,
     normalizeSpecialties,
     Role,
     selfSelectableSpecialties,
@@ -128,7 +129,7 @@ export class UsersService {
             const [user] = await transaction.select().from(users).where(eq(users.id, userId)).limit(1).for("update");
             const current = this.required(user);
             const assigned = current.specialties.filter((specialty) => !selfSelectableSpecialties.includes(specialty));
-            const selected = chosen.filter((specialty) => selfSelectableSpecialties.includes(specialty)).slice(0, 2);
+            const selected = chosen.filter((specialty) => selfSelectableSpecialties.includes(specialty)).slice(0, maximumSpecialties);
             const [updated] = await transaction
                 .update(users)
                 .set({
