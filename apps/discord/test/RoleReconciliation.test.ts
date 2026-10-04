@@ -21,11 +21,14 @@ function createMockMember(id: string, roleMap: Map<string, DiscordRole>, guildRo
     const added: string[] = [];
     const removed: string[] = [];
     const cache = {
-        has: (roleId: string) => roleMap.has(roleId)
+        has: (roleId: string) => roleMap.has(roleId),
+        some: (fn: (role: DiscordRole) => boolean) => Array.from(roleMap.values()).some(fn),
+        values: () => roleMap.values()
     } as unknown as Collection<string, DiscordRole>;
 
     const member = {
         id,
+        user: { bot: false },
         roles: {
             cache,
             add: vi.fn(async (ids: string | string[]) => {
@@ -130,10 +133,12 @@ describe("RoleReconciliationService", () => {
         const memberRoles = new Map<string, DiscordRole>();
         const { member } = createMockMember("111222333444555666", memberRoles, guildRoles);
 
+        const membersMap = new Map([["111222333444555666", member]]);
         const mockGuild = {
             id: "guild-123",
             members: {
-                fetch: vi.fn(async (id: string) => (id === "111222333444555666" ? member : null))
+                cache: membersMap,
+                fetch: vi.fn(async (id?: string) => (id === undefined ? membersMap : (membersMap.get(id) ?? null)))
             }
         } as unknown as Guild;
 
@@ -189,11 +194,66 @@ describe("RoleReconciliationService", () => {
         expect(sentMessages.length).toBe(1);
     });
 
-    it("remains silent when scheduled reconciliation finds 0 drifts and 0 reordered roles", async () => {
+    it("strips unauthorized studio roles from unregistered Discord members", async () => {
+        const guildRoles = new Map<string, DiscordRole>([
+            ["1", createMockDiscordRole("1", "Supervisor")],
+            ["2", createMockDiscordRole("2", "Members")]
+        ]);
+
+        const memberRoles = new Map<string, DiscordRole>([
+            ["1", createMockDiscordRole("1", "Supervisor")]
+        ]);
+        const { member } = createMockMember("999888777666555444", memberRoles, guildRoles);
+
+        const membersMap = new Map([["999888777666555444", member]]);
         const mockGuild = {
             id: "guild-123",
             members: {
+                cache: membersMap,
+                fetch: vi.fn(async (id?: string) => (id === undefined ? membersMap : (membersMap.get(id) ?? null)))
+            }
+        } as unknown as Guild;
+
+        const mockClient = {
+            channels: {
                 fetch: vi.fn(async () => null)
+            }
+        } as unknown as Client;
+
+        const mockApi = {
+            listAllUsers: vi.fn(async () => [])
+        } as unknown as PlatformApiClient;
+
+        const mockProvisioner = {
+            enforceRoleHierarchy: vi.fn(async () => 0)
+        } as unknown as ServerProvisioner;
+
+        const mockSettings = {
+            channel: () => undefined
+        } as unknown as SettingsStore;
+
+        const mockLogger = {
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn()
+        } as unknown as Logger;
+
+        const service = new RoleReconciliationService(mockApi, mockProvisioner, mockSettings, mockClient, mockLogger);
+        const summary = await service.reconcile(mockGuild, "manual");
+
+        expect(summary.totalUsersChecked).toBe(1);
+        expect(summary.driftedMembersSynced).toBe(1);
+        expect(memberRoles.has("1")).toBe(false);
+        expect(memberRoles.has("2")).toBe(true);
+    });
+
+    it("remains silent when scheduled reconciliation finds 0 drifts and 0 reordered roles", async () => {
+        const emptyMap = new Map();
+        const mockGuild = {
+            id: "guild-123",
+            members: {
+                cache: emptyMap,
+                fetch: vi.fn(async () => emptyMap)
             }
         } as unknown as Guild;
 

@@ -80,8 +80,10 @@ export class ServerProvisioner {
     public async bindExisting(guild: Guild): Promise<void> {
         const [roles, channels] = await Promise.all([guild.roles.fetch(), guild.channels.fetch()]);
         await this.settings.update((settings) => {
+            const member = roles.find((role) => findStudioRole(role.name)?.name === "Members");
             const voter = roles.find((role) => findStudioRole(role.name)?.name === "Voters");
             const contributor = roles.find((role) => findStudioRole(role.name)?.name === contributorRoleName);
+            settings.roles[BoundRole.Member] ??= member?.id;
             settings.roles[BoundRole.Voter] ??= voter?.id;
             settings.roles[BoundRole.Contributor] ??= contributor?.id;
             for (const [purpose, name] of Object.entries(channelNames) as [ChannelPurpose, string][]) {

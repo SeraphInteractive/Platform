@@ -192,7 +192,12 @@ describe("authentication", () => {
         const headers = { authorization: `Bearer ${serviceToken}` };
         const me = await context.application.inject({ method: "GET", url: "/api/v1/auth/me", headers });
         expect(me.statusCode).toBe(403);
-        const list = await context.application.inject({ method: "GET", url: "/api/v1/users", headers });
-        expect(list.statusCode).toBe(403);
+        const terms = await context.application.inject({
+            method: "PUT",
+            url: "/api/v1/users/me/terms",
+            headers,
+            payload: { version: "2026-09-27" }
+        });
+        expect(terms.statusCode).toBe(403);
     });
 });

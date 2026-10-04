@@ -1,10 +1,11 @@
+import { Role } from "@platform/contracts";
 import type { Client, Guild, SendableChannels } from "discord.js";
 import type { Logger } from "pino";
 import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
 import { Accent, message, panel, pluralize } from "../Discord/Ui.js";
 import { ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
 import type { ServerProvisioner } from "./ServerProvisioner.js";
-import { syncMemberStudioRoles } from "./StudioRoles.js";
+import { isStudioOrLegacyRole, syncMemberStudioRoles } from "./StudioRoles.js";
 
 export interface ReconciliationSummary {
     readonly reorderedRoles: number;
@@ -45,10 +46,14 @@ export class RoleReconciliationService {
 
         try {
             const allUsers = await this.api.listAllUsers();
+            const registeredDiscordIds = new Set<string>();
+
+            // Reconcile all registered platform users
             for (const user of allUsers) {
                 if (!user.discordId) {
                     continue;
                 }
+                registeredDiscordIds.add(user.discordId);
                 totalUsersChecked++;
                 try {
                     const member = await guild.members.fetch(user.discordId).catch(() => null);
@@ -69,6 +74,35 @@ export class RoleReconciliationService {
                 } catch (memberErr: unknown) {
                     this.logger.warn({ err: memberErr, discordId: user.discordId }, "failed to reconcile member roles");
                     errors.push(`Failed to sync member <@${user.discordId}>`);
+                }
+            }
+
+            // Reconcile unregistered Discord members holding studio roles
+            const guildMembers = await guild.members.fetch().catch(() => null);
+            if (guildMembers !== null) {
+                for (const member of guildMembers.values()) {
+                    if (member.user.bot || registeredDiscordIds.has(member.id)) {
+                        continue;
+                    }
+                    const hasStudioRoles = member.roles.cache.some((role) => isStudioOrLegacyRole(role.name));
+                    if (hasStudioRoles) {
+                        totalUsersChecked++;
+                        try {
+                            const result = await syncMemberStudioRoles(
+                                member,
+                                Role.Member,
+                                [],
+                                trigger === "scheduled" ? "Scheduled role reconciliation (unregistered)" : "Manual role sync (unregistered)"
+                            );
+                            if (result.modified) {
+                                driftedMembersSynced++;
+                                await sleep(mutationPacingDelayMs);
+                            }
+                        } catch (memberErr: unknown) {
+                            this.logger.warn({ err: memberErr, discordId: member.id }, "failed to strip studio roles from unregistered member");
+                            errors.push(`Failed to sync unregistered member <@${member.id}>`);
+                        }
+                    }
                 }
             }
         } catch (apiErr: unknown) {

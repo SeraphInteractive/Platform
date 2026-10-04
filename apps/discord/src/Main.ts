@@ -1,3 +1,4 @@
+import { Role } from "@platform/contracts";
 import { ActivityType, Client, Events, GatewayIntentBits, REST, Routes } from "discord.js";
 import { NotificationConsumer } from "./Api/NotificationConsumer.js";
 import { PlatformApiClient } from "./Api/PlatformApiClient.js";
@@ -13,7 +14,7 @@ import { ServerProvisioner } from "./Services/ServerProvisioner.js";
 import { syncMemberStudioRoles } from "./Services/StudioRoles.js";
 import { TaskForum } from "./Services/TaskForum.js";
 import { ReminderStore } from "./State/ReminderStore.js";
-import { SettingsStore } from "./State/SettingsStore.js";
+import { ChannelPurpose, SettingsStore } from "./State/SettingsStore.js";
 
 async function main(): Promise<void> {
     const configuration = loadBotConfiguration();
@@ -101,8 +102,22 @@ async function main(): Promise<void> {
                 }
                 if (user !== null) {
                     await syncMemberStudioRoles(member, user.role, user.specialties, "Member joined/rejoined");
+                } else {
+                    // auto-grant base member role to new joiners
+                    await syncMemberStudioRoles(member, Role.Member, [], "New member joined Discord");
                 }
-                // users have no role until they have voted or received an assignment
+
+                // post 1-line welcome message with user mention
+                const welcomeChannelId = settings.channel(ChannelPurpose.Announcements);
+                if (welcomeChannelId !== undefined) {
+                    const channel = await client.channels.fetch(welcomeChannelId).catch(() => null);
+                    if (channel?.isSendable() && !channel.isDMBased() && channel.guildId === member.guild.id) {
+                        await channel.send({
+                            content: `👋 Welcome <@${member.id}> to the studio! Sign in at ${configuration.webAppUrl} to get started.`,
+                            allowedMentions: { users: [member.id] }
+                        }).catch(() => undefined);
+                    }
+                }
             } catch (error: unknown) {
                 logger.warn({ err: error, member: member.id }, "failed to handle member add");
             }

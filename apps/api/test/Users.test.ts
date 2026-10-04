@@ -14,13 +14,21 @@ describe("user management", () => {
         await context.close();
     });
 
-    it("hides the member directory from regular users", async () => {
+    it("hides the member directory from regular users but allows moderators and service tokens", async () => {
         const voter = await context.createUser(Role.Voter);
         const moderator = await context.createUser(Role.Moderator);
         expect((await context.application.inject({ method: "GET", url: "/api/v1/users", headers: voter.headers })).statusCode).toBe(403);
         const list = await context.application.inject({ method: "GET", url: "/api/v1/users?perPage=5", headers: moderator.headers });
         expect(list.statusCode).toBe(200);
         expect(json<{ meta: { perPage: number } }>(list).meta.perPage).toBe(5);
+
+        const serviceList = await context.application.inject({
+            method: "GET",
+            url: "/api/v1/users?perPage=5",
+            headers: { authorization: `Bearer ${serviceToken}` }
+        });
+        expect(serviceList.statusCode).toBe(200);
+        expect(json<{ meta: { perPage: number } }>(serviceList).meta.perPage).toBe(5);
     });
 
     it("lets users choose craft specialties but keeps assigned leadership ones", async () => {

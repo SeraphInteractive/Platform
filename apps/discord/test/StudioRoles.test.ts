@@ -58,9 +58,9 @@ function createMockMember(roleMap: Map<string, DiscordRole>, guildRoles: Map<str
 }
 
 describe("targetStudioRoleNames", () => {
-    it("returns empty set for unvoted members until they vote", () => {
+    it("returns Members for base members", () => {
         const names = targetStudioRoleNames(Role.Member, []);
-        expect(names).toEqual(new Set([]));
+        expect(names).toEqual(new Set(["Members"]));
     });
 
     it("returns Voters for verified voters", () => {

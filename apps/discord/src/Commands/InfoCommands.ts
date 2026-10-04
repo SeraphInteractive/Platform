@@ -14,7 +14,7 @@ const helpText = [
     "**Personal**",
     "`/reminder set` • `/reminder list` • `/reminder cancel`",
     "**Server Administration**",
-    "`/bot-setup` • `/setup-forum` • `/set-channel` • `/bot-status` • `/help` • `/docs`"
+    "`/bot-setup` • `/sync-roles` • `/bot-status` • `/help` • `/docs`"
 ].join("\n");
 
 const docsText = [

@@ -43,13 +43,14 @@ export const usersRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
     const security = [{ bearer: [] }];
     const staff = requireRole(Role.Supervisor);
     const staffOrService = requireRoleOrService(Role.Supervisor);
+    const moderatorOrService = requireRoleOrService(Role.Moderator);
     const byId = (params: { userId: string }): UserReference => ({ kind: "id", id: params.userId });
     const byDiscord = (params: { discordId: string }): UserReference => ({ kind: "discord", discordId: params.discordId });
 
     application.get(
         "/users",
         {
-            preHandler: requireRole(Role.Moderator),
+            preHandler: moderatorOrService,
             schema: {
                 tags: ["Users"],
                 summary: "List registered users.",
