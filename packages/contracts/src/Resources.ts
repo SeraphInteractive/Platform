@@ -49,6 +49,16 @@ export const moderatedUserSchema = userSchema
     })
     .meta({ id: "ModeratedUser" });
 
+export const specialtyHolderSchema = z
+    .object({
+        id: uuidSchema,
+        username: z.string(),
+        discordId: snowflakeSchema
+    })
+    .meta({ id: "SpecialtyHolder" });
+
+export const specialtyHoldersSchema = z.record(z.string(), specialtyHolderSchema.nullable()).meta({ id: "SpecialtyHolders" });
+
 export const sessionSchema = z
     .object({
         token: z.string(),
@@ -290,6 +300,8 @@ export const pipelineProgressSchema = z
 export type UserSummaryDto = z.infer<typeof userSummarySchema>;
 export type UserDto = z.infer<typeof userSchema>;
 export type ModeratedUserDto = z.infer<typeof moderatedUserSchema>;
+export type SpecialtyHolderDto = z.infer<typeof specialtyHolderSchema>;
+export type SpecialtyHoldersDto = z.infer<typeof specialtyHoldersSchema>;
 export type SessionDto = z.infer<typeof sessionSchema>;
 export type RoundDto = z.infer<typeof roundSchema>;
 export type RoundDetailDto = z.infer<typeof roundDetailSchema>;

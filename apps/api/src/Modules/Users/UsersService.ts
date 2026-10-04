@@ -1,8 +1,9 @@
-import { asc, count, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { ConflictError, ErrorCode, ForbiddenError, NotFoundError } from "../../Common/Errors/ApplicationError.js";
 import { createPage, offsetOf, type Page, type PaginationQuery } from "../../Common/Http/Schemas.js";
 import type { Actor } from "../../Common/Security/Principal.js";
 import {
+    exclusiveSpecialties,
     hasAtLeast,
     isGrantable,
     isHigherThan,
@@ -11,7 +12,8 @@ import {
     Role,
     selfSelectableSpecialties,
     settleRole,
-    type Specialty
+    Specialty,
+    specialtyLabel
 } from "../../Domain/Roles.js";
 import type { Database, Transaction } from "../../Infrastructure/Database/Database.js";
 import { users, type UserRecord } from "../../Infrastructure/Database/Schema.js";
@@ -25,6 +27,7 @@ export interface RoleChange {
     readonly role: Role;
     readonly specialties?: readonly Specialty[];
     readonly discordUsername?: string;
+    readonly transfer?: boolean;
 }
 
 export interface UserListQuery extends PaginationQuery {
@@ -49,6 +52,35 @@ export class UsersService {
         return user ?? null;
     }
 
+    public async getSpecialtyHolders(): Promise<Record<Specialty, { id: string; username: string; discordId: string } | null>> {
+        const rows = await this.database
+            .select({
+                id: users.id,
+                username: users.discordUsername,
+                discordId: users.discordId,
+                specialties: users.specialties
+            })
+            .from(users)
+            .where(sql`cardinality(${users.specialties}) > 0`);
+
+        const holders = Object.fromEntries(
+            Object.values(Specialty).map((s) => [s, null as { id: string; username: string; discordId: string } | null])
+        ) as Record<Specialty, { id: string; username: string; discordId: string } | null>;
+
+        for (const row of rows) {
+            for (const specialty of row.specialties) {
+                if (exclusiveSpecialties.includes(specialty)) {
+                    holders[specialty] = {
+                        id: row.id,
+                        username: row.username,
+                        discordId: row.discordId
+                    };
+                }
+            }
+        }
+        return holders;
+    }
+
     public async list(query: UserListQuery): Promise<Page<UserRecord>> {
         const filter = query.role === undefined ? undefined : eq(users.role, query.role);
         const [rows, totals] = await Promise.all([
@@ -65,6 +97,7 @@ export class UsersService {
     }
 
     public async changeRole(actor: Actor, reference: UserReference, change: RoleChange, createIfMissing: boolean): Promise<UserRecord> {
+        const transferredHolders: UserRecord[] = [];
         const user = await this.database.transaction(async (transaction) => {
             const { actor: current, target } = await this.lockParticipants(transaction, actor, reference);
             if (target === null) {
@@ -72,13 +105,16 @@ export class UsersService {
                 if (!createIfMissing || reference.kind !== "discord") {
                     throw new NotFoundError("User");
                 }
+                const initialRole = settleRole(change.role, false, null);
+                const initialSpecialties = normalizeSpecialties(change.role, change.specialties ?? []);
+                await this.enforceSpecialtyExclusivity(transaction, null, initialSpecialties, change.transfer, transferredHolders);
                 const [created] = await transaction
                     .insert(users)
                     .values({
                         discordId: reference.discordId,
                         discordUsername: change.discordUsername ?? `discord_${reference.discordId}`,
-                        role: settleRole(change.role, false, null),
-                        specialties: normalizeSpecialties(change.role, change.specialties ?? [])
+                        role: initialRole,
+                        specialties: initialSpecialties
                     })
                     .onConflictDoNothing({ target: users.discordId })
                     .returning();
@@ -96,6 +132,7 @@ export class UsersService {
             }
             const role = settleRole(change.role, target.emailVerifiedAt !== null, target.role);
             const specialties = normalizeSpecialties(role, change.specialties ?? target.specialties);
+            await this.enforceSpecialtyExclusivity(transaction, target.id, specialties, change.transfer, transferredHolders);
             const [updated] = await transaction
                 .update(users)
                 .set({
@@ -107,6 +144,17 @@ export class UsersService {
                 .returning();
             return this.required(updated);
         });
+
+        for (const transferred of transferredHolders) {
+            this.notifier.notify({
+                type: NotificationType.UserRoleChanged,
+                user: personOfUser(transferred),
+                role: transferred.role,
+                specialties: transferred.specialties,
+                actor: personOfActor(actor)
+            });
+        }
+
         this.notifier.notify({
             type: NotificationType.UserRoleChanged,
             user: personOfUser(user),
@@ -269,6 +317,62 @@ export class UsersService {
             return;
         }
         this.assertCanManage(actor, target);
+    }
+
+    private async enforceSpecialtyExclusivity(
+        transaction: Transaction,
+        targetId: string | null,
+        requestedSpecialties: readonly Specialty[],
+        allowTransfer: boolean | undefined,
+        transferredHolders: UserRecord[]
+    ): Promise<void> {
+        const requestedExclusive = requestedSpecialties.filter((s) => exclusiveSpecialties.includes(s));
+        if (requestedExclusive.length === 0) {
+            return;
+        }
+        const condition =
+            targetId === null
+                ? sql`cardinality(${users.specialties}) > 0`
+                : and(ne(users.id, targetId), sql`cardinality(${users.specialties}) > 0`);
+
+        const candidateHolders = await transaction
+            .select()
+            .from(users)
+            .where(condition)
+            .for("update");
+
+        const conflicts: { holder: UserRecord; specialty: Specialty }[] = [];
+        for (const candidate of candidateHolders) {
+            for (const spec of requestedExclusive) {
+                if (candidate.specialties.includes(spec)) {
+                    conflicts.push({ holder: candidate, specialty: spec });
+                }
+            }
+        }
+
+        if (conflicts.length === 0) {
+            return;
+        }
+
+        if (allowTransfer !== true) {
+            const conflict = conflicts[0]!;
+            throw new ConflictError(
+                `${specialtyLabel(conflict.specialty)} is already held by @${conflict.holder.discordUsername}.`,
+                ErrorCode.InvalidStatusTransition
+            );
+        }
+
+        for (const { holder, specialty } of conflicts) {
+            const nextSpecialties = holder.specialties.filter((s) => s !== specialty);
+            const [stripped] = await transaction
+                .update(users)
+                .set({ specialties: nextSpecialties })
+                .where(eq(users.id, holder.id))
+                .returning();
+            if (stripped !== undefined) {
+                transferredHolders.push(stripped);
+            }
+        }
     }
 
     private required(user: UserRecord | undefined): UserRecord {

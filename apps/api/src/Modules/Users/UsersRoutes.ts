@@ -1,4 +1,4 @@
-import { fieldRules } from "@platform/contracts";
+import { fieldRules, specialtyHoldersSchema } from "@platform/contracts";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { NotFoundError } from "../../Common/Errors/ApplicationError.js";
@@ -26,7 +26,8 @@ import type { UserReference } from "./UsersService.js";
 
 const roleChangeSchema = z.object({
     role: z.enum(Role),
-    specialties: z.array(z.enum(Specialty)).max(maximumSpecialties).optional()
+    specialties: z.array(z.enum(Specialty)).max(maximumSpecialties).optional(),
+    transfer: z.boolean().optional()
 });
 
 const ownSpecialtiesSchema = z.object({
@@ -63,6 +64,20 @@ export const usersRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
             const page = await usersService.list(request.query);
             return { data: page.data.map(toModeratedUserResponse), meta: page.meta };
         }
+    );
+
+    application.get(
+        "/users/specialty-holders",
+        {
+            preHandler: moderatorOrService,
+            schema: {
+                tags: ["Users"],
+                summary: "List current holders of exclusive supervisor and admin specialties.",
+                security,
+                response: { 200: dataEnvelope(specialtyHoldersSchema), ...errorResponses }
+            }
+        },
+        async () => ({ data: await usersService.getSpecialtyHolders() })
     );
 
     application.put(

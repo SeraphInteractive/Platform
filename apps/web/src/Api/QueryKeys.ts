@@ -28,5 +28,6 @@ export const queryKeys = {
     threadMaps: ["thread-maps"] as const,
     document: (slug: string) => ["document", slug] as const,
     documentRevisions: (slug: string) => ["document", slug, "revisions"] as const,
-    legalAcceptance: ["legal-acceptance"] as const
+    legalAcceptance: ["legal-acceptance"] as const,
+    specialtyHolders: ["users", "specialty-holders"] as const
 };

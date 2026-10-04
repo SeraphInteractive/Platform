@@ -1,6 +1,19 @@
 "use client";
 
-import { fieldRules, type ModeratedUserDto, problemOf, Role, Specialty, textLimits, type UserDto } from "@platform/contracts";
+import {
+    adminSpecialties,
+    assignableSpecialties,
+    fieldRules,
+    type ModeratedUserDto,
+    problemOf,
+    Role,
+    Specialty,
+    type SpecialtyHolderDto,
+    supervisorSpecialties,
+    teamSpecialties,
+    textLimits,
+    type UserDto
+} from "@platform/contracts";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { UserPlus } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
@@ -20,7 +33,7 @@ import { Button } from "@/Components/Ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/Components/Ui/dialog";
 import { Input } from "@/Components/Ui/input";
 import { Label } from "@/Components/Ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/Ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/Components/Ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/Ui/table";
 import { useSession } from "@/Hooks/UseSession";
 import { formatDate, specialtyLabel } from "@/Lib/Format";
@@ -39,6 +52,60 @@ function canManage(actor: UserDto, target: ModeratedUserDto): boolean {
 
 function canManageSecondary(actor: UserDto, target: ModeratedUserDto): boolean {
     return hasAtLeast(actor, Role.Admin) || canManage(actor, target);
+}
+
+interface SpecialtySelectContentProps {
+    readonly holders: Record<Specialty, SpecialtyHolderDto | null>;
+    readonly currentSpecialty: Specialty | null;
+    readonly targetId?: string;
+}
+
+function SpecialtySelectContent({ holders, currentSpecialty, targetId }: SpecialtySelectContentProps): ReactNode {
+    const isCustomCraft = currentSpecialty !== null && !assignableSpecialties.includes(currentSpecialty);
+    return (
+        <SelectContent>
+            <SelectItem value="__none__">None</SelectItem>
+            {isCustomCraft && (
+                <SelectItem value={currentSpecialty}>
+                    {specialtyLabel(currentSpecialty)} (Craft)
+                </SelectItem>
+            )}
+            <SelectGroup>
+                <SelectLabel>Admin Roles</SelectLabel>
+                {adminSpecialties.map((s) => {
+                    const holder = holders[s];
+                    const isHeldElsewhere = holder !== null && holder !== undefined && holder.id !== targetId;
+                    return (
+                        <SelectItem key={s} value={s}>
+                            {specialtyLabel(s)}
+                            {isHeldElsewhere && ` (held by @${holder.username})`}
+                        </SelectItem>
+                    );
+                })}
+            </SelectGroup>
+            <SelectGroup>
+                <SelectLabel>Supervisor Roles</SelectLabel>
+                {supervisorSpecialties.map((s) => {
+                    const holder = holders[s];
+                    const isHeldElsewhere = holder !== null && holder !== undefined && holder.id !== targetId;
+                    return (
+                        <SelectItem key={s} value={s}>
+                            {specialtyLabel(s)}
+                            {isHeldElsewhere && ` (held by @${holder.username})`}
+                        </SelectItem>
+                    );
+                })}
+            </SelectGroup>
+            <SelectGroup>
+                <SelectLabel>Team Roles</SelectLabel>
+                {teamSpecialties.map((s) => (
+                    <SelectItem key={s} value={s}>
+                        {specialtyLabel(s)}
+                    </SelectItem>
+                ))}
+            </SelectGroup>
+        </SelectContent>
+    );
 }
 
 function BlacklistDialog({ target, onDone }: { readonly target: ModeratedUserDto; readonly onDone: () => void }): ReactNode {
@@ -96,12 +163,16 @@ function BlacklistDialog({ target, onDone }: { readonly target: ModeratedUserDto
 interface UserRowProps {
     readonly actor: UserDto;
     readonly target: ModeratedUserDto;
+    readonly specialtyHolders: Record<Specialty, SpecialtyHolderDto | null>;
 }
 
-function UserRow({ actor, target }: UserRowProps): ReactNode {
+function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
     const queryClient = useQueryClient();
+    const [pendingTransfer, setPendingTransfer] = useState<{ specialty: Specialty; holder: SpecialtyHolderDto } | null>(null);
+
     const refresh = (): void => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.usersAll });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.specialtyHolders });
     };
     const setPrimaryRole = useMutation({
         mutationFn: (role: Role) => platformApi.setRole(target.id, role, target.specialties),
@@ -111,10 +182,15 @@ function UserRow({ actor, target }: UserRowProps): ReactNode {
         }
     });
     const setSecondaryRole = useMutation({
-        mutationFn: (specialties: Specialty[]) => platformApi.setRole(target.id, target.role, specialties),
+        mutationFn: ({ specialties, transfer }: { specialties: Specialty[]; transfer?: boolean }) =>
+            platformApi.setRole(target.id, target.role, specialties, transfer),
         onSuccess: () => {
             refresh();
+            setPendingTransfer(null);
             toast.success(`Updated @${target.username}'s secondary role.`);
+        },
+        onError: (err) => {
+            toast.error(err instanceof Error ? err.message : "Failed to update secondary role.");
         }
     });
     const promote = useMutation({
@@ -136,6 +212,20 @@ function UserRow({ actor, target }: UserRowProps): ReactNode {
     const busy = setPrimaryRole.isPending || setSecondaryRole.isPending || promote.isPending || lift.isPending;
     const avatar = safeHttpUrl(target.avatarUrl);
     const currentSpecialty = target.specialties[0] ?? "__none__";
+
+    const onSecondaryRoleChange = (value: string): void => {
+        if (value === "__none__") {
+            setSecondaryRole.mutate({ specialties: [] });
+            return;
+        }
+        const next = value as Specialty;
+        const holder = specialtyHolders[next];
+        if (holder !== null && holder !== undefined && holder.id !== target.id) {
+            setPendingTransfer({ specialty: next, holder });
+            return;
+        }
+        setSecondaryRole.mutate({ specialties: [next] });
+    };
 
     return (
         <TableRow>
@@ -177,26 +267,47 @@ function UserRow({ actor, target }: UserRowProps): ReactNode {
             </TableCell>
             <TableCell>
                 {manageableSecondary ? (
-                    <Select
-                        value={currentSpecialty}
-                        disabled={busy}
-                        onValueChange={(value) => {
-                            const nextSpecs = value === "__none__" ? [] : [value as Specialty];
-                            setSecondaryRole.mutate(nextSpecs);
-                        }}
-                    >
-                        <SelectTrigger size="sm" className="w-40" aria-label={`Secondary role for ${target.username}`}>
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__none__">None</SelectItem>
-                            {Object.values(Specialty).map((s) => (
-                                <SelectItem key={s} value={s}>
-                                    {specialtyLabel(s)}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <>
+                        <Select
+                            value={currentSpecialty}
+                            disabled={busy}
+                            onValueChange={onSecondaryRoleChange}
+                        >
+                            <SelectTrigger size="sm" className="w-48" aria-label={`Secondary role for ${target.username}`}>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SpecialtySelectContent
+                                holders={specialtyHolders}
+                                currentSpecialty={target.specialties[0] ?? null}
+                                targetId={target.id}
+                            />
+                        </Select>
+                        {pendingTransfer !== null && (
+                            <Dialog open={true} onOpenChange={(open) => !open && setPendingTransfer(null)}>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>Transfer {specialtyLabel(pendingTransfer.specialty)}?</DialogTitle>
+                                        <DialogDescription>
+                                            This role is currently assigned to @{pendingTransfer.holder.username}. Transferring will remove it from them and assign it to @{target.username}.
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <DialogFooter>
+                                        <Button variant="ghost" onClick={() => setPendingTransfer(null)} disabled={setSecondaryRole.isPending}>
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            disabled={setSecondaryRole.isPending}
+                                            onClick={() => {
+                                                setSecondaryRole.mutate({ specialties: [pendingTransfer.specialty], transfer: true });
+                                            }}
+                                        >
+                                            Transfer Role
+                                        </Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                        )}
+                    </>
                 ) : (
                     <span className="text-muted-foreground text-xs">
                         {target.specialties[0] ? specialtyLabel(target.specialties[0]) : "None"}
@@ -263,6 +374,11 @@ function PeopleTable({ actor }: { readonly actor: UserDto }): ReactNode {
         queryFn: () => platformApi.users(query),
         placeholderData: keepPreviousData
     });
+    const specialtyHoldersQuery = useQuery({
+        queryKey: queryKeys.specialtyHolders,
+        queryFn: () => platformApi.specialtyHolders()
+    });
+    const specialtyHolders = specialtyHoldersQuery.data ?? ({} as Record<Specialty, SpecialtyHolderDto | null>);
 
     return (
         <>
@@ -307,7 +423,7 @@ function PeopleTable({ actor }: { readonly actor: UserDto }): ReactNode {
                                 <TableRow>
                                     <TableHead>Person</TableHead>
                                     <TableHead className="w-44">Primary Role</TableHead>
-                                    <TableHead className="w-44">Secondary Role</TableHead>
+                                    <TableHead className="w-48">Secondary Role</TableHead>
                                     <TableHead className="w-32">Voting</TableHead>
                                     <TableHead className="w-32">Joined</TableHead>
                                     <TableHead className="w-40" />
@@ -315,7 +431,12 @@ function PeopleTable({ actor }: { readonly actor: UserDto }): ReactNode {
                             </TableHeader>
                             <TableBody>
                                 {users.data.data.map((target) => (
-                                    <UserRow key={target.id} actor={actor} target={target} />
+                                    <UserRow
+                                        key={target.id}
+                                        actor={actor}
+                                        target={target}
+                                        specialtyHolders={specialtyHolders}
+                                    />
                                 ))}
                             </TableBody>
                         </Table>
@@ -340,6 +461,13 @@ function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProp
     const [role, setRole] = useState<Role>(Role.Contributor);
     const [secondaryRole, setSecondaryRole] = useState<string>("__none__");
 
+    const specialtyHoldersQuery = useQuery({
+        queryKey: queryKeys.specialtyHolders,
+        queryFn: () => platformApi.specialtyHolders(),
+        enabled: open
+    });
+    const specialtyHolders = specialtyHoldersQuery.data ?? ({} as Record<Specialty, SpecialtyHolderDto | null>);
+
     const roles = grantableRoles(actor);
     const validId = /^\d{17,20}$/u.test(discordId.trim());
 
@@ -354,6 +482,7 @@ function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProp
         },
         onSuccess: (updated) => {
             void queryClient.invalidateQueries({ queryKey: queryKeys.usersAll });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.specialtyHolders });
             toast.success(`Assigned ${roleLabels[updated.role]} to ${updated.username}.`);
             setOpen(false);
             setDiscordId("");
@@ -421,14 +550,10 @@ function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProp
                             <SelectTrigger id="discord-secondary-role">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="__none__">None</SelectItem>
-                                {Object.values(Specialty).map((s) => (
-                                    <SelectItem key={s} value={s}>
-                                        {specialtyLabel(s)}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
+                            <SpecialtySelectContent
+                                holders={specialtyHolders}
+                                currentSpecialty={null}
+                            />
                         </Select>
                     </div>
                     <DialogFooter>

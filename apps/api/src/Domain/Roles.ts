@@ -1,6 +1,17 @@
 import { maximumSpecialties, Role, type Specialty } from "@platform/contracts";
 
-export { maximumSpecialties, Role, selfSelectableSpecialties, Specialty } from "@platform/contracts";
+export {
+    adminSpecialties,
+    assignableSpecialties,
+    exclusiveSpecialties,
+    maximumSpecialties,
+    Role,
+    selfSelectableSpecialties,
+    Specialty,
+    specialtyLabel,
+    supervisorSpecialties,
+    teamSpecialties
+} from "@platform/contracts";
 
 const roleRanks: Readonly<Record<Role, number>> = Object.freeze({
     [Role.Member]: 0,

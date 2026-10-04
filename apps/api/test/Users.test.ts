@@ -263,10 +263,10 @@ describe("user management", () => {
             method: "PATCH",
             url: `/api/v1/users/${admin2.record.id}/role`,
             headers: admin1.headers,
-            payload: { role: Role.Admin, specialties: [Specialty.Producer] }
+            payload: { role: Role.Admin, specialties: [Specialty.ProductionManager] }
         });
         expect(peerSpecialty.statusCode).toBe(200);
-        expect(json<{ data: { specialties: string[] } }>(peerSpecialty).data.specialties).toEqual([Specialty.Producer]);
+        expect(json<{ data: { specialties: string[] } }>(peerSpecialty).data.specialties).toEqual([Specialty.ProductionManager]);
 
         // admin cannot modify peer admin's primary role
         const peerPrimary = await context.application.inject({
@@ -304,5 +304,68 @@ describe("user management", () => {
         });
         expect(supervisorSubordinate.statusCode).toBe(200);
         expect(json<{ data: { specialties: string[] } }>(supervisorSubordinate).data.specialties).toEqual([Specialty.LightingArtist]);
+    });
+
+    it("enforces 1-person exclusivity on supervisor/admin roles and supports atomic transfer", async () => {
+        const admin = await context.createUser(Role.Admin);
+        const supervisorA = await context.createUser(Role.Supervisor, { specialties: [Specialty.EditorialSupervisor] });
+        const supervisorB = await context.createUser(Role.Supervisor);
+        const member1 = await context.createUser(Role.Contributor);
+        const member2 = await context.createUser(Role.Contributor);
+
+        // specialty-holders lists current holder
+        const holders = await context.application.inject({
+            method: "GET",
+            url: "/api/v1/users/specialty-holders",
+            headers: admin.headers
+        });
+        expect(holders.statusCode).toBe(200);
+        const holdersData = json<{ data: Record<string, { id: string; username: string } | null> }>(holders).data;
+        expect(holdersData[Specialty.EditorialSupervisor]?.id).toBe(supervisorA.record.id);
+
+        // assigning occupied supervisor role without transfer throws 409
+        const conflict = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${supervisorB.record.id}/role`,
+            headers: admin.headers,
+            payload: { role: Role.Supervisor, specialties: [Specialty.EditorialSupervisor] }
+        });
+        expect(conflict.statusCode).toBe(409);
+
+        // assigning with transfer: true reassigns role from A to B
+        context.notifier.notifications.length = 0;
+        const transferred = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${supervisorB.record.id}/role`,
+            headers: admin.headers,
+            payload: { role: Role.Supervisor, specialties: [Specialty.EditorialSupervisor], transfer: true }
+        });
+        expect(transferred.statusCode).toBe(200);
+        expect(json<{ data: { specialties: string[] } }>(transferred).data.specialties).toEqual([Specialty.EditorialSupervisor]);
+
+        // verify previous holder A lost the specialty
+        const previous = await context.application.inject({
+            method: "GET",
+            url: `/api/v1/users/by-discord/${supervisorA.record.discordId}`,
+            headers: admin.headers
+        });
+        expect(json<{ data: { specialties: string[] } }>(previous).data.specialties).toEqual([]);
+
+        // multiple users can hold team specialties like media_team
+        const team1 = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${member1.record.id}/role`,
+            headers: admin.headers,
+            payload: { role: Role.Contributor, specialties: [Specialty.MediaTeam] }
+        });
+        expect(team1.statusCode).toBe(200);
+
+        const team2 = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${member2.record.id}/role`,
+            headers: admin.headers,
+            payload: { role: Role.Contributor, specialties: [Specialty.MediaTeam] }
+        });
+        expect(team2.statusCode).toBe(200);
     });
 });

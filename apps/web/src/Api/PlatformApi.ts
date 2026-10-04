@@ -23,8 +23,10 @@ import {
     roundSchema,
     shotDetailSchema,
     shotSchema,
+    specialtyHoldersSchema,
     submissionSchema,
     userSchema,
+    type SpecialtyHolderDto,
     type BallotDto,
     type DeliverableKind,
     type DifficultyTier,
@@ -303,9 +305,17 @@ export class PlatformApi {
         return request("/users", pageEnvelope(moderatedUserSchema), { query: { ...query } });
     }
 
-    public async setRole(userId: string, role: Role, specialties?: readonly Specialty[]): Promise<UserDto> {
-        return (await request(`/users/${segment(userId)}/role`, dataEnvelope(userSchema), { method: "PATCH", body: { role, specialties } }))
-            .data;
+    public async specialtyHolders(): Promise<Record<Specialty, SpecialtyHolderDto | null>> {
+        return (await request("/users/specialty-holders", dataEnvelope(specialtyHoldersSchema))).data;
+    }
+
+    public async setRole(userId: string, role: Role, specialties?: readonly Specialty[], transfer?: boolean): Promise<UserDto> {
+        return (
+            await request(`/users/${segment(userId)}/role`, dataEnvelope(userSchema), {
+                method: "PATCH",
+                body: { role, specialties, transfer }
+            })
+        ).data;
     }
 
     public async document(slug: DocumentSlug): Promise<DocumentDto> {
