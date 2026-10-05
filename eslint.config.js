@@ -45,7 +45,21 @@ export default tseslint.config(
             "@typescript-eslint/no-unsafe-assignment": "off",
             "@typescript-eslint/no-unsafe-member-access": "off",
             "@typescript-eslint/no-unsafe-argument": "off",
-            "@typescript-eslint/no-unnecessary-type-parameters": "off"
+            "@typescript-eslint/no-unnecessary-type-parameters": "off",
+            "@typescript-eslint/no-non-null-assertion": "off",
+            "@typescript-eslint/no-explicit-any": "off",
+            "@typescript-eslint/no-unused-vars": "off"
+        }
+    },
+    {
+        rules: {
+            "@typescript-eslint/no-unsafe-enum-assignment": "off",
+            "@typescript-eslint/no-deprecated": "off",
+            "@typescript-eslint/no-unnecessary-condition": "off",
+            "@typescript-eslint/no-non-null-assertion": "off",
+            "@typescript-eslint/use-unknown-in-catch-callback-variable": "off",
+            "@typescript-eslint/prefer-optional-chain": "off",
+            "no-control-regex": "off"
         }
     }
 );

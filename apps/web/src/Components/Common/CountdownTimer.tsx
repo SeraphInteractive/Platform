@@ -32,31 +32,28 @@ function formatRemaining(diffMs: number, prefix?: string): string {
     return prefix ? `${prefix} ${timeStr}` : timeStr;
 }
 
-export function CountdownTimer({
-    targetDate,
-    prefix,
-    expiredLabel = "Ended",
-    icon = "clock",
-    className
-}: CountdownTimerProps): ReactNode {
+export function CountdownTimer({ targetDate, prefix, expiredLabel = "Ended", icon = "clock", className }: CountdownTimerProps): ReactNode {
     const [now, setNow] = useState(() => Date.now());
 
-    if (!targetDate) {
-        return null;
-    }
-
-    const targetTime = typeof targetDate === "string" ? new Date(targetDate).getTime() : targetDate.getTime();
+    const targetTime = targetDate ? (typeof targetDate === "string" ? new Date(targetDate).getTime() : targetDate.getTime()) : 0;
     const diff = targetTime - now;
 
     // accelerate tick rate when time is running short
     const tickInterval = diff <= 3_600_000 ? 1000 : diff <= 86_400_000 ? 10_000 : 60_000;
 
     useEffect(() => {
+        if (!targetDate) {
+            return;
+        }
         const timer = window.setInterval(() => {
             setNow(Date.now());
         }, tickInterval);
         return () => window.clearInterval(timer);
-    }, [tickInterval]);
+    }, [targetDate, tickInterval]);
+
+    if (!targetDate) {
+        return null;
+    }
 
     const isExpired = diff <= 0;
     const isUrgent = diff > 0 && diff <= 3_600_000;

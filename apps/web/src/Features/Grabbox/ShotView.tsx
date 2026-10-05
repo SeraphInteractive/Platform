@@ -161,7 +161,9 @@ function ActionPanel({ shot, user }: { readonly shot: ShotDetailDto; readonly us
         if (user.isBlacklisted) {
             return (
                 <div className="space-y-3">
-                    <p className="text-sm text-destructive">Your account has been blacklisted and cannot submit work on this task. Reach out to a moderator on Discord.</p>
+                    <p className="text-sm text-destructive">
+                        Your account has been blacklisted and cannot submit work on this task. Reach out to a moderator on Discord.
+                    </p>
                     <ReleaseButton shot={shot} isClaimant />
                 </div>
             );

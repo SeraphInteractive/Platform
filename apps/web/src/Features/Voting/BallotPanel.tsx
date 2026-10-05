@@ -78,10 +78,7 @@ function BallotEditor({ round, entries, savedPicks }: BallotEditorProps): ReactN
                                 const pick = picks[index];
                                 const entry = pick === undefined ? undefined : entriesById.get(pick);
                                 return (
-                                    <li
-                                        key={index}
-                                        className="flex items-center gap-2 border px-3 py-2 text-sm border-border"
-                                    >
+                                    <li key={index} className="flex items-center gap-2 border px-3 py-2 text-sm border-border">
                                         <span className="text-muted-foreground w-6 tabular-nums">#{index + 1}</span>
                                         <span className={cn("flex-1 truncate", entry === undefined && "text-muted-foreground")}>
                                             {entry?.title ?? "Empty"}
@@ -135,18 +132,15 @@ function BallotEditor({ round, entries, savedPicks }: BallotEditorProps): ReactN
                     const isPicked = position >= 0;
                     return (
                         <li key={entry.id} className="min-w-0">
-                            <Card
-                                className={cn(
-                                    "h-full min-w-0 overflow-hidden transition-all",
-                                    isPicked && "border-foreground"
-                                )}
-                            >
+                            <Card className={cn("h-full min-w-0 overflow-hidden transition-all", isPicked && "border-foreground")}>
                                 <CardHeader className="min-w-0 overflow-hidden break-words [overflow-wrap:anywhere]">
                                     <CardTitle className="text-sm min-w-0 break-words [overflow-wrap:anywhere] [word-break:break-word]">
                                         {entry.title}
                                     </CardTitle>
                                     {entry.description !== null && (
-                                        <MarkdownText className="text-muted-foreground text-sm min-w-0 break-words [overflow-wrap:anywhere] [word-break:break-word]">{entry.description}</MarkdownText>
+                                        <MarkdownText className="text-muted-foreground text-sm min-w-0 break-words [overflow-wrap:anywhere] [word-break:break-word]">
+                                            {entry.description}
+                                        </MarkdownText>
                                     )}
                                 </CardHeader>
                                 <CardContent className="space-y-3 min-w-0 break-words [overflow-wrap:anywhere] [word-break:break-word]">

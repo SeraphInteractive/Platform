@@ -177,10 +177,7 @@ export const entriesRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
     );
 };
 
-export function toEntryResponse(
-    item: EntryWithAuthor | EntryRecord,
-    storage: ObjectStorage
-): z.infer<typeof entrySchema> {
+export function toEntryResponse(item: EntryWithAuthor | EntryRecord, storage: ObjectStorage): z.infer<typeof entrySchema> {
     const entry = "entry" in item ? item.entry : item;
     const author = "author" in item && item.author !== null ? toUserSummary(item.author) : null;
     return {

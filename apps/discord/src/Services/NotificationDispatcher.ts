@@ -1,4 +1,12 @@
-import { DocumentSlug, EntryStatus, NotificationType, ReviewDecision, Role, ShotStatus, type PlatformNotification } from "@platform/contracts";
+import {
+    DocumentSlug,
+    EntryStatus,
+    NotificationType,
+    ReviewDecision,
+    Role,
+    ShotStatus,
+    type PlatformNotification
+} from "@platform/contracts";
 import type { Client, SendableChannels } from "discord.js";
 import type { Logger } from "pino";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
@@ -57,7 +65,7 @@ export class NotificationDispatcher {
         const memberIds = new Set<string>();
         await Promise.all(
             ids.map(async (id) => {
-                if (guild.members.cache?.has(id) === true) {
+                if (guild.members.cache?.has(id)) {
                     memberIds.add(id);
                     return;
                 }
@@ -112,7 +120,10 @@ export class NotificationDispatcher {
                                 reason: (notification.reason ?? "Blacklisted on platform").slice(0, 500)
                             })
                             .catch((error: unknown) => {
-                                this.logger.warn({ err: error, discordId: notification.user.discordId }, "failed to ban blacklisted member");
+                                this.logger.warn(
+                                    { err: error, discordId: notification.user.discordId },
+                                    "failed to ban blacklisted member"
+                                );
                             });
                     }
                 }
@@ -135,7 +146,10 @@ export class NotificationDispatcher {
                         if (member !== null) {
                             await syncMemberStudioRoles(member, notification.role, notification.specialties, "Platform role updated").catch(
                                 (error: unknown) => {
-                                    this.logger.warn({ err: error, discordId: notification.user.discordId }, "failed to sync member studio roles");
+                                    this.logger.warn(
+                                        { err: error, discordId: notification.user.discordId },
+                                        "failed to sync member studio roles"
+                                    );
                                 }
                             );
                         }
@@ -150,7 +164,10 @@ export class NotificationDispatcher {
                         if (member !== null) {
                             await syncMemberStudioRoles(member, Role.SeniorContributor, [], "Promoted to senior contributor").catch(
                                 (error: unknown) => {
-                                    this.logger.warn({ err: error, discordId: notification.user.discordId }, "failed to sync member studio roles");
+                                    this.logger.warn(
+                                        { err: error, discordId: notification.user.discordId },
+                                        "failed to sync member studio roles"
+                                    );
                                 }
                             );
                         }
@@ -189,7 +206,10 @@ export class NotificationDispatcher {
                         if (posted !== null) {
                             await posted.pin().catch(() => undefined);
                         }
-                        this.logger.info({ revision: notification.revision, slug: notification.slug }, "dynamically updated rules channel message");
+                        this.logger.info(
+                            { revision: notification.revision, slug: notification.slug },
+                            "dynamically updated rules channel message"
+                        );
                     }
                 }
                 return;

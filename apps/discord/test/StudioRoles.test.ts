@@ -3,18 +3,17 @@ import type { Collection, GuildMember, Role as DiscordRole } from "discord.js";
 import { describe, expect, it, vi } from "vitest";
 import { NotificationDispatcher } from "../src/Services/NotificationDispatcher.js";
 import { ServerProvisioner } from "../src/Services/ServerProvisioner.js";
-import {
-    contributorRoleName,
-    syncMemberStudioRoles,
-    targetStudioRoleNames
-} from "../src/Services/StudioRoles.js";
+import { contributorRoleName, syncMemberStudioRoles, targetStudioRoleNames } from "../src/Services/StudioRoles.js";
 import { SettingsStore } from "../src/State/SettingsStore.js";
 
 function createMockDiscordRole(id: string, name: string): DiscordRole {
     return { id, name } as unknown as DiscordRole;
 }
 
-function createMockMember(roleMap: Map<string, DiscordRole>, guildRoles: Map<string, DiscordRole>): {
+function createMockMember(
+    roleMap: Map<string, DiscordRole>,
+    guildRoles: Map<string, DiscordRole>
+): {
     member: GuildMember;
     added: string[];
     removed: string[];

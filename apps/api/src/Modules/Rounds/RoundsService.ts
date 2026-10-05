@@ -54,14 +54,26 @@ export interface RoundDetail {
 
 function isAllowedTransition(pollType: PollType, from: RoundStatus, to: RoundStatus): boolean {
     if (pollType === PollType.Binary) {
-        if (from === RoundStatus.Draft && (to === RoundStatus.Voting || to === RoundStatus.Open)) return true;
-        if (from === RoundStatus.Open && to === RoundStatus.Voting) return true;
-        if (from === RoundStatus.Voting && to === RoundStatus.Finalized) return true;
+        if (from === RoundStatus.Draft && (to === RoundStatus.Voting || to === RoundStatus.Open)) {
+            return true;
+        }
+        if (from === RoundStatus.Open && to === RoundStatus.Voting) {
+            return true;
+        }
+        if (from === RoundStatus.Voting && to === RoundStatus.Finalized) {
+            return true;
+        }
         return false;
     }
-    if (from === RoundStatus.Draft && to === RoundStatus.Open) return true;
-    if (from === RoundStatus.Open && to === RoundStatus.Voting) return true;
-    if (from === RoundStatus.Voting && to === RoundStatus.Finalized) return true;
+    if (from === RoundStatus.Draft && to === RoundStatus.Open) {
+        return true;
+    }
+    if (from === RoundStatus.Open && to === RoundStatus.Voting) {
+        return true;
+    }
+    if (from === RoundStatus.Voting && to === RoundStatus.Finalized) {
+        return true;
+    }
     return false;
 }
 
@@ -210,10 +222,7 @@ export class RoundsService {
                     .where(and(eq(entries.roundId, roundId), eq(entries.status, EntryStatus.Approved), eq(entries.isQuarantined, false)));
                 const totalApproved = approvedCount?.total ?? 0;
                 if (current.pollType === PollType.Binary && totalApproved !== 2) {
-                    throw new ConflictError(
-                        "A binary round requires exactly 2 approved entries to proceed to voting.",
-                        ErrorCode.Conflict
-                    );
+                    throw new ConflictError("A binary round requires exactly 2 approved entries to proceed to voting.", ErrorCode.Conflict);
                 }
                 if (current.pollType === PollType.RankedChoice && totalApproved !== 5) {
                     throw new ConflictError(

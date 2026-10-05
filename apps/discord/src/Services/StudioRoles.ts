@@ -218,7 +218,7 @@ export async function syncMemberStudioRoles(
     member: GuildMember,
     role: Role,
     specialties: readonly Specialty[],
-    reason: string = "Platform role sync"
+    reason = "Platform role sync"
 ): Promise<MemberRoleSyncResult> {
     const targetNames = targetStudioRoleNames(role, specialties);
     const guildRoles = await member.guild.roles.fetch();
@@ -238,14 +238,16 @@ export async function syncMemberStudioRoles(
             // auto-create role if missing from server
             const definition = studioRoles.find((r) => r.name === targetName);
             if (definition !== undefined) {
-                const created = await member.guild.roles.create({
-                    name: definition.name,
-                    colors: { primaryColor: definition.color },
-                    hoist: definition.tier !== StudioTier.Community,
-                    mentionable: definition.tier !== StudioTier.Community,
-                    permissions: [...permissionsFor(definition.tier)],
-                    reason: "Studio role auto-provision"
-                }).catch(() => null);
+                const created = await member.guild.roles
+                    .create({
+                        name: definition.name,
+                        colors: { primaryColor: definition.color },
+                        hoist: definition.tier !== StudioTier.Community,
+                        mentionable: definition.tier !== StudioTier.Community,
+                        permissions: [...permissionsFor(definition.tier)],
+                        reason: "Studio role auto-provision"
+                    })
+                    .catch(() => null);
                 if (created !== null) {
                     toAdd.push(created.id);
                 }
@@ -281,4 +283,3 @@ export async function syncMemberStudioRoles(
         removed: toRemove
     };
 }
-

@@ -160,10 +160,10 @@ export const healthRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }>
 
             const isAllOk = dbResult.status === "ok" && redisResult.status === "ok" && discordResult.status === "ok";
             const isAnyOk = dbResult.status === "ok" || redisResult.status === "ok";
-            const overallStatus = isAllOk ? "ok" : isAnyOk ? "degraded" : "unavailable";
+            const overallStatus: "ok" | "unavailable" | "degraded" = isAllOk ? "ok" : isAnyOk ? "degraded" : "unavailable";
 
             const payload = {
-                status: overallStatus as "ok" | "degraded" | "unavailable",
+                status: overallStatus,
                 uptimeSeconds: Math.floor(process.uptime()),
                 database: dbResult,
                 redis: redisResult,
