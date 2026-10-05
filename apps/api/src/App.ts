@@ -16,6 +16,7 @@ import {
 import { actingUserHeader } from "@platform/contracts";
 import { ApplicationError, BadRequestError, ErrorCode, ForbiddenError, UnauthorizedError } from "./Common/Errors/ApplicationError.js";
 import type { Principal } from "./Common/Security/Principal.js";
+import { requireRole } from "./Common/Security/Authorization.js";
 import type { TokenService } from "./Modules/Auth/TokenService.js";
 import { registerErrorHandling } from "./Common/Http/ErrorHandling.js";
 import type { ServiceContainer } from "./Composition/ServiceContainer.js";
@@ -25,11 +26,14 @@ import { ballotsRoutes } from "./Modules/Ballots/BallotsRoutes.js";
 import { entriesRoutes } from "./Modules/Entries/EntriesRoutes.js";
 import { healthRoutes } from "./Modules/Health/HealthRoutes.js";
 import { notificationRoutes } from "./Modules/Notifications/NotificationRoutes.js";
+import { pipelineRoutes } from "./Modules/Pipeline/PipelineRoutes.js";
 import { roundsRoutes } from "./Modules/Rounds/RoundsRoutes.js";
 import { shotsRoutes } from "./Modules/Shots/ShotsRoutes.js";
 import { telemetryRoutes } from "./Modules/Telemetry/TelemetryRoutes.js";
 import { threadMapsRoutes } from "./Modules/ThreadMaps/ThreadMapsRoutes.js";
 import { uploadsRoutes } from "./Modules/Uploads/UploadsRoutes.js";
+import { documentsRoutes } from "./Modules/Documents/DocumentsRoutes.js";
+import { verificationRoutes } from "./Modules/Verification/VerificationRoutes.js";
 import { usersRoutes } from "./Modules/Users/UsersRoutes.js";
 
 export const apiPrefix = "/api/v1";
@@ -41,12 +45,14 @@ const bearerPattern = /^Bearer ([A-Za-z0-9._~+/=-]{1,256})$/iu;
 
 const perMinuteLimits: Readonly<Record<Role | "service" | "anonymous", number>> = {
     anonymous: 60,
+    [Role.Member]: 120,
     [Role.Voter]: 120,
     [Role.Contributor]: 300,
     [Role.SeniorContributor]: 300,
     [Role.Moderator]: 500,
     [Role.Supervisor]: 500,
     [Role.Admin]: 1000,
+    [Role.SuperAdmin]: 1000,
     service: 3000
 };
 
@@ -186,7 +192,10 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
 
     await application.register(
         async (api) => {
-            api.get("/openapi.json", { schema: { hide: true } }, async () => application.swagger());
+            api.get("/openapi.json", { schema: { hide: true }, preHandler: requireRole(Role.Moderator) }, async () =>
+                application.swagger()
+            );
+            await api.register(healthRoutes, { services });
             await api.register(authRoutes, { services });
             await api.register(usersRoutes, { services });
             await api.register(roundsRoutes, { services });
@@ -196,7 +205,10 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
             await api.register(shotsRoutes, { services });
             await api.register(uploadsRoutes, { services });
             await api.register(threadMapsRoutes, { services });
+            await api.register(pipelineRoutes, { services });
             await api.register(notificationRoutes, { services });
+            await api.register(verificationRoutes, { services });
+            await api.register(documentsRoutes, { services });
         },
         { prefix: apiPrefix }
     );

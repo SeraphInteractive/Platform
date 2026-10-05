@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from "fastify";
 import { ErrorCode, ForbiddenError, UnauthorizedError } from "../Errors/ApplicationError.js";
 import { hasAtLeast, type Role } from "../../Domain/Roles.js";
+import type { LegalAcceptance } from "../../Modules/Documents/DocumentsService.js";
 import {
     actorFor,
     userActorFor,
@@ -26,6 +27,30 @@ export function requireUser(): preHandlerAsyncHookHandler {
 export function requireRole(role: Role): preHandlerAsyncHookHandler {
     return async function (request: FastifyRequest): Promise<void> {
         const { user } = userPrincipalOf(request);
+        if (!hasAtLeast(user.role, role)) {
+            throw new ForbiddenError(`This action requires the ${role} role or higher.`, ErrorCode.InsufficientRole);
+        }
+    };
+}
+
+export function requireAcceptedTerms(legal: LegalAcceptance): preHandlerAsyncHookHandler {
+    return async function (request: FastifyRequest): Promise<void> {
+        const { user } = userPrincipalOf(request);
+        if (user.termsVersion !== (await legal.currentAcceptanceVersion())) {
+            throw new ForbiddenError("Accept the current terms of service first.", ErrorCode.TermsNotAccepted);
+        }
+    };
+}
+
+export function requireParticipant(role: Role, legal: LegalAcceptance): preHandlerAsyncHookHandler {
+    return async function (request: FastifyRequest): Promise<void> {
+        const { user } = userPrincipalOf(request);
+        if (user.termsVersion !== (await legal.currentAcceptanceVersion())) {
+            throw new ForbiddenError("Accept the current terms of service first.", ErrorCode.TermsNotAccepted);
+        }
+        if (!user.isVerified) {
+            throw new ForbiddenError("Verify your email to take part.", ErrorCode.VerificationRequired);
+        }
         if (!hasAtLeast(user.role, role)) {
             throw new ForbiddenError(`This action requires the ${role} role or higher.`, ErrorCode.InsufficientRole);
         }

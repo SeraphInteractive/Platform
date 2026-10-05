@@ -13,9 +13,10 @@ COPY packages/scoring/package.json packages/scoring/
 COPY packages/contracts/package.json packages/contracts/
 COPY apps/api/package.json apps/api/
 COPY apps/discord/package.json apps/discord/
+COPY apps/web/package.json apps/web/
 
 FROM base AS build
-RUN --mount=type=cache,target=/root/.npm npm ci --ignore-scripts
+RUN npm ci --ignore-scripts
 COPY tsconfig.base.json tsconfig.json ./
 COPY packages/scoring/tsconfig.json packages/scoring/
 COPY packages/scoring/src packages/scoring/src
@@ -27,11 +28,16 @@ COPY apps/discord/tsconfig.json apps/discord/
 COPY apps/discord/src apps/discord/src
 RUN npx tsc -b
 
+FROM build AS web-build
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY apps/web apps/web
+RUN npm run build -w @platform/web
+
 FROM base AS api-dependencies
-RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --ignore-scripts --workspace @platform/api
+RUN npm ci --omit=dev --ignore-scripts --workspace @platform/api
 
 FROM base AS discord-dependencies
-RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --ignore-scripts --workspace @platform/discord
+RUN npm ci --omit=dev --ignore-scripts --workspace @platform/discord
 
 FROM ${NODE_IMAGE} AS runtime
 RUN apk upgrade --no-cache \
@@ -69,3 +75,13 @@ EXPOSE 3333
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --start-interval=2s --retries=3 \
     CMD ["node", "-e", "fetch(`http://127.0.0.1:${process.env.PORT}/health/ready`).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
 CMD ["node", "apps/api/dist/Main.js"]
+
+FROM runtime AS web
+ENV HOSTNAME=0.0.0.0     PORT=3000     NEXT_TELEMETRY_DISABLED=1
+COPY --from=web-build /app/apps/web/.next/standalone ./
+COPY --from=web-build /app/apps/web/public apps/web/public
+COPY --from=web-build /app/apps/web/.next/static apps/web/.next/static
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --start-interval=2s --retries=3     CMD ["node", "-e", "fetch(`http://127.0.0.1:${process.env.PORT}/docs`).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+CMD ["node", "apps/web/server.js"]

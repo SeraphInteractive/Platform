@@ -17,7 +17,6 @@ import {
     contributorRoleName,
     findStudioRole,
     normalizeName,
-    observerRoleName,
     permissionsFor,
     studioRoles,
     StudioTier
@@ -37,6 +36,7 @@ const forumTagNames: Readonly<Record<ShotStatus, string>> = {
 };
 
 const channelNames: Readonly<Record<Exclude<ChannelPurpose, ChannelPurpose.TaskForum>, string>> = {
+    [ChannelPurpose.Rules]: "rules",
     [ChannelPurpose.Announcements]: "announcements",
     [ChannelPurpose.Telemetry]: "telemetry-alerts",
     [ChannelPurpose.TaskSubmissions]: "task-submissions",
@@ -44,16 +44,32 @@ const channelNames: Readonly<Record<Exclude<ChannelPurpose, ChannelPurpose.TaskF
 };
 
 const forumName = "tasks";
-const rulesChannelName = "studio-rules";
 
 export const studioRules = [
-    "## Studio rules",
-    "**Leadership seats hold one person.** Executive and department roles have a single seat. Assigning one with /assign-role moves it from the current holder.",
-    "**Assign roles through the bot.** /assign-role keeps Discord roles and platform permissions in sync. Manual role changes don't reach the platform.",
-    "**Reviews.** Department supervisors review submissions for their department. Approved work is locked and handed downstream.",
-    "**Contributor and community roles** have no seat limit.",
-    "**Disputes** go to the Producer and Creative Director."
-].join("\n\n");
+    "# 📜 Studio Guidelines & System Integrity",
+    "*Official community voting rules, mathematical invariants, and production workflow.*",
+    "",
+    "### 1. Community Philosophy & Roles",
+    "• **Voters (Community):** Democratic participation in film rounds and story pitches.",
+    "• **Contributors:** Claim 3D modeling, animation, layout, lighting, or sound tasks from the Grab-Box.",
+    "• **Supervisors & Admins:** Lead departments, QA deliverables, trigger binary polls, and audit integrity.",
+    "",
+    "### 2. Voting Math & Invariants",
+    "• **Ranked-Choice (3-2-1 Borda):** Top 3 choices receive 3, 2, and 1 point respectively (`6 points/ballot`).",
+    "• **Point Conservation Law:** `Total_Points = 6 × Total_Ballots` (strictly enforced by real-time invariants).",
+    "• **Bayesian Shrinkage (K=30):** Pulls low-sample spikes toward prior mean to prevent brigading takeovers.",
+    "",
+    "### 3. Anti-Cheat & Anomaly Telemetry",
+    "• **Velocity Z-Score (Z > 2.5):** Flags automated ballot surges within sliding 5-minute windows.",
+    "• **Shannon Rank Entropy (H < 0.35):** Detects coordinated bullet-voting rings.",
+    "• **Permanent Audit Ledger:** Certified election outcomes are signed and immutable.",
+    "",
+    "### 4. Contributor Grab-Box",
+    "• Claim tasks across 4 difficulty tiers.",
+    "• Deliverables require `.blend` scene source files and compressed video previews for supervisor review.",
+    "",
+    "-# Synced dynamically from web platform • [View Full Documentation](https://dev-api.seraphinteractive.com/documentation)"
+].join("\n");
 
 export class ServerProvisioner {
     public constructor(
@@ -64,9 +80,11 @@ export class ServerProvisioner {
     public async bindExisting(guild: Guild): Promise<void> {
         const [roles, channels] = await Promise.all([guild.roles.fetch(), guild.channels.fetch()]);
         await this.settings.update((settings) => {
-            const observer = roles.find((role) => normalizeName(role.name) === normalizeName(observerRoleName));
-            const contributor = roles.find((role) => normalizeName(role.name) === normalizeName(contributorRoleName));
-            settings.roles[BoundRole.Observer] ??= observer?.id;
+            const member = roles.find((role) => findStudioRole(role.name)?.name === "Members");
+            const voter = roles.find((role) => findStudioRole(role.name)?.name === "Voters");
+            const contributor = roles.find((role) => findStudioRole(role.name)?.name === contributorRoleName);
+            settings.roles[BoundRole.Member] ??= member?.id;
+            settings.roles[BoundRole.Voter] ??= voter?.id;
             settings.roles[BoundRole.Contributor] ??= contributor?.id;
             for (const [purpose, name] of Object.entries(channelNames) as [ChannelPurpose, string][]) {
                 const match = channels.find(
@@ -98,6 +116,9 @@ export class ServerProvisioner {
         for (const definition of studioRoles) {
             const existing = existingRoles.find((role) => findStudioRole(role.name)?.name === definition.name);
             if (existing !== undefined) {
+                if (existing.hoist !== (definition.tier !== StudioTier.Community)) {
+                    await existing.setHoist(definition.tier !== StudioTier.Community, "Studio role setup").catch(() => undefined);
+                }
                 roleIds.set(definition.name, existing);
                 continue;
             }
@@ -112,6 +133,8 @@ export class ServerProvisioner {
             roleIds.set(definition.name, created);
             createdRoles.push(created.name);
         }
+
+        await this.enforceRoleHierarchy(guild);
 
         const staffRoles = studioRoles
             .filter((role) => role.tier <= StudioTier.Department)
@@ -215,7 +238,13 @@ export class ServerProvisioner {
             botAccess
         ]);
         const logs = await ensureText(channelNames[ChannelPurpose.TaskLogs], staff, "Task activity log.", privateOverwrites);
-        const rules = await ensureText(rulesChannelName, staff, "How roles and reviews work.", privateOverwrites);
+        const rules = await ensureText(
+            channelNames[ChannelPurpose.Rules],
+            platform,
+            "Community guidelines, voting invariants, and rules.",
+            readOnlyOverwrites
+        );
+        await rules.setPosition(0).catch(() => undefined);
 
         let forum = find(forumName, ChannelType.GuildForum) as ForumChannel | undefined;
         if (forum === undefined) {
@@ -224,50 +253,29 @@ export class ServerProvisioner {
                 type: ChannelType.GuildForum,
                 parent: pipeline.id,
                 topic: "Open tasks. Use /take-task in a post to claim it.",
-                permissionOverwrites: [
-                    {
-                        id: everyone,
-                        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
-                        deny: [PermissionFlagsBits.SendMessagesInThreads, PermissionFlagsBits.CreatePublicThreads]
-                    },
-                    ...contributorRoles.map((role) => ({
-                        id: role.id,
-                        allow: [PermissionFlagsBits.SendMessagesInThreads, PermissionFlagsBits.AttachFiles]
-                    })),
-                    ...staffRoles.map((role) => ({
-                        id: role.id,
-                        allow: [PermissionFlagsBits.SendMessagesInThreads, PermissionFlagsBits.ManageThreads]
-                    })),
-                    {
-                        id: botId,
-                        allow: [
-                            PermissionFlagsBits.ViewChannel,
-                            PermissionFlagsBits.SendMessagesInThreads,
-                            PermissionFlagsBits.CreatePublicThreads,
-                            PermissionFlagsBits.ManageThreads
-                        ]
-                    }
-                ],
                 reason: "Studio setup"
             });
             createdChannels.push(forumName);
         } else {
             boundChannels.push(forum.name);
         }
+        await this.ensureForumPermissions(forum);
         const tagged = await this.ensureForumTags(forum);
 
-        if ((await rules.messages.fetchPins()).items.length === 0) {
+        const pins = await rules.messages.fetchPinned().catch(() => null);
+        if (pins === null || pins.size === 0) {
             const posted = await rules.send(message(panel(null, studioRules)));
             await posted.pin().catch(() => undefined);
         }
 
         await this.settings.update((settings) => {
+            settings.channels[ChannelPurpose.Rules] = rules.id;
             settings.channels[ChannelPurpose.Announcements] = announcements.id;
             settings.channels[ChannelPurpose.Telemetry] = telemetry.id;
             settings.channels[ChannelPurpose.TaskSubmissions] = submissions.id;
             settings.channels[ChannelPurpose.TaskLogs] = logs.id;
             settings.channels[ChannelPurpose.TaskForum] = tagged.id;
-            settings.roles[BoundRole.Observer] = roleIds.get(observerRoleName)?.id;
+            settings.roles[BoundRole.Voter] = roleIds.get("Voters")?.id;
             settings.roles[BoundRole.Contributor] = roleIds.get(contributorRoleName)?.id;
         });
 
@@ -295,5 +303,95 @@ export class ServerProvisioner {
             }
         });
         return updated;
+    }
+
+    public async ensureForumPermissions(forum: ForumChannel): Promise<void> {
+        const guild = forum.guild;
+        const botId = guild.client.user.id;
+        const everyone = guild.roles.everyone.id;
+        const existingRoles = await guild.roles.fetch();
+        const staffRoles = studioRoles
+            .filter((role) => role.tier <= StudioTier.Department)
+            .map((def) => existingRoles.find((role) => findStudioRole(role.name)?.name === def.name))
+            .filter((role): role is DiscordRole => role !== undefined);
+        const contributorRoles = studioRoles
+            .filter((role) => role.tier === StudioTier.Contributor)
+            .map((def) => existingRoles.find((role) => findStudioRole(role.name)?.name === def.name))
+            .filter((role): role is DiscordRole => role !== undefined);
+
+        // allow thread replies while locking root creation to staff
+        await forum.permissionOverwrites.set(
+            [
+                {
+                    id: everyone,
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.SendMessagesInThreads,
+                        PermissionFlagsBits.UseApplicationCommands
+                    ],
+                    deny: [
+                        PermissionFlagsBits.SendMessages,
+                        PermissionFlagsBits.CreatePublicThreads,
+                        PermissionFlagsBits.CreatePrivateThreads
+                    ]
+                },
+                ...contributorRoles.map((role) => ({
+                    id: role.id,
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.SendMessagesInThreads,
+                        PermissionFlagsBits.UseApplicationCommands,
+                        PermissionFlagsBits.AttachFiles
+                    ]
+                })),
+                ...staffRoles.map((role) => ({
+                    id: role.id,
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.SendMessages,
+                        PermissionFlagsBits.SendMessagesInThreads,
+                        PermissionFlagsBits.CreatePublicThreads,
+                        PermissionFlagsBits.ManageThreads
+                    ]
+                })),
+                {
+                    id: botId,
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.SendMessages,
+                        PermissionFlagsBits.SendMessagesInThreads,
+                        PermissionFlagsBits.CreatePublicThreads,
+                        PermissionFlagsBits.ManageThreads
+                    ]
+                }
+            ],
+            "Configure task forum permissions"
+        );
+    }
+
+    public async enforceRoleHierarchy(guild: Guild): Promise<number> {
+        const guildRoles = await guild.roles.fetch();
+        const roleList: (DiscordRole | null)[] = Array.from(guildRoles.values());
+        const positions: { role: string; position: number }[] = [];
+
+        let position = 1;
+        const reversed = [...studioRoles].reverse();
+        for (const definition of reversed) {
+            const match = roleList.find((role) => role !== null && role !== undefined && findStudioRole(role.name)?.name === definition.name);
+            if (match !== undefined && match !== null) {
+                positions.push({ role: match.id, position });
+                position++;
+            }
+        }
+        if (positions.length > 0) {
+            await guild.roles.setPositions(positions).catch((err: unknown) => {
+                this.logger.warn({ err }, "failed to set role hierarchy positions");
+            });
+        }
+        return positions.length;
     }
 }

@@ -1,3 +1,6 @@
+import type { CaptchaVerifier } from "../../src/Infrastructure/Captcha/CaptchaVerifier.js";
+import type { EmailMessage, EmailSender } from "../../src/Infrastructure/Email/EmailSender.js";
+import type { MailDomainChecker } from "../../src/Infrastructure/Email/MailDomainChecker.js";
 import type { NotificationInput } from "../../src/Infrastructure/Notifications/Notification.js";
 import { StreamNotifier } from "../../src/Infrastructure/Notifications/NotificationLog.js";
 import { DiscordOAuthError, type DiscordOAuthClient, type DiscordProfile } from "../../src/Infrastructure/Discord/DiscordOAuthClient.js";
@@ -41,6 +44,7 @@ export class FakePresenceProvider implements PresenceProvider {
 
 export class FakeObjectStorage implements ObjectStorage {
     private readonly objects = new Map<string, StoredObjectMetadata>();
+    private readonly buffers = new Map<string, Buffer>();
 
     public isEnabled(): boolean {
         return true;
@@ -56,12 +60,23 @@ export class FakeObjectStorage implements ObjectStorage {
         });
     }
 
-    public store(bucket: StorageBucket, key: string, sizeBytes: number, contentType: string): void {
+    public store(bucket: StorageBucket, key: string, sizeBytes: number, contentType: string, data?: Buffer): void {
         this.objects.set(`${bucket}:${key}`, { sizeBytes, contentType });
+        if (data !== undefined) {
+            this.buffers.set(`${bucket}:${key}`, data);
+        }
     }
 
     public getMetadata(bucket: StorageBucket, key: string): Promise<StoredObjectMetadata | null> {
         return Promise.resolve(this.objects.get(`${bucket}:${key}`) ?? null);
+    }
+
+    public getObject(bucket: StorageBucket, key: string, maxBytes?: number): Promise<Buffer | null> {
+        const buf = this.buffers.get(`${bucket}:${key}`);
+        if (buf === undefined) {
+            return Promise.resolve(null);
+        }
+        return Promise.resolve(maxBytes !== undefined && maxBytes > 0 ? buf.subarray(0, maxBytes) : buf);
     }
 
     public createDownloadUrl(bucket: StorageBucket, key: string): Promise<string> {
@@ -71,6 +86,11 @@ export class FakeObjectStorage implements ObjectStorage {
     public getPublicUrl(bucket: StorageBucket, key: string): string | null {
         return `https://media.test/${bucket}/${key}`;
     }
+
+    public deleteObject(bucket: StorageBucket, key: string): Promise<void> {
+        this.objects.delete(`${bucket}:${key}`);
+        return Promise.resolve();
+    }
 }
 
 export class RecordingNotifier extends StreamNotifier {
@@ -79,5 +99,36 @@ export class RecordingNotifier extends StreamNotifier {
     public override notify(notification: NotificationInput): void {
         this.notifications.push(notification);
         super.notify(notification);
+    }
+}
+
+export const passingCaptchaToken = "captcha-pass";
+
+export class FakeCaptchaVerifier implements CaptchaVerifier {
+    public verify(token: string): Promise<boolean> {
+        return Promise.resolve(token === passingCaptchaToken);
+    }
+}
+
+export class FakeMailDomainChecker implements MailDomainChecker {
+    public acceptsMail(domain: string): Promise<boolean> {
+        return Promise.resolve(!domain.endsWith(".invalid"));
+    }
+}
+
+export class RecordingEmailSender implements EmailSender {
+    public readonly messages: EmailMessage[] = [];
+
+    public isEnabled(): boolean {
+        return true;
+    }
+
+    public send(message: EmailMessage): Promise<void> {
+        this.messages.push(message);
+        return Promise.resolve();
+    }
+
+    public lastCode(): string | null {
+        return /\d{6}/u.exec(this.messages.at(-1)?.text ?? "")?.[0] ?? null;
     }
 }

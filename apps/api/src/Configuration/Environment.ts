@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { maximumSuperAdmins } from "../Domain/Roles.js";
 
 const optionalString = z
     .string()
@@ -79,6 +80,9 @@ const environmentObject = z.object({
     DISCORD_CLIENT_SECRET: z.string().min(1),
     DISCORD_REDIRECT_URI: z.url({ protocol: /^https?$/u }),
 
+    SUPER_ADMIN_DISCORD_IDS: snowflakeList.pipe(
+        z.array(snowflake).max(maximumSuperAdmins, `must list at most ${maximumSuperAdmins} users`)
+    ),
     ADMIN_DISCORD_IDS: snowflakeList,
     SUPERVISOR_DISCORD_IDS: snowflakeList,
     MODERATOR_DISCORD_IDS: snowflakeList,
@@ -102,6 +106,9 @@ const environmentObject = z.object({
         .int()
         .min(1024)
         .default(5 * 1024 * 1024),
+    RESEND_API_KEY: optionalString,
+    EMAIL_FROM: optionalString,
+    TURNSTILE_SECRET_KEY: optionalString,
     DELIVERABLE_MAX_BYTES: z.coerce
         .number()
         .int()
@@ -127,8 +134,10 @@ export const environmentSchema = environmentObject.superRefine((value, context) 
     if (insecure.length > 0) {
         context.addIssue({ code: "custom", path: ["APP_URL"], message: `production URLs must use https: ${insecure.join(", ")}` });
     }
-    if (value.REDIS_PASSWORD === undefined) {
-        context.addIssue({ code: "custom", path: ["REDIS_PASSWORD"], message: "is required in production" });
+    for (const key of ["REDIS_PASSWORD", "RESEND_API_KEY", "EMAIL_FROM", "TURNSTILE_SECRET_KEY"] as const) {
+        if (value[key] === undefined) {
+            context.addIssue({ code: "custom", path: [key], message: "is required in production" });
+        }
     }
 });
 

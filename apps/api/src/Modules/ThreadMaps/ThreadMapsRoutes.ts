@@ -17,14 +17,17 @@ function toThreadMapResponse(map: ShotThreadMapRecord): z.infer<typeof threadMap
 export const threadMapsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
     const { database } = services;
     const security = [{ bearer: [] }];
+    const reader = requireRoleOrService(Role.Moderator);
     const writer = requireRoleOrService(Role.Supervisor);
 
     application.get(
         "/shot-thread-maps",
         {
+            preHandler: reader,
             schema: {
                 tags: ["Shot threads"],
                 summary: "All shot to Discord thread bindings.",
+                security,
                 response: { 200: dataEnvelope(z.array(threadMapSchema)), ...errorResponses }
             }
         },
@@ -37,9 +40,11 @@ export const threadMapsRoutes: FastifyPluginAsyncZod<{ services: ServiceContaine
     application.get(
         "/shot-thread-maps/by-thread/:threadId",
         {
+            preHandler: reader,
             schema: {
                 tags: ["Shot threads"],
                 summary: "Resolve the shot bound to a Discord thread.",
+                security,
                 params: z.object({ threadId: snowflakeSchema }),
                 response: { 200: dataEnvelope(threadMapSchema), ...errorResponses }
             }

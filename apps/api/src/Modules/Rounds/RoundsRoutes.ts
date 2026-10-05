@@ -1,3 +1,4 @@
+import { fieldRules } from "@platform/contracts";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import {
@@ -7,7 +8,6 @@ import {
     paginationQuerySchema,
     timestampSchema,
     toIso,
-    trimmedText,
     uuidSchema
 } from "../../Common/Http/Schemas.js";
 import { actorOf, optionalUser, requireRole, userActorOf } from "../../Common/Security/Authorization.js";
@@ -20,7 +20,7 @@ import { roundDetailSchema, roundSchema, toRoundResponse } from "./RoundPresente
 
 const roundParams = z.object({ roundId: uuidSchema });
 const dateInput = timestampSchema.transform((value) => new Date(value));
-const editableStatus = z.enum([RoundStatus.Draft, RoundStatus.Open, RoundStatus.Closed]);
+const editableStatus = z.enum(RoundStatus);
 
 function toRoundResultResponse(result: RoundResultRecord): RoundResultResponse {
     return {
@@ -35,6 +35,19 @@ function toRoundResultResponse(result: RoundResultRecord): RoundResultResponse {
         finalizedBy: result.finalizedBy
     };
 }
+
+const createBinaryChoiceSchema = z.object({
+    title: fieldRules.entryTitle,
+    description: fieldRules.entryDescription.default(null),
+    mediaKey: z.string().max(255).nullable().default(null)
+});
+
+const updateBinaryChoiceSchema = z.object({
+    id: uuidSchema.optional(),
+    title: fieldRules.entryTitle,
+    description: fieldRules.entryDescription.default(null),
+    mediaKey: z.string().max(255).nullable().optional()
+});
 
 export const roundsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
     const { roundsService, leaderboardService } = services;
@@ -88,12 +101,23 @@ export const roundsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }>
                 tags: ["Rounds"],
                 summary: "Create a voting round in draft status.",
                 security,
-                body: z.object({
-                    title: trimmedText(255),
-                    pollType: z.enum(PollType).default(PollType.RankedChoice),
-                    opensAt: dateInput.nullable().default(null),
-                    closesAt: dateInput.nullable().default(null)
-                }),
+                body: z
+                    .object({
+                        title: fieldRules.roundTitle,
+                        pollType: z.enum(PollType).default(PollType.RankedChoice),
+                        opensAt: dateInput.nullable().default(null),
+                        closesAt: dateInput.nullable().default(null),
+                        binaryEntries: z.tuple([createBinaryChoiceSchema, createBinaryChoiceSchema]).optional()
+                    })
+                    .superRefine((data, ctx) => {
+                        if (data.pollType === PollType.Binary && (!data.binaryEntries || data.binaryEntries.length !== 2)) {
+                            ctx.addIssue({
+                                code: z.ZodIssueCode.custom,
+                                message: "Binary rounds require exactly two choices (Option A and Option B).",
+                                path: ["binaryEntries"]
+                            });
+                        }
+                    }),
                 response: { 201: dataEnvelope(roundSchema), ...errorResponses }
             }
         },
@@ -114,11 +138,12 @@ export const roundsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }>
                 params: roundParams,
                 body: z
                     .object({
-                        title: trimmedText(255).optional(),
+                        title: fieldRules.roundTitle.optional(),
                         pollType: z.enum(PollType).optional(),
                         status: editableStatus.optional(),
                         opensAt: dateInput.nullable().optional(),
-                        closesAt: dateInput.nullable().optional()
+                        closesAt: dateInput.nullable().optional(),
+                        binaryEntries: z.tuple([updateBinaryChoiceSchema, updateBinaryChoiceSchema]).optional()
                     })
                     .refine((body) => Object.keys(body).length > 0, "at least one field is required"),
                 response: { 200: dataEnvelope(roundSchema), ...errorResponses }
@@ -143,7 +168,7 @@ export const roundsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }>
             }
         },
         async (request, reply) => {
-            await roundsService.delete(request.params.roundId);
+            await roundsService.delete(actorOf(request), request.params.roundId);
             return reply.status(204).send(null);
         }
     );

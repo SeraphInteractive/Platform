@@ -7,11 +7,12 @@ import {
     type Ballot,
     type EntryScoreBreakdown
 } from "@platform/scoring";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull, lte } from "drizzle-orm";
 import { ConflictError, ErrorCode, NotFoundError } from "../../Common/Errors/ApplicationError.js";
 import type { AuthenticatedUser, UserActor } from "../../Common/Security/Principal.js";
 import { canSeeDrafts } from "../Rounds/RoundVisibility.js";
 import { EntryStatus, RoundStatus } from "../../Domain/Enums.js";
+import { Role } from "../../Domain/Roles.js";
 import type { Database, DatabaseExecutor } from "../../Infrastructure/Database/Database.js";
 import {
     ballots,
@@ -24,6 +25,7 @@ import {
 } from "../../Infrastructure/Database/Schema.js";
 import { RoundEventType, type EventBus } from "../../Infrastructure/Events/EventBus.js";
 import { NotificationType, personOfActor, roundReferenceOf, type Notifier } from "../../Infrastructure/Notifications/Notification.js";
+import { StorageBucket, type ObjectStorage } from "../../Infrastructure/Storage/ObjectStorage.js";
 import type { LeaderboardCache } from "./LeaderboardCache.js";
 import type { Leaderboard, LeaderboardItem } from "./LeaderboardTypes.js";
 
@@ -41,7 +43,8 @@ export class LeaderboardService {
         private readonly database: Database,
         private readonly cache: LeaderboardCache,
         private readonly eventBus: EventBus,
-        private readonly notifier: Notifier
+        private readonly notifier: Notifier,
+        private readonly storage?: ObjectStorage
     ) {}
 
     public async getLive(roundId: string, viewer: AuthenticatedUser | null): Promise<Leaderboard> {
@@ -84,8 +87,8 @@ export class LeaderboardService {
             if (locked.status === RoundStatus.Finalized) {
                 throw new ConflictError("The round has already been finalized.", ErrorCode.RoundFinalized);
             }
-            if (locked.status !== RoundStatus.Closed) {
-                throw new ConflictError("Close the round before finalizing it.", ErrorCode.RoundNotClosed);
+            if (locked.status !== RoundStatus.Voting) {
+                throw new ConflictError("The round must be in voting status before finalizing it.", ErrorCode.RoundNotClosed);
             }
 
             const standings = await this.computeStandings(transaction, locked);
@@ -125,6 +128,17 @@ export class LeaderboardService {
         });
 
         const winner = result.leaderboard[0];
+        let winnerMediaUrl: string | null = null;
+        if (winner !== undefined && this.storage !== undefined) {
+            const [winnerEntry] = await this.database
+                .select({ mediaKey: entries.mediaKey })
+                .from(entries)
+                .where(eq(entries.id, winner.entryId))
+                .limit(1);
+            if (winnerEntry?.mediaKey) {
+                winnerMediaUrl = this.storage.getPublicUrl(StorageBucket.Media, winnerEntry.mediaKey);
+            }
+        }
         this.notifier.notify({
             type: NotificationType.RoundFinalized,
             round: roundReferenceOf(round),
@@ -135,6 +149,7 @@ export class LeaderboardService {
                     : {
                           entryId: winner.entryId,
                           title: winner.title,
+                          mediaUrl: winnerMediaUrl,
                           rawScore: winner.rawScore,
                           voteSharePercentage: winner.voteSharePercentage,
                           regularizedTotalScore: winner.regularizedTotalScore
@@ -142,6 +157,38 @@ export class LeaderboardService {
             actor: personOfActor(actor)
         });
         return result;
+    }
+
+    public async finalizeExpired(): Promise<{ finalizedCount: number; roundIds: string[] }> {
+        const now = new Date();
+        const expired = await this.database
+            .select({ id: votingRounds.id, createdBy: votingRounds.createdBy })
+            .from(votingRounds)
+            .where(
+                and(
+                    eq(votingRounds.status, RoundStatus.Voting),
+                    isNotNull(votingRounds.closesAt),
+                    lte(votingRounds.closesAt, now)
+                )
+            );
+
+        const finalizedRoundIds: string[] = [];
+        for (const round of expired) {
+            try {
+                // system actor for automated round conclusion
+                const systemActor: UserActor = {
+                    userId: round.createdBy,
+                    role: Role.Admin,
+                    displayName: "System",
+                    discordId: "0"
+                };
+                await this.finalize(systemActor, round.id);
+                finalizedRoundIds.push(round.id);
+            } catch {
+                // skip if already finalized or locked concurrently
+            }
+        }
+        return { finalizedCount: finalizedRoundIds.length, roundIds: finalizedRoundIds };
     }
 
     private async computeStandings(executor: DatabaseExecutor, round: VotingRoundRecord): Promise<Standings> {

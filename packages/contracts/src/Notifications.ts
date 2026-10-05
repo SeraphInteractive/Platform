@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DifficultyTier, EntryStatus, PollType, RaidFlag, RaidSeverity, ReviewDecision, RoundStatus } from "./Enums.js";
+import { DifficultyTier, DocumentSlug, EntryStatus, PollType, RaidFlag, RaidSeverity, ReviewDecision, Role, RoundStatus, Specialty } from "./Enums.js";
 import { snowflakeSchema, timestampSchema, uuidSchema } from "./Http.js";
 
 export enum NotificationType {
@@ -7,12 +7,17 @@ export enum NotificationType {
     BallotBlocked = "ballot.blocked",
     UserBlacklisted = "user.blacklisted",
     UserReinstated = "user.reinstated",
+    UserRoleChanged = "user.role_changed",
     ContributorPromoted = "contributor.promoted",
     RaidAlert = "raid.alert",
     RoundCreated = "round.created",
+    RoundUpdated = "round.updated",
+    RoundDeleted = "round.deleted",
     RoundStatusChanged = "round.status_changed",
     RoundFinalized = "round.finalized",
     EntrySubmitted = "entry.submitted",
+    EntryUpdated = "entry.updated",
+    EntryDeleted = "entry.deleted",
     EntryStatusChanged = "entry.status_changed",
     EntryReinstated = "entry.reinstated",
     ShotCreated = "shot.created",
@@ -22,7 +27,10 @@ export enum NotificationType {
     ShotReleased = "shot.released",
     ShotExpired = "shot.expired",
     SubmissionCreated = "submission.created",
-    SubmissionReviewed = "submission.reviewed"
+    SubmissionReviewed = "submission.reviewed",
+    PipelineUpdated = "pipeline.updated",
+    MediaFlaggedAi = "media.flagged_ai",
+    DocumentUpdated = "document.updated"
 }
 
 export const notificationPersonSchema = z.object({
@@ -31,7 +39,7 @@ export const notificationPersonSchema = z.object({
 });
 
 const roundReference = z.object({ id: uuidSchema, title: z.string(), pollType: z.enum(PollType) });
-const entryReference = z.object({ id: uuidSchema, title: z.string() });
+const entryReference = z.object({ id: uuidSchema, title: z.string(), mediaUrl: z.string().nullable().optional() });
 const shotReference = z.object({
     id: uuidSchema,
     code: z.string(),
@@ -51,7 +59,6 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
     notification(NotificationType.BallotSubmitted, {
         round: roundReference,
         voter: notificationPersonSchema,
-        picks: z.array(entryReference),
         isChange: z.boolean()
     }),
     notification(NotificationType.BallotBlocked, {
@@ -65,6 +72,12 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
         reason: z.string().nullable()
     }),
     notification(NotificationType.UserReinstated, { user: notificationPersonSchema, actor: notificationPersonSchema }),
+    notification(NotificationType.UserRoleChanged, {
+        user: notificationPersonSchema,
+        role: z.enum(Role),
+        specialties: z.array(z.enum(Specialty)),
+        actor: notificationPersonSchema
+    }),
     notification(NotificationType.ContributorPromoted, { user: notificationPersonSchema, actor: notificationPersonSchema }),
     notification(NotificationType.RaidAlert, {
         round: roundReference,
@@ -80,6 +93,16 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
         opensAt: timestampSchema.nullable(),
         closesAt: timestampSchema.nullable()
     }),
+    notification(NotificationType.RoundUpdated, {
+        round: roundReference,
+        actor: notificationPersonSchema,
+        opensAt: timestampSchema.nullable(),
+        closesAt: timestampSchema.nullable()
+    }),
+    notification(NotificationType.RoundDeleted, {
+        round: roundReference,
+        actor: notificationPersonSchema
+    }),
     notification(NotificationType.RoundStatusChanged, {
         round: roundReference,
         from: z.enum(RoundStatus),
@@ -93,6 +116,7 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
             .object({
                 entryId: uuidSchema,
                 title: z.string(),
+                mediaUrl: z.string().nullable().optional(),
                 rawScore: z.number(),
                 voteSharePercentage: z.number(),
                 regularizedTotalScore: z.number().nullable()
@@ -105,6 +129,16 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
         entry: entryReference,
         status: z.enum(EntryStatus),
         author: notificationPersonSchema
+    }),
+    notification(NotificationType.EntryUpdated, {
+        round: roundReference,
+        entry: entryReference,
+        actor: notificationPersonSchema
+    }),
+    notification(NotificationType.EntryDeleted, {
+        round: roundReference,
+        entry: entryReference,
+        actor: notificationPersonSchema
     }),
     notification(NotificationType.EntryStatusChanged, {
         round: roundReference,
@@ -143,6 +177,31 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
         contributor: notificationPersonSchema,
         reviewer: notificationPersonSchema,
         notes: z.string().nullable()
+    }),
+    notification(NotificationType.PipelineUpdated, {
+        stepId: z.string(),
+        stepTitle: z.string(),
+        phaseNumber: z.number().int(),
+        phaseTitle: z.string(),
+        progressPercent: z.number(),
+        isPhaseTransition: z.boolean(),
+        actor: notificationPersonSchema
+    }),
+    notification(NotificationType.MediaFlaggedAi, {
+        mediaKind: z.enum(["entry", "task_submission"]),
+        targetId: uuidSchema,
+        title: z.string(),
+        author: notificationPersonSchema,
+        flags: z.array(z.string()),
+        snippet: z.string().nullable()
+    }),
+    notification(NotificationType.DocumentUpdated, {
+        slug: z.enum(DocumentSlug),
+        revision: z.number().int(),
+        title: z.string(),
+        sections: z.array(z.object({ id: z.string(), title: z.string(), html: z.string() })),
+        actor: notificationPersonSchema,
+        note: z.string().nullable()
     })
 ]);
 

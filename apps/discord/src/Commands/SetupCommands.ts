@@ -1,7 +1,7 @@
-import { ChannelType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder, type ChatInputCommandInteraction } from "discord.js";
-import { asEdit, ephemeral, panel, pluralize } from "../Discord/Ui.js";
-import { ChannelPurpose } from "../State/SettingsStore.js";
-import { requireManageGuild, UserFacingError, type BotContext, type SlashCommand } from "./Command.js";
+import { Role } from "@platform/contracts";
+import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder, type ChatInputCommandInteraction } from "discord.js";
+import { Accent, asEdit, ephemeral, panel, pluralize } from "../Discord/Ui.js";
+import { requireManageGuild, requirePlatformRole, UserFacingError, type BotContext, type SlashCommand } from "./Command.js";
 
 export const botSetupCommand: SlashCommand = {
     definition: new SlashCommandBuilder()
@@ -28,88 +28,31 @@ export const botSetupCommand: SlashCommand = {
     }
 };
 
-export const setupForumCommand: SlashCommand = {
+export const syncRolesCommand: SlashCommand = {
     definition: new SlashCommandBuilder()
-        .setName("setup-forum")
-        .setDescription("Choose the channels used for tasks")
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-        .addChannelOption((option) =>
-            option.setName("forum").setDescription("Forum for task posts").addChannelTypes(ChannelType.GuildForum).setRequired(true)
-        )
-        .addChannelOption((option) =>
-            option
-                .setName("submissions")
-                .setDescription("Where review requests go")
-                .addChannelTypes(ChannelType.GuildText)
-                .setRequired(true)
-        )
-        .addChannelOption((option) =>
-            option.setName("log").setDescription("Where task activity is logged").addChannelTypes(ChannelType.GuildText).setRequired(true)
-        )
+        .setName("sync-roles")
+        .setDescription("Reorder server roles by hierarchy and reconcile member roles")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
         .toJSON(),
     async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
-        requireManageGuild(interaction);
+        if (interaction.guild === null) {
+            throw new UserFacingError("Run this inside the server.");
+        }
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+            await requirePlatformRole(interaction, context, Role.Supervisor);
+        }
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        const forum = interaction.options.getChannel("forum", true, [ChannelType.GuildForum]);
-        const submissions = interaction.options.getChannel("submissions", true, [ChannelType.GuildText]);
-        const log = interaction.options.getChannel("log", true, [ChannelType.GuildText]);
-        await context.provisioner.ensureForumTags(forum);
-        await context.settings.update((settings) => {
-            settings.channels[ChannelPurpose.TaskSubmissions] = submissions.id;
-            settings.channels[ChannelPurpose.TaskLogs] = log.id;
-        });
-        await interaction.editReply(
-            asEdit(
-                ephemeral(
-                    panel(null, `Tasks post in <#${forum.id}>, reviews go to <#${submissions.id}>, and activity is logged in <#${log.id}>.`)
-                )
-            )
-        );
-    }
-};
 
-const channelChoices: Readonly<Record<string, readonly ChannelPurpose[]>> = {
-    announcements: [ChannelPurpose.Announcements],
-    alerts: [ChannelPurpose.Telemetry],
-    all: [ChannelPurpose.Announcements, ChannelPurpose.Telemetry]
-};
+        const summary = await context.roleReconciler.reconcile(interaction.guild, "manual");
 
-export const setChannelCommand: SlashCommand = {
-    definition: new SlashCommandBuilder()
-        .setName("set-announcement-channel")
-        .setDescription("Choose where announcements and alerts are posted")
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-        .addChannelOption((option) =>
-            option
-                .setName("channel")
-                .setDescription("Target channel")
-                .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
-                .setRequired(true)
-        )
-        .addStringOption((option) =>
-            option
-                .setName("type")
-                .setDescription("What to post there")
-                .setRequired(true)
-                .addChoices(
-                    { name: "Round results and news", value: "announcements" },
-                    { name: "Staff telemetry alerts", value: "alerts" },
-                    { name: "Both", value: "all" }
-                )
-        )
-        .toJSON(),
-    async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
-        requireManageGuild(interaction);
-        const channel = interaction.options.getChannel("channel", true);
-        const purposes = channelChoices[interaction.options.getString("type", true)] ?? [];
-        await context.settings.update((settings) => {
-            for (const purpose of purposes) {
-                settings.channels[purpose] = channel.id;
-            }
-        });
-        const what = purposes
-            .map((purpose) => (purpose === ChannelPurpose.Announcements ? "announcements" : "telemetry alerts"))
-            .join(" and ");
-        await interaction.reply(ephemeral(panel(null, `Posting ${what} in <#${channel.id}>.`)));
+        const lines = [
+            "## Role Hierarchy & Member Sync Complete",
+            `• Positioned **${summary.reorderedRoles}** studio roles by hierarchy (Executive > Supervisor > Contributor > Community).`,
+            `• Checked **${summary.totalUsersChecked}** registered users, reconciled **${summary.driftedMembersSynced}** drifted ${pluralize(summary.driftedMembersSynced, "member")}.`,
+            summary.errors.length > 0 ? `⚠️ Encountered ${summary.errors.length} error(s) during sync.` : null
+        ].filter((line): line is string => line !== null);
+
+        const accent = summary.errors.length > 0 ? Accent.Warning : Accent.Success;
+        await interaction.editReply(asEdit(ephemeral(panel(accent, lines.join("\n")))));
     }
 };

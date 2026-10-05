@@ -3,18 +3,20 @@ import { and, asc, count, eq } from "drizzle-orm";
 import { ConflictError, ErrorCode, ForbiddenError, NotFoundError, UnprocessableError } from "../../Common/Errors/ApplicationError.js";
 import { createPage, offsetOf, type Page, type PaginationQuery } from "../../Common/Http/Schemas.js";
 import type { AuthenticatedUser } from "../../Common/Security/Principal.js";
-import { hmacHex } from "../../Common/Security/Secrets.js";
-import { EntryStatus } from "../../Domain/Enums.js";
+import { EntryStatus, RoundStatus } from "../../Domain/Enums.js";
+import { Role } from "../../Domain/Roles.js";
 import type { KeyValueStore } from "../../Infrastructure/Cache/KeyValueStore.js";
 import type { Database } from "../../Infrastructure/Database/Database.js";
-import { ballots, entries, users, votingRounds, type BallotRecord } from "../../Infrastructure/Database/Schema.js";
+import { ballots, entries, users, votingRounds, type BallotRecord, type UserRecord } from "../../Infrastructure/Database/Schema.js";
 import { RoundEventType, type EventBus } from "../../Infrastructure/Events/EventBus.js";
 import { NotificationType, personOfUser, roundReferenceOf, type Notifier } from "../../Infrastructure/Notifications/Notification.js";
 import { isAcceptingVotes } from "../Rounds/RoundPresenter.js";
+import { canSeeDrafts } from "../Rounds/RoundVisibility.js";
 import type { RaidMonitor } from "../Telemetry/RaidMonitor.js";
 
 export interface LedgerRow {
-    readonly voter: string;
+    readonly discordId: string;
+    readonly discordUsername: string;
     readonly picks: readonly string[];
     readonly castAt: Date;
     readonly updatedAt: Date;
@@ -33,8 +35,7 @@ export class BallotsService {
         private readonly store: KeyValueStore,
         private readonly eventBus: EventBus,
         private readonly notifier: Notifier,
-        private readonly raidMonitor: RaidMonitor,
-        private readonly pseudonymKey: string
+        private readonly raidMonitor: RaidMonitor
     ) {}
 
     public async cast(voter: AuthenticatedUser, roundId: string, picks: readonly string[]): Promise<BallotRecord> {
@@ -43,7 +44,7 @@ export class BallotsService {
             throw new ForbiddenError("Your account is blacklisted from voting.", ErrorCode.UserBlacklisted);
         }
 
-        const { ballot, roundTitle, pollType, titles } = await this.database.transaction(async (transaction) => {
+        const { ballot, roundTitle, pollType, promotedUser } = await this.database.transaction(async (transaction) => {
             const [round] = await transaction.select().from(votingRounds).where(eq(votingRounds.id, roundId)).limit(1).for("share");
             if (round === undefined) {
                 throw new NotFoundError("Round");
@@ -53,7 +54,7 @@ export class BallotsService {
             }
 
             const eligible = await transaction
-                .select({ id: entries.id, title: entries.title })
+                .select({ id: entries.id })
                 .from(entries)
                 .where(and(eq(entries.roundId, roundId), eq(entries.status, EntryStatus.Approved), eq(entries.isQuarantined, false)));
             const scheme = getScoringScheme(round.pollType);
@@ -83,13 +84,34 @@ export class BallotsService {
             if (saved === undefined) {
                 throw new Error("Ballot upsert returned no row.");
             }
+
+            let promotedUser: UserRecord | undefined;
+            if (voter.role === Role.Member) {
+                const [updated] = await transaction
+                    .update(users)
+                    .set({ role: Role.Voter, updatedAt: new Date() })
+                    .where(and(eq(users.id, voter.id), eq(users.role, Role.Member)))
+                    .returning();
+                promotedUser = updated;
+            }
+
             return {
                 ballot: saved,
                 roundTitle: round.title,
                 pollType: round.pollType,
-                titles: new Map(eligible.map((entry) => [entry.id, entry.title]))
+                promotedUser
             };
         });
+
+        if (promotedUser !== undefined) {
+            this.notifier.notify({
+                type: NotificationType.UserRoleChanged,
+                user: personOfUser(promotedUser),
+                role: promotedUser.role,
+                specialties: promotedUser.specialties,
+                actor: personOfUser(promotedUser)
+            });
+        }
 
         this.raidMonitor.schedule(roundId, picks);
         await this.eventBus.publish({
@@ -105,7 +127,6 @@ export class BallotsService {
             type: NotificationType.BallotSubmitted,
             round: { id: roundId, title: roundTitle, pollType },
             voter: personOfUser(voter),
-            picks: picks.map((pick) => ({ id: pick, title: titles.get(pick) ?? pick })),
             isChange: ballot.createdAt.getTime() !== ballot.updatedAt.getTime()
         });
         return ballot;
@@ -123,16 +144,21 @@ export class BallotsService {
         return ballot;
     }
 
-    public async ledger(roundId: string, query: PaginationQuery): Promise<Page<LedgerRow>> {
-        const [round] = await this.database.select({ id: votingRounds.id }).from(votingRounds).where(eq(votingRounds.id, roundId)).limit(1);
-        if (round === undefined) {
+    public async ledger(roundId: string, query: PaginationQuery, viewer: AuthenticatedUser | null = null): Promise<Page<LedgerRow>> {
+        const [round] = await this.database
+            .select({ id: votingRounds.id, status: votingRounds.status })
+            .from(votingRounds)
+            .where(eq(votingRounds.id, roundId))
+            .limit(1);
+        if (round === undefined || (round.status === RoundStatus.Draft && !canSeeDrafts(viewer))) {
             throw new NotFoundError("Round");
         }
         const filter = and(eq(ballots.roundId, roundId), eq(users.isBlacklisted, false));
         const [rows, totals] = await Promise.all([
             this.database
                 .select({
-                    voterId: ballots.voterId,
+                    discordId: users.discordId,
+                    discordUsername: users.discordUsername,
                     rank1EntryId: ballots.rank1EntryId,
                     rank2EntryId: ballots.rank2EntryId,
                     rank3EntryId: ballots.rank3EntryId,
@@ -149,7 +175,8 @@ export class BallotsService {
         ]);
         return createPage(
             rows.map((row) => ({
-                voter: hmacHex(this.pseudonymKey, `${roundId}:${row.voterId}`, 32),
+                discordId: row.discordId,
+                discordUsername: row.discordUsername,
                 picks: picksOf(row),
                 castAt: row.createdAt,
                 updatedAt: row.updatedAt

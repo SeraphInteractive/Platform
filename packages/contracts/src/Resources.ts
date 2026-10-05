@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
     DifficultyTier,
+    DocumentSlug,
+    documentLimits,
     EntryStatus,
     PollType,
     RaidFlag,
@@ -14,6 +16,7 @@ import {
     SubmissionStatus
 } from "./Enums.js";
 import { snowflakeSchema, timestampSchema, uuidSchema } from "./Http.js";
+import { fieldRules } from "./Validation.js";
 
 export const userSummarySchema = z
     .object({
@@ -32,6 +35,9 @@ export const userSchema = z
         role: z.enum(Role),
         specialties: z.array(z.enum(Specialty)),
         isBlacklisted: z.boolean(),
+        isOnboarded: z.boolean(),
+        termsVersion: z.string().nullable(),
+        isVerified: z.boolean(),
         createdAt: timestampSchema
     })
     .meta({ id: "User" });
@@ -42,6 +48,16 @@ export const moderatedUserSchema = userSchema
         blacklistedAt: timestampSchema.nullable()
     })
     .meta({ id: "ModeratedUser" });
+
+export const specialtyHolderSchema = z
+    .object({
+        id: uuidSchema,
+        username: z.string(),
+        discordId: snowflakeSchema
+    })
+    .meta({ id: "SpecialtyHolder" });
+
+export const specialtyHoldersSchema = z.record(z.string(), specialtyHolderSchema.nullable()).meta({ id: "SpecialtyHolders" });
 
 export const sessionSchema = z
     .object({
@@ -75,6 +91,23 @@ export const roundDetailSchema = roundSchema
     })
     .meta({ id: "RoundDetail" });
 
+export const binaryChoiceInputSchema = z
+    .object({
+        title: fieldRules.entryTitle,
+        description: fieldRules.entryDescription.default(null),
+        mediaKey: z.string().max(255).nullable().default(null)
+    })
+    .meta({ id: "BinaryChoiceInput" });
+
+export const binaryChoiceUpdateInputSchema = z
+    .object({
+        id: uuidSchema.optional(),
+        title: fieldRules.entryTitle,
+        description: fieldRules.entryDescription.default(null),
+        mediaKey: z.string().max(255).nullable().optional()
+    })
+    .meta({ id: "BinaryChoiceUpdateInput" });
+
 export const entrySchema = z
     .object({
         id: uuidSchema,
@@ -84,7 +117,9 @@ export const entrySchema = z
         status: z.enum(EntryStatus),
         isQuarantined: z.boolean(),
         mediaUrl: z.url().nullable(),
+        aiFlags: z.array(z.string()).default([]),
         submittedBy: uuidSchema.nullable(),
+        author: userSummarySchema.nullable().default(null),
         createdAt: timestampSchema,
         updatedAt: timestampSchema
     })
@@ -101,7 +136,8 @@ export const ballotSchema = z
 
 export const ledgerBallotSchema = z
     .object({
-        voter: z.string().describe("Pseudonymous voter identifier, stable within a round."),
+        discordId: z.string().describe("Voter Discord Snowflake ID."),
+        discordUsername: z.string().describe("Voter current Discord username."),
         picks: z.array(uuidSchema),
         castAt: timestampSchema,
         updatedAt: timestampSchema
@@ -198,6 +234,7 @@ export const shotSchema = z
         seniorPriorityUntil: timestampSchema.nullable(),
         isSeniorLocked: z.boolean(),
         latestSubmission: z.object({ version: z.number().int(), status: z.enum(SubmissionStatus) }).nullable(),
+        imageUrls: z.array(z.url()).default([]),
         createdAt: timestampSchema,
         updatedAt: timestampSchema
     })
@@ -216,6 +253,7 @@ export const submissionSchema = z
         reviewedAt: timestampSchema.nullable(),
         videoUrl: z.url().nullable().describe("Short-lived download link, only for staff and the contributor."),
         blendUrl: z.url().nullable(),
+        aiFlags: z.array(z.string()).default([]),
         createdAt: timestampSchema
     })
     .meta({ id: "Submission" });
@@ -246,9 +284,24 @@ export const shotThreadMapSchema = z
 
 export const reclaimResultSchema = z.object({ reclaimedCount: z.number().int(), shotCodes: z.array(z.string()) });
 
+export const pipelineProgressSchema = z
+    .object({
+        stepIndex: z.number().int().min(0),
+        stepId: z.string().max(32),
+        stepTitle: z.string().max(128),
+        phaseNumber: z.number().int().min(0),
+        phaseTitle: z.string().max(128),
+        progressPercent: z.number().min(0).max(100),
+        isPhaseTransition: z.boolean(),
+        updatedAt: timestampSchema.nullable()
+    })
+    .meta({ id: "PipelineProgress" });
+
 export type UserSummaryDto = z.infer<typeof userSummarySchema>;
 export type UserDto = z.infer<typeof userSchema>;
 export type ModeratedUserDto = z.infer<typeof moderatedUserSchema>;
+export type SpecialtyHolderDto = z.infer<typeof specialtyHolderSchema>;
+export type SpecialtyHoldersDto = z.infer<typeof specialtyHoldersSchema>;
 export type SessionDto = z.infer<typeof sessionSchema>;
 export type RoundDto = z.infer<typeof roundSchema>;
 export type RoundDetailDto = z.infer<typeof roundDetailSchema>;
@@ -267,3 +320,81 @@ export type ReviewQueueItemDto = z.infer<typeof reviewQueueItemSchema>;
 export type PresignedUploadDto = z.infer<typeof presignedUploadSchema>;
 export type ShotThreadMapDto = z.infer<typeof shotThreadMapSchema>;
 export type ReclaimResultDto = z.infer<typeof reclaimResultSchema>;
+export type PipelineProgressDto = z.infer<typeof pipelineProgressSchema>;
+export type BinaryChoiceInputDto = z.infer<typeof binaryChoiceInputSchema>;
+export type BinaryChoiceUpdateInputDto = z.infer<typeof binaryChoiceUpdateInputSchema>;
+
+export const emailVerificationSchema = z
+    .object({
+        expiresAt: timestampSchema,
+        resendAvailableAt: timestampSchema
+    })
+    .meta({ id: "EmailVerification" });
+
+export type EmailVerificationDto = z.infer<typeof emailVerificationSchema>;
+
+export const documentSectionSchema = z
+    .object({
+        id: z
+            .string()
+            .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u)
+            .max(documentLimits.sectionIdLength),
+        title: z.string(),
+        html: z.string().max(documentLimits.sectionHtmlLength)
+    })
+    .meta({ id: "DocumentSection" });
+
+export const documentSectionInputSchema = z
+    .object({
+        id: z
+            .string()
+            .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u)
+            .max(documentLimits.sectionIdLength),
+        title: fieldRules.sectionTitle,
+        html: z.string().max(documentLimits.sectionHtmlLength)
+    })
+    .meta({ id: "DocumentSectionEdit" });
+
+export const documentSchema = z
+    .object({
+        slug: z.enum(DocumentSlug),
+        title: z.string(),
+        sections: z.array(documentSectionSchema),
+        revision: z.number().int().nonnegative(),
+        updatedAt: timestampSchema.nullable(),
+        updatedBy: userSummarySchema.nullable()
+    })
+    .meta({ id: "Document" });
+
+export const documentUpdateSchema = z
+    .object({
+        title: fieldRules.documentTitle,
+        sections: z.array(documentSectionInputSchema).min(1).max(documentLimits.sections),
+        expectedRevision: z.number().int().nonnegative(),
+        requireReacceptance: z.boolean().default(false),
+        note: fieldRules.documentNote.default(null)
+    })
+    .meta({ id: "DocumentUpdate" });
+
+export const documentRevisionSummarySchema = z
+    .object({
+        revision: z.number().int().positive(),
+        title: z.string(),
+        note: z.string().nullable(),
+        requiresReacceptance: z.boolean(),
+        author: userSummarySchema.nullable(),
+        createdAt: timestampSchema
+    })
+    .meta({ id: "DocumentRevisionSummary" });
+
+export const documentRevisionSchema = documentRevisionSummarySchema
+    .extend({ sections: z.array(documentSectionSchema) })
+    .meta({ id: "DocumentRevision" });
+
+export const legalAcceptanceSchema = z.object({ version: z.string() }).meta({ id: "LegalAcceptance" });
+
+export type DocumentSectionDto = z.infer<typeof documentSectionSchema>;
+export type DocumentDto = z.infer<typeof documentSchema>;
+export type DocumentUpdateDto = z.input<typeof documentUpdateSchema>;
+export type DocumentRevisionSummaryDto = z.infer<typeof documentRevisionSummarySchema>;
+export type DocumentRevisionDto = z.infer<typeof documentRevisionSchema>;

@@ -1,4 +1,12 @@
-import { GetObjectCommand, HeadObjectCommand, NotFound, PutObjectCommand, S3Client, S3ServiceException } from "@aws-sdk/client-s3";
+import {
+    DeleteObjectCommand,
+    GetObjectCommand,
+    HeadObjectCommand,
+    NotFound,
+    PutObjectCommand,
+    S3Client,
+    S3ServiceException
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { StorageConfiguration } from "../../Configuration/ApplicationConfiguration.js";
 import { ServiceUnavailableError } from "../../Common/Errors/ApplicationError.js";
@@ -64,6 +72,29 @@ export class S3ObjectStorage implements ObjectStorage {
         }
     }
 
+    public async getObject(bucket: StorageBucket, key: string, maxBytes?: number): Promise<Buffer | null> {
+        const { client, name } = this.resolve(bucket);
+        try {
+            const result = await client.send(
+                new GetObjectCommand({
+                    Bucket: name,
+                    Key: key,
+                    Range: maxBytes !== undefined && maxBytes > 0 ? `bytes=0-${maxBytes - 1}` : undefined
+                })
+            );
+            if (result.Body === undefined) {
+                return null;
+            }
+            const byteArray = await result.Body.transformToByteArray();
+            return Buffer.from(byteArray);
+        } catch (error: unknown) {
+            if (error instanceof NotFound || (error instanceof S3ServiceException && error.$metadata.httpStatusCode === 404)) {
+                return null;
+            }
+            throw error;
+        }
+    }
+
     public async createDownloadUrl(bucket: StorageBucket, key: string): Promise<string> {
         const { client, name } = this.resolve(bucket);
         const fileName = key.slice(key.lastIndexOf("/") + 1);
@@ -81,6 +112,21 @@ export class S3ObjectStorage implements ObjectStorage {
         }
         const base = this.configuration.mediaPublicUrl.replace(/\/+$/u, "");
         return `${base}/${key.split("/").map(encodeURIComponent).join("/")}`;
+    }
+
+    public async deleteObject(bucket: StorageBucket, key: string): Promise<void> {
+        if (!this.isEnabled(bucket)) {
+            return;
+        }
+        const { client, name } = this.resolve(bucket);
+        try {
+            await client.send(new DeleteObjectCommand({ Bucket: name, Key: key }));
+        } catch (error: unknown) {
+            if (error instanceof NotFound || (error instanceof S3ServiceException && error.$metadata.httpStatusCode === 404)) {
+                return;
+            }
+            throw error;
+        }
     }
 
     private resolve(bucket: StorageBucket): { client: S3Client; name: string } {

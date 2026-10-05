@@ -16,12 +16,14 @@ export function evaluateRankSeparation(
     const momentsB = calculateMoments(breakdownB, totalBallots, scheme);
     const covariance = calculatePairwiseCovariance(breakdownA.entryId, breakdownB.entryId, ballots, scheme);
 
+    // delta evaluates score difference between entry a and entry b
     const deltaScore = breakdownA.rawScore - breakdownB.rawScore;
     const deltaVariance = Math.max(0, momentsA.totalVariance + momentsB.totalVariance - 2 * covariance.totalCovariance);
     const standardError = Math.sqrt(deltaVariance);
     const zScore = standardError > 1e-9 ? deltaScore / standardError : 0;
     const pValue = approximateTwoTailedPValue(zScore);
-    const isDecisive = Math.abs(zScore) >= zThreshold;
+    // a decisive lead requires positive separation exceeding the threshold
+    const isDecisive = zScore >= zThreshold;
 
     return {
         entryA: breakdownA.entryId,

@@ -12,9 +12,10 @@ import {
 import { createPage, offsetOf, type Page, type PaginationQuery } from "../../Common/Http/Schemas.js";
 import type { AuthenticatedUser } from "../../Common/Security/Principal.js";
 import { DeliverableKind, type DifficultyTier, ShotStatus } from "../../Domain/Enums.js";
-import { hasAtLeast, Role } from "../../Domain/Roles.js";
+import { hasAtLeast, rankOf, Role } from "../../Domain/Roles.js";
 import { isUniqueViolation, type Database, type Transaction } from "../../Infrastructure/Database/Database.js";
 import {
+    deletedStorageObjects,
     shots,
     submissions,
     users,
@@ -33,6 +34,7 @@ import {
     seniorPriorityTiers,
     tierDaysOf
 } from "./DeliverablePolicy.js";
+import { inspectMediaAiSignatures } from "../Uploads/AiMetadataDetector.js";
 
 type UserSummaryRecord = Pick<UserRecord, "id" | "discordId" | "discordUsername" | "discordAvatar">;
 
@@ -69,6 +71,7 @@ export interface CreateShotInput {
     readonly description: string | null;
     readonly difficultyTier: DifficultyTier;
     readonly seniorPriorityHours: number;
+    readonly imageKeys?: readonly string[];
 }
 
 export interface UpdateShotInput {
@@ -78,6 +81,7 @@ export interface UpdateShotInput {
     readonly title?: string;
     readonly description?: string | null;
     readonly difficultyTier?: DifficultyTier;
+    readonly imageKeys?: readonly string[];
 }
 
 export interface DeliverableUploadInput {
@@ -89,7 +93,7 @@ export interface DeliverableUploadInput {
 
 export interface SubmitWorkInput {
     readonly videoKey: string;
-    readonly blendKey: string | null;
+    readonly blendKey: string;
     readonly notes: string | null;
 }
 
@@ -222,6 +226,25 @@ export class ShotsService {
         };
     }
 
+    public async getByCode(shotCode: string, viewer: AuthenticatedUser | null): Promise<ShotListItem> {
+        const [row] = await this.database
+            .select({ shot: shots, claimer: userSummaryColumns })
+            .from(shots)
+            .leftJoin(users, eq(users.id, shots.claimedBy))
+            .where(eq(shots.shotCode, shotCode))
+            .limit(1);
+        if (row === undefined) {
+            throw new NotFoundError("Shot");
+        }
+
+        return {
+            shot: row.shot,
+            claimer: row.claimer,
+            latestSubmission: null,
+            isSeniorLocked: this.isSeniorLocked(row.shot, viewer, new Date())
+        };
+    }
+
     public async create(input: CreateShotInput): Promise<ShotRecord> {
         if (input.roundId !== null) {
             await this.requireRound(input.roundId);
@@ -237,7 +260,8 @@ export class ShotsService {
                     title: input.title,
                     description: input.description,
                     difficultyTier: input.difficultyTier,
-                    seniorPriorityUntil
+                    seniorPriorityUntil,
+                    imageKeys: input.imageKeys === undefined ? [] : [...input.imageKeys]
                 })
                 .returning();
             if (shot === undefined) {
@@ -254,8 +278,17 @@ export class ShotsService {
         if (input.roundId !== undefined && input.roundId !== null) {
             await this.requireRound(input.roundId);
         }
+        const values: Partial<typeof shots.$inferInsert> = {
+            ...(input.roundId !== undefined ? { roundId: input.roundId } : {}),
+            ...(input.sceneNumber !== undefined ? { sceneNumber: input.sceneNumber } : {}),
+            ...(input.shotCode !== undefined ? { shotCode: input.shotCode } : {}),
+            ...(input.title !== undefined ? { title: input.title } : {}),
+            ...(input.description !== undefined ? { description: input.description } : {}),
+            ...(input.difficultyTier !== undefined ? { difficultyTier: input.difficultyTier } : {}),
+            ...(input.imageKeys !== undefined ? { imageKeys: [...input.imageKeys] } : {})
+        };
         try {
-            const [shot] = await this.database.update(shots).set(input).where(eq(shots.id, shotId)).returning();
+            const [shot] = await this.database.update(shots).set(values).where(eq(shots.id, shotId)).returning();
             if (shot === undefined) {
                 throw new NotFoundError("Shot");
             }
@@ -271,10 +304,24 @@ export class ShotsService {
         if (deleted === undefined) {
             throw new NotFoundError("Shot");
         }
+        if (deleted.imageKeys && deleted.imageKeys.length > 0) {
+            // hold orphaned media for 48h recovery buffer before bucket prune
+            const scheduledDeleteAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+            await this.database.insert(deletedStorageObjects).values(
+                deleted.imageKeys.map((key) => ({
+                    bucket: StorageBucket.Media,
+                    objectKey: key,
+                    scheduledDeleteAt
+                }))
+            );
+        }
         this.notifier.notify({ type: NotificationType.ShotDeleted, shot: shotReferenceOf(deleted) });
     }
 
     public async claim(user: AuthenticatedUser, shotId: string): Promise<ShotRecord> {
+        if (user.isBlacklisted) {
+            throw new ForbiddenError("Your account cannot claim tasks.", ErrorCode.UserBlacklisted);
+        }
         const now = new Date();
         let claimed: ShotRecord;
         try {
@@ -351,6 +398,9 @@ export class ShotsService {
     }
 
     public async createDeliverableUpload(user: AuthenticatedUser, shotId: string, input: DeliverableUploadInput): Promise<PresignedUpload> {
+        if (user.isBlacklisted) {
+            throw new ForbiddenError("Your account cannot upload task deliverables.", ErrorCode.UserBlacklisted);
+        }
         if (!this.storage.isEnabled(StorageBucket.Deliverables)) {
             throw new ServiceUnavailableError("Deliverable uploads are not configured on this server.");
         }
@@ -376,13 +426,18 @@ export class ShotsService {
     }
 
     public async submit(user: AuthenticatedUser, shotId: string, input: SubmitWorkInput): Promise<SubmissionRecord> {
+        if (user.isBlacklisted) {
+            throw new ForbiddenError("Your account cannot submit tasks.", ErrorCode.UserBlacklisted);
+        }
         const maxBytes = this.storageConfiguration.deliverableMaxBytes;
         await assertDeliverable(this.storage, input.videoKey, DeliverableKind.Video, shotId, user.id, maxBytes, "videoKey");
-        if (input.blendKey !== null) {
-            await assertDeliverable(this.storage, input.blendKey, DeliverableKind.Blend, shotId, user.id, maxBytes, "blendKey");
-        }
+        await assertDeliverable(this.storage, input.blendKey, DeliverableKind.Blend, shotId, user.id, maxBytes, "blendKey");
 
-        const { submission, shot } = await this.database.transaction(async (transaction) => {
+        const buffer = await this.storage.getObject(StorageBucket.Deliverables, input.videoKey, 524288);
+        const detection = inspectMediaAiSignatures(buffer);
+        const aiFlags = detection.flagged ? [...detection.flags] : [];
+
+        const { submission, shot, promotedUser } = await this.database.transaction(async (transaction) => {
             const locked = await this.lockShot(transaction, shotId);
             this.assertActiveClaim(locked, user);
             const [latest] = await transaction
@@ -399,15 +454,36 @@ export class ShotsService {
                     version: (latest?.version ?? 0) + 1,
                     videoKey: input.videoKey,
                     blendKey: input.blendKey,
-                    notes: input.notes
+                    notes: input.notes,
+                    aiFlags
                 })
                 .returning();
             await transaction.update(shots).set({ status: ShotStatus.Submitted }).where(eq(shots.id, shotId));
+            let promotedUser: UserRecord | undefined;
+            if (rankOf(user.role) < rankOf(Role.Contributor)) {
+                // submitting work earns contributor standing
+                const [updated] = await transaction
+                    .update(users)
+                    .set({ role: Role.Contributor, updatedAt: new Date() })
+                    .where(eq(users.id, user.id))
+                    .returning();
+                promotedUser = updated;
+            }
             if (created === undefined) {
                 throw new Error("Submission insert returned no row.");
             }
-            return { submission: created, shot: locked };
+            return { submission: created, shot: locked, promotedUser };
         });
+
+        if (promotedUser !== undefined) {
+            this.notifier.notify({
+                type: NotificationType.UserRoleChanged,
+                user: personOfUser(promotedUser),
+                role: promotedUser.role,
+                specialties: promotedUser.specialties,
+                actor: personOfUser(promotedUser)
+            });
+        }
 
         this.notifier.notify({
             type: NotificationType.SubmissionCreated,
@@ -417,6 +493,18 @@ export class ShotsService {
             contributor: personOfUser(user),
             notes: submission.notes
         });
+
+        if (aiFlags.length > 0) {
+            this.notifier.notify({
+                type: NotificationType.MediaFlaggedAi,
+                mediaKind: "task_submission",
+                targetId: submission.id,
+                title: `${shot.shotCode} (v${submission.version})`,
+                author: personOfUser(user),
+                flags: aiFlags,
+                snippet: detection.snippet
+            });
+        }
         return submission;
     }
 

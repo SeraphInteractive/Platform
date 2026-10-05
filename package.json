@@ -1,5 +1,5 @@
 {
-    "name": "platform-backend",
+    "name": "platform",
     "private": true,
     "license": "AGPL-3.0-only",
     "type": "module",
@@ -13,8 +13,8 @@
     "scripts": {
         "build": "tsc -b",
         "clean": "tsc -b --clean",
-        "typecheck": "tsc -b && tsc -p tsconfig.eslint.json",
-        "lint": "eslint .",
+        "typecheck": "tsc -b && tsc -p tsconfig.eslint.json && npm run typecheck -w @platform/web",
+        "lint": "eslint . && npm run lint -w @platform/web",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "test": "tsc -b packages/scoring packages/contracts && vitest run",
@@ -23,6 +23,8 @@
         "db:generate": "npm run db:generate -w @platform/api",
         "db:migrate": "npm run db:migrate -w @platform/api",
         "token:issue": "npm run token:issue -w @platform/api --",
+        "dev:web": "tsc -b packages/scoring packages/contracts && npm run dev -w @platform/web",
+        "build:web": "tsc -b packages/scoring packages/contracts && npm run build -w @platform/web",
         "dev:discord": "tsc -b packages/scoring packages/contracts && npm run dev -w @platform/discord"
     },
     "devDependencies": {

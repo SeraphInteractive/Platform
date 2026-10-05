@@ -118,8 +118,17 @@ export function quote(value: string, maximumLength = 1000): string {
         .join("\n");
 }
 
-export function person(value: NotificationPerson): string {
-    return value.discordId === null ? plain(value.username, 64) : `<@${value.discordId}>`;
+export function person(value: NotificationPerson, isMember?: boolean | ((id: string) => boolean)): string {
+    if (value.discordId === null) {
+        return plain(value.username, 64);
+    }
+    if (typeof isMember === "function") {
+        return isMember(value.discordId) ? `<@${value.discordId}>` : plain(value.username, 64);
+    }
+    if (isMember === false) {
+        return plain(value.username, 64);
+    }
+    return `<@${value.discordId}>`;
 }
 
 export function when(iso: string, style: "R" | "f" | "F" | "D" | "d" = "R"): string {

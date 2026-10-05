@@ -8,6 +8,76 @@
       "when": 1790449811057,
       "tag": "0000_initial_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790511795849,
+      "tag": "0001_pipeline_progress_and_specialties",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790531591750,
+      "tag": "0002_super_admin_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790531953158,
+      "tag": "0003_user_onboarding",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790533126109,
+      "tag": "0004_member_terms_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790533730975,
+      "tag": "0005_documents",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790546500000,
+      "tag": "0006_shot_image_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790680000000,
+      "tag": "0007_ai_flags",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790780000000,
+      "tag": "0008_round_voting_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790780000001,
+      "tag": "0009_migrate_closed_rounds",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790780000002,
+      "tag": "0010_add_media_team_specialty",
+      "breakpoints": true
     }
   ]
 }

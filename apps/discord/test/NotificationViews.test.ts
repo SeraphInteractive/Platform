@@ -1,5 +1,6 @@
 import {
     DifficultyTier,
+    DocumentSlug,
     EntryStatus,
     NotificationType,
     platformNotificationSchema,
@@ -7,14 +8,16 @@ import {
     RaidFlag,
     RaidSeverity,
     ReviewDecision,
+    Role,
     RoundStatus,
+    Specialty,
     type PlatformNotification
 } from "@platform/contracts";
 import { MessageFlags } from "discord.js";
 import { describe, expect, it } from "vitest";
 import type { V2Message } from "../src/Discord/Ui.js";
 import { ChannelPurpose } from "../src/State/SettingsStore.js";
-import { renderNotification } from "../src/Views/NotificationViews.js";
+import { htmlToDiscordMarkdown, renderNotification, renderRulesMessage, type RenderedNotification } from "../src/Views/NotificationViews.js";
 import { reviewCard, threadUpdate } from "../src/Views/TaskViews.js";
 
 const occurredAt = "2026-09-27T01:08:00.000Z";
@@ -94,28 +97,46 @@ describe("telemetry alerts", () => {
         expect(text).toBe(["**Entry rejected**", "Option Beta in Binary Test Round", "-# By <@364539598942240768>"].join("\n"));
     });
 
-    it("renders a ballot as a single sentence", () => {
+    it("renders a ballot as a single sentence with mention when in server", () => {
         const { text } = only({
             type: NotificationType.BallotSubmitted,
             occurredAt,
             round,
             voter,
-            picks: [{ id: "b1f3d5c7-1b2e-4c3d-8e9f-0a1b2c3d4e5f", title: "Option Alpha" }],
             isChange: false
         });
-        expect(text).toBe(["**Vote in Binary Test Round**", "<@215537065863938049> voted for Option Alpha"].join("\n"));
+        expect(text).toBe(["**Vote in Binary Test Round**", "<@215537065863938049> cast a ballot."].join("\n"));
     });
 
-    it("renders ranked ballots and changed votes", () => {
+    it("renders a ballot with plain name when voter is not in server", () => {
+        const rendered = renderNotification(
+            {
+                type: NotificationType.BallotSubmitted,
+                occurredAt,
+                round,
+                voter,
+                isChange: false
+            },
+            { ...context, isMember: () => false }
+        );
+        expect(rendered).toHaveLength(1);
+        const first = rendered[0];
+        if (first === undefined) {
+            throw new Error("nothing rendered");
+        }
+        expect(texts(first.message).join("\n")).toBe(["**Vote in Binary Test Round**", "TestVoterBL cast a ballot."].join("\n"));
+    });
+
+    it("renders changed votes without revealing individual picks", () => {
         const { text } = only({
             type: NotificationType.BallotSubmitted,
             occurredAt,
             round: { ...round, pollType: PollType.RankedChoice },
             voter,
-            picks: ["A", "B", "C"].map((title, index) => ({ id: `b1f3d5c7-1b2e-4c3d-8e9f-0a1b2c3d4e5${index}`, title })),
             isChange: true
         });
-        expect(text).toContain("changed their ranking to 1. A  2. B  3. C");
+        expect(text).toBe(["**Vote in Binary Test Round**", "<@215537065863938049> updated their ballot."].join("\n"));
+        expect(text).not.toMatch(/rank|pick|option|entry/iu);
     });
 
     it("renders a ban with actor and reason", () => {
@@ -128,6 +149,20 @@ describe("telemetry alerts", () => {
         });
         expect(text).toBe(
             ["**Banned from voting**", "<@215537065863938049>, by <@212401207694721024>", "-# Reason: Suspected botting script"].join("\n")
+        );
+    });
+
+    it("renders user role updates", () => {
+        const { text } = only({
+            type: NotificationType.UserRoleChanged,
+            occurredAt,
+            user: voter,
+            role: Role.Contributor,
+            specialties: [Specialty.Animator, Specialty.Rigger],
+            actor: admin
+        });
+        expect(text).toBe(
+            ["**User role updated**", "<@215537065863938049> is now contributor (animator, rigger), by <@212401207694721024>"].join("\n")
         );
     });
 
@@ -155,6 +190,25 @@ describe("telemetry alerts", () => {
         );
     });
 
+    it("renders AI detection telemetry alerts", () => {
+        const { purpose, text } = only({
+            type: NotificationType.MediaFlaggedAi,
+            occurredAt,
+            mediaKind: "entry",
+            targetId: "a0f3d5c7-1b2e-4c3d-8e9f-0a1b2c3d4e5f",
+            title: "Option Beta",
+            author: voter,
+            flags: ["Stable Diffusion generation parameters", "Negative prompt parameter"],
+            snippet: "A high quality render of a staircase"
+        });
+        expect(purpose).toBe(ChannelPurpose.Telemetry);
+        expect(text).toContain("**AI signatures detected:** Round Entry \"Option Beta\"");
+        expect(text).toContain("<@215537065863938049>");
+        expect(text).toContain("• Stable Diffusion generation parameters");
+        expect(text).toContain("• Negative prompt parameter");
+        expect(text).toContain("> A high quality render of a staircase");
+    });
+
     it("never lets user content ping or inject markdown", () => {
         const { text, payload } = only({
             type: NotificationType.EntrySubmitted,
@@ -171,10 +225,18 @@ describe("telemetry alerts", () => {
 
 describe("every notification", () => {
     const samples: PlatformNotification[] = [
-        { type: NotificationType.BallotSubmitted, occurredAt, round, voter, picks: [{ id: shot.id, title: "A" }], isChange: false },
+        { type: NotificationType.BallotSubmitted, occurredAt, round, voter, isChange: false },
         { type: NotificationType.BallotBlocked, occurredAt, round, voter, reason: null },
         { type: NotificationType.UserBlacklisted, occurredAt, user: voter, actor: admin, reason: null },
         { type: NotificationType.UserReinstated, occurredAt, user: voter, actor: admin },
+        {
+            type: NotificationType.UserRoleChanged,
+            occurredAt,
+            user: voter,
+            role: Role.Contributor,
+            specialties: [Specialty.Animator],
+            actor: admin
+        },
         { type: NotificationType.ContributorPromoted, occurredAt, user: voter, actor: admin },
         {
             type: NotificationType.RaidAlert,
@@ -187,7 +249,10 @@ describe("every notification", () => {
             quarantined: false
         },
         { type: NotificationType.RoundCreated, occurredAt, round, actor: admin, opensAt: null, closesAt: occurredAt },
-        { type: NotificationType.RoundStatusChanged, occurredAt, round, from: RoundStatus.Closed, to: RoundStatus.Open, actor: admin },
+        { type: NotificationType.RoundUpdated, occurredAt, round, actor: admin, opensAt: null, closesAt: occurredAt },
+        { type: NotificationType.RoundDeleted, occurredAt, round, actor: admin },
+        { type: NotificationType.RoundStatusChanged, occurredAt, round, from: RoundStatus.Draft, to: RoundStatus.Open, actor: admin },
+        { type: NotificationType.RoundStatusChanged, occurredAt, round, from: RoundStatus.Open, to: RoundStatus.Voting, actor: admin },
         {
             type: NotificationType.RoundFinalized,
             occurredAt,
@@ -203,6 +268,20 @@ describe("every notification", () => {
             entry: { id: shot.id, title: "A" },
             status: EntryStatus.Approved,
             author: voter
+        },
+        {
+            type: NotificationType.EntryUpdated,
+            occurredAt,
+            round,
+            entry: { id: shot.id, title: "A" },
+            actor: admin
+        },
+        {
+            type: NotificationType.EntryDeleted,
+            occurredAt,
+            round,
+            entry: { id: shot.id, title: "A" },
+            actor: admin
         },
         {
             type: NotificationType.EntryStatusChanged,
@@ -239,6 +318,43 @@ describe("every notification", () => {
             contributor: voter,
             reviewer: supervisor,
             notes: null
+        },
+        {
+            type: NotificationType.PipelineUpdated,
+            occurredAt,
+            stepId: "1.1",
+            stepTitle: "Art Style",
+            phaseNumber: 1,
+            phaseTitle: "Phase 1: Animatic",
+            progressPercent: 18,
+            isPhaseTransition: true,
+            actor: supervisor
+        },
+        {
+            type: NotificationType.MediaFlaggedAi,
+            occurredAt,
+            mediaKind: "entry",
+            targetId: shot.id,
+            title: "Option Alpha",
+            author: voter,
+            flags: ["Stable Diffusion generation parameters"],
+            snippet: "A detailed 3d render"
+        },
+        {
+            type: NotificationType.DocumentUpdated,
+            occurredAt,
+            slug: DocumentSlug.Guidelines,
+            revision: 4,
+            title: "Community Guidelines & Invariants",
+            sections: [
+                {
+                    id: "voting-math",
+                    title: "Voting Math",
+                    html: "<p>3-2-1 Borda count with <code>6 * N</code> invariant.</p>"
+                }
+            ],
+            actor: admin,
+            note: "Updated Borda point conservation invariants"
         }
     ];
 
@@ -260,9 +376,110 @@ describe("every notification", () => {
     });
 
     it("announces winners publicly", () => {
-        const [rendered] = renderNotification(samples[8] as PlatformNotification, context);
+        const sample = samples.find((s) => s.type === NotificationType.RoundFinalized);
+        expect(sample).toBeDefined();
+        const [rendered] = renderNotification(sample as PlatformNotification, context);
         expect(rendered?.purpose).toBe(ChannelPurpose.Announcements);
         expect(texts(rendered?.message as V2Message).join("\n")).toContain("**Option Alpha** wins with 62.5% of the vote.");
+    });
+
+    it("announces when a round is opened for submissions and voting", () => {
+        const votingSample = samples.find(
+            (s) => s.type === NotificationType.RoundStatusChanged && s.to === RoundStatus.Voting
+        );
+        expect(votingSample).toBeDefined();
+        const votingRendered = renderNotification(votingSample as PlatformNotification, context);
+        expect(votingRendered).toHaveLength(2);
+        const votingAnnouncement = votingRendered.find((r) => r.purpose === ChannelPurpose.Announcements);
+        expect(votingAnnouncement).toBeDefined();
+        expect(texts((votingAnnouncement as RenderedNotification).message).join("\n")).toContain("## Voting is now open for Binary Test Round!");
+
+        const openSample = samples.find(
+            (s) => s.type === NotificationType.RoundStatusChanged && s.to === RoundStatus.Open
+        );
+        expect(openSample).toBeDefined();
+        const openRendered = renderNotification(openSample as PlatformNotification, context);
+        expect(openRendered).toHaveLength(2);
+        const openAnnouncement = openRendered.find((r) => r.purpose === ChannelPurpose.Announcements);
+        expect(openAnnouncement).toBeDefined();
+        expect(texts((openAnnouncement as RenderedNotification).message).join("\n")).toContain("## Submissions are now open for Binary Test Round!");
+    });
+
+    it("announces phase unlocks and step progress to announcements channel", () => {
+        const phaseUnlock = only({
+            type: NotificationType.PipelineUpdated,
+            occurredAt,
+            stepId: "2.1",
+            stepTitle: "3D Modelling",
+            phaseNumber: 2,
+            phaseTitle: "Phase 2: LookDev",
+            progressPercent: 36,
+            isPhaseTransition: true,
+            actor: supervisor
+        });
+        expect(phaseUnlock.purpose).toBe(ChannelPurpose.Announcements);
+        expect(phaseUnlock.text).toContain("## Phase 2 Unlocked: Phase 2: LookDev");
+        expect(phaseUnlock.text).toContain("3D Modelling");
+        expect(phaseUnlock.text).toContain("36% overall completed");
+
+        const stepProgress = only({
+            type: NotificationType.PipelineUpdated,
+            occurredAt,
+            stepId: "2.2",
+            stepTitle: "Rigging and Deformation",
+            phaseNumber: 2,
+            phaseTitle: "Phase 2: LookDev",
+            progressPercent: 41,
+            isPhaseTransition: false,
+            actor: supervisor
+        });
+        expect(stepProgress.purpose).toBe(ChannelPurpose.Announcements);
+        expect(stepProgress.text).toContain("Rigging and Deformation");
+        expect(stepProgress.text).toContain("Phase 2: LookDev");
+        expect(stepProgress.text).toContain("41% completed");
+    });
+
+    it("shows entry and winner media as a components v2 gallery", () => {
+        const hasGallery = (payload: V2Message): boolean =>
+            payload.components.some((c) => ((c.toJSON() as ComponentJson).components ?? []).some((child) => child.type === 12));
+        const entry = only({
+            type: NotificationType.EntrySubmitted,
+            occurredAt,
+            round,
+            entry: { id: shot.id, title: "Hero Design", mediaUrl: "https://media.example.test/hero.png" },
+            status: EntryStatus.PendingReview,
+            author: voter
+        });
+        expect(hasGallery(entry.payload)).toBe(true);
+        expect(entry.payload).not.toHaveProperty("embeds");
+        expect(entry.text).toContain("Hero Design");
+
+        const winner = only({
+            type: NotificationType.RoundFinalized,
+            occurredAt,
+            round,
+            totalBallots: 40,
+            winner: {
+                entryId: shot.id,
+                title: "Winning Art",
+                mediaUrl: "https://media.example.test/winner.webp",
+                rawScore: 25,
+                voteSharePercentage: 62.5,
+                regularizedTotalScore: null
+            },
+            actor: admin
+        });
+        expect(hasGallery(winner.payload)).toBe(true);
+
+        const noMedia = only({
+            type: NotificationType.EntrySubmitted,
+            occurredAt,
+            round,
+            entry: { id: shot.id, title: "Text Only", mediaUrl: null },
+            status: EntryStatus.PendingReview,
+            author: voter
+        });
+        expect(hasGallery(noMedia.payload)).toBe(false);
     });
 });
 
@@ -309,5 +526,42 @@ describe("task views", () => {
                 "-# Upload a new version with /submit-task when it's ready."
             ].join("\n")
         );
+    });
+});
+
+describe("rules views", () => {
+    it("converts rich html tags to discord markdown", () => {
+        const html = "<p>Rule <strong>one</strong>: <code>x &gt; 0</code> and <em>two</em>.</p><ul><li>Item A</li><li>Item B</li></ul>";
+        const converted = htmlToDiscordMarkdown(html);
+        expect(converted).toContain("**one**");
+        expect(converted).toContain("`x > 0`");
+        expect(converted).toContain("*two*");
+        expect(converted).toContain("• Item A");
+        expect(converted).toContain("• Item B");
+    });
+
+    it("renders dynamic rules message for single-message channel pins", () => {
+        const notification = {
+            type: NotificationType.DocumentUpdated as const,
+            occurredAt,
+            slug: DocumentSlug.Guidelines,
+            revision: 3,
+            title: "Studio Guidelines & Math",
+            sections: [
+                {
+                    id: "math",
+                    title: "Borda Count",
+                    html: "<p>Points = <code>6 * N</code></p>"
+                }
+            ],
+            actor: admin,
+            note: null
+        };
+        const rendered = renderRulesMessage(notification);
+        const text = texts(rendered).join("\n");
+        expect(text).toContain("# 📜 Studio Guidelines & Math");
+        expect(text).toContain("### Borda Count");
+        expect(text).toContain("Points = `6 * N`");
+        expect(text).toContain("Revision 3");
     });
 });

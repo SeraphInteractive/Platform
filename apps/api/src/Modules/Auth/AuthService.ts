@@ -129,20 +129,21 @@ export class AuthService {
 
     public async syncUser(profile: DiscordProfile): Promise<UserRecord> {
         const assignedRole = this.assignedRoleFor(profile.id);
+        const retainedRole = sql<Role>`CASE WHEN ${users.role} = ${Role.SuperAdmin} THEN (CASE WHEN ${users.emailVerifiedAt} IS NULL THEN ${Role.Member} ELSE ${Role.Voter} END)::user_role ELSE ${users.role} END`;
         const [user] = await this.database
             .insert(users)
             .values({
                 discordId: profile.id,
                 discordUsername: profile.username,
                 discordAvatar: profile.avatar,
-                role: assignedRole
+                role: assignedRole ?? Role.Member
             })
             .onConflictDoUpdate({
                 target: users.discordId,
                 set: {
                     discordUsername: profile.username,
                     discordAvatar: profile.avatar,
-                    role: sql`GREATEST(${users.role}, excluded.role)`,
+                    role: assignedRole ?? retainedRole,
                     updatedAt: new Date()
                 }
             })
@@ -171,8 +172,11 @@ export class AuthService {
         }
     }
 
-    private assignedRoleFor(discordId: string): Role {
+    private assignedRoleFor(discordId: string): Role | null {
         const assignments = this.roleAssignments;
+        if (assignments.superAdmins.includes(discordId)) {
+            return Role.SuperAdmin;
+        }
         if (assignments.admins.includes(discordId)) {
             return Role.Admin;
         }
@@ -185,7 +189,7 @@ export class AuthService {
         if (assignments.seniorContributors.includes(discordId)) {
             return Role.SeniorContributor;
         }
-        return Role.Voter;
+        return null;
     }
 
     private defaultTarget(): ReturnTarget {

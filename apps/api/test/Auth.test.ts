@@ -77,7 +77,7 @@ describe("authentication", () => {
         expect(exchange.statusCode).toBe(200);
         const session = json<{ data: { token: string; user: { discordId: string; role: string } } }>(exchange).data;
         expect(session.user.discordId).toBe(discordId);
-        expect(session.user.role).toBe(Role.Voter);
+        expect(session.user.role).toBe(Role.Member);
 
         const me = await context.application.inject({
             method: "GET",
@@ -164,6 +164,22 @@ describe("authentication", () => {
         expect(json<{ data: { user: { role: string } } }>(exchange).data.user.role).toBe(Role.Admin);
     });
 
+    it("keeps roles granted in the app when the user logs in again", async () => {
+        const discordId = nextSnowflake();
+        const existing = await context.createUser(Role.Contributor, { discordId });
+        context.discord.register("returning-code", { id: discordId, username: "Returning", avatar: null });
+        const { fragment, verifier } = await login("returning-code");
+        const exchange = await context.application.inject({
+            method: "POST",
+            url: "/api/v1/auth/token",
+            payload: { code: fragment.get("code"), codeVerifier: verifier }
+        });
+        expect(json<{ data: { user: { id: string; role: string } } }>(exchange).data.user).toMatchObject({
+            id: existing.record.id,
+            role: Role.Contributor
+        });
+    });
+
     it("rejects malformed and unknown bearer tokens", async () => {
         for (const authorization of ["Bearer nope", "Basic abc", `Bearer plt_${"a".repeat(43)}`]) {
             const response = await context.application.inject({ method: "GET", url: "/api/v1/rounds", headers: { authorization } });
@@ -176,7 +192,12 @@ describe("authentication", () => {
         const headers = { authorization: `Bearer ${serviceToken}` };
         const me = await context.application.inject({ method: "GET", url: "/api/v1/auth/me", headers });
         expect(me.statusCode).toBe(403);
-        const list = await context.application.inject({ method: "GET", url: "/api/v1/users", headers });
-        expect(list.statusCode).toBe(403);
+        const terms = await context.application.inject({
+            method: "PUT",
+            url: "/api/v1/users/me/terms",
+            headers,
+            payload: { version: "2026-09-27" }
+        });
+        expect(terms.statusCode).toBe(403);
     });
 });
