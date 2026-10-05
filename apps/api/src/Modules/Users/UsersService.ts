@@ -335,11 +335,7 @@ export class UsersService {
                 ? sql`cardinality(${users.specialties}) > 0`
                 : and(ne(users.id, targetId), sql`cardinality(${users.specialties}) > 0`);
 
-        const candidateHolders = await transaction
-            .select()
-            .from(users)
-            .where(condition)
-            .for("update");
+        const candidateHolders = await transaction.select().from(users).where(condition).for("update");
 
         const conflicts: { holder: UserRecord; specialty: Specialty }[] = [];
         for (const candidate of candidateHolders) {

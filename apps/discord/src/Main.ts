@@ -112,10 +112,12 @@ async function main(): Promise<void> {
                 if (welcomeChannelId !== undefined) {
                     const channel = await client.channels.fetch(welcomeChannelId).catch(() => null);
                     if (channel?.isSendable() && !channel.isDMBased() && channel.guildId === member.guild.id) {
-                        await channel.send({
-                            content: `👋 Welcome <@${member.id}> to the studio! Sign in at ${configuration.webAppUrl} to get started.`,
-                            allowedMentions: { users: [member.id] }
-                        }).catch(() => undefined);
+                        await channel
+                            .send({
+                                content: `👋 Welcome <@${member.id}> to the studio! Sign in at ${configuration.webAppUrl} to get started.`,
+                                allowedMentions: { users: [member.id] }
+                            })
+                            .catch(() => undefined);
                     }
                 }
             } catch (error: unknown) {

@@ -119,12 +119,12 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
 
     const binaryProblem =
         pollType === PollType.Binary
-            ? (problemOf(fieldRules.entryTitle, choiceA.title) ? `Option A: ${problemOf(fieldRules.entryTitle, choiceA.title)}` : null) ??
+            ? ((problemOf(fieldRules.entryTitle, choiceA.title) ? `Option A: ${problemOf(fieldRules.entryTitle, choiceA.title)}` : null) ??
               problemOf(fieldRules.entryDescription, choiceA.description) ??
               fileProblem(choiceA.file) ??
               (problemOf(fieldRules.entryTitle, choiceB.title) ? `Option B: ${problemOf(fieldRules.entryTitle, choiceB.title)}` : null) ??
               problemOf(fieldRules.entryDescription, choiceB.description) ??
-              fileProblem(choiceB.file)
+              fileProblem(choiceB.file))
             : null;
 
     const problem = problemOf(fieldRules.roundTitle, title) ?? scheduleProblem ?? binaryProblem;
@@ -254,7 +254,9 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
                             </SelectContent>
                         </Select>
                         {!canCreateBinary && round === undefined && (
-                            <p className="text-muted-foreground text-xs">Binary voting rounds can only be initiated by supervisors and administrators.</p>
+                            <p className="text-muted-foreground text-xs">
+                                Binary voting rounds can only be initiated by supervisors and administrators.
+                            </p>
                         )}
                         {round !== undefined && !canEditLockedFields && (
                             <p className="text-muted-foreground text-xs">The poll type is locked once a round leaves draft.</p>
@@ -272,7 +274,9 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
                                     setOpensAt(event.target.value);
                                 }}
                             />
-                            {!canEditLockedFields && <p className="text-muted-foreground text-xs">Start date is locked once a round leaves draft.</p>}
+                            {!canEditLockedFields && (
+                                <p className="text-muted-foreground text-xs">Start date is locked once a round leaves draft.</p>
+                            )}
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor={`${formId}-closes`}>Closes (optional)</Label>
@@ -323,7 +327,9 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
                                 <div className="space-y-1.5">
                                     <Label htmlFor={`${formId}-optA-media`}>Media image (optional)</Label>
                                     {choiceA.existingMediaUrl && !choiceA.file && (
-                                        <p className="text-muted-foreground text-xs">Current media attached. Uploading a file will replace it.</p>
+                                        <p className="text-muted-foreground text-xs">
+                                            Current media attached. Uploading a file will replace it.
+                                        </p>
                                     )}
                                     <FilePicker
                                         id={`${formId}-optA-media`}
@@ -362,7 +368,9 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
                                 <div className="space-y-1.5">
                                     <Label htmlFor={`${formId}-optB-media`}>Media image (optional)</Label>
                                     {choiceB.existingMediaUrl && !choiceB.file && (
-                                        <p className="text-muted-foreground text-xs">Current media attached. Uploading a file will replace it.</p>
+                                        <p className="text-muted-foreground text-xs">
+                                            Current media attached. Uploading a file will replace it.
+                                        </p>
                                     )}
                                     <FilePicker
                                         id={`${formId}-optB-media`}

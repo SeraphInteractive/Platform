@@ -112,7 +112,11 @@ export const takeTaskCommand: SlashCommand = {
         .setName("take-task")
         .setDescription("Claim the task in this post or by code")
         .addStringOption((option) =>
-            option.setName("task").setDescription("Task code (e.g. SC01_A1B2), defaults to current post").setMaxLength(50).setAutocomplete(true)
+            option
+                .setName("task")
+                .setDescription("Task code (e.g. SC01_A1B2), defaults to current post")
+                .setMaxLength(50)
+                .setAutocomplete(true)
         )
         .toJSON(),
     async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
@@ -145,7 +149,11 @@ export const releaseTaskCommand: SlashCommand = {
         .setName("release-task")
         .setDescription("Give up your claim on the task in this post or by code")
         .addStringOption((option) =>
-            option.setName("task").setDescription("Task code (e.g. SC01_A1B2), defaults to current post").setMaxLength(50).setAutocomplete(true)
+            option
+                .setName("task")
+                .setDescription("Task code (e.g. SC01_A1B2), defaults to current post")
+                .setMaxLength(50)
+                .setAutocomplete(true)
         )
         .addStringOption((option) => option.setName("reason").setDescription("Optional note for the team").setMaxLength(500))
         .toJSON(),
@@ -187,7 +195,11 @@ export const submitTaskCommand: SlashCommand = {
         .setName("submit-task")
         .setDescription("Submit deliverables for the task in this post or by code via Grab-Box UI")
         .addStringOption((option) =>
-            option.setName("task").setDescription("Task code (e.g. SC01_A1B2), defaults to current post").setMaxLength(50).setAutocomplete(true)
+            option
+                .setName("task")
+                .setDescription("Task code (e.g. SC01_A1B2), defaults to current post")
+                .setMaxLength(50)
+                .setAutocomplete(true)
         )
         .toJSON(),
     async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {

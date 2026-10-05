@@ -1,5 +1,16 @@
 import { z } from "zod";
-import { DifficultyTier, DocumentSlug, EntryStatus, PollType, RaidFlag, RaidSeverity, ReviewDecision, Role, RoundStatus, Specialty } from "./Enums.js";
+import {
+    DifficultyTier,
+    DocumentSlug,
+    EntryStatus,
+    PollType,
+    RaidFlag,
+    RaidSeverity,
+    ReviewDecision,
+    Role,
+    RoundStatus,
+    Specialty
+} from "./Enums.js";
 import { snowflakeSchema, timestampSchema, uuidSchema } from "./Http.js";
 
 export enum NotificationType {

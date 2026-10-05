@@ -195,7 +195,9 @@ describe("voting rounds", () => {
         expect(ledger.statusCode).toBe(200);
         const ledgerData = json<{ data: { discordId: string; discordUsername: string; picks: string[] }[] }>(ledger).data;
         expect(ledgerData).toHaveLength(2);
-        expect(ledgerData.some((row) => row.discordId === voter.record.discordId && row.discordUsername === voter.record.discordUsername)).toBe(true);
+        expect(
+            ledgerData.some((row) => row.discordId === voter.record.discordId && row.discordUsername === voter.record.discordUsername)
+        ).toBe(true);
 
         // updates dynamically if user changes discord username
         await context.database.update(users).set({ discordUsername: "renamed_voter" }).where(eq(users.id, voter.record.id));
@@ -349,10 +351,7 @@ describe("voting rounds", () => {
         const roundId = json<Envelope<{ id: string }>>(validCreation).data.id;
 
         // verify the 2 entries exist and are approved
-        const initialEntries = await context.database
-            .select()
-            .from(entries)
-            .where(eq(entries.roundId, roundId));
+        const initialEntries = await context.database.select().from(entries).where(eq(entries.roundId, roundId));
         expect(initialEntries).toHaveLength(2);
         const optA = initialEntries.find((e) => e.title === "Original Option A");
         const optB = initialEntries.find((e) => e.title === "Original Option B");
@@ -516,13 +515,14 @@ describe("voting rounds", () => {
 
         // create synthetic PNG with Stable Diffusion parameters in tEXt chunk
         const prompt = "Cyberpunk staircase\nSteps: 20, Sampler: Euler a, CFG scale: 7";
-        const textPayload = Buffer.concat([
-            Buffer.from("parameters", "latin1"),
-            Buffer.from([0x00]),
-            Buffer.from(prompt, "utf-8")
-        ]);
+        const textPayload = Buffer.concat([Buffer.from("parameters", "latin1"), Buffer.from([0x00]), Buffer.from(prompt, "utf-8")]);
         const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-        const ihdr = Buffer.concat([Buffer.from([0x00, 0x00, 0x00, 0x0d]), Buffer.from("IHDR", "ascii"), Buffer.alloc(13), Buffer.alloc(4)]);
+        const ihdr = Buffer.concat([
+            Buffer.from([0x00, 0x00, 0x00, 0x0d]),
+            Buffer.from("IHDR", "ascii"),
+            Buffer.alloc(13),
+            Buffer.alloc(4)
+        ]);
         const customLen = Buffer.alloc(4);
         customLen.writeUInt32BE(textPayload.length, 0);
         const customChunk = Buffer.concat([customLen, Buffer.from("tEXt", "ascii"), textPayload, Buffer.alloc(4)]);

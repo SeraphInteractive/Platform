@@ -126,13 +126,7 @@ function EntryDetailDialog({
     );
 }
 
-function EntryCard({
-    entry,
-    onClick
-}: {
-    readonly entry: EntryDto;
-    readonly onClick: () => void;
-}): ReactNode {
+function EntryCard({ entry, onClick }: { readonly entry: EntryDto; readonly onClick: () => void }): ReactNode {
     const { user } = useSession();
     const isMyEntry = user !== null && entry.submittedBy === user.id;
     const authorAvatar = entry.author?.avatarUrl ? safeHttpUrl(entry.author.avatarUrl) : null;
@@ -185,9 +179,7 @@ function EntryCard({
                 </h3>
 
                 {entry.description !== null && (
-                    <p className="line-clamp-2 text-xs text-muted-foreground/80 leading-relaxed">
-                        {entry.description}
-                    </p>
+                    <p className="line-clamp-2 text-xs text-muted-foreground/80 leading-relaxed">{entry.description}</p>
                 )}
 
                 <div className="mt-auto pt-2.5 border-t flex items-center justify-between text-xs text-muted-foreground gap-2">
@@ -199,9 +191,7 @@ function EntryCard({
                                     {entry.author.username.slice(0, 2).toUpperCase()}
                                 </AvatarFallback>
                             </Avatar>
-                            <span className="truncate font-medium text-foreground">
-                                {isMyEntry ? "You" : `@${entry.author.username}`}
-                            </span>
+                            <span className="truncate font-medium text-foreground">{isMyEntry ? "You" : `@${entry.author.username}`}</span>
                         </div>
                     ) : isMyEntry ? (
                         <span className="font-medium text-primary">Submitted by you</span>
@@ -259,11 +249,7 @@ function EntriesGrid({
         <>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {entries.data.map((entry) => (
-                    <EntryCard
-                        key={entry.id}
-                        entry={entry}
-                        onClick={() => onSelectEntry(entry.id)}
-                    />
+                    <EntryCard key={entry.id} entry={entry} onClick={() => onSelectEntry(entry.id)} />
                 ))}
             </div>
             <EntryDetailDialog
@@ -318,7 +304,7 @@ function Ledger({ roundId, entries }: { readonly roundId: string; readonly entri
                                 <TableCell className="max-w-96">
                                     <ol className="space-y-0.5">
                                         {row.picks.map((pick, index) => (
-                                             <li key={pick} className="truncate">
+                                            <li key={pick} className="truncate">
                                                 {index + 1}. {titles.get(pick) ?? pick}
                                             </li>
                                         ))}
@@ -411,11 +397,7 @@ function RoundDetail({ round }: { readonly round: RoundDetailDto }): ReactNode {
                     <BallotPanel round={round} />
                 </TabsContent>
                 <TabsContent value="entries">
-                    <EntriesGrid
-                        roundId={round.id}
-                        selectedEntryId={selectedEntryId}
-                        onSelectEntry={setSelectedEntryId}
-                    />
+                    <EntriesGrid roundId={round.id} selectedEntryId={selectedEntryId} onSelectEntry={setSelectedEntryId} />
                 </TabsContent>
                 <TabsContent value="standings">
                     <Standings round={round} onSelectEntry={handleSelectEntry} />

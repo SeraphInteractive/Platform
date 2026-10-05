@@ -264,7 +264,7 @@ export class ActingApiClient {
     }
 
     public async listUsers(options: { page?: number; perPage?: number; role?: Role } = {}): Promise<Page<ModeratedUserDto>> {
-        return this.request("/users", pageEnvelope(moderatedUserSchema), { query: options as Record<string, string | number | undefined> });
+        return this.request("/users", pageEnvelope(moderatedUserSchema), { query: options });
     }
 
     public async listRounds(status?: RoundStatus): Promise<Page<RoundDto>> {
@@ -321,10 +321,7 @@ export class ActingApiClient {
         return (await this.request(`/shots/${shotId}/uploads`, dataEnvelope(presignedUploadSchema), { method: "POST", body: input })).data;
     }
 
-    public async submitWork(
-        shotId: string,
-        input: { videoKey: string; blendKey: string; notes: string | null }
-    ): Promise<SubmissionDto> {
+    public async submitWork(shotId: string, input: { videoKey: string; blendKey: string; notes: string | null }): Promise<SubmissionDto> {
         return (await this.request(`/shots/${shotId}/submissions`, dataEnvelope(submissionSchema), { method: "POST", body: input })).data;
     }
 

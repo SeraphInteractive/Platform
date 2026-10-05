@@ -60,12 +60,9 @@ describe("AiMetadataDetector", () => {
     });
 
     it("detects Stable Diffusion Automatic1111 parameters in PNG tEXt chunk", () => {
-        const prompt = "A cinematic view of a floating castle, 8k\nNegative prompt: blurry, bad anatomy\nSteps: 25, Sampler: DPM++ 2M Karras, CFG scale: 7, Seed: 998822, Size: 512x512, Model: realisticVision";
-        const textPayload = Buffer.concat([
-            Buffer.from("parameters", "latin1"),
-            Buffer.from([0x00]),
-            Buffer.from(prompt, "utf-8")
-        ]);
+        const prompt =
+            "A cinematic view of a floating castle, 8k\nNegative prompt: blurry, bad anatomy\nSteps: 25, Sampler: DPM++ 2M Karras, CFG scale: 7, Seed: 998822, Size: 512x512, Model: realisticVision";
+        const textPayload = Buffer.concat([Buffer.from("parameters", "latin1"), Buffer.from([0x00]), Buffer.from(prompt, "utf-8")]);
         const png = createPngWithChunk("tEXt", textPayload);
         const result = inspectMediaAiSignatures(png);
 
@@ -83,11 +80,7 @@ describe("AiMetadataDetector", () => {
                 { id: 2, type: "CLIPTextEncode", class_type: "CLIPTextEncode" }
             ]
         });
-        const textPayload = Buffer.concat([
-            Buffer.from("workflow", "latin1"),
-            Buffer.from([0x00]),
-            Buffer.from(workflowJson, "utf-8")
-        ]);
+        const textPayload = Buffer.concat([Buffer.from("workflow", "latin1"), Buffer.from([0x00]), Buffer.from(workflowJson, "utf-8")]);
         const png = createPngWithChunk("tEXt", textPayload);
         const result = inspectMediaAiSignatures(png);
 

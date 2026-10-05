@@ -400,7 +400,8 @@ export function renderNotification(notification: PlatformNotification, context: 
             ];
         }
         case NotificationType.DocumentUpdated: {
-            const noteText = notification.note !== null && notification.note.trim().length > 0 ? `\n-# Note: ${plain(notification.note, 200)}` : "";
+            const noteText =
+                notification.note !== null && notification.note.trim().length > 0 ? `\n-# Note: ${plain(notification.note, 200)}` : "";
             return [
                 post(
                     ChannelPurpose.TaskLogs,
@@ -443,11 +444,7 @@ export function htmlToDiscordMarkdown(html: string): string {
 }
 
 export function renderRulesMessage(notification: NotificationOf<NotificationType.DocumentUpdated>): V2Message {
-    const lines: string[] = [
-        `# 📜 ${notification.title}`,
-        `*Official guidelines, scoring invariants, and fair-play policies.*`,
-        ""
-    ];
+    const lines: string[] = [`# 📜 ${notification.title}`, `*Official guidelines, scoring invariants, and fair-play policies.*`, ""];
 
     for (const section of notification.sections) {
         lines.push(`### ${section.title}`);

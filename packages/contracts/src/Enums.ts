@@ -81,11 +81,7 @@ export const selfSelectableSpecialties: readonly Specialty[] = [
     Specialty.VideoEditor
 ];
 
-export const adminSpecialties: readonly Specialty[] = [
-    Specialty.Producer,
-    Specialty.CreativeDirector,
-    Specialty.ProductionManager
-];
+export const adminSpecialties: readonly Specialty[] = [Specialty.Producer, Specialty.CreativeDirector, Specialty.ProductionManager];
 
 export const supervisorSpecialties: readonly Specialty[] = [
     Specialty.TechnicalDirector,
@@ -101,20 +97,11 @@ export const supervisorSpecialties: readonly Specialty[] = [
     Specialty.SoundDirector
 ];
 
-export const exclusiveSpecialties: readonly Specialty[] = [
-    ...adminSpecialties,
-    ...supervisorSpecialties
-];
+export const exclusiveSpecialties: readonly Specialty[] = [...adminSpecialties, ...supervisorSpecialties];
 
-export const teamSpecialties: readonly Specialty[] = [
-    Specialty.MediaTeam
-];
+export const teamSpecialties: readonly Specialty[] = [Specialty.MediaTeam];
 
-export const assignableSpecialties: readonly Specialty[] = [
-    ...adminSpecialties,
-    ...supervisorSpecialties,
-    ...teamSpecialties
-];
+export const assignableSpecialties: readonly Specialty[] = [...adminSpecialties, ...supervisorSpecialties, ...teamSpecialties];
 
 export function specialtyLabel(specialty: Specialty): string {
     const words = specialty.split("_").map((word) => (word === "3d" ? "3D" : `${word.charAt(0).toUpperCase()}${word.slice(1)}`));

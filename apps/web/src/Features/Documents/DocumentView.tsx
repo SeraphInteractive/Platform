@@ -80,7 +80,9 @@ function MobileContents({ document }: { readonly document: DocumentDto }): React
                             href={documentPaths[slug]}
                             className={cn(
                                 "rounded px-2 py-0.5 transition-colors",
-                                slug === document.slug ? "bg-accent text-foreground font-medium" : "text-muted-foreground hover:text-foreground"
+                                slug === document.slug
+                                    ? "bg-accent text-foreground font-medium"
+                                    : "text-muted-foreground hover:text-foreground"
                             )}
                         >
                             {documentNames[slug]}

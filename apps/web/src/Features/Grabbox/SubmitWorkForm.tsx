@@ -78,7 +78,11 @@ export function SubmitWorkForm({ shot, onSubmitted }: { readonly shot: ShotDetai
                 setProgress({ label: "Uploading project file", value });
             });
             const notes = input.notes.trim();
-            return platformApi.submitWork(shot.id, { videoKey: videoUpload.key, blendKey: blendUpload.key, notes: notes.length === 0 ? null : notes });
+            return platformApi.submitWork(shot.id, {
+                videoKey: videoUpload.key,
+                blendKey: blendUpload.key,
+                notes: notes.length === 0 ? null : notes
+            });
         },
         onSuccess: (submission) => {
             void queryClient.invalidateQueries({ queryKey: queryKeys.shot(shot.id) });

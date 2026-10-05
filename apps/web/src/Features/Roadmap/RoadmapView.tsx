@@ -192,7 +192,9 @@ export function RoadmapView(): ReactNode {
                             )}
                         </CardContent>
                     </Card>
-                    {!isLoading && hasAtLeast(user, Role.Supervisor) && <UpdateProgress key={pipeline.data.stepIndex} progress={pipeline.data} />}
+                    {!isLoading && hasAtLeast(user, Role.Supervisor) && (
+                        <UpdateProgress key={pipeline.data.stepIndex} progress={pipeline.data} />
+                    )}
                     <Timeline currentIndex={pipeline.data.stepIndex} />
                 </div>
             )}
