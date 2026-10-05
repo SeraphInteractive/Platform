@@ -61,7 +61,7 @@ export function clearVerifierCookie(response: NextResponse): void {
 export function isSameOrigin(request: NextRequest): boolean {
     const origin = request.headers.get("origin");
     if (origin !== null) {
-        return origin === env().WEB_APP_URL;
+        return origin === request.nextUrl.origin || origin === env().WEB_APP_URL;
     }
     return request.headers.get("sec-fetch-site") === "same-origin";
 }
