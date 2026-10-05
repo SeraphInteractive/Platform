@@ -111,11 +111,7 @@ interface PositionedLayoutItem<T> {
 }
 
 // compute screen-space clustering and vertical fan-out for overlapping points
-function computeAntiCollisionLayout<T>(
-    items: readonly LayoutPoint<T>[],
-    zoom: number,
-    threshold: number = 26
-): PositionedLayoutItem<T>[] {
+function computeAntiCollisionLayout<T>(items: readonly LayoutPoint<T>[], zoom: number, threshold: number = 26): PositionedLayoutItem<T>[] {
     const n = items.length;
     if (n === 0) return [];
 
@@ -202,13 +198,7 @@ interface ScatterChartProps {
     readonly hovered?: RaidTelemetryDto | null;
 }
 
-export function ScatterChart({
-    telemetryList,
-    leaderboardItems = [],
-    titleOf,
-    onHover,
-    hovered
-}: ScatterChartProps): ReactNode {
+export function ScatterChart({ telemetryList, leaderboardItems = [], titleOf, onHover, hovered }: ScatterChartProps): ReactNode {
     const [localHovered, setLocalHovered] = useState<RaidTelemetryDto | null>(null);
     const activeHover = hovered !== undefined ? hovered : localHovered;
     const setActiveHover = onHover ?? setLocalHovered;
@@ -221,8 +211,7 @@ export function ScatterChart({
     const minY = 0.0;
     const maxY = 1.0;
 
-    const { svgRef, transform, onMouseDown, onMouseMove, onMouseUp, onMouseLeave, onDoubleClick, resetZoom } =
-        useSvgPanZoom(width, height);
+    const { svgRef, transform, onMouseDown, onMouseMove, onMouseUp, onMouseLeave, onDoubleClick, resetZoom } = useSvgPanZoom(width, height);
 
     const scaleX = (val: number): number => padding + ((val - minX) / (maxX - minX)) * (width - 2 * padding);
     const scaleY = (val: number): number => height - padding - ((val - minY) / (maxY - minY)) * (height - 2 * padding);
@@ -283,12 +272,7 @@ export function ScatterChart({
                 >
                     <defs>
                         <clipPath id="scatter-plot-clip">
-                            <rect
-                                x={padding}
-                                y={padding}
-                                width={width - 2 * padding}
-                                height={height - 2 * padding}
-                            />
+                            <rect x={padding} y={padding} width={width - 2 * padding} height={height - 2 * padding} />
                         </clipPath>
                     </defs>
 
@@ -320,7 +304,8 @@ export function ScatterChart({
                                     points.map((p) => {
                                         const title = getTitle(p.entryId);
                                         const shortId = p.entryId.slice(0, 6);
-                                        const displayLabel = title.length > 18 ? `${title.slice(0, 18)}… #${shortId}` : `${title} #${shortId}`;
+                                        const displayLabel =
+                                            title.length > 18 ? `${title.slice(0, 18)}… #${shortId}` : `${title} #${shortId}`;
                                         return {
                                             data: p,
                                             id: p.id,
@@ -496,8 +481,7 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
     const height = 220;
     const padding = 38;
 
-    const { svgRef, transform, onMouseDown, onMouseMove, onMouseUp, onMouseLeave, onDoubleClick, resetZoom } =
-        useSvgPanZoom(width, height);
+    const { svgRef, transform, onMouseDown, onMouseMove, onMouseUp, onMouseLeave, onDoubleClick, resetZoom } = useSvgPanZoom(width, height);
 
     if (items.length === 0) {
         return <p className="text-muted-foreground text-xs">No entries to display.</p>;
@@ -541,12 +525,7 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
                 >
                     <defs>
                         <clipPath id="shrinkage-plot-clip">
-                            <rect
-                                x={padding}
-                                y={padding}
-                                width={width - 2 * padding}
-                                height={height - 2 * padding}
-                            />
+                            <rect x={padding} y={padding} width={width - 2 * padding} height={height - 2 * padding} />
                         </clipPath>
                     </defs>
 
@@ -568,7 +547,10 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
                                 const layoutItems = computeAntiCollisionLayout(
                                     items.map((item) => {
                                         const shortId = item.entryId.slice(0, 6);
-                                        const label = item.title.length > 18 ? `${item.title.slice(0, 18)}… #${shortId}` : `${item.title} #${shortId}`;
+                                        const label =
+                                            item.title.length > 18
+                                                ? `${item.title.slice(0, 18)}… #${shortId}`
+                                                : `${item.title} #${shortId}`;
                                         const reg = item.regularizedMeanScore ?? item.rawScore;
                                         return {
                                             data: item,
@@ -686,7 +668,9 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
                         {activeItem.title} (#{activeItem.entryId.slice(0, 6)})
                     </span>
                     <span className="text-muted-foreground">·</span>
-                    <span>Raw: {formatNumber(activeItem.rawScore)} pts (#{activeItem.position})</span>
+                    <span>
+                        Raw: {formatNumber(activeItem.rawScore)} pts (#{activeItem.position})
+                    </span>
                     <span>Regularized: {formatNumber(activeItem.regularizedTotalScore ?? activeItem.rawScore)}</span>
                 </div>
             )}
@@ -869,22 +853,21 @@ export function NetworkMonitor(): ReactNode {
             setLastChecked(new Date());
 
             // update rolling stats for each service
-            const updateMetric = (
-                item: { status: "ok" | "error"; latencyMs: number | null },
-                degradedThreshold: number
-            ) => (prev: ServiceMetricState): ServiceMetricState => {
-                const latency = item.status === "ok" && item.latencyMs !== null ? item.latencyMs : null;
-                const nextHistory = latency !== null ? [...prev.history, latency].slice(-30) : prev.history;
-                let status: ServiceMetricState["status"] = "down";
-                if (item.status === "ok" && latency !== null) {
-                    status = latency > degradedThreshold ? "degraded" : "operational";
-                }
-                return {
-                    history: nextHistory,
-                    currentLatency: latency,
-                    status
+            const updateMetric =
+                (item: { status: "ok" | "error"; latencyMs: number | null }, degradedThreshold: number) =>
+                (prev: ServiceMetricState): ServiceMetricState => {
+                    const latency = item.status === "ok" && item.latencyMs !== null ? item.latencyMs : null;
+                    const nextHistory = latency !== null ? [...prev.history, latency].slice(-30) : prev.history;
+                    let status: ServiceMetricState["status"] = "down";
+                    if (item.status === "ok" && latency !== null) {
+                        status = latency > degradedThreshold ? "degraded" : "operational";
+                    }
+                    return {
+                        history: nextHistory,
+                        currentLatency: latency,
+                        status
+                    };
                 };
-            };
 
             setDbState(updateMetric(data.database, 100));
             setRedisState(updateMetric(data.redis, 50));
@@ -942,12 +925,7 @@ export function NetworkMonitor(): ReactNode {
                 ? "Service Outage Detected"
                 : "Probing Cluster…";
 
-    const overallColor =
-        overallStatus === "ok"
-            ? "bg-emerald-500"
-            : overallStatus === "degraded"
-              ? "bg-amber-500"
-              : "bg-destructive";
+    const overallColor = overallStatus === "ok" ? "bg-emerald-500" : overallStatus === "degraded" ? "bg-amber-500" : "bg-destructive";
 
     return (
         <div className="space-y-4">
@@ -962,15 +940,9 @@ export function NetworkMonitor(): ReactNode {
                     <div>
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-semibold text-foreground">{overallLabel}</span>
-                            <span className="rounded-full border px-2 py-0.5 text-[10px] font-mono text-muted-foreground">
-                                3 TARGETS
-                            </span>
+                            <span className="rounded-full border px-2 py-0.5 text-[10px] font-mono text-muted-foreground">3 TARGETS</span>
                         </div>
-                        {uptime !== null && (
-                            <div className="text-muted-foreground text-xs font-mono">
-                                Uptime: {formatUptime(uptime)}
-                            </div>
-                        )}
+                        {uptime !== null && <div className="text-muted-foreground text-xs font-mono">Uptime: {formatUptime(uptime)}</div>}
                     </div>
                 </div>
 
@@ -980,12 +952,7 @@ export function NetworkMonitor(): ReactNode {
                             Updated {lastChecked.toLocaleTimeString()}
                         </span>
                     )}
-                    <Button
-                        variant="outline"
-                        size="xs"
-                        onClick={() => setIsStreaming((prev) => !prev)}
-                        className="gap-1 text-xs"
-                    >
+                    <Button variant="outline" size="xs" onClick={() => setIsStreaming((prev) => !prev)} className="gap-1 text-xs">
                         {isStreaming ? (
                             <>
                                 <Pause className="size-3" />
@@ -998,13 +965,7 @@ export function NetworkMonitor(): ReactNode {
                             </>
                         )}
                     </Button>
-                    <Button
-                        variant="outline"
-                        size="xs"
-                        disabled={isPinging}
-                        onClick={() => void runProbe()}
-                        className="gap-1 text-xs"
-                    >
+                    <Button variant="outline" size="xs" disabled={isPinging} onClick={() => void runProbe()} className="gap-1 text-xs">
                         <RefreshCw className={cn("size-3", isPinging && "animate-spin")} />
                         <span>Ping Now</span>
                     </Button>
@@ -1053,7 +1014,12 @@ export function NetworkMonitor(): ReactNode {
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-mono uppercase font-medium", statusBadge)}>
+                                        <span
+                                            className={cn(
+                                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-mono uppercase font-medium",
+                                                statusBadge
+                                            )}
+                                        >
                                             {service.state.status}
                                         </span>
                                     </TableCell>

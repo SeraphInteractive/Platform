@@ -64,11 +64,21 @@ const options: sanitizeHtml.IOptions = {
             const src = (attributes.src ?? "").trim();
             if (internalLink.test(src) || externalLink.test(src)) {
                 const attribs: Record<string, string> = { src };
-                if (attributes.alt !== undefined) attribs.alt = attributes.alt;
-                if (attributes.title !== undefined) attribs.title = attributes.title;
-                if (attributes.class !== undefined) attribs.class = attributes.class;
-                if (attributes.width !== undefined) attribs.width = attributes.width;
-                if (attributes.height !== undefined) attribs.height = attributes.height;
+                if (attributes.alt !== undefined) {
+                    attribs.alt = attributes.alt;
+                }
+                if (attributes.title !== undefined) {
+                    attribs.title = attributes.title;
+                }
+                if (attributes.class !== undefined) {
+                    attribs.class = attributes.class;
+                }
+                if (attributes.width !== undefined) {
+                    attribs.width = attributes.width;
+                }
+                if (attributes.height !== undefined) {
+                    attribs.height = attributes.height;
+                }
                 return { tagName, attribs };
             }
             return { tagName: "span", attribs: {} };

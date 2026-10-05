@@ -71,15 +71,9 @@ function RoundCard({ round }: RoundCardProps): ReactNode {
                 <div className="flex items-center justify-between gap-2">
                     <RoundStatusBadge status={round.status} />
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                        {isLiveVoting && round.closesAt && (
-                            <CountdownTimer targetDate={round.closesAt} prefix="Closes" />
-                        )}
-                        {isOpenSubmissions && round.closesAt && (
-                            <CountdownTimer targetDate={round.closesAt} prefix="Due" />
-                        )}
-                        {isDraft && round.opensAt && (
-                            <CountdownTimer targetDate={round.opensAt} prefix="Opens" />
-                        )}
+                        {isLiveVoting && round.closesAt && <CountdownTimer targetDate={round.closesAt} prefix="Closes" />}
+                        {isOpenSubmissions && round.closesAt && <CountdownTimer targetDate={round.closesAt} prefix="Due" />}
+                        {isDraft && round.opensAt && <CountdownTimer targetDate={round.opensAt} prefix="Opens" />}
                         <span className="text-muted-foreground bg-muted/60 rounded px-2 py-0.5 text-xs font-medium">
                             {pollTypeLabels[round.pollType]}
                         </span>
@@ -139,13 +133,7 @@ function RoundCard({ round }: RoundCardProps): ReactNode {
     );
 }
 
-function EmptyTabState({
-    tab,
-    onSwitchTab
-}: {
-    readonly tab: FilterTab;
-    readonly onSwitchTab: (tab: FilterTab) => void;
-}): ReactNode {
+function EmptyTabState({ tab, onSwitchTab }: { readonly tab: FilterTab; readonly onSwitchTab: (tab: FilterTab) => void }): ReactNode {
     if (tab === "all_active") {
         return (
             <div className="bg-card flex flex-col items-center justify-center rounded-lg border border-dashed p-10 text-center">
@@ -157,7 +145,13 @@ function EmptyTabState({
                     There are no voting or submission rounds running at the moment. Check past results or check back soon!
                 </p>
                 <div className="mt-4 flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => { onSwitchTab(RoundStatus.Finalized); }}>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                            onSwitchTab(RoundStatus.Finalized);
+                        }}
+                    >
                         <Trophy className="size-4 mr-1.5" />
                         View past results
                     </Button>
@@ -176,11 +170,23 @@ function EmptyTabState({
                     No rounds are currently accepting ballots. You can check open submissions or explore past results.
                 </p>
                 <div className="mt-4 flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => { onSwitchTab(RoundStatus.Open); }}>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                            onSwitchTab(RoundStatus.Open);
+                        }}
+                    >
                         <Sparkles className="size-4 mr-1.5" />
                         Check submissions
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => { onSwitchTab(RoundStatus.Finalized); }}>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                            onSwitchTab(RoundStatus.Finalized);
+                        }}
+                    >
                         <Trophy className="size-4 mr-1.5" />
                         Past results
                     </Button>
@@ -195,11 +201,15 @@ function EmptyTabState({
                     <Sparkles className="size-6" />
                 </div>
                 <h3 className="font-semibold text-base">No open submissions</h3>
-                <p className="text-muted-foreground mt-1 max-w-sm text-sm">
-                    No rounds are currently accepting new entries or pitches.
-                </p>
+                <p className="text-muted-foreground mt-1 max-w-sm text-sm">No rounds are currently accepting new entries or pitches.</p>
                 <div className="mt-4 flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => { onSwitchTab(RoundStatus.Voting); }}>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                            onSwitchTab(RoundStatus.Voting);
+                        }}
+                    >
                         <Vote className="size-4 mr-1.5" />
                         View live voting
                     </Button>
@@ -276,7 +286,12 @@ export function RoundsView(): ReactNode {
             ) : rounds.isError ? (
                 <ErrorState error={rounds.error} onRetry={() => void rounds.refetch()} />
             ) : displayedRounds.length === 0 ? (
-                <EmptyTabState tab={activeTab} onSwitchTab={(newTab) => { setTab(newTab); }} />
+                <EmptyTabState
+                    tab={activeTab}
+                    onSwitchTab={(newTab) => {
+                        setTab(newTab);
+                    }}
+                />
             ) : (
                 <>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

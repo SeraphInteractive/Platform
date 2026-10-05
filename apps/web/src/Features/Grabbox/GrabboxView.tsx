@@ -130,14 +130,10 @@ function ShotCard({ shot }: { readonly shot: ShotDto }): ReactNode {
                     </span>
                 </div>
 
-                <h3 className="line-clamp-2 text-sm font-semibold leading-snug group-hover:text-primary transition-colors">
-                    {shot.title}
-                </h3>
+                <h3 className="line-clamp-2 text-sm font-semibold leading-snug group-hover:text-primary transition-colors">{shot.title}</h3>
 
                 {shot.description !== null && (
-                    <p className="line-clamp-2 text-xs text-muted-foreground/80 leading-relaxed">
-                        {shot.description}
-                    </p>
+                    <p className="line-clamp-2 text-xs text-muted-foreground/80 leading-relaxed">{shot.description}</p>
                 )}
 
                 <div className="mt-auto pt-2.5 border-t flex items-center justify-between text-xs text-muted-foreground gap-2">
@@ -159,9 +155,7 @@ function ShotCard({ shot }: { readonly shot: ShotDto }): ReactNode {
                     ) : shot.isSeniorLocked ? (
                         <SeniorLock shot={shot} />
                     ) : (
-                        <span className="text-success inline-flex items-center gap-1 text-xs font-medium">
-                            ● Available
-                        </span>
+                        <span className="text-success inline-flex items-center gap-1 text-xs font-medium">● Available</span>
                     )}
                 </div>
             </div>

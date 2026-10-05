@@ -57,7 +57,7 @@ export const documentsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer
             }
         },
         async (_request, reply) => {
-            void reply.header('Cache-Control', 'public, max-age=60');
+            void reply.header("Cache-Control", "public, max-age=60");
             return { data: { version: await documentsService.currentAcceptanceVersion() } };
         }
     );
@@ -73,7 +73,7 @@ export const documentsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer
             }
         },
         async (request, reply) => {
-            void reply.header('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
+            void reply.header("Cache-Control", "public, max-age=300, stale-while-revalidate=600");
             return { data: presentDocument(await documentsService.get(request.params.slug)) };
         }
     );

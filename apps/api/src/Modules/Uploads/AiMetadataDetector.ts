@@ -19,7 +19,10 @@ const aiTextRules: readonly KeywordRule[] = [
     { pattern: /\bCivitai resources:\s*\[/iu, flagName: "Civitai resource tag" },
 
     // comfyui graph metadata
-    { pattern: /"(?:class_type|type)":\s*"(?:KSampler|VAEDecode|CLIPTextEncode|CheckpointLoaderSimple|LoraLoader)"/iu, flagName: "ComfyUI workflow graph" },
+    {
+        pattern: /"(?:class_type|type)":\s*"(?:KSampler|VAEDecode|CLIPTextEncode|CheckpointLoaderSimple|LoraLoader)"/iu,
+        flagName: "ComfyUI workflow graph"
+    },
     { pattern: /"client_id":\s*"[^"]+",\s*"prompt":\s*\{/iu, flagName: "ComfyUI prompt payload" },
 
     // midjourney / dall-e / novelai / fooocus / invokeai signatures
@@ -70,7 +73,7 @@ function extractSnippet(text: string): string | null {
     }
     // pull out first meaningful prompt sentence or json segment
     const sdMatch = /^(.*?)(?:Negative prompt:|Steps:|$)/su.exec(trimmed);
-    const candidate = sdMatch !== null && sdMatch[1]?.trim() ? sdMatch[1].trim() : trimmed;
+    const candidate = sdMatch?.[1]?.trim() ? sdMatch[1].trim() : trimmed;
     return candidate.length > 280 ? `${candidate.slice(0, 277)}...` : candidate;
 }
 

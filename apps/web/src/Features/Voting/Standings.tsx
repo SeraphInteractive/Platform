@@ -45,13 +45,16 @@ function StandingsTable({
                             <TableCell className="tabular-nums">{item.position}</TableCell>
                             <TableCell className="min-w-48">
                                 <div className="flex items-center justify-between gap-2">
-                                    <span className={cn("block max-w-80 truncate", onSelectEntry !== undefined && "font-medium hover:text-primary transition-colors")}>
+                                    <span
+                                        className={cn(
+                                            "block max-w-80 truncate",
+                                            onSelectEntry !== undefined && "font-medium hover:text-primary transition-colors"
+                                        )}
+                                    >
                                         {item.title}
                                     </span>
                                     {onSelectEntry !== undefined && (
-                                        <span className="text-[11px] text-muted-foreground/70 shrink-0 hidden sm:inline">
-                                            View &rarr;
-                                        </span>
+                                        <span className="text-[11px] text-muted-foreground/70 shrink-0 hidden sm:inline">View &rarr;</span>
                                     )}
                                 </div>
                                 <span className="bg-muted mt-1.5 block h-1.5 w-full max-w-80 overflow-hidden" aria-hidden="true">
@@ -147,9 +150,7 @@ function CertifiedResults({
                         <p className="text-muted-foreground text-xs tracking-wider uppercase">
                             {first?.status === SeparationStatus.StatisticalTie ? "Top of the count" : "Winner"}
                         </p>
-                        {onSelectEntry !== undefined && (
-                            <span className="text-xs text-primary font-medium">View entry &rarr;</span>
-                        )}
+                        {onSelectEntry !== undefined && <span className="text-xs text-primary font-medium">View entry &rarr;</span>}
                     </div>
                     <p className="mt-1 text-lg font-semibold text-balance">{winner.title}</p>
                     <p className="text-muted-foreground text-sm">

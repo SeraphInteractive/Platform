@@ -78,6 +78,13 @@
       "when": 1790780000002,
       "tag": "0010_add_media_team_specialty",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791178185466,
+      "tag": "0011_deleted_storage_objects",
+      "breakpoints": true
     }
   ]
 }

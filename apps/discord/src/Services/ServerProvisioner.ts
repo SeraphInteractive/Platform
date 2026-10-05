@@ -13,14 +13,7 @@ import {
 import type { Logger } from "pino";
 import { message, panel } from "../Discord/Ui.js";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
-import {
-    contributorRoleName,
-    findStudioRole,
-    normalizeName,
-    permissionsFor,
-    studioRoles,
-    StudioTier
-} from "./StudioRoles.js";
+import { contributorRoleName, findStudioRole, normalizeName, permissionsFor, studioRoles, StudioTier } from "./StudioRoles.js";
 
 export interface ProvisionSummary {
     readonly createdRoles: readonly string[];
@@ -381,7 +374,9 @@ export class ServerProvisioner {
         let position = 1;
         const reversed = [...studioRoles].reverse();
         for (const definition of reversed) {
-            const match = roleList.find((role) => role !== null && role !== undefined && findStudioRole(role.name)?.name === definition.name);
+            const match = roleList.find(
+                (role) => role !== null && role !== undefined && findStudioRole(role.name)?.name === definition.name
+            );
             if (match !== undefined && match !== null) {
                 positions.push({ role: match.id, position });
                 position++;

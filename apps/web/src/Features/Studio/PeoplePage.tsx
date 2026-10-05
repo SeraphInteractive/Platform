@@ -7,7 +7,7 @@ import {
     type ModeratedUserDto,
     problemOf,
     Role,
-    Specialty,
+    type Specialty,
     type SpecialtyHolderDto,
     supervisorSpecialties,
     teamSpecialties,
@@ -65,11 +65,7 @@ function SpecialtySelectContent({ holders, currentSpecialty, targetId }: Special
     return (
         <SelectContent>
             <SelectItem value="__none__">None</SelectItem>
-            {isCustomCraft && (
-                <SelectItem value={currentSpecialty}>
-                    {specialtyLabel(currentSpecialty)} (Craft)
-                </SelectItem>
-            )}
+            {isCustomCraft && <SelectItem value={currentSpecialty}>{specialtyLabel(currentSpecialty)} (Craft)</SelectItem>}
             <SelectGroup>
                 <SelectLabel>Admin Roles</SelectLabel>
                 {adminSpecialties.map((s) => {
@@ -268,11 +264,7 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
             <TableCell>
                 {manageableSecondary ? (
                     <>
-                        <Select
-                            value={currentSpecialty}
-                            disabled={busy}
-                            onValueChange={onSecondaryRoleChange}
-                        >
+                        <Select value={currentSpecialty} disabled={busy} onValueChange={onSecondaryRoleChange}>
                             <SelectTrigger size="sm" className="w-48" aria-label={`Secondary role for ${target.username}`}>
                                 <SelectValue />
                             </SelectTrigger>
@@ -288,11 +280,16 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
                                     <DialogHeader>
                                         <DialogTitle>Transfer {specialtyLabel(pendingTransfer.specialty)}?</DialogTitle>
                                         <DialogDescription>
-                                            This role is currently assigned to @{pendingTransfer.holder.username}. Transferring will remove it from them and assign it to @{target.username}.
+                                            This role is currently assigned to @{pendingTransfer.holder.username}. Transferring will remove
+                                            it from them and assign it to @{target.username}.
                                         </DialogDescription>
                                     </DialogHeader>
                                     <DialogFooter>
-                                        <Button variant="ghost" onClick={() => setPendingTransfer(null)} disabled={setSecondaryRole.isPending}>
+                                        <Button
+                                            variant="ghost"
+                                            onClick={() => setPendingTransfer(null)}
+                                            disabled={setSecondaryRole.isPending}
+                                        >
                                             Cancel
                                         </Button>
                                         <Button
@@ -431,12 +428,7 @@ function PeopleTable({ actor }: { readonly actor: UserDto }): ReactNode {
                             </TableHeader>
                             <TableBody>
                                 {users.data.data.map((target) => (
-                                    <UserRow
-                                        key={target.id}
-                                        actor={actor}
-                                        target={target}
-                                        specialtyHolders={specialtyHolders}
-                                    />
+                                    <UserRow key={target.id} actor={actor} target={target} specialtyHolders={specialtyHolders} />
                                 ))}
                             </TableBody>
                         </Table>
@@ -550,10 +542,7 @@ function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProp
                             <SelectTrigger id="discord-secondary-role">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SpecialtySelectContent
-                                holders={specialtyHolders}
-                                currentSpecialty={null}
-                            />
+                            <SpecialtySelectContent holders={specialtyHolders} currentSpecialty={null} />
                         </Select>
                     </div>
                     <DialogFooter>

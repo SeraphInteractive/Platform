@@ -99,7 +99,10 @@ export class RoleReconciliationService {
                                 await sleep(mutationPacingDelayMs);
                             }
                         } catch (memberErr: unknown) {
-                            this.logger.warn({ err: memberErr, discordId: member.id }, "failed to strip studio roles from unregistered member");
+                            this.logger.warn(
+                                { err: memberErr, discordId: member.id },
+                                "failed to strip studio roles from unregistered member"
+                            );
                             errors.push(`Failed to sync unregistered member <@${member.id}>`);
                         }
                     }

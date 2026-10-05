@@ -22,14 +22,7 @@ export const roleLabels: Readonly<Record<Role, string>> = {
     [Role.SuperAdmin]: "Super admin"
 };
 
-export const rolesByRank: readonly Role[] = [
-    Role.Member,
-    Role.Voter,
-    Role.Contributor,
-    Role.Supervisor,
-    Role.Admin,
-    Role.SuperAdmin
-];
+export const rolesByRank: readonly Role[] = [Role.Member, Role.Voter, Role.Contributor, Role.Supervisor, Role.Admin, Role.SuperAdmin];
 
 export function isGrantable(role: Role): boolean {
     return role !== Role.SuperAdmin;

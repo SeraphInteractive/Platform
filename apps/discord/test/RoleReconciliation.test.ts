@@ -13,7 +13,11 @@ function createMockDiscordRole(id: string, name: string): DiscordRole {
     return { id, name } as unknown as DiscordRole;
 }
 
-function createMockMember(id: string, roleMap: Map<string, DiscordRole>, guildRoles: Map<string, DiscordRole>): {
+function createMockMember(
+    id: string,
+    roleMap: Map<string, DiscordRole>,
+    guildRoles: Map<string, DiscordRole>
+): {
     member: GuildMember;
     added: string[];
     removed: string[];
@@ -108,12 +112,8 @@ describe("syncMemberStudioRoles result details", () => {
     });
 
     it("reports modified = false when member roles already match", async () => {
-        const guildRoles = new Map<string, DiscordRole>([
-            ["1", createMockDiscordRole("1", "Supervisor")]
-        ]);
-        const memberRoles = new Map<string, DiscordRole>([
-            ["1", createMockDiscordRole("1", "Supervisor")]
-        ]);
+        const guildRoles = new Map<string, DiscordRole>([["1", createMockDiscordRole("1", "Supervisor")]]);
+        const memberRoles = new Map<string, DiscordRole>([["1", createMockDiscordRole("1", "Supervisor")]]);
         const { member } = createMockMember("100", memberRoles, guildRoles);
 
         const result = await syncMemberStudioRoles(member, Role.Supervisor, []);
@@ -200,9 +200,7 @@ describe("RoleReconciliationService", () => {
             ["2", createMockDiscordRole("2", "Members")]
         ]);
 
-        const memberRoles = new Map<string, DiscordRole>([
-            ["1", createMockDiscordRole("1", "Supervisor")]
-        ]);
+        const memberRoles = new Map<string, DiscordRole>([["1", createMockDiscordRole("1", "Supervisor")]]);
         const { member } = createMockMember("999888777666555444", memberRoles, guildRoles);
 
         const membersMap = new Map([["999888777666555444", member]]);

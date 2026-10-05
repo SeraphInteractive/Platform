@@ -86,7 +86,9 @@ function TasksSection({ user }: { readonly user: UserDto }): ReactNode {
                         <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between py-4">
                             <div>
                                 <p className="text-sm font-medium">No active task</p>
-                                <p className="text-xs text-muted-foreground">Claim an available task from the grab-box to start contributing.</p>
+                                <p className="text-xs text-muted-foreground">
+                                    Claim an available task from the grab-box to start contributing.
+                                </p>
                             </div>
                             <Button asChild size="sm">
                                 <Link href="/grabbox">
@@ -104,9 +106,7 @@ function TasksSection({ user }: { readonly user: UserDto }): ReactNode {
                                     <span className="font-mono text-xs font-semibold text-primary">{myShots.active.shotCode}</span>
                                     <ShotStatusBadge status={myShots.active.status} />
                                 </div>
-                                <p className="truncate text-base font-semibold text-foreground">
-                                    {myShots.active.title}
-                                </p>
+                                <p className="truncate text-base font-semibold text-foreground">{myShots.active.title}</p>
                                 {myShots.active.deadlineAt !== null && (
                                     <div className="mt-1">
                                         <CountdownTimer targetDate={myShots.active.deadlineAt} prefix="Due in" />
@@ -170,7 +170,12 @@ function UserEntriesSection(): ReactNode {
                         >
                             <div className="relative aspect-video w-full overflow-hidden bg-muted/40 border-b">
                                 {entry.mediaUrl !== null ? (
-                                    <EntryMedia url={entry.mediaUrl} title={entry.title} controls={false} className="size-full object-cover" />
+                                    <EntryMedia
+                                        url={entry.mediaUrl}
+                                        title={entry.title}
+                                        controls={false}
+                                        className="size-full object-cover"
+                                    />
                                 ) : (
                                     <div className="flex size-full flex-col items-center justify-center gap-1 text-muted-foreground/40 bg-muted/20">
                                         <Sparkles className="size-6 stroke-[1.25]" aria-hidden="true" />
@@ -189,9 +194,7 @@ function UserEntriesSection(): ReactNode {
                             <div className="flex flex-1 flex-col p-3 gap-1.5">
                                 {parentRound !== undefined && (
                                     <div className="flex items-center justify-between gap-2 text-xs">
-                                        <span className="truncate font-medium text-primary">
-                                            {parentRound.title}
-                                        </span>
+                                        <span className="truncate font-medium text-primary">{parentRound.title}</span>
                                         <RoundStatusBadge status={parentRound.status} />
                                     </div>
                                 )}
@@ -253,17 +256,17 @@ function ActiveAndUpcomingRoundsSection(): ReactNode {
                                     <CountdownTimer targetDate={round.opensAt} prefix="Opens in" />
                                 )}
                             </div>
-                            <CardTitle className="line-clamp-1 text-base font-semibold mt-2">
-                                {round.title}
-                            </CardTitle>
-                            <CardDescription className="text-xs">
-                                {pollTypeLabels[round.pollType]}
-                            </CardDescription>
+                            <CardTitle className="line-clamp-1 text-base font-semibold mt-2">{round.title}</CardTitle>
+                            <CardDescription className="text-xs">{pollTypeLabels[round.pollType]}</CardDescription>
                         </CardHeader>
                         <CardContent className="pt-0">
                             <Button asChild size="sm" className="w-full">
                                 <Link href={`/voting/${round.id}` as Route}>
-                                    {round.status === RoundStatus.Voting ? "Vote now" : round.status === RoundStatus.Open ? "Propose idea" : "View round"}
+                                    {round.status === RoundStatus.Voting
+                                        ? "Vote now"
+                                        : round.status === RoundStatus.Open
+                                          ? "Propose idea"
+                                          : "View round"}
                                     <ArrowRight className="size-4 ml-1.5" />
                                 </Link>
                             </Button>
@@ -319,4 +322,3 @@ export function MeView(): ReactNode {
         </>
     );
 }
-

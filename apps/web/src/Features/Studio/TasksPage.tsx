@@ -1,6 +1,15 @@
 "use client";
 
-import { DifficultyTier, fieldRules, MediaContentType, problemOf, Role, ShotStatus, textLimits, type ShotDto } from "@platform/contracts";
+import {
+    DifficultyTier,
+    fieldRules,
+    type MediaContentType,
+    problemOf,
+    Role,
+    ShotStatus,
+    textLimits,
+    type ShotDto
+} from "@platform/contracts";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, ImagePlus, MoreHorizontal, Plus, X } from "lucide-react";
 import type { Route } from "next";

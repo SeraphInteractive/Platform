@@ -164,13 +164,7 @@ export class LeaderboardService {
         const expired = await this.database
             .select({ id: votingRounds.id, createdBy: votingRounds.createdBy })
             .from(votingRounds)
-            .where(
-                and(
-                    eq(votingRounds.status, RoundStatus.Voting),
-                    isNotNull(votingRounds.closesAt),
-                    lte(votingRounds.closesAt, now)
-                )
-            );
+            .where(and(eq(votingRounds.status, RoundStatus.Voting), isNotNull(votingRounds.closesAt), lte(votingRounds.closesAt, now)));
 
         const finalizedRoundIds: string[] = [];
         for (const round of expired) {
