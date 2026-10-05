@@ -1,6 +1,6 @@
 # Platform Backend
 
-Community voting rounds, raid telemetry, the shot grab-box production pipeline, the studio Discord bot and the web app.
+Backend for community voting rounds, raid telemetry, the shot grab-box production pipeline and the studio Discord bot.
 
 ## Getting started
 
@@ -10,7 +10,6 @@ cp .env.example .env
 npm run db:migrate
 npm run dev # set LOG_FORMAT=pretty for readable logs
 npm run dev:discord # the Discord bot
-npm run dev:web # the web app
 ```
 
 ## Docker
@@ -18,12 +17,6 @@ npm run dev:web # the web app
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
 ```
-
-## Contributing
-
-We're happy to receive help and contributions! Please read the [contribution policy](/CONTRIBUTING.md).
-
-Please note that while you are allowed to use AI agents in your workflow, it is strictly not allowed to push unreviewed code.
 
 ## License
 

@@ -1,27 +1,30 @@
-import { entrySchema, fieldRules } from "@platform/contracts";
+import { entrySchema } from "@platform/contracts";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { dataEnvelope, errorResponses, pageEnvelope, paginationQuerySchema, toIso, uuidSchema } from "../../Common/Http/Schemas.js";
-import { actorOf, currentUser, optionalUser, requireParticipant, requireRole, requireUser } from "../../Common/Security/Authorization.js";
+import {
+    dataEnvelope,
+    errorResponses,
+    pageEnvelope,
+    paginationQuerySchema,
+    toIso,
+    trimmedText,
+    uuidSchema
+} from "../../Common/Http/Schemas.js";
+import { actorOf, currentUser, optionalUser, requireRole, requireUser } from "../../Common/Security/Authorization.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
 import { EntryStatus } from "../../Domain/Enums.js";
 import { Role } from "../../Domain/Roles.js";
 import type { EntryRecord } from "../../Infrastructure/Database/Schema.js";
 import { StorageBucket, type ObjectStorage } from "../../Infrastructure/Storage/ObjectStorage.js";
-import { toUserSummary } from "../Users/UserPresenter.js";
-import type { EntryWithAuthor } from "./EntriesService.js";
 
 const roundParams = z.object({ roundId: uuidSchema });
 const entryParams = z.object({ roundId: uuidSchema, entryId: uuidSchema });
 const mediaKeySchema = z.string().max(255);
 
-const pitchSchema = fieldRules.entryTitle;
-const descriptionSchema = fieldRules.entryDescription;
-
 export const entriesRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
     const { entriesService, objectStorage } = services;
     const security = [{ bearer: [] }];
-    const present = (entry: EntryWithAuthor | EntryRecord): z.infer<typeof entrySchema> => toEntryResponse(entry, objectStorage);
+    const present = (entry: EntryRecord): z.infer<typeof entrySchema> => toEntryResponse(entry, objectStorage);
 
     application.get(
         "/rounds/:roundId/entries",
@@ -58,7 +61,7 @@ export const entriesRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
     application.post(
         "/rounds/:roundId/entries",
         {
-            preHandler: requireParticipant(Role.Member, services.documentsService),
+            preHandler: requireUser(),
             config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
             schema: {
                 tags: ["Entries"],
@@ -66,8 +69,8 @@ export const entriesRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
                 security,
                 params: roundParams,
                 body: z.object({
-                    title: pitchSchema,
-                    description: descriptionSchema.default(null),
+                    title: trimmedText(255),
+                    description: trimmedText(1500).nullable().default(null),
                     mediaKey: mediaKeySchema.nullable().default(null)
                 }),
                 response: { 201: dataEnvelope(entrySchema), ...errorResponses }
@@ -90,17 +93,15 @@ export const entriesRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
                 params: entryParams,
                 body: z
                     .object({
-                        title: pitchSchema.optional(),
-                        description: descriptionSchema.optional(),
+                        title: trimmedText(255).optional(),
+                        description: trimmedText(1500).nullable().optional(),
                         mediaKey: mediaKeySchema.nullable().optional()
                     })
                     .refine((body) => Object.keys(body).length > 0, "at least one field is required"),
                 response: { 200: dataEnvelope(entrySchema), ...errorResponses }
             }
         },
-        async (request) => ({
-            data: present(await entriesService.update(actorOf(request), request.params.roundId, request.params.entryId, request.body))
-        })
+        async (request) => ({ data: present(await entriesService.update(request.params.roundId, request.params.entryId, request.body)) })
     );
 
     application.patch(
@@ -153,36 +154,13 @@ export const entriesRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
             }
         },
         async (request, reply) => {
-            await entriesService.delete(actorOf(request), request.params.roundId, request.params.entryId);
+            await entriesService.delete(request.params.roundId, request.params.entryId);
             return reply.status(204).send(null);
-        }
-    );
-
-    application.get(
-        "/users/me/entries",
-        {
-            preHandler: requireUser(),
-            schema: {
-                tags: ["Entries"],
-                summary: "List all entries submitted by the authenticated user across rounds.",
-                security,
-                response: { 200: dataEnvelope(z.array(entrySchema)), ...errorResponses }
-            }
-        },
-        async (request) => {
-            const user = currentUser(request);
-            const rows = await entriesService.listByAuthor(user.id);
-            return { data: rows.map(present) };
         }
     );
 };
 
-export function toEntryResponse(
-    item: EntryWithAuthor | EntryRecord,
-    storage: ObjectStorage
-): z.infer<typeof entrySchema> {
-    const entry = "entry" in item ? item.entry : item;
-    const author = "author" in item && item.author !== null ? toUserSummary(item.author) : null;
+export function toEntryResponse(entry: EntryRecord, storage: ObjectStorage): z.infer<typeof entrySchema> {
     return {
         id: entry.id,
         roundId: entry.roundId,
@@ -191,9 +169,7 @@ export function toEntryResponse(
         status: entry.status,
         isQuarantined: entry.isQuarantined,
         mediaUrl: entry.mediaKey === null ? null : storage.getPublicUrl(StorageBucket.Media, entry.mediaKey),
-        aiFlags: entry.aiFlags ?? [],
         submittedBy: entry.submittedBy,
-        author,
         createdAt: toIso(entry.createdAt),
         updatedAt: toIso(entry.updatedAt)
     };

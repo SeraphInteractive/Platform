@@ -4,7 +4,6 @@ import { ShotStatus, enumValues, notificationStreamIdPattern } from "@platform/c
 import { z } from "zod";
 
 export enum ChannelPurpose {
-    Rules = "rules",
     Announcements = "announcements",
     Telemetry = "telemetry",
     TaskLogs = "taskLogs",
@@ -13,8 +12,7 @@ export enum ChannelPurpose {
 }
 
 export enum BoundRole {
-    Member = "member",
-    Voter = "voter",
+    Observer = "observer",
     Contributor = "contributor"
 }
 

@@ -1,40 +1,27 @@
-import { fieldRules, specialtyHoldersSchema } from "@platform/contracts";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { NotFoundError } from "../../Common/Errors/ApplicationError.js";
 import {
     dataEnvelope,
     errorResponses,
     pageEnvelope,
     paginationQuerySchema,
     snowflakeSchema,
+    trimmedText,
     uuidSchema
 } from "../../Common/Http/Schemas.js";
-import {
-    actorOf,
-    currentUser,
-    requireRole,
-    requireRoleOrService,
-    requireService,
-    requireUser
-} from "../../Common/Security/Authorization.js";
+import { actorOf, requireRole, requireRoleOrService, requireService, requireUser } from "../../Common/Security/Authorization.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
-import { maximumSpecialties, Role, selfSelectableSpecialties, Specialty } from "../../Domain/Roles.js";
+import { maximumSpecialties, Role, Specialty } from "../../Domain/Roles.js";
 import { PresenceStatus } from "../../Infrastructure/Discord/PresenceProvider.js";
 import { moderatedUserSchema, toModeratedUserResponse, toUserResponse, userSchema } from "./UserPresenter.js";
 import type { UserReference } from "./UsersService.js";
 
 const roleChangeSchema = z.object({
     role: z.enum(Role),
-    specialties: z.array(z.enum(Specialty)).max(maximumSpecialties).optional(),
-    transfer: z.boolean().optional()
+    specialties: z.array(z.enum(Specialty)).max(maximumSpecialties).optional()
 });
 
-const ownSpecialtiesSchema = z.object({
-    specialties: z.array(z.enum(selfSelectableSpecialties)).max(maximumSpecialties)
-});
-
-const blacklistSchema = z.object({ reason: fieldRules.reason.default(null) });
+const blacklistSchema = z.object({ reason: trimmedText(500).nullable().default(null) });
 
 const userIdParams = z.object({ userId: uuidSchema });
 const discordIdParams = z.object({ discordId: snowflakeSchema });
@@ -44,14 +31,13 @@ export const usersRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
     const security = [{ bearer: [] }];
     const staff = requireRole(Role.Supervisor);
     const staffOrService = requireRoleOrService(Role.Supervisor);
-    const moderatorOrService = requireRoleOrService(Role.Moderator);
     const byId = (params: { userId: string }): UserReference => ({ kind: "id", id: params.userId });
     const byDiscord = (params: { discordId: string }): UserReference => ({ kind: "discord", discordId: params.discordId });
 
     application.get(
         "/users",
         {
-            preHandler: moderatorOrService,
+            preHandler: requireRole(Role.Moderator),
             schema: {
                 tags: ["Users"],
                 summary: "List registered users.",
@@ -64,52 +50,6 @@ export const usersRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
             const page = await usersService.list(request.query);
             return { data: page.data.map(toModeratedUserResponse), meta: page.meta };
         }
-    );
-
-    application.get(
-        "/users/specialty-holders",
-        {
-            preHandler: moderatorOrService,
-            schema: {
-                tags: ["Users"],
-                summary: "List current holders of exclusive supervisor and admin specialties.",
-                security,
-                response: { 200: dataEnvelope(specialtyHoldersSchema), ...errorResponses }
-            }
-        },
-        async () => ({ data: await usersService.getSpecialtyHolders() })
-    );
-
-    application.put(
-        "/users/me/terms",
-        {
-            preHandler: requireUser(),
-            schema: {
-                tags: ["Users"],
-                summary: "Accept the current terms of service and privacy policy.",
-                security,
-                body: z.object({ version: z.string().min(1).max(32) }),
-                response: { 200: dataEnvelope(userSchema), ...errorResponses }
-            }
-        },
-        async (request) => ({ data: toUserResponse(await usersService.acceptTerms(currentUser(request).id, request.body.version)) })
-    );
-
-    application.put(
-        "/users/me/specialties",
-        {
-            preHandler: requireUser(),
-            schema: {
-                tags: ["Users"],
-                summary: "Choose your own specialties and complete onboarding.",
-                security,
-                body: ownSpecialtiesSchema,
-                response: { 200: dataEnvelope(userSchema), ...errorResponses }
-            }
-        },
-        async (request) => ({
-            data: toUserResponse(await usersService.chooseOwnSpecialties(currentUser(request).id, request.body.specialties))
-        })
     );
 
     application.get(
@@ -171,7 +111,7 @@ export const usersRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
                 summary: "Set a user's role by Discord ID, creating the user if needed.",
                 security,
                 params: discordIdParams,
-                body: roleChangeSchema.extend({ discordUsername: fieldRules.username.optional() }),
+                body: roleChangeSchema.extend({ discordUsername: trimmedText(64).optional() }),
                 response: { 200: dataEnvelope(userSchema), ...errorResponses }
             }
         },
@@ -218,27 +158,6 @@ export const usersRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
         }
     );
 
-    application.get(
-        "/users/by-discord/:discordId",
-        {
-            preHandler: staffOrService,
-            schema: {
-                tags: ["Users"],
-                summary: "Get a user by Discord ID.",
-                security,
-                params: discordIdParams,
-                response: { 200: dataEnvelope(moderatedUserSchema), ...errorResponses }
-            }
-        },
-        async (request) => {
-            const user = await usersService.findByDiscordId(request.params.discordId);
-            if (user === null) {
-                throw new NotFoundError("User");
-            }
-            return { data: toModeratedUserResponse(user) };
-        }
-    );
-
     application.put(
         "/users/by-discord/:discordId/profile",
         {
@@ -249,7 +168,7 @@ export const usersRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
                 security,
                 params: discordIdParams,
                 body: z.object({
-                    username: fieldRules.username,
+                    username: trimmedText(64),
                     avatar: z
                         .string()
                         .regex(/^(?:a_)?[a-f0-9]{32}$/u)

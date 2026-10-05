@@ -45,7 +45,7 @@ export const users = pgTable(
         discordId: varchar("discord_id", { length: 20 }).notNull().unique(),
         discordUsername: varchar("discord_username", { length: 64 }).notNull(),
         discordAvatar: varchar("discord_avatar", { length: 64 }),
-        role: roleEnum("role").notNull(),
+        role: roleEnum("role").notNull().default(Role.Voter),
         specialties: specialtyEnum("specialties")
             .array()
             .notNull()
@@ -53,16 +53,11 @@ export const users = pgTable(
         isBlacklisted: boolean("is_blacklisted").notNull().default(false),
         blacklistReason: varchar("blacklist_reason", { length: 500 }),
         blacklistedAt: timestamp("blacklisted_at", { withTimezone: true }),
-        onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
-        termsVersion: varchar("terms_version", { length: 32 }),
-        termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
-        verifiedEmailHash: varchar("verified_email_hash", { length: 64 }).unique(),
-        emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
         ...timestamps
     },
     (table) => [
         index("users_created_at_idx").on(table.createdAt),
-        check("users_specialties_limit", sql`cardinality(${table.specialties}) <= 3`)
+        check("users_specialties_limit", sql`cardinality(${table.specialties}) <= 2`)
     ]
 );
 
@@ -114,7 +109,6 @@ export const entries = pgTable(
         status: entryStatusEnum("status").notNull().default(EntryStatus.PendingReview),
         mediaKey: varchar("media_key", { length: 255 }),
         isQuarantined: boolean("is_quarantined").notNull().default(false),
-        aiFlags: jsonb("ai_flags").$type<string[]>().notNull().default([]),
         ...timestamps
     },
     (table) => [index("entries_round_status_idx").on(table.roundId, table.status, table.createdAt)]
@@ -209,10 +203,6 @@ export const shots = pgTable(
         claimedAt: timestamp("claimed_at", { withTimezone: true }),
         deadlineAt: timestamp("deadline_at", { withTimezone: true }),
         seniorPriorityUntil: timestamp("senior_priority_until", { withTimezone: true }),
-        imageKeys: text("image_keys")
-            .array()
-            .notNull()
-            .default(sql`'{}'`),
         ...timestamps
     },
     (table) => [
@@ -225,7 +215,6 @@ export const shots = pgTable(
             .on(table.claimedBy)
             .where(sql`${table.status} IN ('claimed', 'submitted')`),
         check("shots_scene_number_positive", sql`${table.sceneNumber} > 0`),
-        check("shots_image_keys_limit", sql`cardinality(${table.imageKeys}) <= 4`),
         check(
             "shots_active_claim_consistency",
             sql`${table.status} NOT IN ('claimed', 'submitted') OR (${table.claimedBy} IS NOT NULL AND ${table.claimedAt} IS NOT NULL)`
@@ -251,7 +240,6 @@ export const submissions = pgTable(
         supervisorNotes: varchar("supervisor_notes", { length: 2000 }),
         reviewedBy: uuid("reviewed_by").references(() => users.id, { onDelete: "set null" }),
         reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
-        aiFlags: jsonb("ai_flags").$type<string[]>().notNull().default([]),
         ...timestamps
     },
     (table) => [
@@ -269,75 +257,7 @@ export const shotThreadMaps = pgTable("shot_thread_maps", {
     ...timestamps
 });
 
-export const pipelineProgress = pgTable(
-    "pipeline_progress",
-    {
-        id: integer("id").primaryKey().default(1),
-        stepIndex: integer("step_index").notNull(),
-        stepId: varchar("step_id", { length: 32 }).notNull(),
-        stepTitle: varchar("step_title", { length: 128 }).notNull(),
-        phaseNumber: integer("phase_number").notNull(),
-        phaseTitle: varchar("phase_title", { length: 128 }).notNull(),
-        progressPercent: doublePrecision("progress_percent").notNull(),
-        isPhaseTransition: boolean("is_phase_transition").notNull(),
-        updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
-        ...timestamps
-    },
-    (table) => [
-        check("pipeline_progress_singleton", sql`${table.id} = 1`),
-        check("pipeline_progress_percent_range", sql`${table.progressPercent} BETWEEN 0 AND 100`)
-    ]
-);
-
-export interface StoredDocumentSection {
-    readonly id: string;
-    readonly title: string;
-    readonly html: string;
-}
-
-export const documents = pgTable("documents", {
-    slug: varchar("slug", { length: 32 }).primaryKey(),
-    title: varchar("title", { length: 200 }).notNull(),
-    sections: jsonb("sections").$type<StoredDocumentSection[]>().notNull(),
-    revision: integer("revision").notNull(),
-    acceptanceVersion: varchar("acceptance_version", { length: 32 }),
-    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
-    ...timestamps
-});
-
-export const documentRevisions = pgTable(
-    "document_revisions",
-    {
-        id: uuid("id").primaryKey().defaultRandom(),
-        slug: varchar("slug", { length: 32 })
-            .notNull()
-            .references(() => documents.slug, { onDelete: "cascade" }),
-        revision: integer("revision").notNull(),
-        title: varchar("title", { length: 200 }).notNull(),
-        sections: jsonb("sections").$type<StoredDocumentSection[]>().notNull(),
-        requiresReacceptance: boolean("requires_reacceptance").notNull().default(false),
-        note: varchar("note", { length: 500 }),
-        authorId: uuid("author_id").references(() => users.id, { onDelete: "set null" }),
-        createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
-    },
-    (table) => [uniqueIndex("document_revisions_slug_revision").on(table.slug, table.revision)]
-);
-
-export const deletedStorageObjects = pgTable(
-    "deleted_storage_objects",
-    {
-        id: uuid("id").primaryKey().defaultRandom(),
-        bucket: varchar("bucket", { length: 32 }).notNull(),
-        objectKey: varchar("object_key", { length: 512 }).notNull(),
-        scheduledDeleteAt: timestamp("scheduled_delete_at", { withTimezone: true }).notNull(),
-        createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
-    },
-    (table) => [index("deleted_storage_objects_scheduled_idx").on(table.scheduledDeleteAt)]
-);
-
 export type UserRecord = typeof users.$inferSelect;
-export type DocumentRecord = typeof documents.$inferSelect;
-export type DocumentRevisionRecord = typeof documentRevisions.$inferSelect;
 export type VotingRoundRecord = typeof votingRounds.$inferSelect;
 export type EntryRecord = typeof entries.$inferSelect;
 export type BallotRecord = typeof ballots.$inferSelect;
@@ -346,5 +266,3 @@ export type RoundResultRecord = typeof roundResults.$inferSelect;
 export type ShotRecord = typeof shots.$inferSelect;
 export type SubmissionRecord = typeof submissions.$inferSelect;
 export type ShotThreadMapRecord = typeof shotThreadMaps.$inferSelect;
-export type PipelineProgressRecord = typeof pipelineProgress.$inferSelect;
-export type DeletedStorageObjectRecord = typeof deletedStorageObjects.$inferSelect;

@@ -6,8 +6,6 @@ export interface AuthenticatedUser {
     readonly discordUsername: string;
     readonly role: Role;
     readonly isBlacklisted: boolean;
-    readonly termsVersion: string | null;
-    readonly isVerified: boolean;
 }
 
 export interface UserPrincipal {

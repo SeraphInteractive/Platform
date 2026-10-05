@@ -26,7 +26,6 @@ export function referenceOf(shot: Pick<ShotDto, "id" | "shotCode" | "title" | "s
 export class TaskForum {
     private readonly threadsByShot = new Map<string, string>();
     private readonly shotsByThread = new Map<string, string>();
-    private readonly pendingThreads = new Map<string, Promise<string | null>>();
 
     public constructor(
         private readonly client: Client,
@@ -37,13 +36,8 @@ export class TaskForum {
     ) {}
 
     public async load(): Promise<void> {
-        try {
-            const maps = await this.api.listThreadMaps();
-            for (const map of maps) {
-                this.remember(map.shotId, map.discordThreadId);
-            }
-        } catch (error: unknown) {
-            this.logger.warn({ err: error }, "failed to load task thread bindings");
+        for (const map of await this.api.listThreadMaps()) {
+            this.remember(map.shotId, map.discordThreadId);
         }
     }
 
@@ -55,20 +49,6 @@ export class TaskForum {
         return this.shotsByThread.get(threadId);
     }
 
-    public async resolveShotFor(threadId: string): Promise<string | undefined> {
-        const cached = this.shotsByThread.get(threadId);
-        if (cached !== undefined) {
-            return cached;
-        }
-        // fall back to the persisted binding when the cache is cold
-        const remote = await this.api.getThreadMapByThread(threadId);
-        if (remote !== null) {
-            this.remember(remote.shotId, remote.discordThreadId);
-            return remote.shotId;
-        }
-        return undefined;
-    }
-
     public async forum(): Promise<ForumChannel | null> {
         const id = this.settings.channel(ChannelPurpose.TaskForum);
         if (id === undefined) {
@@ -78,22 +58,7 @@ export class TaskForum {
         return channel !== null && channel.type === ChannelType.GuildForum && channel.guildId === this.guildId ? channel : null;
     }
 
-    public ensureThread(shot: ShotReference, description: string | null, status: ShotStatus): Promise<string | null> {
-        const inFlight = this.pendingThreads.get(shot.id);
-        if (inFlight !== undefined) {
-            return inFlight;
-        }
-        const creation = this.createThread(shot, description, status).finally(() => this.pendingThreads.delete(shot.id));
-        this.pendingThreads.set(shot.id, creation);
-        return creation;
-    }
-
-    public async ensureThreadFor(shotId: string): Promise<string | null> {
-        const shot = await this.api.getShot(shotId);
-        return this.ensureThread(referenceOf(shot), shot.description, shot.status);
-    }
-
-    private async createThread(shot: ShotReference, description: string | null, status: ShotStatus): Promise<string | null> {
+    public async ensureThread(shot: ShotReference, description: string | null, status: ShotStatus): Promise<string | null> {
         const existing = await this.thread(shot.id);
         if (existing !== null) {
             return existing.id;
@@ -148,62 +113,15 @@ export class TaskForum {
         await thread.send(content);
     }
 
-    public async remove(target: string | ShotReference): Promise<void> {
-        const shotId = typeof target === "string" ? target : target.id;
-        const shotCode = typeof target === "string" ? undefined : target.code;
-        let thread = await this.thread(shotId);
-
-        // search forum if binding is missing from memory cache
-        if (thread === null && shotCode !== undefined) {
-            const forum = await this.forum();
-            if (forum !== null) {
-                const active = await forum.threads.fetchActive().catch(() => null);
-                if (active !== null) {
-                    for (const [, t] of active.threads) {
-                        if (
-                            t.parentId === forum.id &&
-                            (t.name === shotCode || t.name.startsWith(`${shotCode} - `) || t.name.startsWith(`${shotCode}: `))
-                        ) {
-                            thread = t;
-                            break;
-                        }
-                    }
-                }
-                if (thread === null) {
-                    const archived = await forum.threads.fetchArchived({ limit: 100 }).catch(() => null);
-                    if (archived !== null) {
-                        for (const [, t] of archived.threads) {
-                            if (
-                                t.parentId === forum.id &&
-                                (t.name === shotCode || t.name.startsWith(`${shotCode} - `) || t.name.startsWith(`${shotCode}: `))
-                            ) {
-                                thread = t;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
+    public async remove(shotId: string): Promise<void> {
+        const thread = await this.thread(shotId);
         if (thread !== null) {
-            try {
-                await thread.delete("Task deleted");
-            } catch (error: unknown) {
-                this.logger.warn({ err: error, threadId: thread.id }, "failed to delete thread, falling back to lock and archive");
-                // fallback to lock and archive when delete fails (e.g. missing permissions)
-                await thread.setLocked(true, "Task deleted").catch(() => undefined);
-                await thread.setArchived(true, "Task deleted").catch(() => undefined);
-            }
+            await thread.delete("Task deleted");
         }
-
         const threadId = this.threadsByShot.get(shotId);
         this.threadsByShot.delete(shotId);
         if (threadId !== undefined) {
             this.shotsByThread.delete(threadId);
-        }
-        if (thread !== null) {
-            this.shotsByThread.delete(thread.id);
         }
         await this.api.unbindThread(shotId).catch((error: unknown) => {
             this.logger.warn({ err: error, shotId }, "failed to unbind thread");
@@ -233,11 +151,9 @@ export class TaskForum {
                 }
                 known.add(existing.id);
                 const tag = this.settings.forumTag(shot.status);
-                const shouldBeLocked = shot.status === ShotStatus.Approved;
                 const stale =
                     existing.name !== this.threadName(reference) ||
-                    (tag !== undefined && (existing.appliedTags.length !== 1 || existing.appliedTags[0] !== tag)) ||
-                    existing.locked !== shouldBeLocked;
+                    (tag !== undefined && (existing.appliedTags.length !== 1 || existing.appliedTags[0] !== tag));
                 if (stale) {
                     await this.rename(reference);
                     await this.setStatus(shot.id, shot.status);
@@ -286,6 +202,6 @@ export class TaskForum {
     }
 
     private threadName(shot: ShotReference): string {
-        return `${shot.code} - ${shot.title}`.slice(0, 100);
+        return `${shot.code} · ${shot.title}`.slice(0, 100);
     }
 }

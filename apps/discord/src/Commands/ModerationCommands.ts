@@ -2,7 +2,7 @@ import { Role, type Specialty } from "@platform/contracts";
 import { MessageFlags, SlashCommandBuilder, type ChatInputCommandInteraction, type GuildMember } from "discord.js";
 import { asEdit, ephemeral, message, panel, plain } from "../Discord/Ui.js";
 import { findStudioRole, isLeadership, platformRoleFor } from "../Services/StudioRoles.js";
-import { actingAs, requirePlatformRole, UserFacingError, type BotContext, type SlashCommand } from "./Command.js";
+import { actingAs, UserFacingError, type BotContext, type SlashCommand } from "./Command.js";
 
 export const blacklistCommand: SlashCommand = {
     definition: new SlashCommandBuilder()
@@ -25,7 +25,6 @@ export const blacklistCommand: SlashCommand = {
             throw new UserFacingError("Pick a member or give a valid Discord ID.");
         }
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        await requirePlatformRole(interaction, context, Role.Supervisor);
         const api = actingAs(interaction, context);
         const ban = interaction.options.getString("action", true) === "ban";
         const user = ban ? await api.blacklist(target, interaction.options.getString("reason")) : await api.reinstate(target);
@@ -65,10 +64,8 @@ export const assignRoleCommand: SlashCommand = {
         const api = actingAs(interaction, context);
         const reason = `${interaction.options.getString("reason") ?? "Assigned with /assign-role"} (by ${interaction.user.username})`;
 
-        const specialtiesOf = (holder: GuildMember, extra?: Specialty, excludeRoleId?: string): Specialty[] => {
-            // exclude role being stripped from specialty list
+        const specialtiesOf = (holder: GuildMember, extra?: Specialty): Specialty[] => {
             const specialties = holder.roles.cache
-                .filter((held) => held.id !== excludeRoleId)
                 .map((held) => findStudioRole(held.name)?.specialty)
                 .filter((value): value is Specialty => value !== undefined);
             return [...new Set(extra === undefined ? specialties : [extra, ...specialties])].slice(0, 2);
@@ -85,12 +82,7 @@ export const assignRoleCommand: SlashCommand = {
                     (held) => held.id !== role.id && isLeadership(findStudioRole(held.name)?.tier ?? 3)
                 );
                 if (!keepsLeadership) {
-                    await api.setRole(
-                        holder.id,
-                        Role.Contributor,
-                        specialtiesOf(holder, undefined, role.id),
-                        holder.user.globalName ?? holder.user.username
-                    );
+                    await api.setRole(holder.id, Role.Contributor, specialtiesOf(holder), holder.user.globalName ?? holder.user.username);
                 }
                 previous.push(holder);
             }

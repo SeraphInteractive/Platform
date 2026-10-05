@@ -44,7 +44,6 @@ export interface DiscordConfiguration {
 }
 
 export interface RoleAssignmentConfiguration {
-    readonly superAdmins: readonly string[];
     readonly admins: readonly string[];
     readonly supervisors: readonly string[];
     readonly moderators: readonly string[];
@@ -63,15 +62,6 @@ export interface StorageConfiguration {
     readonly deliverableMaxBytes: number;
 }
 
-export interface EmailConfiguration {
-    readonly resendApiKey: string | undefined;
-    readonly from: string | undefined;
-}
-
-export interface VerificationConfiguration {
-    readonly turnstileSecretKey: string | undefined;
-}
-
 export interface ApplicationConfiguration {
     readonly environment: RuntimeEnvironment;
     readonly server: ServerConfiguration;
@@ -81,8 +71,6 @@ export interface ApplicationConfiguration {
     readonly discord: DiscordConfiguration;
     readonly roleAssignments: RoleAssignmentConfiguration;
     readonly storage: StorageConfiguration;
-    readonly email: EmailConfiguration;
-    readonly verification: VerificationConfiguration;
 }
 
 export function createConfiguration(environment: Environment): ApplicationConfiguration {
@@ -125,7 +113,6 @@ export function createConfiguration(environment: Environment): ApplicationConfig
             redirectUri: environment.DISCORD_REDIRECT_URI
         },
         roleAssignments: {
-            superAdmins: environment.SUPER_ADMIN_DISCORD_IDS,
             admins: environment.ADMIN_DISCORD_IDS,
             supervisors: environment.SUPERVISOR_DISCORD_IDS,
             moderators: environment.MODERATOR_DISCORD_IDS,
@@ -141,13 +128,6 @@ export function createConfiguration(environment: Environment): ApplicationConfig
             mediaPublicUrl: environment.S3_MEDIA_PUBLIC_URL,
             mediaMaxBytes: environment.MEDIA_MAX_BYTES,
             deliverableMaxBytes: environment.DELIVERABLE_MAX_BYTES
-        },
-        email: {
-            resendApiKey: environment.RESEND_API_KEY,
-            from: environment.EMAIL_FROM
-        },
-        verification: {
-            turnstileSecretKey: environment.TURNSTILE_SECRET_KEY
         }
     };
 }

@@ -1,11 +1,6 @@
 import type { FastifyBaseLogger } from "fastify";
 import { Redis, type RedisOptions } from "ioredis";
 import type { ApplicationConfiguration } from "../Configuration/ApplicationConfiguration.js";
-import { DisabledCaptchaVerifier, TurnstileVerifier } from "../Infrastructure/Captcha/TurnstileVerifier.js";
-import type { EmailSender } from "../Infrastructure/Email/EmailSender.js";
-import { LogEmailSender } from "../Infrastructure/Email/LogEmailSender.js";
-import { DnsMailDomainChecker } from "../Infrastructure/Email/MailDomainChecker.js";
-import { ResendEmailSender } from "../Infrastructure/Email/ResendEmailSender.js";
 import { RedisKeyValueStore } from "../Infrastructure/Cache/RedisKeyValueStore.js";
 import { createPostgresConnection } from "../Infrastructure/Database/Database.js";
 import { HttpDiscordOAuthClient } from "../Infrastructure/Discord/DiscordOAuthClient.js";
@@ -15,11 +10,6 @@ import { StreamNotifier } from "../Infrastructure/Notifications/NotificationLog.
 import { RedisNotificationLog } from "../Infrastructure/Notifications/RedisNotificationLog.js";
 import { S3ObjectStorage } from "../Infrastructure/Storage/S3ObjectStorage.js";
 import type { Infrastructure } from "./ServiceContainer.js";
-
-function createEmailSender(configuration: ApplicationConfiguration, logger: FastifyBaseLogger): EmailSender {
-    const resend = new ResendEmailSender(configuration.email);
-    return resend.isEnabled() || configuration.environment === "production" ? resend : new LogEmailSender(logger);
-}
 
 export function createProductionInfrastructure(configuration: ApplicationConfiguration, logger: FastifyBaseLogger): Infrastructure {
     const connection = createPostgresConnection(configuration.database);
@@ -62,16 +52,6 @@ export function createProductionInfrastructure(configuration: ApplicationConfigu
         notifier: new StreamNotifier(notificationLog, logger),
         notificationLog,
         rateLimitRedis: redis,
-        emailSender: createEmailSender(configuration, logger),
-        captchaVerifier:
-            configuration.verification.turnstileSecretKey === undefined
-                ? new DisabledCaptchaVerifier()
-                : new TurnstileVerifier(
-                      configuration.verification.turnstileSecretKey,
-                      configuration.security.corsOrigins.map((origin) => new URL(origin).hostname),
-                      logger
-                  ),
-        mailDomainChecker: new DnsMailDomainChecker(),
         dispose: async (): Promise<void> => {
             await eventBus.close();
             await redis.quit();

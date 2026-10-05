@@ -28,9 +28,6 @@ export function toUserResponse(user: UserRecord): UserDto {
         role: user.role,
         specialties: user.specialties,
         isBlacklisted: user.isBlacklisted,
-        isOnboarded: user.onboardedAt !== null,
-        termsVersion: user.termsVersion,
-        isVerified: user.emailVerifiedAt !== null,
         createdAt: toIso(user.createdAt)
     };
 }
@@ -43,15 +40,10 @@ export function toModeratedUserResponse(user: UserRecord): ModeratedUserDto {
     };
 }
 
-export function toUserSummary(user: {
-    readonly id: string;
-    readonly discordId: string | null;
-    readonly discordUsername: string;
-    readonly discordAvatar: string | null;
-}): UserSummaryDto {
+export function toUserSummary(user: Pick<UserRecord, "id" | "discordId" | "discordUsername" | "discordAvatar">): UserSummaryDto {
     return {
         id: user.id,
         username: user.discordUsername,
-        avatarUrl: user.discordId !== null ? avatarUrlOf(user.discordId, user.discordAvatar) : null
+        avatarUrl: avatarUrlOf(user.discordId, user.discordAvatar)
     };
 }

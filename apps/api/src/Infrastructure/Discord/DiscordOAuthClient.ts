@@ -52,7 +52,7 @@ export class HttpDiscordOAuthClient implements DiscordOAuthClient {
             response_type: "code",
             scope: "identify",
             state,
-            prompt: "consent"
+            prompt: "none"
         }).toString();
         return url.toString();
     }

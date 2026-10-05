@@ -110,7 +110,7 @@ export const roundsCommand: SlashCommand = {
                 .setDescription("Only show rounds with this status")
                 .addChoices(
                     { name: "Open", value: RoundStatus.Open },
-                    { name: "Voting", value: RoundStatus.Voting },
+                    { name: "Closed", value: RoundStatus.Closed },
                     { name: "Finalized", value: RoundStatus.Finalized },
                     { name: "Draft", value: RoundStatus.Draft }
                 )
