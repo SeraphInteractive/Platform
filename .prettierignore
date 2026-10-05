@@ -6,3 +6,4 @@ package-lock.json
 LICENSE
 .next
 next-env.d.ts
+AGENTS.md
