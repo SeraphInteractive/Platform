@@ -4,5 +4,3 @@ coverage
 apps/api/drizzle
 package-lock.json
 LICENSE
-.next
-next-env.d.ts

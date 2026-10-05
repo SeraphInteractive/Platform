@@ -45,7 +45,7 @@ export enum RoundView {
 const statusLabels: Readonly<Record<RoundStatus, string>> = {
     [RoundStatus.Draft]: "Draft",
     [RoundStatus.Open]: "Open",
-    [RoundStatus.Voting]: "Voting",
+    [RoundStatus.Closed]: "Closed",
     [RoundStatus.Finalized]: "Finalized"
 };
 
@@ -54,11 +54,8 @@ function pollLabel(pollType: PollType): string {
 }
 
 function schedule(round: RoundDto): string {
-    if (round.status === RoundStatus.Voting && round.closesAt !== null) {
-        return `closes ${when(round.closesAt)}`;
-    }
     if (round.status === RoundStatus.Open && round.closesAt !== null) {
-        return `submissions close ${when(round.closesAt)}`;
+        return `closes ${when(round.closesAt)}`;
     }
     if (round.status === RoundStatus.Draft && round.opensAt !== null) {
         return `opens ${when(round.opensAt)}`;
@@ -68,10 +65,8 @@ function schedule(round: RoundDto): string {
 
 export function sortRounds(rounds: readonly RoundDto[]): RoundDto[] {
     return [...rounds].sort((a, b) => {
-        const aActive = a.status === RoundStatus.Voting || a.status === RoundStatus.Open;
-        const bActive = b.status === RoundStatus.Voting || b.status === RoundStatus.Open;
-        if (aActive !== bActive) {
-            return aActive ? -1 : 1;
+        if ((a.status === RoundStatus.Open) !== (b.status === RoundStatus.Open)) {
+            return a.status === RoundStatus.Open ? -1 : 1;
         }
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
@@ -84,7 +79,7 @@ export function roundList(rounds: readonly RoundDto[]): V2Message {
     const shown = sortRounds(rounds).slice(0, 15);
     const lines = shown.map((round) => {
         const suffix = schedule(round);
-        return `**${plain(round.title, 100)}**\n-# ${statusLabels[round.status]}, ${pollLabel(round.pollType)}${suffix.length > 0 ? `, ${suffix}` : ""}`;
+        return `**${plain(round.title, 100)}**\n-# ${statusLabels[round.status]} · ${pollLabel(round.pollType)}${suffix.length > 0 ? ` · ${suffix}` : ""}`;
     });
     const more = rounds.length > shown.length ? `\n-# and ${rounds.length - shown.length} more` : "";
     return message(panel(null, "## Rounds", divider(), lines.join("\n\n") + more));
@@ -99,7 +94,7 @@ export function roundSelect(action: RoundView, rounds: readonly RoundDto[], prom
                 .slice(0, 25)
                 .map((round) => ({
                     label: truncate(round.title, 90),
-                    description: `${statusLabels[round.status]}, ${pollLabel(round.pollType)}`,
+                    description: `${statusLabels[round.status]} · ${pollLabel(round.pollType)}`,
                     value: round.id
                 }))
         );
@@ -113,9 +108,9 @@ export function roundDetail(round: RoundDetailDto, webAppUrl: string): V2Message
     ].filter((line): line is string => line !== null);
     const lines = [
         `## ${plain(round.title, 200)}`,
-        `${statusLabels[round.status]}, ${pollLabel(round.pollType)}${round.isAcceptingVotes ? ", accepting votes" : ""}`,
+        `${statusLabels[round.status]} · ${pollLabel(round.pollType)}${round.isAcceptingVotes ? " · accepting votes" : ""}`,
         ...times,
-        `${pluralize(round.eligibleEntryCount, "entry", "entries")}, ${pluralize(round.ballotCount, "ballot")}`,
+        `${pluralize(round.eligibleEntryCount, "entry", "entries")} · ${pluralize(round.ballotCount, "ballot")}`,
         ...round.warnings.map((warning) => `-# ${plain(warning, 200)}`)
     ];
     const components = round.isAcceptingVotes ? [buttons(linkButton("Vote on the web", `${webAppUrl}/studio`))] : [];
@@ -131,7 +126,7 @@ export function entryPage(round: RoundDetailDto, entries: readonly EntryDto[], i
     const blocks = [
         `## ${plain(entry.title, 200)}`,
         entry.description === null ? "-# No description" : plain(entry.description, 1500),
-        `-# ${plain(round.title, 100)}, entry ${index + 1} of ${entries.length}, submitted ${when(entry.createdAt)}${status === null ? "" : `, ${status}`}`
+        `-# ${plain(round.title, 100)} · entry ${index + 1} of ${entries.length} · submitted ${when(entry.createdAt)}${status === null ? "" : ` · ${status}`}`
     ].join("\n");
     const media = entry.mediaUrl !== null && /\.(png|jpe?g|gif|webp)$/iu.test(entry.mediaUrl) ? [image(entry.mediaUrl, entry.title)] : [];
     const navigation = buttons(
@@ -148,7 +143,7 @@ export function entryPage(round: RoundDetailDto, entries: readonly EntryDto[], i
 
 function standingLine(item: LeaderboardItemDto, pollType: PollType): string {
     if (pollType === PollType.Binary) {
-        return `${item.position}. **${plain(item.title, 100)}** ${item.voteSharePercentage.toFixed(1)}%, ${pluralize(item.rawScore, "vote")}`;
+        return `${item.position}. **${plain(item.title, 100)}** ${item.voteSharePercentage.toFixed(1)}% · ${pluralize(item.rawScore, "vote")}`;
     }
     const points = (item.regularizedTotalScore ?? item.rawScore).toFixed(1);
     const counts = item.rankCounts.map((count, position) => `${count}× ${["1st", "2nd", "3rd"][position] ?? ""}`).join(", ");
@@ -160,7 +155,7 @@ export function leaderboard(round: RoundDto, board: LeaderboardDto): V2Message {
         return message(panel(null, `## ${plain(round.title)}`, "No votes yet."));
     }
     const lines = board.items.slice(0, 10).map((item) => standingLine(item, board.pollType));
-    const footer = `-# ${pluralize(board.totalBallots, "ballot")}, updated ${when(board.computedAt)}${board.isConserved ? "" : ", point totals don't add up, check the audit"}`;
+    const footer = `-# ${pluralize(board.totalBallots, "ballot")} · updated ${when(board.computedAt)}${board.isConserved ? "" : " · point totals don't add up, check the audit"}`;
     return message(panel(null, `## ${plain(round.title)}`, lines.join("\n"), footer));
 }
 
@@ -181,7 +176,7 @@ export function results(round: RoundDto, result: RoundResultDto): V2Message {
                 `## ${plain(round.title)}: results`,
                 standings.join("\n"),
                 verdict,
-                `-# ${pluralize(result.totalBallots, "ballot")}, finalized ${when(result.finalizedAt, "D")}`
+                `-# ${pluralize(result.totalBallots, "ballot")} · finalized ${when(result.finalizedAt, "D")}`
             ]
                 .filter((line): line is string => line !== null)
                 .join("\n")
@@ -210,7 +205,7 @@ export function telemetry(round: RoundDto, snapshots: readonly RaidTelemetryDto[
                 : snapshot.severity === RaidSeverity.Suspicious
                   ? "suspicious"
                   : "critical";
-        return `**${plain(titles.get(snapshot.entryId) ?? "Unknown entry", 100)}** ${state}\n-# ${flags.length > 0 ? flags.join(", ") : "no anomalies"}, velocity ${snapshot.velocityZScore.toFixed(1)}σ`;
+        return `**${plain(titles.get(snapshot.entryId) ?? "Unknown entry", 100)}** ${state}\n-# ${flags.length > 0 ? flags.join(", ") : "no anomalies"} · velocity ${snapshot.velocityZScore.toFixed(1)}σ`;
     });
     const worst = ordered[0]?.severity ?? RaidSeverity.Normal;
     const accent = worst === RaidSeverity.CriticalRaid ? Accent.Danger : worst === RaidSeverity.Suspicious ? Accent.Warning : null;

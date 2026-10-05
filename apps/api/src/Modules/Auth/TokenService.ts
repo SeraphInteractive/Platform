@@ -47,9 +47,7 @@ export class TokenService {
                 discordId: users.discordId,
                 discordUsername: users.discordUsername,
                 role: users.role,
-                isBlacklisted: users.isBlacklisted,
-                termsVersion: users.termsVersion,
-                emailVerifiedAt: users.emailVerifiedAt
+                isBlacklisted: users.isBlacklisted
             })
             .from(accessTokens)
             .innerJoin(users, eq(users.id, accessTokens.userId))
@@ -79,9 +77,7 @@ export class TokenService {
                 discordId: row.discordId,
                 discordUsername: row.discordUsername,
                 role: row.role,
-                isBlacklisted: row.isBlacklisted,
-                termsVersion: row.termsVersion,
-                isVerified: row.emailVerifiedAt !== null
+                isBlacklisted: row.isBlacklisted
             }
         };
     }
@@ -93,29 +89,12 @@ export class TokenService {
                 discordId: users.discordId,
                 discordUsername: users.discordUsername,
                 role: users.role,
-                isBlacklisted: users.isBlacklisted,
-                termsVersion: users.termsVersion,
-                emailVerifiedAt: users.emailVerifiedAt
+                isBlacklisted: users.isBlacklisted
             })
             .from(users)
             .where(eq(users.discordId, discordId))
             .limit(1);
-        return user === undefined
-            ? null
-            : {
-                  kind: "user",
-                  tokenId: null,
-                  isDelegated: true,
-                  user: {
-                      id: user.id,
-                      discordId: user.discordId,
-                      discordUsername: user.discordUsername,
-                      role: user.role,
-                      isBlacklisted: user.isBlacklisted,
-                      termsVersion: user.termsVersion,
-                      isVerified: user.emailVerifiedAt !== null
-                  }
-              };
+        return user === undefined ? null : { kind: "user", tokenId: null, isDelegated: true, user };
     }
 
     public async revoke(tokenId: string): Promise<void> {

@@ -1,9 +1,7 @@
 import { actingUserHeader, NotificationType, platformNotificationSchema } from "@platform/contracts";
-import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PollType, RoundStatus } from "../src/Domain/Enums.js";
 import { Role } from "../src/Domain/Roles.js";
-import { entries } from "../src/Infrastructure/Database/Schema.js";
 import { createTestContext, json, nextSnowflake, serviceToken, type TestContext } from "./Support/TestApplication.js";
 
 interface Envelope<T> {
@@ -32,7 +30,7 @@ describe("platform service integration", () => {
             payload: { username: "BotUser", avatar: null }
         });
         expect(synced.statusCode).toBe(200);
-        expect(json<Envelope<{ role: string; username: string }>>(synced).data).toMatchObject({ role: Role.Member, username: "BotUser" });
+        expect(json<Envelope<{ role: string; username: string }>>(synced).data).toMatchObject({ role: Role.Voter, username: "BotUser" });
 
         const user = await context.createUser(Role.Voter);
         const forbidden = await context.application.inject({
@@ -97,7 +95,6 @@ describe("platform service integration", () => {
     it("streams notifications to the service and resumes from Last-Event-ID", async () => {
         const address = await context.application.listen({ host: "127.0.0.1", port: 0 });
         const supervisor = await context.createUser(Role.Supervisor);
-        const admin = await context.createUser(Role.Admin);
         const baseline = await context.notificationLog.latestId();
 
         const denied = await fetch(`${address}/api/v1/notifications/stream`, { headers: supervisor.headers });
@@ -113,12 +110,8 @@ describe("platform service integration", () => {
         await context.application.inject({
             method: "POST",
             url: "/api/v1/rounds",
-            headers: admin.headers,
-            payload: {
-                title: "Streamed round",
-                pollType: PollType.Binary,
-                binaryEntries: [{ title: "Choice 1" }, { title: "Choice 2" }]
-            }
+            headers: supervisor.headers,
+            payload: { title: "Streamed round", pollType: PollType.Binary }
         });
 
         const reader = response.body?.getReader();
@@ -141,43 +134,42 @@ describe("platform service integration", () => {
 
     it("emits notifications that match the published contract", async () => {
         const supervisor = await context.createUser(Role.Supervisor);
-        const admin = await context.createUser(Role.Admin);
         const voter = await context.createUser(Role.Voter);
         const round = json<Envelope<{ id: string }>>(
             await context.application.inject({
                 method: "POST",
                 url: "/api/v1/rounds",
-                headers: admin.headers,
-                payload: {
-                    title: "Contract",
-                    pollType: PollType.Binary,
-                    binaryEntries: [{ title: "A" }, { title: "B" }]
-                }
+                headers: supervisor.headers,
+                payload: { title: "Contract", pollType: PollType.Binary }
             })
         ).data;
+        const entryIds: string[] = [];
+        for (const title of ["A", "B"]) {
+            const entry = await context.application.inject({
+                method: "POST",
+                url: `/api/v1/rounds/${round.id}/entries`,
+                headers: supervisor.headers,
+                payload: { title }
+            });
+            entryIds.push(json<Envelope<{ id: string }>>(entry).data.id);
+        }
         await context.application.inject({
             method: "PATCH",
             url: `/api/v1/rounds/${round.id}`,
             headers: supervisor.headers,
-            payload: { title: "Contract Renamed" }
-        });
-        const roundEntries = await context.database
-            .select()
-            .from(entries)
-            .where(eq(entries.roundId, round.id))
-            .orderBy(entries.createdAt, entries.id);
-        const entryIds = roundEntries.map((e) => e.id);
-        await context.application.inject({
-            method: "PATCH",
-            url: `/api/v1/rounds/${round.id}`,
-            headers: supervisor.headers,
-            payload: { status: RoundStatus.Voting }
+            payload: { status: RoundStatus.Open }
         });
         await context.application.inject({
             method: "PUT",
             url: `/api/v1/rounds/${round.id}/ballots/me`,
             headers: voter.headers,
-            payload: { picks: [entryIds[0]!] }
+            payload: { picks: [entryIds[0]] }
+        });
+        await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/rounds/${round.id}`,
+            headers: supervisor.headers,
+            payload: { status: RoundStatus.Closed }
         });
         await context.application.inject({ method: "POST", url: `/api/v1/rounds/${round.id}/finalize`, headers: supervisor.headers });
         await context.application.inject({
@@ -192,64 +184,6 @@ describe("platform service integration", () => {
             headers: supervisor.headers,
             payload: { sceneNumber: 1, shotCode: "NT-1", title: "Notify", difficultyTier: "easy" }
         });
-        await context.application.inject({
-            method: "POST",
-            url: "/api/v1/pipeline/progress",
-            headers: supervisor.headers,
-            payload: {
-                stepIndex: 1,
-                stepId: "0.2",
-                stepTitle: "Story Vote",
-                phaseNumber: 0,
-                phaseTitle: "Phase 0: Pre-Production",
-                progressPercent: 7,
-                isPhaseTransition: false
-            }
-        });
-        const pipeline = await context.application.inject({ method: "GET", url: "/api/v1/pipeline" });
-        expect(json<Envelope<{ stepId: string; progressPercent: number; updatedAt: string | null }>>(pipeline).data).toMatchObject({
-            stepId: "0.2",
-            progressPercent: 7
-        });
-
-        const tempRound = json<Envelope<{ id: string }>>(
-            await context.application.inject({
-                method: "POST",
-                url: "/api/v1/rounds",
-                headers: admin.headers,
-                payload: { title: "Temp Round", pollType: PollType.RankedChoice }
-            })
-        ).data;
-        await context.application.inject({
-            method: "PATCH",
-            url: `/api/v1/rounds/${tempRound.id}`,
-            headers: supervisor.headers,
-            payload: { status: RoundStatus.Open }
-        });
-        const tempEntry = json<Envelope<{ id: string }>>(
-            await context.application.inject({
-                method: "POST",
-                url: `/api/v1/rounds/${tempRound.id}/entries`,
-                headers: supervisor.headers,
-                payload: { title: "Temp Entry" }
-            })
-        ).data;
-        await context.application.inject({
-            method: "PATCH",
-            url: `/api/v1/rounds/${tempRound.id}/entries/${tempEntry.id}`,
-            headers: admin.headers,
-            payload: { title: "Renamed Entry" }
-        });
-        await context.application.inject({
-            method: "DELETE",
-            url: `/api/v1/rounds/${tempRound.id}/entries/${tempEntry.id}`,
-            headers: admin.headers
-        });
-        await context.application.inject({
-            method: "DELETE",
-            url: `/api/v1/rounds/${tempRound.id}`,
-            headers: supervisor.headers
-        });
 
         await new Promise((resolve) => setTimeout(resolve, 10));
         const types = new Set<string>();
@@ -262,17 +196,12 @@ describe("platform service integration", () => {
         }
         for (const expected of [
             NotificationType.RoundCreated,
-            NotificationType.RoundUpdated,
-            NotificationType.RoundDeleted,
             NotificationType.EntrySubmitted,
-            NotificationType.EntryUpdated,
-            NotificationType.EntryDeleted,
             NotificationType.RoundStatusChanged,
             NotificationType.BallotSubmitted,
             NotificationType.RoundFinalized,
             NotificationType.UserBlacklisted,
-            NotificationType.ShotCreated,
-            NotificationType.PipelineUpdated
+            NotificationType.ShotCreated
         ]) {
             expect(types.has(expected), expected).toBe(true);
         }

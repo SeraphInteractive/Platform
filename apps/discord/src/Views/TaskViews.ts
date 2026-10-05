@@ -24,7 +24,6 @@ import {
     type V2Message
 } from "../Discord/Ui.js";
 
-export const claimButtonPrefix = "claim-task";
 export const reviewButtonPrefix = "review";
 export const deliverablesButtonPrefix = "deliverables";
 
@@ -36,7 +35,7 @@ const tierDays: Readonly<Record<DifficultyTier, number>> = {
 };
 
 export function threadStarter(shot: ShotReference, description: string | null): V2Message {
-    const details = `${capitalize(shot.difficulty)}, scene ${shot.sceneNumber}, ${tierDays[shot.difficulty]} days once claimed`;
+    const details = `${capitalize(shot.difficulty)} · scene ${shot.sceneNumber} · ${tierDays[shot.difficulty]} days once claimed`;
     return message(
         panel(
             null,
@@ -45,12 +44,11 @@ export function threadStarter(shot: ShotReference, description: string | null): 
                 `-# ${plain(shot.code, 50)}`,
                 details,
                 description === null ? null : plain(description, 1500),
-                "-# Click Claim Task or use /take-task to claim."
+                "-# Use /take-task in this post to claim it."
             ]
                 .filter((line): line is string => line !== null)
                 .join("\n")
-        ),
-        buttons(actionButton(`${claimButtonPrefix}:${shot.id}`, "Claim Task", ButtonStyle.Primary))
+        )
     );
 }
 

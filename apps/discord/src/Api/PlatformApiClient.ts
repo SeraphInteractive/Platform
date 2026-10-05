@@ -106,30 +106,8 @@ export class PlatformApiClient {
         this.syncedProfiles.set(identity.id, Date.now());
     }
 
-    public async getUserByDiscordId(discordId: string): Promise<ModeratedUserDto | null> {
-        try {
-            return (await this.send(`/users/by-discord/${discordId}`, dataEnvelope(moderatedUserSchema))).data;
-        } catch (error: unknown) {
-            if (error instanceof PlatformApiError && error.status === 404) {
-                return null;
-            }
-            throw error;
-        }
-    }
-
     public async listThreadMaps(): Promise<readonly ShotThreadMapDto[]> {
         return (await this.send("/shot-thread-maps", dataEnvelope(z.array(shotThreadMapSchema)))).data;
-    }
-
-    public async getThreadMapByThread(discordThreadId: string): Promise<ShotThreadMapDto | null> {
-        try {
-            return (await this.send(`/shot-thread-maps/by-thread/${discordThreadId}`, dataEnvelope(shotThreadMapSchema))).data;
-        } catch (error: unknown) {
-            if (error instanceof PlatformApiError && error.status === 404) {
-                return null;
-            }
-            throw error;
-        }
     }
 
     public async bindThread(shotId: string, discordThreadId: string): Promise<void> {
@@ -152,33 +130,6 @@ export class PlatformApiClient {
         return shots;
     }
 
-    public async listAllUsers(): Promise<readonly ModeratedUserDto[]> {
-        const users: ModeratedUserDto[] = [];
-        for (let page = 1; page <= 100; page++) {
-            const result = await this.send("/users", pageEnvelope(moderatedUserSchema), { query: { page, perPage: 100 } });
-            users.push(...result.data);
-            if (page >= result.meta.totalPages) {
-                break;
-            }
-        }
-        return users;
-    }
-
-    public async getShot(shotId: string): Promise<ShotDetailDto> {
-        return (await this.send(`/shots/${shotId}`, dataEnvelope(shotDetailSchema))).data;
-    }
-
-    public async getShotByCode(shotCode: string): Promise<ShotDto | null> {
-        try {
-            return (await this.send(`/shots/by-code/${encodeURIComponent(shotCode)}`, dataEnvelope(shotSchema))).data;
-        } catch (error: unknown) {
-            if (error instanceof PlatformApiError && error.status === 404) {
-                return null;
-            }
-            throw error;
-        }
-    }
-
     public async isHealthy(): Promise<{ healthy: boolean; latencyMs: number }> {
         const started = performance.now();
         try {
@@ -188,17 +139,6 @@ export class PlatformApiClient {
             return { healthy: response.ok, latencyMs: Math.round(performance.now() - started) };
         } catch {
             return { healthy: false, latencyMs: Math.round(performance.now() - started) };
-        }
-    }
-
-    public async sendHeartbeat(wsPingMs: number): Promise<void> {
-        try {
-            await this.send("/health/bot-heartbeat", z.object({ status: z.literal("ok") }), {
-                method: "POST",
-                body: { wsPingMs: Math.max(0, Math.round(wsPingMs)) }
-            });
-        } catch (error: unknown) {
-            this.logger.debug({ err: error }, "failed to send bot heartbeat");
         }
     }
 
@@ -263,10 +203,6 @@ export class ActingApiClient {
         return (await this.request("/auth/me", dataEnvelope(userSchema))).data;
     }
 
-    public async listUsers(options: { page?: number; perPage?: number; role?: Role } = {}): Promise<Page<ModeratedUserDto>> {
-        return this.request("/users", pageEnvelope(moderatedUserSchema), { query: options as Record<string, string | number | undefined> });
-    }
-
     public async listRounds(status?: RoundStatus): Promise<Page<RoundDto>> {
         return this.request("/rounds", pageEnvelope(roundSchema), { query: { status, perPage: 100 } });
     }
@@ -323,7 +259,7 @@ export class ActingApiClient {
 
     public async submitWork(
         shotId: string,
-        input: { videoKey: string; blendKey: string; notes: string | null }
+        input: { videoKey: string; blendKey: string | null; notes: string | null }
     ): Promise<SubmissionDto> {
         return (await this.request(`/shots/${shotId}/submissions`, dataEnvelope(submissionSchema), { method: "POST", body: input })).data;
     }

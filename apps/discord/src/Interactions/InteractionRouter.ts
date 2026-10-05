@@ -2,12 +2,9 @@ import type { Interaction } from "discord.js";
 import { replyWithError, type BotContext, type ComponentHandler, type SlashCommand } from "../Commands/Command.js";
 import { docsCommand, helpCommand, statusCommand } from "../Commands/InfoCommands.js";
 import { assignRoleCommand, blacklistCommand } from "../Commands/ModerationCommands.js";
-import { reminderCommand } from "../Commands/ReminderCommands.js";
 import { entryPageHandler, roundCommands, roundSelectHandler } from "../Commands/RoundCommands.js";
-import { botSetupCommand, syncRolesCommand } from "../Commands/SetupCommands.js";
+import { botSetupCommand, setChannelCommand, setupForumCommand } from "../Commands/SetupCommands.js";
 import {
-    availableTasksCommand,
-    claimTaskButtonHandler,
     createTaskCommand,
     deliverablesButtonHandler,
     releaseTaskCommand,
@@ -25,22 +22,20 @@ export const slashCommands: readonly SlashCommand[] = [
     ...roundCommands,
     blacklistCommand,
     assignRoleCommand,
-    availableTasksCommand,
     createTaskCommand,
     takeTaskCommand,
     releaseTaskCommand,
     submitTaskCommand,
     syncTaskCommand,
     botSetupCommand,
-    syncRolesCommand,
-    statusCommand,
-    reminderCommand
+    setupForumCommand,
+    setChannelCommand,
+    statusCommand
 ];
 
 const componentHandlers: readonly ComponentHandler[] = [
     roundSelectHandler,
     entryPageHandler,
-    claimTaskButtonHandler,
     reviewButtonHandler,
     reviewModalHandler,
     deliverablesButtonHandler

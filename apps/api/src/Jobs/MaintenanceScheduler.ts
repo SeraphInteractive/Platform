@@ -2,7 +2,6 @@ import type { FastifyBaseLogger } from "fastify";
 import type { KeyValueStore } from "../Infrastructure/Cache/KeyValueStore.js";
 import type { TokenService } from "../Modules/Auth/TokenService.js";
 import type { ShotsService } from "../Modules/Shots/ShotsService.js";
-import type { LeaderboardService } from "../Modules/Leaderboards/LeaderboardService.js";
 
 interface ScheduledJob {
     readonly name: string;
@@ -17,7 +16,6 @@ export class MaintenanceScheduler {
     public constructor(
         shotsService: ShotsService,
         tokenService: TokenService,
-        leaderboardService: LeaderboardService,
         private readonly store: KeyValueStore,
         private readonly logger: FastifyBaseLogger
     ) {
@@ -37,16 +35,6 @@ export class MaintenanceScheduler {
                 intervalMs: 60 * 60 * 1000,
                 run: async (): Promise<void> => {
                     await tokenService.purgeExpired();
-                }
-            },
-            {
-                name: "finalize-expired-rounds",
-                intervalMs: 60 * 1000,
-                run: async (): Promise<void> => {
-                    const result = await leaderboardService.finalizeExpired();
-                    if (result.finalizedCount > 0) {
-                        this.logger.info({ finalized: result.roundIds }, "auto-finalized expired voting rounds");
-                    }
                 }
             }
         ];

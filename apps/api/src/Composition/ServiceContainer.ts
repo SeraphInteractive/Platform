@@ -2,9 +2,6 @@ import type { FastifyBaseLogger } from "fastify";
 import type { Redis } from "ioredis";
 import type { ApplicationConfiguration } from "../Configuration/ApplicationConfiguration.js";
 import type { KeyValueStore } from "../Infrastructure/Cache/KeyValueStore.js";
-import type { CaptchaVerifier } from "../Infrastructure/Captcha/CaptchaVerifier.js";
-import type { EmailSender } from "../Infrastructure/Email/EmailSender.js";
-import type { MailDomainChecker } from "../Infrastructure/Email/MailDomainChecker.js";
 import type { Database } from "../Infrastructure/Database/Database.js";
 import type { DiscordOAuthClient } from "../Infrastructure/Discord/DiscordOAuthClient.js";
 import type { PresenceProvider } from "../Infrastructure/Discord/PresenceProvider.js";
@@ -22,8 +19,6 @@ import { RoundsService } from "../Modules/Rounds/RoundsService.js";
 import { ReviewsService } from "../Modules/Shots/ReviewsService.js";
 import { ShotsService } from "../Modules/Shots/ShotsService.js";
 import { RaidMonitor, type RaidMonitorOptions } from "../Modules/Telemetry/RaidMonitor.js";
-import { DocumentsService } from "../Modules/Documents/DocumentsService.js";
-import { VerificationService } from "../Modules/Verification/VerificationService.js";
 import { UsersService } from "../Modules/Users/UsersService.js";
 
 export interface Infrastructure {
@@ -37,9 +32,6 @@ export interface Infrastructure {
     readonly notifier: Notifier;
     readonly notificationLog: NotificationLog;
     readonly rateLimitRedis: Redis | undefined;
-    readonly emailSender: EmailSender;
-    readonly captchaVerifier: CaptchaVerifier;
-    readonly mailDomainChecker: MailDomainChecker;
     dispose(): Promise<void>;
 }
 
@@ -59,8 +51,6 @@ export interface ServiceContainer extends Infrastructure {
     readonly raidMonitor: RaidMonitor;
     readonly shotsService: ShotsService;
     readonly reviewsService: ReviewsService;
-    readonly verificationService: VerificationService;
-    readonly documentsService: DocumentsService;
 }
 
 export function createServiceContainer(
@@ -72,7 +62,6 @@ export function createServiceContainer(
     const { database, keyValueStore, eventBus, notifier, objectStorage } = infrastructure;
     const leaderboardCache = new LeaderboardCache(keyValueStore);
     const tokenService = new TokenService(database, configuration.security, logger);
-    const documentsService = new DocumentsService(database, notifier);
     const raidMonitor = new RaidMonitor(database, keyValueStore, eventBus, notifier, leaderboardCache, logger, options.raidMonitor);
 
     return {
@@ -92,24 +81,13 @@ export function createServiceContainer(
             configuration.roleAssignments,
             logger
         ),
-        usersService: new UsersService(database, notifier, leaderboardCache, documentsService),
+        usersService: new UsersService(database, notifier, leaderboardCache),
         roundsService: new RoundsService(database, notifier, leaderboardCache),
-        leaderboardService: new LeaderboardService(database, leaderboardCache, eventBus, notifier, objectStorage),
+        leaderboardService: new LeaderboardService(database, leaderboardCache, eventBus, notifier),
         entriesService: new EntriesService(database, notifier, objectStorage, configuration.storage, leaderboardCache),
-        ballotsService: new BallotsService(database, keyValueStore, eventBus, notifier, raidMonitor),
+        ballotsService: new BallotsService(database, keyValueStore, eventBus, notifier, raidMonitor, configuration.security.appKey),
         raidMonitor,
         shotsService: new ShotsService(database, notifier, objectStorage, configuration.storage),
-        reviewsService: new ReviewsService(database, notifier, objectStorage),
-        documentsService,
-        verificationService: new VerificationService(
-            database,
-            keyValueStore,
-            infrastructure.emailSender,
-            infrastructure.captchaVerifier,
-            infrastructure.mailDomainChecker,
-            configuration.security.appKey,
-            logger,
-            notifier
-        )
+        reviewsService: new ReviewsService(database, notifier, objectStorage)
     };
 }

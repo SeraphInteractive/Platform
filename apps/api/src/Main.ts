@@ -13,7 +13,7 @@ async function main(): Promise<void> {
     const logger = createLogger(configuration.server.logLevel, configuration.server.logFormat === "pretty");
     const services = createServiceContainer(configuration, createProductionInfrastructure(configuration, logger), logger);
     const application = await buildApplication(services, logger);
-    const scheduler = new MaintenanceScheduler(services.shotsService, services.tokenService, services.leaderboardService, services.keyValueStore, logger);
+    const scheduler = new MaintenanceScheduler(services.shotsService, services.tokenService, services.keyValueStore, logger);
 
     let shuttingDown = false;
     const shutdown = async (signal: string): Promise<void> => {
