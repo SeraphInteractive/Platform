@@ -64,8 +64,8 @@ export function HomeView(): ReactNode {
                 <VideoPlayer src={videoUrl} title="Project Stairway announcement trailer" />
 
                 <blockquote className="border-border border-l-2 pl-4 text-xs italic text-muted-foreground sm:text-sm">
-                    An independent community animation project bringing together 3D animators, modelers, storyboard artists,
-                    and sound designers to build an original Minecraft cinematic narrative from the ground up.
+                    An independent community animation project bringing together artists to build an original Minecraft
+                    cinematic narrative from the ground up.
                 </blockquote>
             </header>
 
