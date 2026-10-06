@@ -6,7 +6,8 @@ const upstreamTimeoutMs = 30_000;
 
 interface UpstreamOptions {
     readonly method: string;
-    readonly body?: string;
+    readonly body?: BodyInit | null;
+    readonly contentType?: string;
     readonly token?: string | null;
     readonly search?: string;
     readonly accept?: string;
@@ -20,7 +21,9 @@ export async function apiFetch(request: NextRequest, path: string, options: Upst
         url.search = options.search;
     }
     const headers = new Headers({ Accept: options.accept ?? "application/json" });
-    if (options.body !== undefined) {
+    if (options.contentType !== undefined) {
+        headers.set("Content-Type", options.contentType);
+    } else if (options.body !== undefined && typeof options.body === "string") {
         headers.set("Content-Type", "application/json");
     }
     if (options.token !== undefined && options.token !== null) {

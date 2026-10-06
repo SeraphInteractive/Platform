@@ -60,6 +60,9 @@ export function sendProblem(request: FastifyRequest, reply: FastifyReply, proble
     return reply
         .status(problem.status)
         .header("Content-Type", "application/problem+json; charset=utf-8")
+        .header("X-Content-Type-Options", "nosniff")
+        .header("X-Frame-Options", "DENY")
+        .header("Cache-Control", "private, no-store")
         .serializer((payload: unknown) => JSON.stringify(payload))
         .send(body);
 }

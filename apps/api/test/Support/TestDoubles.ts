@@ -64,6 +64,20 @@ export class FakeObjectStorage implements ObjectStorage {
         this.objects.set(`${bucket}:${key}`, { sizeBytes, contentType });
         if (data !== undefined) {
             this.buffers.set(`${bucket}:${key}`, data);
+        } else {
+            let defaultBuf: Buffer;
+            if (contentType === "image/png") {
+                defaultBuf = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+            } else if (contentType === "image/jpeg") {
+                defaultBuf = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00]);
+            } else if (contentType === "video/webm") {
+                defaultBuf = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x00]);
+            } else if (key.endsWith(".blend")) {
+                defaultBuf = Buffer.from("BLENDER_v300_dummy_test_project");
+            } else {
+                defaultBuf = Buffer.from("\x00\x00\x00\x18ftypisom\x00\x00\x02\x00");
+            }
+            this.buffers.set(`${bucket}:${key}`, defaultBuf);
         }
     }
 
@@ -77,6 +91,11 @@ export class FakeObjectStorage implements ObjectStorage {
             return Promise.resolve(null);
         }
         return Promise.resolve(maxBytes !== undefined && maxBytes > 0 ? buf.subarray(0, maxBytes) : buf);
+    }
+
+    public putObject(bucket: StorageBucket, key: string, data: Buffer, contentType: string): Promise<void> {
+        this.store(bucket, key, data.byteLength, contentType, data);
+        return Promise.resolve();
     }
 
     public createDownloadUrl(bucket: StorageBucket, key: string): Promise<string> {

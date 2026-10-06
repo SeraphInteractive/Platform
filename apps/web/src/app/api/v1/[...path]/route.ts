@@ -38,22 +38,34 @@ async function forward(request: NextRequest, context: RouteContext): Promise<Nex
     }
 
     const method = request.method.toUpperCase();
+    const isUploadStream = path[0] === "uploads" && path[1] === "stream";
     const isMutation = method !== "GET" && method !== "HEAD";
-    let body: string | undefined;
+    let body: BodyInit | undefined;
+    let contentType: string | undefined;
+
     if (isMutation) {
         if (!isSameOrigin(request)) {
             return problem(403, "FORBIDDEN", "Cross-origin request rejected.");
         }
-        const text = await request.text();
-        if (new TextEncoder().encode(text).byteLength > maximumBodyBytes) {
-            return problem(413, "PAYLOAD_TOO_LARGE", "The request body is too large.");
-        }
-        if (text.length > 0) {
-            const contentType = request.headers.get("content-type") ?? "";
-            if (!contentType.toLowerCase().startsWith("application/json")) {
-                return problem(415, "UNSUPPORTED_MEDIA_TYPE", "Send JSON.");
+        if (isUploadStream) {
+            const buffer = await request.arrayBuffer();
+            if (buffer.byteLength > 50 * 1024 * 1024) {
+                return problem(413, "PAYLOAD_TOO_LARGE", "The upload is too large.");
             }
-            body = text;
+            body = buffer;
+            contentType = request.headers.get("content-type") ?? "application/octet-stream";
+        } else {
+            const text = await request.text();
+            if (new TextEncoder().encode(text).byteLength > maximumBodyBytes) {
+                return problem(413, "PAYLOAD_TOO_LARGE", "The request body is too large.");
+            }
+            if (text.length > 0) {
+                const header = request.headers.get("content-type") ?? "";
+                if (!header.toLowerCase().startsWith("application/json")) {
+                    return problem(415, "UNSUPPORTED_MEDIA_TYPE", "Send JSON.");
+                }
+                body = text;
+            }
         }
     }
 
@@ -63,11 +75,12 @@ async function forward(request: NextRequest, context: RouteContext): Promise<Nex
         apiFetch(request, `/api/v1/${path.join("/")}`, {
             method,
             body,
+            contentType,
             token: bearer,
             search: request.nextUrl.search,
             accept,
             signal: request.signal,
-            timeout: accept !== "text/event-stream"
+            timeout: accept !== "text/event-stream" && !isUploadStream
         });
     let upstream: Response;
     let retriedAnonymously = false;

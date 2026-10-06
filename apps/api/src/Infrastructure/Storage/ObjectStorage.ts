@@ -21,6 +21,7 @@ export interface ObjectStorage {
     createUpload(bucket: StorageBucket, key: string, contentType: string, sizeBytes: number): Promise<PresignedUpload>;
     getMetadata(bucket: StorageBucket, key: string): Promise<StoredObjectMetadata | null>;
     getObject(bucket: StorageBucket, key: string, maxBytes?: number): Promise<Buffer | null>;
+    putObject(bucket: StorageBucket, key: string, data: Buffer, contentType: string): Promise<void>;
     createDownloadUrl(bucket: StorageBucket, key: string): Promise<string>;
     getPublicUrl(bucket: StorageBucket, key: string): string | null;
     deleteObject(bucket: StorageBucket, key: string): Promise<void>;

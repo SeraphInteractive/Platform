@@ -92,7 +92,7 @@ export function createServiceContainer(
             configuration.roleAssignments,
             logger
         ),
-        usersService: new UsersService(database, notifier, leaderboardCache, documentsService),
+        usersService: new UsersService(database, notifier, leaderboardCache, documentsService, tokenService),
         roundsService: new RoundsService(database, notifier, leaderboardCache),
         leaderboardService: new LeaderboardService(database, leaderboardCache, eventBus, notifier, objectStorage),
         entriesService: new EntriesService(database, notifier, objectStorage, configuration.storage, leaderboardCache),

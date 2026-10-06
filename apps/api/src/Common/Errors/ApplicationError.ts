@@ -91,3 +91,9 @@ export class ServiceUnavailableError extends ApplicationError {
         super(503, ErrorCode.ServiceUnavailable, message);
     }
 }
+
+export class PayloadTooLargeError extends ApplicationError {
+    public constructor(message = "The request payload is too large.") {
+        super(413, ErrorCode.PayloadTooLarge, message);
+    }
+}

@@ -9,6 +9,7 @@ import {
     isHigherThan,
     maximumSpecialties,
     normalizeSpecialties,
+    rankOf,
     Role,
     selfSelectableSpecialties,
     settleRole,
@@ -20,6 +21,7 @@ import { users, type UserRecord } from "../../Infrastructure/Database/Schema.js"
 import { NotificationType, personOfActor, personOfUser, type Notifier } from "../../Infrastructure/Notifications/Notification.js";
 import type { LegalAcceptance } from "../Documents/DocumentsService.js";
 import type { LeaderboardCache } from "../Leaderboards/LeaderboardCache.js";
+import type { TokenService } from "../Auth/TokenService.js";
 
 export type UserReference = { readonly kind: "id"; readonly id: string } | { readonly kind: "discord"; readonly discordId: string };
 
@@ -39,7 +41,8 @@ export class UsersService {
         private readonly database: Database,
         private readonly notifier: Notifier,
         private readonly leaderboardCache: LeaderboardCache,
-        private readonly legal: LegalAcceptance
+        private readonly legal: LegalAcceptance,
+        private readonly tokens?: TokenService
     ) {}
 
     public async findById(userId: string): Promise<UserRecord | null> {
@@ -98,6 +101,7 @@ export class UsersService {
 
     public async changeRole(actor: Actor, reference: UserReference, change: RoleChange, createIfMissing: boolean): Promise<UserRecord> {
         const transferredHolders: UserRecord[] = [];
+        let isDemoted = false;
         const user = await this.database.transaction(async (transaction) => {
             const { actor: current, target } = await this.lockParticipants(transaction, actor, reference);
             if (target === null) {
@@ -131,6 +135,9 @@ export class UsersService {
                 this.assertCanManageSecondary(current, target);
             }
             const role = settleRole(change.role, target.emailVerifiedAt !== null, target.role);
+            if (rankOf(role) < rankOf(target.role)) {
+                isDemoted = true;
+            }
             const specialties = normalizeSpecialties(role, change.specialties ?? target.specialties);
             await this.enforceSpecialtyExclusivity(transaction, target.id, specialties, change.transfer, transferredHolders);
             const [updated] = await transaction
@@ -144,6 +151,10 @@ export class UsersService {
                 .returning();
             return this.required(updated);
         });
+
+        if (isDemoted && this.tokens !== undefined) {
+            await this.tokens.revokeAllForUser(user.id);
+        }
 
         for (const transferred of transferredHolders) {
             this.notifier.notify({
@@ -218,6 +229,9 @@ export class UsersService {
             return this.required(updated);
         });
         await this.leaderboardCache.invalidateAll();
+        if (this.tokens !== undefined) {
+            await this.tokens.revokeAllForUser(user.id);
+        }
         this.notifier.notify({
             type: NotificationType.UserBlacklisted,
             user: personOfUser(user),

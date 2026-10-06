@@ -58,7 +58,10 @@ export const ballotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
                 response: { 200: dataEnvelope(ballotSchema), ...errorResponses }
             }
         },
-        async (request) => ({ data: toBallotResponse(await ballotsService.getOwn(currentUser(request).id, request.params.roundId)) })
+        async (request, reply) => {
+            void reply.header("Cache-Control", "private, no-store");
+            return { data: toBallotResponse(await ballotsService.getOwn(currentUser(request).id, request.params.roundId)) };
+        }
     );
 
     application.put(

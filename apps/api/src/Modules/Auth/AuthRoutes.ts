@@ -8,10 +8,10 @@ import { ForbiddenError, NotFoundError } from "../../Common/Errors/ApplicationEr
 import { toUserResponse, userSchema } from "../Users/UserPresenter.js";
 
 const stateCookieTtlSeconds = 10 * 60;
-const strictAuthRateLimit = { max: 20, timeWindow: "1 minute" };
 
 export const authRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
     const { authService, tokenService, usersService, configuration } = services;
+    const strictAuthRateLimit = { max: configuration.environment === "test" ? 1000 : 5, timeWindow: "1 minute" };
     const stateCookie = configuration.security.secureCookies ? "__Host-platform_oauth_state" : "platform_oauth_state";
     const cookieOptions = {
         httpOnly: true,
@@ -112,11 +112,12 @@ export const authRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> =
                 response: { 200: dataEnvelope(userSchema), ...errorResponses }
             }
         },
-        async (request) => {
+        async (request, reply) => {
             const user = await usersService.findById(currentUser(request).id);
             if (user === null) {
                 throw new NotFoundError("User");
             }
+            void reply.header("Cache-Control", "private, no-store");
             return { data: toUserResponse(user) };
         }
     );

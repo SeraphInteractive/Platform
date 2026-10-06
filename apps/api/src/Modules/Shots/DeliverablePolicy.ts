@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { ErrorCode, UnprocessableError } from "../../Common/Errors/ApplicationError.js";
 import { DeliverableKind, DifficultyTier } from "../../Domain/Enums.js";
 import { StorageBucket, type ObjectStorage } from "../../Infrastructure/Storage/ObjectStorage.js";
+import { matchesDeliverableKind } from "../Uploads/MagicBytes.js";
 
 const deliverableExtensions: Readonly<Record<DeliverableKind, readonly string[]>> = {
     [DeliverableKind.Video]: [".mp4", ".webm", ".mov"],
@@ -66,6 +67,13 @@ export async function assertDeliverable(
     ) {
         throw new UnprocessableError(`${field} does not reference a completed upload for this shot.`, ErrorCode.UploadMissing, [
             { path: `body.${field}`, message: "upload not found" }
+        ]);
+    }
+
+    const header = await storage.getObject(StorageBucket.Deliverables, key, 512);
+    if (!matchesDeliverableKind(header, kind)) {
+        throw new UnprocessableError(`${field} does not match the required ${kind} format.`, ErrorCode.UploadMissing, [
+            { path: `body.${field}`, message: "invalid file signature" }
         ]);
     }
 }

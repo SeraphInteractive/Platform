@@ -113,6 +113,23 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
     application.setValidatorCompiler(validatorCompiler);
     application.setSerializerCompiler(serializerCompiler);
     application.removeContentTypeParser("text/plain");
+    application.addContentTypeParser(
+        [
+            "application/octet-stream",
+            "image/png",
+            "image/jpeg",
+            "image/gif",
+            "image/webp",
+            "video/mp4",
+            "video/webm",
+            "video/quicktime",
+            "application/x-blender"
+        ],
+        { parseAs: "buffer", bodyLimit: configuration.storage.deliverableMaxBytes },
+        (_request, body, done) => {
+            done(null, body);
+        }
+    );
     application.decorateRequest("principal", null);
 
     application.addHook("onRequest", async (request, reply) => {
@@ -146,6 +163,8 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
         },
         crossOriginResourcePolicy: { policy: "same-site" },
         referrerPolicy: { policy: "no-referrer" },
+        noSniff: true,
+        frameguard: { action: "deny" },
         hsts: isProduction ? { maxAge: 63_072_000, includeSubDomains: true, preload: false } : false
     });
 

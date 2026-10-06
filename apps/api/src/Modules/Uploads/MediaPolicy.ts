@@ -2,6 +2,7 @@ import { MediaContentType } from "@platform/contracts";
 import { randomUUID } from "node:crypto";
 import { ErrorCode, UnprocessableError } from "../../Common/Errors/ApplicationError.js";
 import { StorageBucket, type ObjectStorage } from "../../Infrastructure/Storage/ObjectStorage.js";
+import { matchesContentType } from "./MagicBytes.js";
 
 const extensions: Readonly<Record<MediaContentType, string>> = {
     [MediaContentType.Png]: "png",
@@ -12,6 +13,10 @@ const extensions: Readonly<Record<MediaContentType, string>> = {
     [MediaContentType.Webm]: "webm",
     [MediaContentType.QuickTime]: "mov"
 };
+
+export function extensionOf(contentType: MediaContentType): string {
+    return extensions[contentType];
+}
 
 const mediaKeyPattern = /^media\/([0-9a-f-]{36})\/[0-9a-f-]{36}\.(?:png|jpg|gif|webp|mp4|webm|mov)$/u;
 
@@ -36,6 +41,13 @@ export async function assertUploadedMedia(storage: ObjectStorage, key: string, o
     ) {
         throw new UnprocessableError("The referenced upload is missing or invalid.", ErrorCode.UploadMissing, [
             { path: "body.mediaKey", message: "upload not found" }
+        ]);
+    }
+
+    const header = await storage.getObject(StorageBucket.Media, key, 512);
+    if (!matchesContentType(header, metadata.contentType ?? "")) {
+        throw new UnprocessableError("The uploaded file content does not match its declared media format.", ErrorCode.UploadMissing, [
+            { path: "body.mediaKey", message: "invalid file signature" }
         ]);
     }
 }

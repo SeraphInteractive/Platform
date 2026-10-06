@@ -95,6 +95,19 @@ export class S3ObjectStorage implements ObjectStorage {
         }
     }
 
+    public async putObject(bucket: StorageBucket, key: string, data: Buffer, contentType: string): Promise<void> {
+        const { client, name } = this.resolve(bucket);
+        await client.send(
+            new PutObjectCommand({
+                Bucket: name,
+                Key: key,
+                Body: data,
+                ContentType: contentType,
+                ContentLength: data.byteLength
+            })
+        );
+    }
+
     public async createDownloadUrl(bucket: StorageBucket, key: string): Promise<string> {
         const { client, name } = this.resolve(bucket);
         const fileName = key.slice(key.lastIndexOf("/") + 1);
