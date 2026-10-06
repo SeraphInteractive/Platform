@@ -16,13 +16,13 @@ async function fetchCurrentUser(): Promise<UserDto | null> {
     const response = await fetch("/api/session", { credentials: "same-origin", cache: "no-store" });
     const parsed = sessionSchema.safeParse(await response.json().catch(() => null));
     if (!response.ok || !parsed.success) {
-        throw new ApiError(response.status, "SESSION_UNAVAILABLE", "Could not load your session.");
+        return null;
     }
     return parsed.data.data;
 }
 
 export function useSession(): Session {
-    const query = useQuery({ queryKey: queryKeys.me, queryFn: fetchCurrentUser, staleTime: 60_000 });
+    const query = useQuery({ queryKey: queryKeys.me, queryFn: fetchCurrentUser, staleTime: 60_000, retry: false });
     return { user: query.data ?? null, isLoading: query.isPending };
 }
 

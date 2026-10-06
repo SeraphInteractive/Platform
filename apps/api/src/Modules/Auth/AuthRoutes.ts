@@ -11,7 +11,7 @@ const stateCookieTtlSeconds = 10 * 60;
 
 export const authRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
     const { authService, tokenService, usersService, configuration } = services;
-    const strictAuthRateLimit = { max: configuration.environment === "test" ? 1000 : 5, timeWindow: "1 minute" };
+    const strictAuthRateLimit = { max: configuration.environment === "test" ? 1000 : 60, timeWindow: "1 minute" };
     const stateCookie = configuration.security.secureCookies ? "__Host-platform_oauth_state" : "platform_oauth_state";
     const cookieOptions = {
         httpOnly: true,
