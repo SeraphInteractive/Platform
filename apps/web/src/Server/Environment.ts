@@ -12,6 +12,16 @@ const environmentSchema = z.object({
     WEB_APP_URL: originSchema,
     API_INTERNAL_URL: originSchema,
     API_PUBLIC_URL: originSchema,
+    CORS_ORIGINS: z
+        .string()
+        .default("")
+        .transform((value) =>
+            value
+                .split(",")
+                .map((item) => item.trim())
+                .filter((item) => item.length > 0)
+        )
+        .pipe(z.array(originSchema)),
     STORAGE_ORIGINS: z
         .string()
         .default("")

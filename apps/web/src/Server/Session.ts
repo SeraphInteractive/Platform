@@ -61,7 +61,35 @@ export function clearVerifierCookie(response: NextResponse): void {
 export function isSameOrigin(request: NextRequest): boolean {
     const origin = request.headers.get("origin");
     if (origin !== null) {
-        return origin === request.nextUrl.origin || origin === env().WEB_APP_URL;
+        if (origin === request.nextUrl.origin || origin === env().WEB_APP_URL || env().CORS_ORIGINS.includes(origin)) {
+            return true;
+        }
+        const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+        const proto = request.headers.get("x-forwarded-proto") ?? (isSecureDeployment() ? "https" : "http");
+        if (host !== null && host.length > 0) {
+            const expectedOrigin = `${proto}://${host}`;
+            if (origin === expectedOrigin) {
+                return true;
+            }
+        }
+        return false;
     }
-    return request.headers.get("sec-fetch-site") === "same-origin";
+    const secFetchSite = request.headers.get("sec-fetch-site");
+    if (secFetchSite === "same-origin" || secFetchSite === "same-site") {
+        return true;
+    }
+    const referer = request.headers.get("referer");
+    if (referer !== null) {
+        try {
+            const refererOrigin = new URL(referer).origin;
+            return (
+                refererOrigin === request.nextUrl.origin ||
+                refererOrigin === env().WEB_APP_URL ||
+                env().CORS_ORIGINS.includes(refererOrigin)
+            );
+        } catch {
+            return false;
+        }
+    }
+    return true;
 }
