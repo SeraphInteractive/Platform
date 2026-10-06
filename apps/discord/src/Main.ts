@@ -107,8 +107,8 @@ async function main(): Promise<void> {
                     await syncMemberStudioRoles(member, Role.Member, [], "New member joined Discord");
                 }
 
-                // post 1-line welcome message with user mention
-                const welcomeChannelId = settings.channel(ChannelPurpose.Announcements);
+                // prefer dedicated welcome channel; fall back to announcements if unconfigured
+                const welcomeChannelId = settings.channel(ChannelPurpose.Welcome) ?? settings.channel(ChannelPurpose.Announcements);
                 if (welcomeChannelId !== undefined) {
                     const channel = await client.channels.fetch(welcomeChannelId).catch(() => null);
                     if (channel?.isSendable() && !channel.isDMBased() && channel.guildId === member.guild.id) {

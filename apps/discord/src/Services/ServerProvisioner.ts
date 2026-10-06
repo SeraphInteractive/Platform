@@ -29,11 +29,21 @@ const forumTagNames: Readonly<Record<ShotStatus, string>> = {
 };
 
 const channelNames: Readonly<Record<Exclude<ChannelPurpose, ChannelPurpose.TaskForum>, string>> = {
+    [ChannelPurpose.Welcome]: "welcome",
     [ChannelPurpose.Rules]: "rules",
     [ChannelPurpose.Announcements]: "announcements",
     [ChannelPurpose.Telemetry]: "telemetry-alerts",
     [ChannelPurpose.TaskSubmissions]: "task-submissions",
     [ChannelPurpose.TaskLogs]: "task-logs"
+};
+
+const channelAliases: Readonly<Record<Exclude<ChannelPurpose, ChannelPurpose.TaskForum>, readonly string[]>> = {
+    [ChannelPurpose.Welcome]: ["welcome", "welcome-and-rules", "arrivals", "general-welcome"],
+    [ChannelPurpose.Rules]: ["rules", "studio-rules", "guidelines", "rules-and-guidelines"],
+    [ChannelPurpose.Announcements]: ["announcements", "announcement", "studio-announcements"],
+    [ChannelPurpose.Telemetry]: ["telemetry-alerts", "telemetry", "bot-alerts", "alerts"],
+    [ChannelPurpose.TaskSubmissions]: ["task-submissions", "submissions", "deliverables"],
+    [ChannelPurpose.TaskLogs]: ["task-logs", "task-log", "logs"]
 };
 
 const forumName = "tasks";
@@ -79,11 +89,15 @@ export class ServerProvisioner {
             settings.roles[BoundRole.Member] ??= member?.id;
             settings.roles[BoundRole.Voter] ??= voter?.id;
             settings.roles[BoundRole.Contributor] ??= contributor?.id;
-            for (const [purpose, name] of Object.entries(channelNames) as [ChannelPurpose, string][]) {
-                const match = channels.find(
-                    (channel) =>
-                        channel !== null && channel.type === ChannelType.GuildText && normalizeName(channel.name) === normalizeName(name)
-                );
+            for (const purpose of Object.keys(channelAliases) as Exclude<ChannelPurpose, ChannelPurpose.TaskForum>[]) {
+                const aliases = channelAliases[purpose];
+                const match = channels.find((channel) => {
+                    if (channel === null || channel.type !== ChannelType.GuildText) {
+                        return false;
+                    }
+                    const normalized = normalizeName(channel.name);
+                    return aliases.some((alias) => normalizeName(alias) === normalized);
+                });
                 settings.channels[purpose] ??= match?.id;
             }
             const forum = channels.find(
@@ -160,14 +174,29 @@ export class ServerProvisioner {
         };
 
         const ensureText = async (
-            name: string,
+            purpose: Exclude<ChannelPurpose, ChannelPurpose.TaskForum>,
             parent: CategoryChannel,
             topic: string,
             overwrites: OverwriteResolvable[]
         ): Promise<TextChannel> => {
-            const existing = find(name, ChannelType.GuildText);
-            if (existing?.type === ChannelType.GuildText) {
+            const name = channelNames[purpose];
+            const aliases = channelAliases[purpose];
+            const existing = channels.find((channel) => {
+                if (channel === null || channel.type !== ChannelType.GuildText) {
+                    return false;
+                }
+                const normalized = normalizeName(channel.name);
+                return aliases.some((alias) => normalizeName(alias) === normalized);
+            }) as TextChannel | undefined;
+
+            if (existing !== undefined) {
                 boundChannels.push(`#${existing.name}`);
+                // move to target parent category if misplaced
+                if (existing.parentId !== parent.id) {
+                    await existing.setParent(parent.id, { lockPermissions: false }).catch(() => undefined);
+                }
+                // sync permission overwrites so public channels (rules, welcome, announcements) stay visible
+                await existing.permissionOverwrites.set(overwrites).catch(() => undefined);
                 return existing;
             }
             createdChannels.push(`#${name}`);
@@ -212,32 +241,40 @@ export class ServerProvisioner {
         const pipeline = await ensureCategory("Task pipeline", []);
         const staff = await ensureCategory("Staff", privateOverwrites);
 
+        const welcome = await ensureText(
+            ChannelPurpose.Welcome,
+            platform,
+            "Welcome to the studio! Member arrivals and onboarding.",
+            readOnlyOverwrites
+        );
         const announcements = await ensureText(
-            channelNames[ChannelPurpose.Announcements],
+            ChannelPurpose.Announcements,
             platform,
             "Round results and studio news.",
             readOnlyOverwrites
         );
         const telemetry = await ensureText(
-            channelNames[ChannelPurpose.Telemetry],
+            ChannelPurpose.Telemetry,
             staff,
             "Voting activity, bans and raid alerts.",
             privateOverwrites
         );
-        const submissions = await ensureText(channelNames[ChannelPurpose.TaskSubmissions], pipeline, "Deliverables waiting for review.", [
+        const submissions = await ensureText(ChannelPurpose.TaskSubmissions, pipeline, "Deliverables waiting for review.", [
             { id: everyone, deny: [PermissionFlagsBits.ViewChannel] },
             ...staffRead,
             ...contributorRoles.map((role) => ({ id: role.id, allow: [PermissionFlagsBits.ViewChannel] })),
             botAccess
         ]);
-        const logs = await ensureText(channelNames[ChannelPurpose.TaskLogs], staff, "Task activity log.", privateOverwrites);
+        const logs = await ensureText(ChannelPurpose.TaskLogs, staff, "Task activity log.", privateOverwrites);
         const rules = await ensureText(
-            channelNames[ChannelPurpose.Rules],
+            ChannelPurpose.Rules,
             platform,
             "Community guidelines, voting invariants, and rules.",
             readOnlyOverwrites
         );
-        await rules.setPosition(0).catch(() => undefined);
+        await welcome.setPosition(0).catch(() => undefined);
+        await rules.setPosition(1).catch(() => undefined);
+        await announcements.setPosition(2).catch(() => undefined);
 
         let forum = find(forumName, ChannelType.GuildForum) as ForumChannel | undefined;
         if (forum === undefined) {
@@ -262,6 +299,7 @@ export class ServerProvisioner {
         }
 
         await this.settings.update((settings) => {
+            settings.channels[ChannelPurpose.Welcome] = welcome.id;
             settings.channels[ChannelPurpose.Rules] = rules.id;
             settings.channels[ChannelPurpose.Announcements] = announcements.id;
             settings.channels[ChannelPurpose.Telemetry] = telemetry.id;

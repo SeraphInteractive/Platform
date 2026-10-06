@@ -118,7 +118,7 @@ export function HomeView(): ReactNode {
                                 <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
                             </div>
                             <div className="space-y-1">
-                                <h3 className="font-semibold text-base">Task Grab-Box</h3>
+                                <h3 className="font-semibold text-base">Grab-Box</h3>
                                 <p className="text-muted-foreground text-xs leading-relaxed">
                                     <span className="font-medium text-foreground tabular-nums">{availableCount}</span> available to claim · <span className="font-medium text-foreground tabular-nums">{inProgressCount}</span> in progress
                                 </p>
@@ -136,7 +136,7 @@ export function HomeView(): ReactNode {
                                 <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
                             </div>
                             <div className="space-y-1">
-                                <h3 className="font-semibold text-base">Decision Ballots</h3>
+                                <h3 className="font-semibold text-base">Ballots</h3>
                                 <p className="text-muted-foreground text-xs leading-relaxed">
                                     <span className="font-medium text-foreground tabular-nums">{votingCount}</span> voting · <span className="font-medium text-foreground tabular-nums">{openCount}</span> submissions · <span className="font-medium text-foreground tabular-nums">{closedCount}</span> closed
                                 </p>

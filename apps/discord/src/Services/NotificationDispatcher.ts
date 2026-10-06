@@ -10,6 +10,7 @@ import {
 import type { Client, SendableChannels } from "discord.js";
 import type { Logger } from "pino";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
+import { Accent, message, panel, person, plain } from "../Discord/Ui.js";
 import { renderNotification, renderRulesMessage } from "../Views/NotificationViews.js";
 import { reviewCard, threadUpdate } from "../Views/TaskViews.js";
 import { syncMemberStudioRoles } from "./StudioRoles.js";
@@ -109,6 +110,35 @@ export class NotificationDispatcher {
                 const approved = notification.decision === ReviewDecision.Approved;
                 await this.forum.post(notification.shot.id, threadUpdate(notification));
                 await this.forum.setStatus(notification.shot.id, approved ? ShotStatus.Approved : ShotStatus.Claimed);
+                if (notification.contributor.discordId !== null) {
+                    try {
+                        const user = await this.client.users.fetch(notification.contributor.discordId);
+                        const note = notification.notes ? `\n\n> ${plain(notification.notes)}` : "";
+                        if (approved) {
+                            await user.send(
+                                message(
+                                    panel(
+                                        Accent.Success,
+                                        `🎉 **Your deliverable has been approved!**`,
+                                        `Your submission for **${plain(notification.shot.code)} - ${plain(notification.shot.title)}** (v${notification.version}) was approved by ${person(notification.reviewer, false)}.${note}`
+                                    )
+                                )
+                            );
+                        } else {
+                            await user.send(
+                                message(
+                                    panel(
+                                        Accent.Warning,
+                                        `⚠️ **Changes requested on your deliverable**`,
+                                        `Your submission for **${plain(notification.shot.code)} - ${plain(notification.shot.title)}** (v${notification.version}) was reviewed by ${person(notification.reviewer, false)} with changes requested.${note}\n\n-# Upload a new version with /submit-task when ready.`
+                                    )
+                                )
+                            );
+                        }
+                    } catch (error: unknown) {
+                        this.logger.warn({ err: error, discordId: notification.contributor.discordId }, "failed to DM contributor on submission review");
+                    }
+                }
                 return;
             }
             case NotificationType.UserBlacklisted:
@@ -185,6 +215,20 @@ export class NotificationDispatcher {
                         BoundRole.Contributor,
                         `Entry "${notification.entry.title}" approved`
                     );
+                    try {
+                        const user = await this.client.users.fetch(notification.author.discordId);
+                        await user.send(
+                            message(
+                                panel(
+                                    Accent.Success,
+                                    `🎉 **Your entry has been approved!**`,
+                                    `Your submission **${plain(notification.entry.title)}** for **${plain(notification.round.title)}** has been approved and is now on the ballot.`
+                                )
+                            )
+                        );
+                    } catch (error: unknown) {
+                        this.logger.warn({ err: error, discordId: notification.author.discordId }, "failed to DM user on entry approval");
+                    }
                 }
                 return;
             case NotificationType.DocumentUpdated: {
