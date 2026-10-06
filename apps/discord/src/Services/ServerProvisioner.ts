@@ -49,29 +49,39 @@ const channelAliases: Readonly<Record<Exclude<ChannelPurpose, ChannelPurpose.Tas
 const forumName = "tasks";
 
 export const studioRules = [
-    "# 📜 Studio Guidelines & System Integrity",
-    "*Official community voting rules, mathematical invariants, and production workflow.*",
+    "# 📜 Project Stairway — Studio Charter & Community Agreement",
+    "*Official code of conduct, intellectual property & licensing terms, pipeline obligations, and democratic invariants.*",
     "",
-    "### 1. Community Philosophy & Roles",
-    "• **Voters (Community):** Democratic participation in film rounds and story pitches.",
-    "• **Contributors:** Claim 3D modeling, animation, layout, lighting, or sound tasks from the Grab-Box.",
-    "• **Supervisors & Admins:** Lead departments, QA deliverables, trigger binary polls, and audit integrity.",
+    "### 1. Code of Conduct & Community Standards",
+    "• **Professionalism & Mutual Respect:** Treat all members, contributors, supervisors, and directors with respect. Critique work and technical execution constructively, never individuals.",
+    "• **Zero Tolerance for Harassment:** Discrimination, hate speech, bigotry, harassment, defamation, predatory conduct, and targeted toxicity result in an immediate and irreversible permanent ban.",
+    "• **Constructive Collaboration:** Maintain a positive, collaborative environment. Support newer artists, give actionable feedback, and communicate transparently during collaborative tasks.",
+    "• **Channel Discipline:** Keep discussions on-topic within relevant department channels and threads. Commercial solicitation, unsolicited DMs, off-topic spam, and self-promotion are strictly prohibited.",
     "",
-    "### 2. Voting Math & Invariants",
-    "• **Ranked-Choice (3-2-1 Borda):** Top 3 choices receive 3, 2, and 1 point respectively (`6 points/ballot`).",
-    "• **Point Conservation Law:** `Total_Points = 6 × Total_Ballots` (strictly enforced by real-time invariants).",
-    "• **Bayesian Shrinkage (K=30):** Pulls low-sample spikes toward prior mean to prevent brigading takeovers.",
+    "### 2. Intellectual Property, Asset Warranties & Contributor Licensing",
+    "• **Original Authorship Warranty:** All contributions (3D models, textures, animations, audio, rigs, shaders, code, and pitches) must be 100% original work authored by you, public domain, or permissibly open-source.",
+    "• **Prohibited Assets:** Uploading ripped assets from third-party games, uncredited copyrighted models, or AI outputs without verifiable training provenance is strictly forbidden.",
+    "• **Irrevocable Production Grant:** By submitting any deliverable, `.blend` file, or creative pitch to the platform or grab-box, you grant Project Stairway and Squared Media an irrevocable, perpetual, worldwide, royalty-free license to use, adapt, modify, composite, render, and distribute your work in the official film release, behind-the-scenes material, and related promotional media.",
+    "• **Attribution Rights:** Approved contributors receive permanent credit in the film's official credits ledger and on the web platform under their verified identity.",
     "",
-    "### 3. Anti-Cheat & Anomaly Telemetry",
-    "• **Velocity Z-Score (Z > 2.5):** Flags automated ballot surges within sliding 5-minute windows.",
-    "• **Shannon Rank Entropy (H < 0.35):** Detects coordinated bullet-voting rings.",
-    "• **Permanent Audit Ledger:** Certified election outcomes are signed and immutable.",
+    "### 3. Contributor Pipeline & Grab-Box Obligations",
+    "• **Task Commitment & Tiers:** Claim only tasks you have the skills and bandwidth to complete within the designated tier timeframe (Tier 1: 1–2 days, Tier 2: 3–4 days, Tier 3: 5–7 days, Tier 4: 10–14 days).",
+    "• **Mandatory Deliverable Standards:** Every grab-box deliverable requires two files: an inspectable, organized `.blend` file (proper collection hierarchy, clean geometry, packed assets) and a compressed video viewport render (`MP4`/`WebM`).",
+    "• **Proactive Release Invariant:** If you are unable to complete a claimed task before the deadline, you must release it immediately using `/release-task` or the web platform so another artist can continue without bottlenecking production.",
+    "• **Quality Assurance & Supervisor Authority:** Department supervisors hold final authority over technical QA, topology standards, and artistic continuity. Revisions requested in Discord review threads must be resolved before downstream handover.",
     "",
-    "### 4. Contributor Grab-Box",
-    "• Claim tasks across 4 difficulty tiers.",
-    "• Deliverables require `.blend` scene source files and compressed video previews for supervisor review.",
+    "### 4. Democratic Voting Integrity & Mathematical Invariants",
+    "• **Single Verified Voter:** Exactly one account per individual, verified via zero-knowledge HMAC-SHA256 email hashing. Multi-accounting, sockpuppeting, and vote farming are strictly prohibited.",
+    "• **Ranked-Choice Invariant (3-2-1 Borda):** Ballots distribute 3, 2, and 1 points respectively (`6 points/ballot`). Total round points are mathematically conserved: `Total_Points = 6 × Total_Ballots`.",
+    "• **Bayesian Shrinkage Smoothing (K=30):** Early scores are regularized against prior distributions to prevent sample-size skew and brigading anomalies.",
+    "• **Real-Time Telemetry & Anti-Cheat:** Automated detection engines continuously audit velocity bursts ($Z > 2.5$), rank entropy collapse, and unnatural clustering. Fraudulent ballots trigger automatic quarantine and actor blacklisting.",
     "",
-    "-# Synced dynamically from web platform • [View Full Documentation](https://dev-api.seraphinteractive.com/documentation)"
+    "### 5. Governance, Leadership Seats & Dispute Resolution",
+    "• **Single-Seat Hierarchy:** Executive (Producer, Creative Director, Production Manager, Admin) and Department Lead roles are single-holder seats assigned and synchronized via `/assign-role`.",
+    "• **Dispute Escalation:** Procedural or creative disagreements escalate directly to the Producer and Creative Director, whose rulings are final.",
+    "• **Enforcement & Sanctions:** Violations of these guidelines, conduct policies, or licensing terms will result in progressive disciplinary action: deliverable rejection, grab-box lockout, role revocation, temporary suspension, or permanent cross-platform blacklisting.",
+    "",
+    "-# Synced dynamically from web platform • [View Full Documentation & Legal Policies](https://dev-api.seraphinteractive.com/documentation)"
 ].join("\n");
 
 export class ServerProvisioner {
@@ -293,7 +303,10 @@ export class ServerProvisioner {
         const tagged = await this.ensureForumTags(forum);
 
         const pins = await rules.messages.fetchPinned().catch(() => null);
-        if (pins === null || pins.size === 0) {
+        const botRulesMessage = pins?.find((msg) => msg.author.id === botId);
+        if (botRulesMessage !== undefined) {
+            await botRulesMessage.edit(message(panel(null, studioRules))).catch(() => undefined);
+        } else {
             const posted = await rules.send(message(panel(null, studioRules)));
             await posted.pin().catch(() => undefined);
         }
