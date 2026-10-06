@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { env, isSecureDeployment } from "@/Server/Environment";
 
 const turnstileOrigin = "https://challenges.cloudflare.com";
+const youtubeOrigins = "https://www.youtube.com https://www.youtube-nocookie.com";
 
 function contentSecurityPolicy(nonce: string): string {
     const { NODE_ENV, STORAGE_ORIGINS } = env();
@@ -19,7 +20,7 @@ function contentSecurityPolicy(nonce: string): string {
         "base-uri 'none'",
         "form-action 'self'",
         "frame-ancestors 'none'",
-        `frame-src ${turnstileOrigin}`,
+        `frame-src ${turnstileOrigin} ${youtubeOrigins}`,
         "worker-src 'self' blob:",
         "manifest-src 'self'"
     ];

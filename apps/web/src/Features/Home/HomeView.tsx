@@ -1,13 +1,9 @@
 "use client";
 
-import { RoundStatus, ShotStatus } from "@platform/contracts";
-import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Film, Layers, Vote } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { platformApi } from "@/Api/PlatformApi";
-import { queryKeys } from "@/Api/QueryKeys";
 import { VideoPlayer } from "@/Components/Common/VideoPlayer";
 import { Button } from "@/Components/Ui/button";
 import { Card, CardContent } from "@/Components/Ui/card";
@@ -17,11 +13,6 @@ import { useSession } from "@/Hooks/UseSession";
 
 export function HomeView(): ReactNode {
     const { user } = useSession();
-    const pipeline = useQuery({ queryKey: queryKeys.pipeline, queryFn: () => platformApi.pipeline() });
-    const roundsQuery = { status: RoundStatus.Open, page: 1, perPage: 5 };
-    const rounds = useQuery({ queryKey: queryKeys.rounds(roundsQuery), queryFn: () => platformApi.rounds(roundsQuery) });
-    const shotsQuery = { status: ShotStatus.Available, page: 1, perPage: 1 };
-    const shots = useQuery({ queryKey: queryKeys.shots(shotsQuery), queryFn: () => platformApi.shots(shotsQuery) });
     const myShots = useMyShots(user !== null ? user.id : null);
     const active = myShots.active;
     const videoUrl = getAnnouncementEmbedUrl();
@@ -67,13 +58,8 @@ export function HomeView(): ReactNode {
                 <div className="grid gap-6 md:grid-cols-3">
                     <Card className="flex flex-col justify-between transition-colors hover:border-foreground/40">
                         <CardContent className="space-y-4 p-6">
-                            <div className="flex items-center justify-between">
-                                <div className="rounded-lg bg-primary/10 p-2 text-primary">
-                                    <Film className="size-5" />
-                                </div>
-                                <span className="rounded-full border bg-muted px-2.5 py-0.5 text-xs font-medium">
-                                    {shots.data?.meta.total ?? "–"} open
-                                </span>
+                            <div className="rounded-lg bg-primary/10 p-2 text-primary w-fit">
+                                <Film className="size-5" />
                             </div>
                             <div className="space-y-1">
                                 <h3 className="font-semibold text-base">Task Grab-Box</h3>
@@ -93,13 +79,8 @@ export function HomeView(): ReactNode {
 
                     <Card className="flex flex-col justify-between transition-colors hover:border-foreground/40">
                         <CardContent className="space-y-4 p-6">
-                            <div className="flex items-center justify-between">
-                                <div className="rounded-lg bg-primary/10 p-2 text-primary">
-                                    <Vote className="size-5" />
-                                </div>
-                                <span className="rounded-full border bg-muted px-2.5 py-0.5 text-xs font-medium">
-                                    {rounds.data?.meta.total ?? "–"} active
-                                </span>
+                            <div className="rounded-lg bg-primary/10 p-2 text-primary w-fit">
+                                <Vote className="size-5" />
                             </div>
                             <div className="space-y-1">
                                 <h3 className="font-semibold text-base">Decision Ballots</h3>
@@ -119,29 +100,14 @@ export function HomeView(): ReactNode {
 
                     <Card className="flex flex-col justify-between transition-colors hover:border-foreground/40">
                         <CardContent className="space-y-4 p-6">
-                            <div className="flex items-center justify-between">
-                                <div className="rounded-lg bg-primary/10 p-2 text-primary">
-                                    <Layers className="size-5" />
-                                </div>
-                                <span className="rounded-full border bg-muted px-2.5 py-0.5 text-xs font-medium">
-                                    {pipeline.data ? `${Math.round(pipeline.data.progressPercent)}%` : "–"}
-                                </span>
+                            <div className="rounded-lg bg-primary/10 p-2 text-primary w-fit">
+                                <Layers className="size-5" />
                             </div>
-                            <div className="space-y-2">
-                                <div className="space-y-1">
-                                    <h3 className="font-semibold text-base">Production Roadmap</h3>
-                                    <p className="text-muted-foreground text-xs leading-relaxed">
-                                        {pipeline.data?.stepTitle ?? "Track live milestones and active departments."}
-                                    </p>
-                                </div>
-                                {pipeline.data && (
-                                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                                        <div
-                                            className="h-full bg-primary transition-all duration-300"
-                                            style={{ width: `${Math.min(100, Math.max(0, pipeline.data.progressPercent))}%` }}
-                                        />
-                                    </div>
-                                )}
+                            <div className="space-y-1">
+                                <h3 className="font-semibold text-base">Production Roadmap</h3>
+                                <p className="text-muted-foreground text-xs leading-relaxed">
+                                    Track project milestones across storyboarding, modeling, animation, and final post-production.
+                                </p>
                             </div>
                         </CardContent>
                         <div className="border-t p-4 pt-3">
