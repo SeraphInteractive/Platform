@@ -2,7 +2,7 @@
 
 import { RoundStatus, ShotStatus } from "@platform/contracts";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Film, Layers, Vote } from "lucide-react";
+import { ArrowRight, Film, Vote } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -89,16 +89,16 @@ export function HomeView(): ReactNode {
                 <section className="space-y-2">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                         <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+                            <Link href="/roadmap" className="text-muted-foreground hover:text-foreground text-xs font-semibold uppercase tracking-wider transition-colors">
                                 Production Roadmap
-                            </span>
+                            </Link>
                             <span className="text-muted-foreground text-xs">·</span>
                             <span className="text-xs text-muted-foreground">
-                                Phase {progress.phaseNumber}: {progress.phaseTitle}
+                                {progress.phaseTitle}
                             </span>
                         </div>
                         <span className="text-xs font-medium tabular-nums text-muted-foreground">
-                            Step {progress.stepId} · {Math.round(progress.progressPercent)}%
+                            Step {progress.stepId}: {progress.stepTitle} · {Math.round(progress.progressPercent)}%
                         </span>
                     </div>
                     <Progress value={progress.progressPercent} aria-label="Overall film production progress" />
@@ -107,103 +107,42 @@ export function HomeView(): ReactNode {
 
             <section className="space-y-4">
                 <h2 className="text-xl font-semibold tracking-tight">Community Workflows</h2>
-                <div className="grid gap-6 md:grid-cols-3">
-                    <Card className="flex flex-col justify-between transition-colors hover:border-foreground/40">
-                        <CardContent className="space-y-4 p-6">
-                            <div className="flex items-center justify-between gap-2">
-                                <div className="rounded-lg bg-primary/10 p-2 text-primary w-fit">
-                                    <Film className="size-5" />
-                                </div>
-                                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Production</span>
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <Link
+                        href="/grabbox"
+                        className="group flex flex-col justify-between rounded-xl border border-border/80 bg-card p-5 transition-all hover:border-foreground/40 hover:bg-accent/10"
+                    >
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <Film className="size-5 text-muted-foreground transition-colors group-hover:text-foreground" />
+                                <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-1">
                                 <h3 className="font-semibold text-base">Task Grab-Box</h3>
-                                <div className="flex flex-wrap gap-2 pt-1">
-                                    <div className="rounded border bg-muted/40 px-2.5 py-1 text-xs">
-                                        <span className="text-muted-foreground">Available: </span>
-                                        <span className="font-semibold tabular-nums">{availableCount}</span>
-                                    </div>
-                                    <div className="rounded border bg-muted/40 px-2.5 py-1 text-xs">
-                                        <span className="text-muted-foreground">In Progress: </span>
-                                        <span className="font-semibold tabular-nums">{inProgressCount}</span>
-                                    </div>
-                                </div>
+                                <p className="text-muted-foreground text-xs leading-relaxed">
+                                    <span className="font-medium text-foreground tabular-nums">{availableCount}</span> available to claim · <span className="font-medium text-foreground tabular-nums">{inProgressCount}</span> in progress
+                                </p>
                             </div>
-                        </CardContent>
-                        <div className="border-t p-4 pt-3">
-                            <Button asChild variant="outline" size="sm" className="w-full justify-between">
-                                <Link href="/grabbox">
-                                    Browse Grab-Box <ArrowRight className="size-4" />
-                                </Link>
-                            </Button>
                         </div>
-                    </Card>
+                    </Link>
 
-                    <Card className="flex flex-col justify-between transition-colors hover:border-foreground/40">
-                        <CardContent className="space-y-4 p-6">
-                            <div className="flex items-center justify-between gap-2">
-                                <div className="rounded-lg bg-primary/10 p-2 text-primary w-fit">
-                                    <Vote className="size-5" />
-                                </div>
-                                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Governance</span>
+                    <Link
+                        href="/voting"
+                        className="group flex flex-col justify-between rounded-xl border border-border/80 bg-card p-5 transition-all hover:border-foreground/40 hover:bg-accent/10"
+                    >
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <Vote className="size-5 text-muted-foreground transition-colors group-hover:text-foreground" />
+                                <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-1">
                                 <h3 className="font-semibold text-base">Decision Ballots</h3>
-                                <div className="flex flex-wrap gap-2 pt-1">
-                                    <div className="rounded border bg-muted/40 px-2.5 py-1 text-xs">
-                                        <span className="text-muted-foreground">Voting: </span>
-                                        <span className="font-semibold tabular-nums">{votingCount}</span>
-                                    </div>
-                                    <div className="rounded border bg-muted/40 px-2.5 py-1 text-xs">
-                                        <span className="text-muted-foreground">Submissions: </span>
-                                        <span className="font-semibold tabular-nums">{openCount}</span>
-                                    </div>
-                                    <div className="rounded border bg-muted/40 px-2.5 py-1 text-xs">
-                                        <span className="text-muted-foreground">Closed: </span>
-                                        <span className="font-semibold tabular-nums">{closedCount}</span>
-                                    </div>
-                                </div>
+                                <p className="text-muted-foreground text-xs leading-relaxed">
+                                    <span className="font-medium text-foreground tabular-nums">{votingCount}</span> voting · <span className="font-medium text-foreground tabular-nums">{openCount}</span> submissions · <span className="font-medium text-foreground tabular-nums">{closedCount}</span> closed
+                                </p>
                             </div>
-                        </CardContent>
-                        <div className="border-t p-4 pt-3">
-                            <Button asChild variant="outline" size="sm" className="w-full justify-between">
-                                <Link href="/voting">
-                                    Cast Your Vote <ArrowRight className="size-4" />
-                                </Link>
-                            </Button>
                         </div>
-                    </Card>
-
-                    <Card className="flex flex-col justify-between transition-colors hover:border-foreground/40">
-                        <CardContent className="space-y-4 p-6">
-                            <div className="flex items-center justify-between gap-2">
-                                <div className="rounded-lg bg-primary/10 p-2 text-primary w-fit">
-                                    <Layers className="size-5" />
-                                </div>
-                                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Milestones</span>
-                            </div>
-                            <div className="space-y-2">
-                                <h3 className="font-semibold text-base">Production Roadmap</h3>
-                                <div className="space-y-1.5 pt-1 text-xs">
-                                    <div className="rounded border bg-muted/40 px-2.5 py-1">
-                                        <span className="text-muted-foreground">Stage: </span>
-                                        <span className="font-medium truncate">{progress?.phaseTitle ?? "Pre-Production"}</span>
-                                    </div>
-                                    <div className="rounded border bg-muted/40 px-2.5 py-1">
-                                        <span className="text-muted-foreground">Step: </span>
-                                        <span className="font-medium truncate">{progress ? `${progress.stepId} - ${progress.stepTitle}` : "Initial Setup"}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </CardContent>
-                        <div className="border-t p-4 pt-3">
-                            <Button asChild variant="outline" size="sm" className="w-full justify-between">
-                                <Link href="/roadmap">
-                                    View Roadmap <ArrowRight className="size-4" />
-                                </Link>
-                            </Button>
-                        </div>
-                    </Card>
+                    </Link>
                 </div>
             </section>
         </div>
