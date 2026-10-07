@@ -10,11 +10,13 @@ import { NotificationDispatcher } from "./Services/NotificationDispatcher.js";
 import { ReminderScheduler } from "./Services/ReminderScheduler.js";
 import { RoleReconciliationService } from "./Services/RoleReconciliationService.js";
 import { RoleSyncScheduler } from "./Services/RoleSyncScheduler.js";
+import { ProfanityFilter } from "./Services/ProfanityFilter.js";
 import { ServerProvisioner } from "./Services/ServerProvisioner.js";
 import { syncMemberStudioRoles } from "./Services/StudioRoles.js";
 import { TaskForum } from "./Services/TaskForum.js";
 import { ReminderStore } from "./State/ReminderStore.js";
 import { ChannelPurpose, SettingsStore } from "./State/SettingsStore.js";
+import { WarningStore } from "./State/WarningStore.js";
 
 async function main(): Promise<void> {
     const configuration = loadBotConfiguration();
@@ -22,7 +24,17 @@ async function main(): Promise<void> {
     const settings = new SettingsStore(configuration.dataDirectory);
     await settings.load();
 
-    const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
+    const warnings = new WarningStore(configuration.dataDirectory);
+    await warnings.load();
+
+    const client = new Client({
+        intents: [
+            GatewayIntentBits.Guilds,
+            GatewayIntentBits.GuildMembers,
+            GatewayIntentBits.GuildMessages,
+            GatewayIntentBits.MessageContent
+        ]
+    });
     const api = new PlatformApiClient(configuration.apiBaseUrl, configuration.serviceToken, logger);
     const forum = new TaskForum(client, configuration.guildId, settings, api, logger);
     const dispatcher = new NotificationDispatcher(client, configuration.guildId, settings, forum, logger);
@@ -33,6 +45,7 @@ async function main(): Promise<void> {
     const reminderScheduler = new ReminderScheduler(client, reminders, logger);
     const roleReconciler = new RoleReconciliationService(api, provisioner, settings, client, logger);
     const roleScheduler = new RoleSyncScheduler(roleReconciler, configuration.guildId, client, logger);
+    const profanityFilter = new ProfanityFilter(client, configuration.guildId, settings, warnings, logger);
     const context: BotContext = {
         configuration,
         api,
@@ -44,6 +57,8 @@ async function main(): Promise<void> {
         reminderScheduler,
         roleReconciler,
         roleScheduler,
+        warnings,
+        profanityFilter,
         logger
     };
     const router = new InteractionRouter(context);
@@ -86,6 +101,14 @@ async function main(): Promise<void> {
 
     client.on(Events.InteractionCreate, (interaction) => {
         void router.route(interaction);
+    });
+
+    client.on(Events.MessageCreate, (msg) => {
+        void profanityFilter.inspectMessage(msg);
+    });
+
+    client.on(Events.MessageUpdate, (_oldMsg, newMsg) => {
+        void profanityFilter.inspectMessage(newMsg);
     });
 
     client.on(Events.GuildMemberAdd, (member) => {

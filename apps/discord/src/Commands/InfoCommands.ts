@@ -66,7 +66,8 @@ export const statusCommand: SlashCommand = {
             `Telemetry: ${channel(ChannelPurpose.Telemetry)}`,
             `Task forum: ${channel(ChannelPurpose.TaskForum)}`,
             `Task submissions: ${channel(ChannelPurpose.TaskSubmissions)}`,
-            `Task log: ${channel(ChannelPurpose.TaskLogs)}`
+            `Task log: ${channel(ChannelPurpose.TaskLogs)}`,
+            `Moderation logs: ${channel(ChannelPurpose.ModerationLogs)}`
         ];
         await interaction.editReply({
             components: [panel(null, lines.join("\n"))],

@@ -10,7 +10,8 @@ export enum ChannelPurpose {
     Telemetry = "telemetry",
     TaskLogs = "taskLogs",
     TaskSubmissions = "taskSubmissions",
-    TaskForum = "taskForum"
+    TaskForum = "taskForum",
+    ModerationLogs = "moderationLogs"
 }
 
 export enum BoundRole {

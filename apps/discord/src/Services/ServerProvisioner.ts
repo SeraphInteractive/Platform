@@ -13,7 +13,7 @@ import {
 import type { Logger } from "pino";
 import { message, panel } from "../Discord/Ui.js";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
-import { contributorRoleName, findStudioRole, normalizeName, permissionsFor, studioRoles, StudioTier } from "./StudioRoles.js";
+import { contributorRoleName, findStudioRole, normalizeName, permissionsForRole, studioRoles, StudioTier } from "./StudioRoles.js";
 
 export interface ProvisionSummary {
     readonly createdRoles: readonly string[];
@@ -34,7 +34,8 @@ const channelNames: Readonly<Record<Exclude<ChannelPurpose, ChannelPurpose.TaskF
     [ChannelPurpose.Announcements]: "announcements",
     [ChannelPurpose.Telemetry]: "telemetry-alerts",
     [ChannelPurpose.TaskSubmissions]: "task-submissions",
-    [ChannelPurpose.TaskLogs]: "task-logs"
+    [ChannelPurpose.TaskLogs]: "task-logs",
+    [ChannelPurpose.ModerationLogs]: "moderation-logs"
 };
 
 const channelAliases: Readonly<Record<Exclude<ChannelPurpose, ChannelPurpose.TaskForum>, readonly string[]>> = {
@@ -43,7 +44,8 @@ const channelAliases: Readonly<Record<Exclude<ChannelPurpose, ChannelPurpose.Tas
     [ChannelPurpose.Announcements]: ["announcements", "announcement", "studio-announcements"],
     [ChannelPurpose.Telemetry]: ["telemetry-alerts", "telemetry", "bot-alerts", "alerts"],
     [ChannelPurpose.TaskSubmissions]: ["task-submissions", "submissions", "deliverables"],
-    [ChannelPurpose.TaskLogs]: ["task-logs", "task-log", "logs"]
+    [ChannelPurpose.TaskLogs]: ["task-logs", "task-log", "logs"],
+    [ChannelPurpose.ModerationLogs]: ["moderation-logs", "mod-logs", "supervisor-logs", "mod-log"]
 };
 
 const forumName = "tasks";
@@ -116,11 +118,13 @@ export class ServerProvisioner {
         const roleIds = new Map<string, DiscordRole>();
 
         for (const definition of studioRoles) {
+            const permissions = permissionsForRole(definition);
             const existing = existingRoles.find((role) => findStudioRole(role.name)?.name === definition.name);
             if (existing !== undefined) {
                 if (existing.hoist !== (definition.tier !== StudioTier.Community)) {
                     await existing.setHoist(definition.tier !== StudioTier.Community, "Studio role setup").catch(() => undefined);
                 }
+                await existing.setPermissions(permissions, "Studio role setup").catch(() => undefined);
                 roleIds.set(definition.name, existing);
                 continue;
             }
@@ -129,7 +133,7 @@ export class ServerProvisioner {
                 colors: { primaryColor: definition.color },
                 hoist: definition.tier !== StudioTier.Community,
                 mentionable: definition.tier !== StudioTier.Community,
-                permissions: [...permissionsFor(definition.tier)],
+                permissions: [...permissions],
                 reason: "Studio role setup"
             });
             roleIds.set(definition.name, created);
@@ -261,6 +265,12 @@ export class ServerProvisioner {
             botAccess
         ]);
         const logs = await ensureText(ChannelPurpose.TaskLogs, staff, "Task activity log.", privateOverwrites);
+        const moderationLogs = await ensureText(
+            ChannelPurpose.ModerationLogs,
+            staff,
+            "Profanity warnings, timeouts, and AutoMod incident logs.",
+            privateOverwrites
+        );
         const rules = await ensureText(
             ChannelPurpose.Rules,
             platform,
@@ -303,6 +313,7 @@ export class ServerProvisioner {
             settings.channels[ChannelPurpose.Telemetry] = telemetry.id;
             settings.channels[ChannelPurpose.TaskSubmissions] = submissions.id;
             settings.channels[ChannelPurpose.TaskLogs] = logs.id;
+            settings.channels[ChannelPurpose.ModerationLogs] = moderationLogs.id;
             settings.channels[ChannelPurpose.TaskForum] = tagged.id;
             settings.roles[BoundRole.Voter] = roleIds.get("Voters")?.id;
             settings.roles[BoundRole.Contributor] = roleIds.get(contributorRoleName)?.id;

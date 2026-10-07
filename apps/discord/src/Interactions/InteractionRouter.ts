@@ -19,6 +19,13 @@ import {
 } from "../Commands/TaskCommands.js";
 import { Accent, notice } from "../Discord/Ui.js";
 
+import {
+    apologyDecisionButtonHandler,
+    apologyModalHandler,
+    apologyRequestButtonHandler,
+    banApologyCommand
+} from "../Commands/ApologyReviewHandlers.js";
+
 export const slashCommands: readonly SlashCommand[] = [
     helpCommand,
     docsCommand,
@@ -34,7 +41,8 @@ export const slashCommands: readonly SlashCommand[] = [
     botSetupCommand,
     syncRolesCommand,
     statusCommand,
-    reminderCommand
+    reminderCommand,
+    banApologyCommand
 ];
 
 const componentHandlers: readonly ComponentHandler[] = [
@@ -43,7 +51,10 @@ const componentHandlers: readonly ComponentHandler[] = [
     claimTaskButtonHandler,
     reviewButtonHandler,
     reviewModalHandler,
-    deliverablesButtonHandler
+    deliverablesButtonHandler,
+    apologyRequestButtonHandler,
+    apologyModalHandler,
+    apologyDecisionButtonHandler
 ];
 
 export class InteractionRouter {
@@ -53,6 +64,48 @@ export class InteractionRouter {
     public constructor(private readonly context: BotContext) {}
 
     public async route(interaction: Interaction): Promise<void> {
+        // in direct messages, only allow ban-apology slash command and apology components
+        if (interaction.guildId === null) {
+            if (interaction.isChatInputCommand()) {
+                if (interaction.commandName !== "ban-apology") {
+                    await interaction
+                        .reply(notice("Only the /ban-apology command is accessible in Direct Messages.", Accent.Warning))
+                        .catch(() => undefined);
+                    return;
+                }
+                const command = this.commands.get("ban-apology");
+                try {
+                    await command?.execute(interaction, this.context);
+                } catch (error: unknown) {
+                    await replyWithError(interaction, error, this.context.logger);
+                }
+                return;
+            }
+
+            if (interaction.isButton() || interaction.isModalSubmit()) {
+                const prefix = interaction.customId.split(":")[0] ?? "";
+                if (prefix.startsWith("apology")) {
+                    const handler = this.handlers.get(prefix);
+                    if (handler !== undefined) {
+                        try {
+                            await handler.handle(interaction, this.context);
+                        } catch (error: unknown) {
+                            await replyWithError(interaction, error, this.context.logger);
+                        }
+                    }
+                    return;
+                }
+            }
+
+            if (interaction.isRepliable()) {
+                await interaction
+                    .reply(notice("Commands are only accessible inside the Project Stairway server.", Accent.Warning))
+                    .catch(() => undefined);
+            }
+            return;
+        }
+
+        // reject foreign guilds
         if (interaction.guildId !== this.context.configuration.guildId) {
             if (interaction.isRepliable()) {
                 await interaction.reply(notice("This bot only works in its home server.", Accent.Warning)).catch(() => undefined);

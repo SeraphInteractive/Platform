@@ -15,35 +15,36 @@ export interface StudioRole {
     readonly specialty?: Specialty;
 }
 
-const departmentPermissions = [
-    PermissionFlagsBits.ViewChannel,
-    PermissionFlagsBits.ManageThreads,
-    PermissionFlagsBits.ModerateMembers,
-    PermissionFlagsBits.ViewAuditLog,
-    PermissionFlagsBits.SendMessages,
-    PermissionFlagsBits.SendMessagesInThreads,
-    PermissionFlagsBits.AttachFiles,
-    PermissionFlagsBits.EmbedLinks,
-    PermissionFlagsBits.ReadMessageHistory
-];
-
-const contributorPermissions = [
-    PermissionFlagsBits.ViewChannel,
-    PermissionFlagsBits.SendMessages,
-    PermissionFlagsBits.SendMessagesInThreads,
-    PermissionFlagsBits.AttachFiles,
-    PermissionFlagsBits.EmbedLinks,
-    PermissionFlagsBits.AddReactions,
-    PermissionFlagsBits.UseApplicationCommands,
-    PermissionFlagsBits.ReadMessageHistory
-];
-
-const communityPermissions = [
+export const memberPermissions = [
     PermissionFlagsBits.ViewChannel,
     PermissionFlagsBits.ReadMessageHistory,
+    PermissionFlagsBits.SendMessages,
     PermissionFlagsBits.AddReactions,
     PermissionFlagsBits.UseApplicationCommands
 ];
+
+export const voterPermissions = [
+    ...memberPermissions,
+    PermissionFlagsBits.AttachFiles,
+    PermissionFlagsBits.EmbedLinks,
+    PermissionFlagsBits.UseExternalEmojis,
+    PermissionFlagsBits.UseExternalStickers
+];
+
+export const contributorPermissions = [
+    ...voterPermissions,
+    PermissionFlagsBits.SendMessagesInThreads,
+    PermissionFlagsBits.CreatePublicThreads
+];
+
+export const departmentPermissions = [
+    ...contributorPermissions,
+    PermissionFlagsBits.ManageThreads,
+    PermissionFlagsBits.ModerateMembers,
+    PermissionFlagsBits.ViewAuditLog
+];
+
+export const communityPermissions = memberPermissions;
 
 export const studioRoles: readonly StudioRole[] = Object.freeze([
     { name: "Producer", tier: StudioTier.Executive, color: 0xe74c3c, specialty: Specialty.Producer },
@@ -169,6 +170,24 @@ export function isLeadership(tier: StudioTier): boolean {
     return tier === StudioTier.Executive || tier === StudioTier.Department;
 }
 
+export function permissionsForRole(role: StudioRole): readonly bigint[] {
+    if (role.name === "Members") {
+        return memberPermissions;
+    }
+    if (role.name === "Voters") {
+        return voterPermissions;
+    }
+    switch (role.tier) {
+        case StudioTier.Executive:
+        case StudioTier.Department:
+            return departmentPermissions;
+        case StudioTier.Contributor:
+            return contributorPermissions;
+        case StudioTier.Community:
+            return memberPermissions;
+    }
+}
+
 export function permissionsFor(tier: StudioTier): readonly bigint[] {
     switch (tier) {
         case StudioTier.Executive:
@@ -177,7 +196,7 @@ export function permissionsFor(tier: StudioTier): readonly bigint[] {
         case StudioTier.Contributor:
             return contributorPermissions;
         case StudioTier.Community:
-            return communityPermissions;
+            return memberPermissions;
     }
 }
 
