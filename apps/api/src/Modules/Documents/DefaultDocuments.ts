@@ -47,6 +47,26 @@ export const defaultDocuments: Readonly<Record<DocumentSlug, DefaultDocument>> =
             }
         ]
     },
+    [DocumentSlug.Rules]: {
+        title: "Discord Rules",
+        sections: [
+            {
+                id: "community-rules",
+                title: "1. Community & Chat Rules",
+                html: "<p>Welcome to Project Stairway. By participating in this server, you agree to abide by these core community standards:</p><ul><li><strong>Respect Everyone:</strong> Treat all community members, contributors, supervisors, and directors with respect. Harassment, discrimination, hate speech, and toxicity result in an immediate ban.</li><li><strong>Channel Discipline:</strong> Keep conversations on-topic within designated channels and threads.</li><li><strong>No Spam or Self-Promotion:</strong> Commercial advertising, unsolicited direct messages, and spam are strictly prohibited.</li><li><strong>Appropriate Content:</strong> Maintain a PG-13 environment. NSFW, gore, or disruptive content is forbidden.</li></ul>"
+            },
+            {
+                id: "pipeline-etiquette",
+                title: "2. Production & Grab-Box Etiquette",
+                html: "<p>When participating in film production and task claims:</p><ul><li><strong>Honor Claim Timelines:</strong> Claim tasks only when you have bandwidth to complete them. If unable to finish, release the task promptly with <code>/release-task</code>.</li><li><strong>Deliverable Quality:</strong> Provide organized <code>.blend</code> files alongside compressed viewport renders according to department standards.</li><li><strong>Constructive Reviews:</strong> Keep discussion in task review threads objective, polite, and focused on QA criteria.</li></ul>"
+            },
+            {
+                id: "charter-redirect",
+                title: "3. Studio Charter & Full Policies",
+                html: '<p>For complete legal terms, IP licensing agreements, democratic voting invariants, and studio leadership hierarchy, please view our full <a href="/guidelines">Guidelines &amp; Studio Charter</a> and <a href="/legal/terms">Terms of Service</a> on the web platform.</p>'
+            }
+        ]
+    },
     [DocumentSlug.Terms]: {
         title: "Terms of Service",
         sections: [

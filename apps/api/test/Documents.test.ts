@@ -115,4 +115,21 @@ describe("documents", () => {
         const response = await publish(superAdmin, DocumentSlug.Guidelines, { ...body, expectedRevision: 1, requireReacceptance: true });
         expect(response.statusCode).toBe(400);
     });
+
+    it("serves default discord rules and rejects re-acceptance requirement", async () => {
+        const response = await context.application.inject({ method: "GET", url: "/api/v1/documents/rules" });
+        expect(response.statusCode).toBe(200);
+        const data = json<{ data: { title: string; revision: number; sections: { id: string }[] } }>(response).data;
+        expect(data.title).toBe("Discord Rules");
+        expect(data.revision).toBe(0);
+        expect(data.sections.length).toBeGreaterThan(0);
+
+        const invalidReacceptance = await publish(superAdmin, DocumentSlug.Rules, {
+            ...body,
+            title: "Discord Rules",
+            expectedRevision: 0,
+            requireReacceptance: true
+        });
+        expect(invalidReacceptance.statusCode).toBe(400);
+    });
 });

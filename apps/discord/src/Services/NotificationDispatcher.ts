@@ -232,27 +232,29 @@ export class NotificationDispatcher {
                 }
                 return;
             case NotificationType.DocumentUpdated: {
-                if (notification.slug === DocumentSlug.Guidelines) {
+                if (notification.slug === DocumentSlug.Rules || notification.slug === DocumentSlug.Guidelines) {
                     const rulesChannel = await this.channel(ChannelPurpose.Rules);
                     if (rulesChannel !== null && "messages" in rulesChannel) {
-                        const existing = await rulesChannel.messages.fetch({ limit: 20 }).catch(() => null);
-                        if (existing !== null) {
-                            for (const msg of existing.values()) {
-                                if (msg.author.id === this.client.user?.id) {
-                                    await msg.delete().catch(() => undefined);
-                                }
+                        const botId = this.client.user?.id;
+                        const pins = await rulesChannel.messages.fetchPinned().catch(() => null);
+                        const pinnedBotMsg = pins?.find((msg) => msg.author.id === botId);
+                        const rendered = renderRulesMessage(notification);
+                        if (pinnedBotMsg !== undefined) {
+                            await pinnedBotMsg.edit(rendered).catch((err) => {
+                                this.logger.error({ err }, "failed to edit pinned rules message");
+                            });
+                        } else {
+                            const posted = await rulesChannel.send(rendered).catch((err) => {
+                                this.logger.error({ err }, "failed to post updated rules message");
+                                return null;
+                            });
+                            if (posted !== null) {
+                                await posted.pin().catch(() => undefined);
                             }
-                        }
-                        const posted = await rulesChannel.send(renderRulesMessage(notification)).catch((err) => {
-                            this.logger.error({ err }, "failed to post updated rules message");
-                            return null;
-                        });
-                        if (posted !== null) {
-                            await posted.pin().catch(() => undefined);
                         }
                         this.logger.info(
                             { revision: notification.revision, slug: notification.slug },
-                            "dynamically updated rules channel message"
+                            "dynamically synced rules channel message in-place"
                         );
                     }
                 }

@@ -404,15 +404,9 @@ export function renderNotification(notification: PlatformNotification, context: 
                 notification.note !== null && notification.note.trim().length > 0 ? `\n-# Note: ${plain(notification.note, 200)}` : "";
             return [
                 post(
-                    ChannelPurpose.TaskLogs,
-                    Accent.Info,
-                    `**Guidelines Updated (Rev #${notification.revision}): ${plain(notification.title)}**`,
-                    `Updated by ${person(notification.actor, isMember)}${noteText}`
-                ),
-                post(
                     ChannelPurpose.Telemetry,
                     Accent.Info,
-                    `**Document Published: ${plain(notification.title)} (Rev #${notification.revision})**`,
+                    `**${plain(notification.title)} Published (Rev #${notification.revision})**`,
                     `Published by ${person(notification.actor, isMember)}${noteText}`
                 )
             ];
@@ -444,7 +438,7 @@ export function htmlToDiscordMarkdown(html: string): string {
 }
 
 export function renderRulesMessage(notification: NotificationOf<NotificationType.DocumentUpdated>): V2Message {
-    const lines: string[] = [`# 📜 ${notification.title}`, `*Official guidelines, scoring invariants, and fair-play policies.*`, ""];
+    const lines: string[] = [`# 📜 ${notification.title}`, `*Official community standards, guidelines, and pipeline etiquette.*`, ""];
 
     for (const section of notification.sections) {
         lines.push(`### ${section.title}`);
@@ -453,8 +447,8 @@ export function renderRulesMessage(notification: NotificationOf<NotificationType
     }
 
     lines.push(
-        `-# Revision ${notification.revision} • Synced automatically from web platform • [View Full Documentation](https://dev-api.seraphinteractive.com/documentation)`
+        `-# Revision ${notification.revision} • Synced dynamically from web platform • [View Full Documentation & Legal Policies](https://dev-api.seraphinteractive.com/guidelines)`
     );
 
-    return message(panel(Accent.Info, lines.join("\n").trim()));
+    return message(panel(null, lines.join("\n").trim()));
 }

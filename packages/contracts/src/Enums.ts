@@ -51,6 +51,7 @@ export const initialTermsVersion = "2026-09-27";
 
 export enum DocumentSlug {
     Guidelines = "guidelines",
+    Rules = "rules",
     Terms = "terms",
     Privacy = "privacy",
     AcceptableUse = "acceptable-use"
