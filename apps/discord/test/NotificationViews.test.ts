@@ -564,7 +564,7 @@ describe("rules views", () => {
         };
         const rendered = renderRulesMessage(notification);
         const text = texts(rendered).join("\n");
-        expect(text).toContain("# 📜 Studio Guidelines & Math");
+        expect(text).toContain("# Studio Guidelines & Math");
         expect(text).toContain("### Borda Count");
         expect(text).toContain("Points = `6 * N`");
         expect(text).toContain("Revision 3");

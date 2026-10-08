@@ -425,7 +425,7 @@ export function htmlToDiscordMarkdown(html: string): string {
         .replace(/<i>(.*?)<\/i>/gi, "*$1*")
         .replace(/<code>(.*?)<\/code>/gi, "`$1`")
         .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/gi, "```\n$1\n```")
-        .replace(/<li>(.*?)<\/li>/gi, "• $1\n")
+        .replace(/<li>(.*?)<\/li>/gi, "• $1\n\n")
         .replace(/<\/?ul>/gi, "\n")
         .replace(/<\/?ol>/gi, "\n")
         .replace(/<a\s+(?:[^>]*?\s+)?href="([^"]*)"[^>]*>(.*?)<\/a>/gi, "[$2]($1)")
@@ -438,17 +438,16 @@ export function htmlToDiscordMarkdown(html: string): string {
 }
 
 export function renderRulesMessage(notification: NotificationOf<NotificationType.DocumentUpdated>): V2Message {
-    const lines: string[] = [`# 📜 ${notification.title}`, `*Official community standards, guidelines, and pipeline etiquette.*`, ""];
+    const lines: string[] = [`# ${plain(notification.title)}`, `*Official community standards and pipeline etiquette.*`, ""];
 
     for (const section of notification.sections) {
         lines.push(`### ${section.title}`);
+        lines.push("");
         lines.push(htmlToDiscordMarkdown(section.html));
         lines.push("");
     }
 
-    lines.push(
-        `-# Revision ${notification.revision} • Synced dynamically from web platform • [View Full Documentation & Legal Policies](https://dev-api.seraphinteractive.com/guidelines)`
-    );
+    lines.push(`-# Revision ${notification.revision} • Project Stairway Studio`);
 
     return message(panel(null, lines.join("\n").trim()));
 }

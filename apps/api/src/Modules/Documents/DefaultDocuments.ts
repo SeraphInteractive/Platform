@@ -51,19 +51,29 @@ export const defaultDocuments: Readonly<Record<DocumentSlug, DefaultDocument>> =
         title: "Discord Rules",
         sections: [
             {
-                id: "community-rules",
-                title: "1. Community & Chat Rules",
-                html: "<p>Welcome to Project Stairway. By participating in this server, you agree to abide by these core community standards:</p><ul><li><strong>Respect Everyone:</strong> Treat all community members, contributors, supervisors, and directors with respect. Harassment, discrimination, hate speech, and toxicity result in an immediate ban.</li><li><strong>Channel Discipline:</strong> Keep conversations on-topic within designated channels and threads.</li><li><strong>No Spam or Self-Promotion:</strong> Commercial advertising, unsolicited direct messages, and spam are strictly prohibited.</li><li><strong>Appropriate Content:</strong> Maintain a PG-13 environment. NSFW, gore, or disruptive content is forbidden.</li></ul>"
+                id: "conduct",
+                title: "1. Conduct",
+                html: "<ul><li><strong>Respect and Zero Tolerance:</strong> Harassment, hate speech, slurs, doxxing, or personal attacks result in immediate removal.</li><li><strong>PG-13 Standard:</strong> Explicit, NSFW, gore, or disruptive media is strictly prohibited.</li><li><strong>No Spam or Promotion:</strong> Unsolicited commercial advertising, DM self-promotion, and link spam are not allowed.</li><li><strong>Channel Discipline:</strong> Keep discussions on-topic in designated department channels and production threads.</li></ul>"
             },
             {
-                id: "pipeline-etiquette",
-                title: "2. Production & Grab-Box Etiquette",
-                html: "<p>When participating in film production and task claims:</p><ul><li><strong>Honor Claim Timelines:</strong> Claim tasks only when you have bandwidth to complete them. If unable to finish, release the task promptly with <code>/release-task</code>.</li><li><strong>Deliverable Quality:</strong> Provide organized <code>.blend</code> files alongside compressed viewport renders according to department standards.</li><li><strong>Constructive Reviews:</strong> Keep discussion in task review threads objective, polite, and focused on QA criteria.</li></ul>"
+                id: "moderation",
+                title: "2. Moderation",
+                html: "<ul><li><strong>Automated Inspection:</strong> AutoMod actively deletes profanity, slurs, and obfuscated text variations across all channels.</li><li><strong>Progressive Discipline:</strong><br />• 1st Offence (5 warnings): 24-hour mute.<br />• 2nd Offence (+3 warnings): 1-week mute.<br />• 3rd Offence (+1 warning): 1-month server ban.</li><li><strong>Decay and Logs:</strong> Infraction warnings decay after 30 days. All moderation actions are logged to staff channels.</li><li><strong>Ban Apology Review:</strong> Banned members can submit <code>/ban-apology</code> in direct messages with the bot for supervisor review.</li></ul>"
             },
             {
-                id: "charter-redirect",
-                title: "3. Studio Charter & Full Policies",
-                html: '<p>For complete legal terms, IP licensing agreements, democratic voting invariants, and studio leadership hierarchy, please view our full <a href="/guidelines">Guidelines &amp; Studio Charter</a> and <a href="/legal/terms">Terms of Service</a> on the web platform.</p>'
+                id: "permissions",
+                title: "3. Permissions",
+                html: "<ul><li><strong>Base Members:</strong> Text-only access in public channels. File uploads, link embeds, and external emojis are restricted to prevent raids and spam.</li><li><strong>Verified Voters:</strong> Authenticated community members unlock file attachments, image uploads, link embeds, and external reactions.</li><li><strong>Contributors:</strong> Unlocks thread creation and active participation in task review discussions.</li></ul>"
+            },
+            {
+                id: "grabbox",
+                title: "4. Grab-Box",
+                html: "<ul><li><strong>Single Active Claim:</strong> Contributors may hold only one active production task claim at a time.</li><li><strong>Deadlines and Release:</strong> Complete tasks within the allocated timeframe. If unable to finish, release the task promptly with <code>/release-task</code>.</li><li><strong>Submission Standards:</strong> Submissions must include packed, organized <code>.blend</code> files alongside compressed viewport preview video (<code>MP4</code>/<code>WebM</code>).</li><li><strong>Supervisor QA:</strong> Deliverables must pass department supervisor review before merging into the master film timeline.</li></ul>"
+            },
+            {
+                id: "charter-links",
+                title: "5. Charter & Links",
+                html: "<ul><li><strong>Contributor Ownership:</strong> You retain ownership of original work while granting the studio a perpetual license for film production and release.</li><li><strong>Guidelines and Studio Charter:</strong> <a href=\"https://projectstairway.net/guidelines\">https://projectstairway.net/guidelines</a></li><li><strong>Terms of Service:</strong> <a href=\"https://projectstairway.net/legal/terms\">https://projectstairway.net/legal/terms</a></li><li><strong>Grab-Box Pipeline:</strong> <a href=\"https://projectstairway.net/grabbox\">https://projectstairway.net/grabbox</a></li><li><strong>Platform Dashboard:</strong> <a href=\"https://projectstairway.net\">https://projectstairway.net</a></li></ul>"
             }
         ]
     },
