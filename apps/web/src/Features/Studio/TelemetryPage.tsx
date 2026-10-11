@@ -12,11 +12,12 @@ import { EmptyState, ErrorState, LoadingRows, RequireRole } from "@/Components/C
 import { RoundStatusBadge } from "@/Components/Common/StatusBadge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/Ui/select";
 import { pollTypeLabels, roundStatusLabels } from "@/Lib/Format";
-import { RoundIntegrity } from "./RoundIntegrity";
+import { RoundIntegrity, type IntegrityTab } from "./RoundIntegrity";
 
 function TelemetryView(): ReactNode {
     const searchParams = useSearchParams();
     const queryRoundId = searchParams.get("roundId");
+    const [activeTab, setActiveTab] = useState<IntegrityTab>("raid");
 
     const rounds = useQuery({
         queryKey: queryKeys.rounds({ page: 1, perPage: 100 }),
@@ -66,42 +67,49 @@ function TelemetryView(): ReactNode {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3">
-                    <Select
-                        value={activeRound.id}
-                        onValueChange={(val) => {
-                            setSelectedId(val);
-                        }}
-                    >
-                        <SelectTrigger className="w-72">
-                            <SelectValue placeholder="Select round" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {roundList.map((r) => (
-                                <SelectItem key={r.id} value={r.id}>
-                                    <span className="truncate">{r.title}</span>
-                                    <span className="text-muted-foreground ml-2 text-[11px]">({roundStatusLabels[r.status]})</span>
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <RoundStatusBadge status={activeRound.status} />
+            {activeTab !== "network" && (
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3">
+                        <Select
+                            value={activeRound.id}
+                            onValueChange={(val) => {
+                                setSelectedId(val);
+                            }}
+                        >
+                            <SelectTrigger className="w-72">
+                                <SelectValue placeholder="Select round" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {roundList.map((r) => (
+                                    <SelectItem key={r.id} value={r.id}>
+                                        <span className="truncate">{r.title}</span>
+                                        <span className="text-muted-foreground ml-2 text-[11px]">({roundStatusLabels[r.status]})</span>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <RoundStatusBadge status={activeRound.status} />
+                    </div>
+                    <div className="text-muted-foreground flex items-center gap-3 text-xs font-mono">
+                        <span>{pollTypeLabels[activeRound.pollType]}</span>
+                        {roundDetail.data !== undefined && (
+                            <>
+                                <span>·</span>
+                                <span>{roundDetail.data.ballotCount} ballots</span>
+                                <span>·</span>
+                                <span>{roundDetail.data.eligibleEntryCount} entries</span>
+                            </>
+                        )}
+                    </div>
                 </div>
-                <div className="text-muted-foreground flex items-center gap-3 text-xs font-mono">
-                    <span>{pollTypeLabels[activeRound.pollType]}</span>
-                    {roundDetail.data !== undefined && (
-                        <>
-                            <span>·</span>
-                            <span>{roundDetail.data.ballotCount} ballots</span>
-                            <span>·</span>
-                            <span>{roundDetail.data.eligibleEntryCount} entries</span>
-                        </>
-                    )}
-                </div>
-            </div>
+            )}
 
-            <RoundIntegrity roundId={activeRound.id} live={activeRound.status === RoundStatus.Open} />
+            <RoundIntegrity
+                roundId={activeRound.id}
+                live={activeRound.status === RoundStatus.Open}
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+            />
         </div>
     );
 }

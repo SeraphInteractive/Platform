@@ -3,7 +3,7 @@
 import { RaidFlag, RaidSeverity } from "@platform/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Scale, ShieldAlert } from "lucide-react";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
 import { RelativeTime } from "@/Components/Common/RelativeTime";
@@ -104,17 +104,23 @@ function LiveFeed({
     );
 }
 
+export type IntegrityTab = "raid" | "invariance" | "network";
+
 export interface RoundIntegrityProps {
     readonly roundId: string;
     readonly live: boolean;
-    readonly defaultTab?: "raid" | "invariance" | "network";
+    readonly defaultTab?: IntegrityTab;
+    readonly activeTab?: IntegrityTab;
+    readonly onTabChange?: (tab: IntegrityTab) => void;
 }
 
-export function RoundIntegrity({ roundId, live, defaultTab = "raid" }: RoundIntegrityProps): ReactNode {
+export function RoundIntegrity({ roundId, live, defaultTab = "raid", activeTab, onTabChange }: RoundIntegrityProps): ReactNode {
     const queryClient = useQueryClient();
     const roundEvents = useRoundEvents(roundId, live);
     const lastRefresh = useRef(0);
     const latestEvent = roundEvents.events[0];
+    const [internalTab, setInternalTab] = useState<IntegrityTab>(defaultTab);
+    const currentTab = activeTab ?? internalTab;
 
     useEffect(() => {
         if (latestEvent === undefined || Date.now() - lastRefresh.current < 5_000) {
@@ -140,7 +146,17 @@ export function RoundIntegrity({ roundId, live, defaultTab = "raid" }: RoundInte
 
     return (
         <div className="space-y-6">
-            <Tabs defaultValue={defaultTab} className="space-y-6">
+            <Tabs
+                value={currentTab}
+                onValueChange={(val) => {
+                    const next = val as IntegrityTab;
+                    if (activeTab === undefined) {
+                        setInternalTab(next);
+                    }
+                    onTabChange?.(next);
+                }}
+                className="space-y-6"
+            >
                 <TabsList>
                     <TabsTrigger value="raid" className="flex items-center gap-1.5">
                         <ShieldAlert className="size-3.5" />
