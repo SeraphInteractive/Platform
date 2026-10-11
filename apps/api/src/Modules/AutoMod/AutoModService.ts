@@ -3,11 +3,92 @@ import { BadRequestError, NotFoundError } from "../../Common/Errors/ApplicationE
 import type { Database } from "../../Infrastructure/Database/Database.js";
 import { automodRules, type AutomodRuleRecord } from "../../Infrastructure/Database/Schema.js";
 
+const defaultSeedRules: readonly string[] = Object.freeze([
+    "gyatt",
+    "goon",
+    "gooner",
+    "gooning",
+    "edging",
+    "edger",
+    "diddy party",
+    "oil up",
+    "freaky bob",
+    "thug shaker",
+    "bop",
+    "nigger",
+    "nigga",
+    "niggaz",
+    "faggot",
+    "fag",
+    "retard",
+    "retarded",
+    "tranny",
+    "troon",
+    "shemale",
+    "chink",
+    "gook",
+    "kike",
+    "spic",
+    "wetback",
+    "coon",
+    "beaner",
+    "raghead",
+    "towelhead",
+    "kys",
+    "kill yourself",
+    "rope yourself",
+    "slit wrists",
+    "drink bleach",
+    "neck yourself",
+    "hang yourself",
+    "cunt",
+    "cunts",
+    "whore",
+    "whores",
+    "slut",
+    "sluts",
+    "bitch",
+    "bitches",
+    "bitchass",
+    "bastard",
+    "bastards",
+    "dickhead",
+    "cocksucker",
+    "pussy",
+    "fuck",
+    "fucking",
+    "fucker",
+    "motherfucker",
+    "shit",
+    "bullshit",
+    "dipshit",
+    "shithead",
+    "asshole",
+    "dumbass",
+    "jackass",
+    "asswipe",
+    "asshat"
+]);
+
 export class AutoModService {
     public constructor(private readonly database: Database) {}
 
     public async list(): Promise<AutomodRuleRecord[]> {
-        return this.database.select().from(automodRules).orderBy(desc(automodRules.createdAt));
+        const existing = await this.database.select().from(automodRules).orderBy(desc(automodRules.createdAt));
+        if (existing.length === 0) {
+            await this.seedDefaults();
+            return this.database.select().from(automodRules).orderBy(desc(automodRules.createdAt));
+        }
+        return existing;
+    }
+
+    private async seedDefaults(): Promise<void> {
+        const rows = defaultSeedRules.map((pattern) => ({
+            pattern,
+            isRegex: false,
+            createdBy: null
+        }));
+        await this.database.insert(automodRules).values(rows);
     }
 
     public async create(pattern: string, isRegex: boolean, actorId: string): Promise<AutomodRuleRecord> {

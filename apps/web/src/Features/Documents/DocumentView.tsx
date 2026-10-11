@@ -18,15 +18,38 @@ import { hasAtLeast } from "@/Lib/Roles";
 import { cn } from "@/Lib/Utils";
 import { documentNames, documentPaths, editorPath } from "./DocumentLinks";
 
+const shortTitleMap: Record<string, string> = {
+    "Overview & Roles": "Overview",
+    "Code of Conduct & Studio Demeanor": "Conduct",
+    "Intellectual Property, Licensing & Contributor Agreement": "Licensing",
+    "Voting System & Mathematical Invariants": "Voting",
+    "Fair Play & Anti-Cheat Telemetry": "Fair Play",
+    "Grab-Box System & Deliverable Standards": "Grab-Box",
+    "Production Pipeline & Supervisor QA": "Pipeline"
+};
+
+function getSectionName(title: string): string {
+    const trimmed = title.trim();
+    if (shortTitleMap[trimmed] !== undefined) {
+        return shortTitleMap[trimmed];
+    }
+    return trimmed.replace(/^(?:\d+\.|\d+\s*[-–—])\s*/u, "");
+}
+
 export function DocumentSections({ document }: { readonly document: Pick<DocumentDto, "sections"> }): ReactNode {
     return (
         <article className="max-w-[70ch] space-y-12 min-w-0 w-full">
-            {document.sections.map((section) => (
-                <section key={section.id} id={section.id} className="scroll-mt-20 space-y-4 min-w-0">
-                    <h2 className="text-lg font-semibold tracking-tight">{section.title}</h2>
-                    <div className="doc-prose" dangerouslySetInnerHTML={{ __html: section.html }} />
-                </section>
-            ))}
+            {document.sections.map((section, index) => {
+                const name = getSectionName(section.title);
+                return (
+                    <section key={section.id} id={section.id} className="scroll-mt-20 space-y-4 min-w-0">
+                        <h2 className="text-lg font-semibold tracking-tight">
+                            {index + 1}. {name}
+                        </h2>
+                        <div className="doc-prose" dangerouslySetInnerHTML={{ __html: section.html }} />
+                    </section>
+                );
+            })}
         </article>
     );
 }
@@ -54,14 +77,22 @@ function Contents({ document }: { readonly document: DocumentDto }): ReactNode {
                     </ul>
                 )}
                 <ol className={cn("space-y-2 text-xs", isLegal && "border-l pl-3")}>
-                    {document.sections.map((section, index) => (
-                        <li key={section.id}>
-                            <a href={`#${section.id}`} className="text-muted-foreground hover:text-foreground flex gap-2 transition-colors">
-                                <span className="tabular-nums">{String(index + 1).padStart(2, "0")}</span>
-                                {section.title}
-                            </a>
-                        </li>
-                    ))}
+                    {document.sections.map((section, index) => {
+                        const name = getSectionName(section.title);
+                        return (
+                            <li key={section.id}>
+                                <a
+                                    href={`#${section.id}`}
+                                    className="text-muted-foreground hover:text-foreground flex items-baseline gap-2.5 transition-colors leading-relaxed"
+                                >
+                                    <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground/70">
+                                        {String(index + 1).padStart(2, "0")}
+                                    </span>
+                                    <span className="leading-snug">{name}</span>
+                                </a>
+                            </li>
+                        );
+                    })}
                 </ol>
             </div>
         </nav>
@@ -96,14 +127,22 @@ function MobileContents({ document }: { readonly document: DocumentDto }): React
                     <span className="text-[10px] text-muted-foreground transition-transform group-open:rotate-180">▼</span>
                 </summary>
                 <ol className="mt-2.5 space-y-2 text-xs border-t pt-2">
-                    {document.sections.map((section, index) => (
-                        <li key={section.id}>
-                            <a href={`#${section.id}`} className="text-muted-foreground hover:text-foreground flex gap-2 transition-colors">
-                                <span className="tabular-nums font-mono">{String(index + 1).padStart(2, "0")}</span>
-                                <span>{section.title}</span>
-                            </a>
-                        </li>
-                    ))}
+                    {document.sections.map((section, index) => {
+                        const name = getSectionName(section.title);
+                        return (
+                            <li key={section.id}>
+                                <a
+                                    href={`#${section.id}`}
+                                    className="text-muted-foreground hover:text-foreground flex items-baseline gap-2.5 transition-colors leading-relaxed"
+                                >
+                                    <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground/70">
+                                        {String(index + 1).padStart(2, "0")}
+                                    </span>
+                                    <span className="leading-snug">{name}</span>
+                                </a>
+                            </li>
+                        );
+                    })}
                 </ol>
             </details>
         </nav>
@@ -160,7 +199,7 @@ export function DocumentView({ slug }: { readonly slug: DocumentSlug }): ReactNo
                     }
                 />
             )}
-            <div className="grid gap-10 lg:grid-cols-[12rem_1fr] min-w-0">
+            <div className="grid gap-10 lg:grid-cols-[14rem_1fr] min-w-0">
                 <Contents document={data} />
                 <div className="min-w-0 w-full">
                     <MobileContents document={data} />
