@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
 import { DiscordIcon, YouTubeIcon } from "@/Components/Icons/BrandIcons";
-import { toDiscordAppInviteUrl, useSiteConfig } from "@/Components/SiteConfig";
+import { openDiscordInvite, toDiscordAppInviteUrl, toDiscordWebInviteUrl, useSiteConfig } from "@/Components/SiteConfig";
 import {
     Sidebar,
     SidebarContent,
@@ -112,7 +112,15 @@ export function AppSidebar(): ReactNode {
                     {toDiscordAppInviteUrl(discordInviteUrl) !== null && (
                         <SidebarMenuItem>
                             <SidebarMenuButton asChild tooltip="Join the Discord">
-                                <a href={toDiscordAppInviteUrl(discordInviteUrl)!} target="_blank" rel="noopener noreferrer">
+                                <a
+                                    href={toDiscordWebInviteUrl(discordInviteUrl) ?? toDiscordAppInviteUrl(discordInviteUrl)!}
+                                    onClick={(event) => {
+                                        event.preventDefault();
+                                        openDiscordInvite(discordInviteUrl);
+                                    }}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
                                     <DiscordIcon />
                                     <span>Join the Discord</span>
                                 </a>
