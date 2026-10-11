@@ -16,7 +16,7 @@ import {
 } from "@platform/contracts";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { UserPlus } from "lucide-react";
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
@@ -33,17 +33,24 @@ import { Button } from "@/Components/Ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/Components/Ui/dialog";
 import { Input } from "@/Components/Ui/input";
 import { Label } from "@/Components/Ui/label";
+import { RadioGroup, RadioGroupItem } from "@/Components/Ui/radio-group";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/Components/Ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/Ui/table";
 import { useSession } from "@/Hooks/UseSession";
 import { formatDate, specialtyLabel } from "@/Lib/Format";
 import { hasAtLeast, isGrantable, outranks, roleLabels, rolesByRank } from "@/Lib/Roles";
 import { safeHttpUrl } from "@/Lib/SafeUrl";
+import { cn } from "@/Lib/Utils";
 
 const anyRole = "any";
 
 function grantableRoles(actor: UserDto): Role[] {
     return rolesByRank.filter((role) => isGrantable(role) && (hasAtLeast(actor, Role.Admin) || outranks(actor.role, role)));
+}
+
+// senior contributor is coupled under contributor in the table selector
+function grantablePrimaryRoles(actor: UserDto): Role[] {
+    return grantableRoles(actor).filter((role) => role !== Role.SeniorContributor);
 }
 
 function canManage(actor: UserDto, target: ModeratedUserDto): boolean {
@@ -156,6 +163,92 @@ function BlacklistDialog({ target, onDone }: { readonly target: ModeratedUserDto
     );
 }
 
+interface ContributorTierDialogProps {
+    readonly open: boolean;
+    readonly onOpenChange: (open: boolean) => void;
+    readonly target: ModeratedUserDto;
+    readonly busy: boolean;
+    readonly onSave: (tier: Role) => void;
+}
+
+function ContributorTierDialog({ open, onOpenChange, target, busy, onSave }: ContributorTierDialogProps): ReactNode {
+    const [selectedTier, setSelectedTier] = useState<Role>(
+        target.role === Role.SeniorContributor ? Role.SeniorContributor : Role.Contributor
+    );
+
+    useEffect(() => {
+        if (open) {
+            setSelectedTier(target.role === Role.SeniorContributor ? Role.SeniorContributor : Role.Contributor);
+        }
+    }, [open, target.role]);
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Assign Contributor Tier: @{target.username}</DialogTitle>
+                    <DialogDescription>
+                        Choose whether this contributor receives standard task access or senior priority privileges.
+                    </DialogDescription>
+                </DialogHeader>
+                <RadioGroup
+                    value={selectedTier}
+                    onValueChange={(val) => setSelectedTier(val as Role)}
+                    className="gap-3 py-2"
+                >
+                    <label
+                        htmlFor={`tier-base-${target.id}`}
+                        className={cn(
+                            "flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                            selectedTier === Role.Contributor
+                                ? "border-primary bg-accent/30"
+                                : "border-border hover:bg-muted/50"
+                        )}
+                    >
+                        <RadioGroupItem value={Role.Contributor} id={`tier-base-${target.id}`} className="mt-0.5" />
+                        <div className="space-y-1 text-sm">
+                            <div className="font-medium text-foreground">Base Contributor</div>
+                            <p className="text-muted-foreground text-xs leading-relaxed">
+                                Standard contributor access to grab-box tasks.
+                            </p>
+                        </div>
+                    </label>
+                    <label
+                        htmlFor={`tier-senior-${target.id}`}
+                        className={cn(
+                            "flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                            selectedTier === Role.SeniorContributor
+                                ? "border-primary bg-accent/30"
+                                : "border-border hover:bg-muted/50"
+                        )}
+                    >
+                        <RadioGroupItem value={Role.SeniorContributor} id={`tier-senior-${target.id}`} className="mt-0.5" />
+                        <div className="space-y-1 text-sm">
+                            <div className="font-medium text-foreground">Senior Contributor</div>
+                            <p className="text-muted-foreground text-xs leading-relaxed">
+                                Priority access to hard/senior-locked tasks during priority windows.
+                            </p>
+                        </div>
+                    </label>
+                </RadioGroup>
+                <DialogFooter>
+                    <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
+                        Cancel
+                    </Button>
+                    <Button
+                        disabled={busy}
+                        onClick={() => {
+                            onSave(selectedTier);
+                        }}
+                    >
+                        {busy ? "Saving..." : "Save Role"}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 interface UserRowProps {
     readonly actor: UserDto;
     readonly target: ModeratedUserDto;
@@ -164,6 +257,7 @@ interface UserRowProps {
 
 function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
     const queryClient = useQueryClient();
+    const [tierDialogOpen, setTierDialogOpen] = useState(false);
     const [pendingTransfer, setPendingTransfer] = useState<{ specialty: Specialty; holder: SpecialtyHolderDto } | null>(null);
 
     const refresh = (): void => {
@@ -236,27 +330,71 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
             </TableCell>
             <TableCell>
                 {manageable ? (
-                    <Select
-                        value={target.role}
-                        disabled={busy}
-                        onValueChange={(value) => {
-                            const next = value as Role;
-                            if (next !== target.role) {
-                                setPrimaryRole.mutate(next);
-                            }
-                        }}
-                    >
-                        <SelectTrigger size="sm" className="w-40" aria-label={`Primary role for ${target.username}`}>
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {grantableRoles(actor).map((role) => (
-                                <SelectItem key={role} value={role}>
-                                    {roleLabels[role]}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <>
+                        <Select
+                            value={target.role === Role.SeniorContributor ? Role.Contributor : target.role}
+                            disabled={busy}
+                            onValueChange={(value) => {
+                                const next = value as Role;
+                                if (next === Role.Contributor) {
+                                    setTierDialogOpen(true);
+                                    return;
+                                }
+                                if (next !== target.role) {
+                                    setPrimaryRole.mutate(next);
+                                }
+                            }}
+                        >
+                            <SelectTrigger size="sm" className="w-44" aria-label={`Primary role for ${target.username}`}>
+                                <SelectValue>{roleLabels[target.role]}</SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                {grantablePrimaryRoles(actor).map((role) => (
+                                    <SelectItem
+                                        key={role}
+                                        value={role}
+                                        onPointerUp={() => {
+                                            // re-selecting contributor tier when already contributor
+                                            if (
+                                                role === Role.Contributor &&
+                                                (target.role === Role.Contributor || target.role === Role.SeniorContributor)
+                                            ) {
+                                                setTierDialogOpen(true);
+                                            }
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (
+                                                (e.key === "Enter" || e.key === " ") &&
+                                                role === Role.Contributor &&
+                                                (target.role === Role.Contributor || target.role === Role.SeniorContributor)
+                                            ) {
+                                                setTierDialogOpen(true);
+                                            }
+                                        }}
+                                    >
+                                        {roleLabels[role]}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <ContributorTierDialog
+                            open={tierDialogOpen}
+                            onOpenChange={setTierDialogOpen}
+                            target={target}
+                            busy={setPrimaryRole.isPending}
+                            onSave={(tier) => {
+                                if (tier === target.role) {
+                                    setTierDialogOpen(false);
+                                    return;
+                                }
+                                setPrimaryRole.mutate(tier, {
+                                    onSuccess: () => {
+                                        setTierDialogOpen(false);
+                                    }
+                                });
+                            }}
+                        />
+                    </>
                 ) : (
                     roleLabels[target.role]
                 )}
