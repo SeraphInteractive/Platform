@@ -2,24 +2,122 @@
 
 import { RaidSeverity, type LeaderboardItemDto, type RaidTelemetryDto } from "@platform/contracts";
 import { Bot, Database, Layers, Pause, Play, RefreshCw, RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/Components/Ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/Ui/table";
 import { formatNumber } from "@/Lib/Format";
 import { cn } from "@/Lib/Utils";
 
-function useSvgPanZoom(width: number, height: number) {
-    const [transform, setTransform] = useState<{ zoom: number; panX: number; panY: number }>({
-        zoom: 1,
-        panX: 0,
-        panY: 0
-    });
+interface CartesianBounds {
+    readonly minX: number;
+    readonly maxX: number;
+    readonly minY: number;
+    readonly maxY: number;
+}
+
+function generateNiceTicks(min: number, max: number, maxTicks = 5): number[] {
+    const range = max - min;
+    if (range <= 0 || !Number.isFinite(range)) return [min];
+
+    const roughStep = range / Math.max(1, maxTicks - 1);
+    const exponent = Math.floor(Math.log10(roughStep));
+    const fraction = roughStep / Math.pow(10, exponent);
+
+    let niceFraction: number;
+    if (fraction <= 1.5) {
+        niceFraction = 1;
+    } else if (fraction <= 3.5) {
+        niceFraction = 2;
+    } else if (fraction <= 7.5) {
+        niceFraction = 5;
+    } else {
+        niceFraction = 10;
+    }
+
+    const step = niceFraction * Math.pow(10, exponent);
+    const firstTick = Math.ceil(min / step) * step;
+    const lastTick = Math.floor(max / step) * step;
+
+    const ticks: number[] = [];
+    const precision = Math.max(0, -exponent + (niceFraction === 1 ? 0 : 1));
+    for (let t = firstTick; t <= lastTick + step * 0.5; t += step) {
+        const rounded = Number(t.toFixed(Math.min(precision + 2, 6)));
+        ticks.push(rounded);
+    }
+    return ticks;
+}
+
+function formatTickValue(val: number): string {
+    if (Math.abs(val) >= 10_000) return (val / 1000).toFixed(0) + "k";
+    if (Math.abs(val) >= 1_000) return (val / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+    if (Number.isInteger(val)) return String(val);
+    const abs = Math.abs(val);
+    if (abs < 0.01) return val.toFixed(3);
+    if (abs < 1) return val.toFixed(2);
+    return val.toFixed(1).replace(/\.0$/, "");
+}
+
+function useCartesianZoom({
+    width,
+    height,
+    padding,
+    initialBounds,
+    maxZoom = 16
+}: {
+    readonly width: number;
+    readonly height: number;
+    readonly padding: number;
+    readonly initialBounds: CartesianBounds;
+    readonly maxZoom?: number;
+}) {
+    const [bounds, setBounds] = useState<CartesianBounds>(initialBounds);
     const isDraggingRef = useRef(false);
-    const startMouseRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-    const startPanRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+    const dragStartRef = useRef<{ clientX: number; clientY: number; bounds: CartesianBounds }>({
+        clientX: 0,
+        clientY: 0,
+        bounds: initialBounds
+    });
+    const [mouseDataPos, setMouseDataPos] = useState<{ x: number; y: number; px: number; py: number } | null>(null);
     const svgRef = useRef<SVGSVGElement | null>(null);
 
-    // non-passive wheel event for smooth zoom centered at cursor
+    // sync bounds when initialBounds change from external data updates
+    useEffect(() => {
+        setBounds(initialBounds);
+    }, [initialBounds.minX, initialBounds.maxX, initialBounds.minY, initialBounds.maxY]);
+
+    const plotW = Math.max(1, width - 2 * padding);
+    const plotH = Math.max(1, height - 2 * padding);
+
+    const projectX = useCallback(
+        (val: number): number => padding + ((val - bounds.minX) / (bounds.maxX - bounds.minX)) * plotW,
+        [bounds.minX, bounds.maxX, padding, plotW]
+    );
+
+    const projectY = useCallback(
+        (val: number): number => height - padding - ((val - bounds.minY) / (bounds.maxY - bounds.minY)) * plotH,
+        [bounds.minY, bounds.maxY, height, padding, plotH]
+    );
+
+    const invertX = useCallback(
+        (screenX: number): number => bounds.minX + ((screenX - padding) / plotW) * (bounds.maxX - bounds.minX),
+        [bounds.minX, bounds.maxX, padding, plotW]
+    );
+
+    const invertY = useCallback(
+        (screenY: number): number => bounds.minY + ((height - padding - screenY) / plotH) * (bounds.maxY - bounds.minY),
+        [bounds.minY, bounds.maxY, height, padding, plotH]
+    );
+
+    const initSpanX = initialBounds.maxX - initialBounds.minX;
+    const currentSpanX = bounds.maxX - bounds.minX;
+    const zoomLevel = Math.max(1, initSpanX / currentSpanX);
+    const isZoomed = zoomLevel > 1.02;
+
+    const resetZoom = useCallback(() => {
+        setBounds(initialBounds);
+    }, [initialBounds]);
+
+    // non-passive wheel zoom centered directly at cursor
     useEffect(() => {
         const svg = svgRef.current;
         if (!svg) return;
@@ -32,162 +130,121 @@ function useSvgPanZoom(width: number, height: number) {
             const svgX = (mouseX / rect.width) * width;
             const svgY = (mouseY / rect.height) * height;
 
-            setTransform((prev) => {
-                const factor = e.deltaY < 0 ? 1.15 : 0.87;
-                const nextZoom = Math.min(8, Math.max(1, prev.zoom * factor));
-                if (nextZoom === 1) {
-                    return { zoom: 1, panX: 0, panY: 0 };
+            if (svgX < padding || svgX > width - padding || svgY < padding || svgY > height - padding) {
+                return;
+            }
+
+            const factor = e.deltaY < 0 ? 1.2 : 0.83;
+
+            setBounds((prev) => {
+                const prevSpanX = prev.maxX - prev.minX;
+                const prevSpanY = prev.maxY - prev.minY;
+                const nextZoom = (initSpanX / prevSpanX) * factor;
+
+                if (nextZoom <= 1.01) {
+                    return initialBounds;
                 }
-                const scale = nextZoom / prev.zoom;
-                const nextPanX = svgX - (svgX - prev.panX) * scale;
-                const nextPanY = svgY - (svgY - prev.panY) * scale;
-                return { zoom: nextZoom, panX: nextPanX, panY: nextPanY };
+                if (nextZoom > maxZoom) {
+                    return prev;
+                }
+
+                const ratioX = (svgX - padding) / plotW;
+                const ratioY = (height - padding - svgY) / plotH;
+
+                const pivotX = prev.minX + ratioX * prevSpanX;
+                const pivotY = prev.minY + ratioY * prevSpanY;
+
+                const nextSpanX = prevSpanX / factor;
+                const nextSpanY = prevSpanY / factor;
+
+                return {
+                    minX: pivotX - ratioX * nextSpanX,
+                    maxX: pivotX + (1 - ratioX) * nextSpanX,
+                    minY: pivotY - ratioY * nextSpanY,
+                    maxY: pivotY + (1 - ratioY) * nextSpanY
+                };
             });
         };
 
         svg.addEventListener("wheel", onWheel, { passive: false });
         return () => svg.removeEventListener("wheel", onWheel);
-    }, [width, height]);
+    }, [width, height, padding, plotW, plotH, initSpanX, initialBounds, maxZoom]);
 
     const onMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
         if (e.button !== 0) return;
         isDraggingRef.current = true;
-        startMouseRef.current = { x: e.clientX, y: e.clientY };
-        startPanRef.current = { x: transform.panX, y: transform.panY };
+        dragStartRef.current = { clientX: e.clientX, clientY: e.clientY, bounds };
     };
 
     const onMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-        if (!isDraggingRef.current || !svgRef.current) return;
-        const rect = svgRef.current.getBoundingClientRect();
+        const svg = svgRef.current;
+        if (svg) {
+            const rect = svg.getBoundingClientRect();
+            const svgX = ((e.clientX - rect.left) / rect.width) * width;
+            const svgY = ((e.clientY - rect.top) / rect.height) * height;
+            if (svgX >= padding && svgX <= width - padding && svgY >= padding && svgY <= height - padding) {
+                setMouseDataPos({
+                    x: invertX(svgX),
+                    y: invertY(svgY),
+                    px: svgX,
+                    py: svgY
+                });
+            } else {
+                setMouseDataPos(null);
+            }
+        }
+
+        if (!isDraggingRef.current || !svg) return;
+        const rect = svg.getBoundingClientRect();
         const scale = width / rect.width;
-        const dx = (e.clientX - startMouseRef.current.x) * scale;
-        const dy = (e.clientY - startMouseRef.current.y) * scale;
-        setTransform((prev) => ({
-            ...prev,
-            panX: startPanRef.current.x + dx,
-            panY: startPanRef.current.y + dy
-        }));
+        const dx = (e.clientX - dragStartRef.current.clientX) * scale;
+        const dy = (e.clientY - dragStartRef.current.clientY) * scale;
+
+        const startSpanX = dragStartRef.current.bounds.maxX - dragStartRef.current.bounds.minX;
+        const startSpanY = dragStartRef.current.bounds.maxY - dragStartRef.current.bounds.minY;
+
+        const deltaDataX = -(dx / plotW) * startSpanX;
+        const deltaDataY = (dy / plotH) * startSpanY;
+
+        setBounds({
+            minX: dragStartRef.current.bounds.minX + deltaDataX,
+            maxX: dragStartRef.current.bounds.maxX + deltaDataX,
+            minY: dragStartRef.current.bounds.minY + deltaDataY,
+            maxY: dragStartRef.current.bounds.maxY + deltaDataY
+        });
     };
 
     const onMouseUp = () => {
         isDraggingRef.current = false;
     };
 
-    const resetZoom = () => {
-        setTransform({ zoom: 1, panX: 0, panY: 0 });
+    const onMouseLeave = () => {
+        isDraggingRef.current = false;
+        setMouseDataPos(null);
     };
+
+    const xTicks = generateNiceTicks(bounds.minX, bounds.maxX, 5);
+    const yTicks = generateNiceTicks(bounds.minY, bounds.maxY, 4);
 
     return {
         svgRef,
-        transform,
+        bounds,
+        projectX,
+        projectY,
+        invertX,
+        invertY,
+        zoomLevel,
+        isZoomed,
+        resetZoom,
+        xTicks,
+        yTicks,
+        mouseDataPos,
         onMouseDown,
         onMouseMove,
         onMouseUp,
-        onMouseLeave: onMouseUp,
-        onDoubleClick: resetZoom,
-        resetZoom
+        onMouseLeave,
+        onDoubleClick: resetZoom
     };
-}
-
-interface LayoutPoint<T> {
-    readonly data: T;
-    readonly id: string;
-    readonly cx: number;
-    readonly cy: number;
-    readonly label: string;
-}
-
-interface PositionedLayoutItem<T> {
-    readonly data: T;
-    readonly id: string;
-    readonly cx: number;
-    readonly cy: number;
-    readonly label: string;
-    readonly labelX: number;
-    readonly labelY: number;
-    readonly badgeWidth: number;
-    readonly badgeHeight: number;
-    readonly hasOffset: boolean;
-}
-
-// compute screen-space clustering and vertical fan-out for overlapping points
-function computeAntiCollisionLayout<T>(items: readonly LayoutPoint<T>[], zoom: number, threshold: number = 26): PositionedLayoutItem<T>[] {
-    const n = items.length;
-    if (n === 0) return [];
-
-    const adj: number[][] = Array.from({ length: n }, () => []);
-    for (let i = 0; i < n; i++) {
-        const itemI = items[i];
-        if (!itemI) continue;
-        for (let j = i + 1; j < n; j++) {
-            const itemJ = items[j];
-            if (!itemJ) continue;
-            const dist = Math.hypot(itemI.cx - itemJ.cx, itemI.cy - itemJ.cy) * zoom;
-            if (dist < threshold) {
-                adj[i]?.push(j);
-                adj[j]?.push(i);
-            }
-        }
-    }
-
-    const visited = new Set<number>();
-    const result: PositionedLayoutItem<T>[] = [];
-
-    for (let i = 0; i < n; i++) {
-        if (visited.has(i)) continue;
-
-        const cluster: number[] = [];
-        const queue: number[] = [i];
-        visited.add(i);
-
-        while (queue.length > 0) {
-            const curr = queue.shift();
-            if (curr === undefined) break;
-            cluster.push(curr);
-            const neighbors = adj[curr] ?? [];
-            for (const neighbor of neighbors) {
-                if (!visited.has(neighbor)) {
-                    visited.add(neighbor);
-                    queue.push(neighbor);
-                }
-            }
-        }
-
-        cluster.sort((a, b) => {
-            const itemA = items[a];
-            const itemB = items[b];
-            if (!itemA || !itemB) return 0;
-            return itemA.cy - itemB.cy || itemA.cx - itemB.cx;
-        });
-        const clusterSize = cluster.length;
-        const verticalSpacing = 16;
-
-        cluster.forEach((itemIdx, idxInCluster) => {
-            const item = items[itemIdx];
-            if (!item) return;
-            const offsetY = clusterSize > 1 ? (idxInCluster - (clusterSize - 1) / 2) * verticalSpacing : 0;
-            const labelX = item.cx + 8;
-            const labelY = item.cy + offsetY;
-            const approxCharWidth = 5.6;
-            const badgeWidth = Math.max(36, item.label.length * approxCharWidth + 8);
-            const badgeHeight = 14;
-
-            result.push({
-                data: item.data,
-                id: item.id,
-                cx: item.cx,
-                cy: item.cy,
-                label: item.label,
-                labelX,
-                labelY,
-                badgeWidth,
-                badgeHeight,
-                hasOffset: Math.abs(offsetY) > 1 || clusterSize > 1
-            });
-        });
-    }
-
-    return result;
 }
 
 interface ScatterChartProps {
@@ -206,15 +263,30 @@ export function ScatterChart({ telemetryList, leaderboardItems = [], titleOf, on
     const width = 640;
     const height = 240;
     const padding = 38;
-    const minX = -2;
-    const maxX = 8;
-    const minY = 0.0;
-    const maxY = 1.0;
 
-    const { svgRef, transform, onMouseDown, onMouseMove, onMouseUp, onMouseLeave, onDoubleClick, resetZoom } = useSvgPanZoom(width, height);
-
-    const scaleX = (val: number): number => padding + ((val - minX) / (maxX - minX)) * (width - 2 * padding);
-    const scaleY = (val: number): number => height - padding - ((val - minY) / (maxY - minY)) * (height - 2 * padding);
+    const initialBounds = useMemo(() => ({ minX: -2, maxX: 8, minY: 0.0, maxY: 1.0 }), []);
+    const {
+        svgRef,
+        bounds,
+        projectX,
+        projectY,
+        zoomLevel,
+        isZoomed,
+        resetZoom,
+        xTicks,
+        yTicks,
+        mouseDataPos,
+        onMouseDown,
+        onMouseMove,
+        onMouseUp,
+        onMouseLeave,
+        onDoubleClick
+    } = useCartesianZoom({
+        width,
+        height,
+        padding,
+        initialBounds
+    });
 
     const titlesById = new Map(leaderboardItems.map((i) => [i.entryId, i.title]));
     const getTitle = (entryId: string): string => {
@@ -243,19 +315,55 @@ export function ScatterChart({ telemetryList, leaderboardItems = [], titleOf, on
                   createdAt: new Date().toISOString()
               }));
 
+    // calculate dynamic threat zone rectangle in screen space
+    const threatMinX = Math.max(padding, projectX(2.5));
+    const threatMaxX = Math.min(width - padding, projectX(Math.max(8, bounds.maxX)));
+    const threatMinY = Math.max(padding, projectY(0.35));
+    const threatMaxY = Math.min(height - padding, projectY(Math.min(0.0, bounds.minY)));
+    const hasThreatZone = threatMaxX > threatMinX && threatMaxY > threatMinY;
+
     return (
         <div className="w-full space-y-2">
-            <div className="relative overflow-hidden rounded-md border bg-card p-2">
-                {transform.zoom > 1 && (
-                    <button
-                        type="button"
-                        onClick={resetZoom}
-                        className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded border bg-background/90 px-2 py-0.5 text-[10px] font-mono text-muted-foreground shadow-sm backdrop-blur hover:text-foreground"
-                    >
-                        <RotateCcw className="size-2.5" />
-                        <span>{transform.zoom.toFixed(1)}x · Reset</span>
-                    </button>
-                )}
+            <div className="relative overflow-hidden rounded-md border bg-card p-2 bezel">
+                {/* top corner toolbar with reset and active zoom indicator */}
+                <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
+                    {isZoomed && (
+                        <button
+                            type="button"
+                            onClick={resetZoom}
+                            className="flex items-center gap-1 rounded border bg-background/90 px-2 py-0.5 text-[10px] font-mono text-muted-foreground shadow-xs backdrop-blur-xs hover:text-foreground"
+                        >
+                            <RotateCcw className="size-2.5" />
+                            <span>{zoomLevel.toFixed(1)}x · Reset</span>
+                        </button>
+                    )}
+                </div>
+
+                {/* compact corner hud metric telemetry */}
+                {activeHover !== null ? (
+                    <div className="absolute left-3 top-3 z-10 flex max-w-[70%] items-center gap-2 rounded border bg-background/95 px-2.5 py-1 text-[11px] font-mono shadow-xs backdrop-blur-xs">
+                        <span
+                            className={cn(
+                                "size-2 shrink-0 rounded-full",
+                                activeHover.severity === RaidSeverity.CriticalRaid
+                                    ? "bg-destructive"
+                                    : activeHover.severity === RaidSeverity.Suspicious
+                                      ? "bg-amber-500"
+                                      : "bg-emerald-500"
+                            )}
+                        />
+                        <span className="truncate font-semibold text-foreground">{getTitle(activeHover.entryId)}</span>
+                        <span className="text-muted-foreground shrink-0">·</span>
+                        <span className="shrink-0 text-muted-foreground">Z: {formatNumber(activeHover.velocityZScore)}</span>
+                        <span className="shrink-0 text-muted-foreground">H: {formatNumber(activeHover.rankEntropy, 2)}</span>
+                    </div>
+                ) : mouseDataPos !== null ? (
+                    <div className="absolute left-3 top-3 z-10 flex items-center gap-2 rounded border bg-background/80 px-2 py-0.5 text-[10px] font-mono text-muted-foreground backdrop-blur-xs">
+                        <span>Z: {formatNumber(mouseDataPos.x, 2)}</span>
+                        <span>·</span>
+                        <span>H: {formatNumber(mouseDataPos.y, 2)}</span>
+                    </div>
+                ) : null}
 
                 <svg
                     ref={svgRef}
@@ -267,7 +375,7 @@ export function ScatterChart({ telemetryList, leaderboardItems = [], titleOf, on
                     onDoubleClick={onDoubleClick}
                     className={cn(
                         "h-auto max-h-64 w-full select-none",
-                        transform.zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"
+                        isZoomed ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"
                     )}
                 >
                     <defs>
@@ -276,187 +384,192 @@ export function ScatterChart({ telemetryList, leaderboardItems = [], titleOf, on
                         </clipPath>
                     </defs>
 
-                    {/* zoomable plot area */}
+                    {/* dynamic hairline grid lines */}
                     <g clipPath="url(#scatter-plot-clip)">
-                        <g transform={`translate(${transform.panX}, ${transform.panY}) scale(${transform.zoom})`}>
-                            {/* threat zone box */}
-                            <rect
-                                x={scaleX(2.5)}
-                                y={scaleY(0.35)}
-                                width={scaleX(maxX) - scaleX(2.5)}
-                                height={scaleY(0.0) - scaleY(0.35)}
-                                className="fill-destructive/15 stroke-destructive/40"
-                                strokeDasharray="3 3"
-                            />
-                            <text
-                                x={scaleX(maxX) - 6}
-                                y={scaleY(0.0) - 8}
-                                textAnchor="end"
-                                fontSize="9"
-                                className="fill-destructive font-mono font-semibold"
-                            >
-                                THREAT ZONE (Z &gt; 2.5, H &lt; 0.35)
-                            </text>
+                        {xTicks.map((tick) => {
+                            const x = projectX(tick);
+                            return (
+                                <line
+                                    key={`gx-${tick}`}
+                                    x1={x}
+                                    y1={padding}
+                                    x2={x}
+                                    y2={height - padding}
+                                    className="stroke-border/25"
+                                    strokeDasharray="2 2"
+                                />
+                            );
+                        })}
+                        {yTicks.map((tick) => {
+                            const y = projectY(tick);
+                            return (
+                                <line
+                                    key={`gy-${tick}`}
+                                    x1={padding}
+                                    y1={y}
+                                    x2={width - padding}
+                                    y2={y}
+                                    className="stroke-border/25"
+                                    strokeDasharray="2 2"
+                                />
+                            );
+                        })}
 
-                            {/* points with anti-collision fan-out */}
-                            {(() => {
-                                const layoutItems = computeAntiCollisionLayout(
-                                    points.map((p) => {
-                                        const title = getTitle(p.entryId);
-                                        const shortId = p.entryId.slice(0, 6);
-                                        const displayLabel =
-                                            title.length > 18 ? `${title.slice(0, 18)}… #${shortId}` : `${title} #${shortId}`;
-                                        return {
-                                            data: p,
-                                            id: p.id,
-                                            cx: scaleX(p.velocityZScore),
-                                            cy: scaleY(p.rankEntropy),
-                                            label: displayLabel
-                                        };
-                                    }),
-                                    transform.zoom
-                                );
+                        {/* threat zone box */}
+                        {hasThreatZone && (
+                            <g>
+                                <rect
+                                    x={threatMinX}
+                                    y={threatMinY}
+                                    width={threatMaxX - threatMinX}
+                                    height={threatMaxY - threatMinY}
+                                    className="fill-destructive/10 stroke-destructive/30"
+                                    strokeDasharray="3 3"
+                                />
+                                <text
+                                    x={threatMaxX - 6}
+                                    y={threatMaxY - 8}
+                                    textAnchor="end"
+                                    fontSize="8"
+                                    className="fill-destructive/80 font-mono font-medium pointer-events-none select-none"
+                                >
+                                    THREAT ZONE (Z &gt; 2.5, H &lt; 0.35)
+                                </text>
+                            </g>
+                        )}
 
-                                // render hovered point on top layer
-                                const sortedPoints = [...layoutItems].sort((a, b) => {
-                                    const aSel = activeHover?.entryId === a.data.entryId ? 1 : 0;
-                                    const bSel = activeHover?.entryId === b.data.entryId ? 1 : 0;
-                                    return aSel - bSel;
-                                });
+                        {/* hover crosshair lines */}
+                        {activeHover !== null && (
+                            <g>
+                                <line
+                                    x1={padding}
+                                    y1={projectY(activeHover.rankEntropy)}
+                                    x2={width - padding}
+                                    y2={projectY(activeHover.rankEntropy)}
+                                    className="stroke-primary/40"
+                                    strokeDasharray="2 2"
+                                />
+                                <line
+                                    x1={projectX(activeHover.velocityZScore)}
+                                    y1={padding}
+                                    x2={projectX(activeHover.velocityZScore)}
+                                    y2={height - padding}
+                                    className="stroke-primary/40"
+                                    strokeDasharray="2 2"
+                                />
+                            </g>
+                        )}
 
-                                return sortedPoints.map((item) => {
-                                    const p = item.data;
-                                    const isSelected = activeHover?.entryId === p.entryId;
-                                    const fillColor =
-                                        p.severity === RaidSeverity.CriticalRaid
-                                            ? "#ef4444"
-                                            : p.severity === RaidSeverity.Suspicious
-                                              ? "#f59e0b"
-                                              : "#10b981";
+                        {/* minimal point pins */}
+                        {points.map((p) => {
+                            const cx = projectX(p.velocityZScore);
+                            const cy = projectY(p.rankEntropy);
+                            const isSelected = activeHover?.entryId === p.entryId;
+                            const fillColor =
+                                p.severity === RaidSeverity.CriticalRaid
+                                    ? "#ef4444"
+                                    : p.severity === RaidSeverity.Suspicious
+                                      ? "#f59e0b"
+                                      : "#10b981";
 
-                                    return (
-                                        <g
-                                            key={p.id}
-                                            onMouseEnter={() => setActiveHover(p)}
-                                            onMouseLeave={() => setActiveHover(null)}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setActiveHover(p);
-                                            }}
-                                            className="cursor-pointer"
-                                        >
-                                            {item.hasOffset && (
-                                                <path
-                                                    d={`M ${item.cx} ${item.cy} Q ${item.cx + 4} ${item.labelY} ${item.labelX} ${item.labelY}`}
-                                                    stroke={isSelected ? "#3b82f6" : "rgba(148, 163, 184, 0.45)"}
-                                                    strokeWidth={isSelected ? 1.5 : 1}
-                                                    strokeDasharray="2 2"
-                                                    fill="none"
-                                                />
-                                            )}
-                                            <rect
-                                                x={item.labelX}
-                                                y={item.labelY - 9}
-                                                width={item.badgeWidth}
-                                                height={item.badgeHeight}
-                                                rx="3"
-                                                fill="#020817"
-                                                fillOpacity={isSelected ? 0.95 : 0.7}
-                                                stroke={isSelected ? "#3b82f6" : undefined}
-                                                strokeWidth={isSelected ? 1 : 0}
-                                            />
-                                            <text
-                                                x={item.labelX + 4}
-                                                y={item.labelY + 2}
-                                                fontSize="9"
-                                                className={cn(
-                                                    "font-mono select-none pointer-events-none transition-colors",
-                                                    isSelected ? "fill-foreground font-semibold" : "fill-foreground/85"
-                                                )}
-                                            >
-                                                {item.label}
-                                            </text>
-                                            <circle
-                                                cx={item.cx}
-                                                cy={item.cy}
-                                                r={isSelected ? 6 : 4}
-                                                fill={fillColor}
-                                                stroke="#1e293b"
-                                                strokeWidth={isSelected ? 2 : 1}
-                                            />
-                                        </g>
-                                    );
-                                });
-                            })()}
-                        </g>
+                            return (
+                                <g
+                                    key={p.id}
+                                    onMouseEnter={() => setActiveHover(p)}
+                                    onMouseLeave={() => setActiveHover(null)}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveHover(p);
+                                    }}
+                                    className="cursor-pointer"
+                                >
+                                    {isSelected && (
+                                        <circle cx={cx} cy={cy} r={9} fill={fillColor} fillOpacity={0.2} className="animate-pulse" />
+                                    )}
+                                    <circle
+                                        cx={cx}
+                                        cy={cy}
+                                        r={isSelected ? 5.5 : 3.8}
+                                        fill={fillColor}
+                                        stroke="#0b0c10"
+                                        strokeWidth={isSelected ? 2 : 1}
+                                        className="transition-all"
+                                    />
+                                </g>
+                            );
+                        })}
                     </g>
 
-                    {/* static axes frame */}
-                    <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} className="stroke-border" />
-                    <line x1={padding} y1={padding} x2={padding} y2={height - padding} className="stroke-border" />
+                    {/* dynamic axes frame */}
+                    <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} className="stroke-border/80" />
+                    <line x1={padding} y1={padding} x2={padding} y2={height - padding} className="stroke-border/80" />
 
-                    {/* x ticks */}
-                    {[-2, 0, 2, 4, 6, 8].map((tick) => (
-                        <g key={tick}>
-                            <line
-                                x1={scaleX(tick)}
-                                y1={height - padding}
-                                x2={scaleX(tick)}
-                                y2={height - padding + 4}
-                                className="stroke-muted-foreground/60"
-                            />
-                            <text
-                                x={scaleX(tick)}
-                                y={height - padding + 14}
-                                fontSize="9"
-                                textAnchor="middle"
-                                className="fill-muted-foreground font-mono"
-                            >
-                                {tick}
-                            </text>
-                        </g>
-                    ))}
+                    {/* dynamic x ticks */}
+                    {xTicks.map((tick) => {
+                        const x = projectX(tick);
+                        if (x < padding || x > width - padding) return null;
+                        return (
+                            <g key={`tx-${tick}`}>
+                                <line
+                                    x1={x}
+                                    y1={height - padding}
+                                    x2={x}
+                                    y2={height - padding + 4}
+                                    className="stroke-muted-foreground/60"
+                                />
+                                <text
+                                    x={x}
+                                    y={height - padding + 14}
+                                    fontSize="9"
+                                    textAnchor="middle"
+                                    className="fill-muted-foreground font-mono select-none pointer-events-none"
+                                >
+                                    {formatTickValue(tick)}
+                                </text>
+                            </g>
+                        );
+                    })}
 
-                    {/* y ticks */}
-                    {[0.0, 0.5, 1.0].map((tick) => (
-                        <g key={tick}>
-                            <line
-                                x1={padding - 4}
-                                y1={scaleY(tick)}
-                                x2={padding}
-                                y2={scaleY(tick)}
-                                className="stroke-muted-foreground/60"
-                            />
-                            <text
-                                x={padding - 6}
-                                y={scaleY(tick) + 3}
-                                fontSize="9"
-                                textAnchor="end"
-                                className="fill-muted-foreground font-mono"
-                            >
-                                {tick.toFixed(1)}
-                            </text>
-                        </g>
-                    ))}
+                    {/* dynamic y ticks */}
+                    {yTicks.map((tick) => {
+                        const y = projectY(tick);
+                        if (y < padding || y > height - padding) return null;
+                        return (
+                            <g key={`ty-${tick}`}>
+                                <line x1={padding - 4} y1={y} x2={padding} y2={y} className="stroke-muted-foreground/60" />
+                                <text
+                                    x={padding - 6}
+                                    y={y + 3}
+                                    fontSize="9"
+                                    textAnchor="end"
+                                    className="fill-muted-foreground font-mono select-none pointer-events-none"
+                                >
+                                    {formatTickValue(tick)}
+                                </text>
+                            </g>
+                        );
+                    })}
 
-                    <text x={width / 2} y={height - 4} fontSize="10" textAnchor="middle" className="fill-muted-foreground font-mono">
+                    {/* axis labels */}
+                    <text x={width / 2} y={height - 4} fontSize="9" textAnchor="middle" className="fill-muted-foreground/80 font-mono">
                         Velocity Z-Score &rarr;
                     </text>
                     <text
                         x={-height / 2}
                         y={12}
                         transform="rotate(-90)"
-                        fontSize="10"
+                        fontSize="9"
                         textAnchor="middle"
-                        className="fill-muted-foreground font-mono"
+                        className="fill-muted-foreground/80 font-mono"
                     >
                         Rank Entropy (H) &rarr;
                     </text>
                 </svg>
             </div>
 
+            {/* details footer when selected */}
             {activeHover !== null && (
-                <div className="flex flex-wrap items-center gap-3 rounded border bg-muted/30 px-3 py-1.5 text-xs font-mono">
+                <div className="flex flex-wrap items-center gap-3 rounded border bg-card/60 px-3 py-1.5 text-xs font-mono bezel">
                     <span className="font-semibold text-foreground">
                         {getTitle(activeHover.entryId)} (#{activeHover.entryId.slice(0, 6)})
                     </span>
@@ -481,34 +594,80 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
     const height = 220;
     const padding = 38;
 
-    const { svgRef, transform, onMouseDown, onMouseMove, onMouseUp, onMouseLeave, onDoubleClick, resetZoom } = useSvgPanZoom(width, height);
-
-    if (items.length === 0) {
-        return <p className="text-muted-foreground text-xs">No entries to display.</p>;
-    }
-
-    const maxRaw = Math.max(...items.map((i) => i.rawScore), 10);
-    const maxReg = Math.max(...items.map((i) => i.regularizedMeanScore ?? i.rawScore), 10);
+    const maxRaw = items.length > 0 ? Math.max(...items.map((i) => i.rawScore), 10) : 10;
+    const maxReg = items.length > 0 ? Math.max(...items.map((i) => i.regularizedMeanScore ?? i.rawScore), 10) : 10;
     const maxVal = Math.max(maxRaw, maxReg) * 1.15;
 
-    const scaleX = (val: number): number => padding + (val / maxVal) * (width - 2 * padding);
-    const scaleY = (val: number): number => height - padding - (val / maxVal) * (height - 2 * padding);
+    const initialBounds = useMemo(() => ({ minX: 0, maxX: maxVal, minY: 0, maxY: maxVal }), [maxVal]);
+    const {
+        svgRef,
+        bounds,
+        projectX,
+        projectY,
+        zoomLevel,
+        isZoomed,
+        resetZoom,
+        xTicks,
+        yTicks,
+        mouseDataPos,
+        onMouseDown,
+        onMouseMove,
+        onMouseUp,
+        onMouseLeave,
+        onDoubleClick
+    } = useCartesianZoom({
+        width,
+        height,
+        padding,
+        initialBounds
+    });
+
+    if (items.length === 0) {
+        return <p className="text-muted-foreground text-xs font-mono">No entries to display.</p>;
+    }
 
     const activeItem = items.find((i) => i.entryId === hoveredEntryId) ?? null;
 
+    // 45-degree parity reference line coordinates in visible bounds
+    const parityStart = Math.max(bounds.minX, bounds.minY);
+    const parityEnd = Math.min(bounds.maxX, bounds.maxY);
+    const hasParityLine = parityEnd > parityStart;
+
     return (
         <div className="w-full space-y-2">
-            <div className="relative overflow-hidden rounded-md border bg-card p-2">
-                {transform.zoom > 1 && (
-                    <button
-                        type="button"
-                        onClick={resetZoom}
-                        className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded border bg-background/90 px-2 py-0.5 text-[10px] font-mono text-muted-foreground shadow-sm backdrop-blur hover:text-foreground"
-                    >
-                        <RotateCcw className="size-2.5" />
-                        <span>{transform.zoom.toFixed(1)}x · Reset</span>
-                    </button>
-                )}
+            <div className="relative overflow-hidden rounded-md border bg-card p-2 bezel">
+                {/* top corner toolbar with reset and active zoom indicator */}
+                <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
+                    {isZoomed && (
+                        <button
+                            type="button"
+                            onClick={resetZoom}
+                            className="flex items-center gap-1 rounded border bg-background/90 px-2 py-0.5 text-[10px] font-mono text-muted-foreground shadow-xs backdrop-blur-xs hover:text-foreground"
+                        >
+                            <RotateCcw className="size-2.5" />
+                            <span>{zoomLevel.toFixed(1)}x · Reset</span>
+                        </button>
+                    )}
+                </div>
+
+                {/* compact corner hud metric telemetry */}
+                {activeItem !== null ? (
+                    <div className="absolute left-3 top-3 z-10 flex max-w-[70%] items-center gap-2 rounded border bg-background/95 px-2.5 py-1 text-[11px] font-mono shadow-xs backdrop-blur-xs">
+                        <span className="size-2 shrink-0 rounded-full bg-emerald-500" />
+                        <span className="truncate font-semibold text-foreground">{activeItem.title}</span>
+                        <span className="text-muted-foreground shrink-0">·</span>
+                        <span className="shrink-0 text-muted-foreground">Raw: {formatNumber(activeItem.rawScore)}</span>
+                        <span className="shrink-0 text-muted-foreground">
+                            Reg: {formatNumber(activeItem.regularizedTotalScore ?? activeItem.rawScore)}
+                        </span>
+                    </div>
+                ) : mouseDataPos !== null ? (
+                    <div className="absolute left-3 top-3 z-10 flex items-center gap-2 rounded border bg-background/80 px-2 py-0.5 text-[10px] font-mono text-muted-foreground backdrop-blur-xs">
+                        <span>Raw: {formatNumber(mouseDataPos.x, 1)}</span>
+                        <span>·</span>
+                        <span>Reg: {formatNumber(mouseDataPos.y, 1)}</span>
+                    </div>
+                ) : null}
 
                 <svg
                     ref={svgRef}
@@ -520,7 +679,7 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
                     onDoubleClick={onDoubleClick}
                     className={cn(
                         "h-auto max-h-60 w-full select-none",
-                        transform.zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"
+                        isZoomed ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"
                     )}
                 >
                     <defs>
@@ -529,141 +688,189 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
                         </clipPath>
                     </defs>
 
-                    {/* zoomable plot area */}
+                    {/* dynamic hairline grid lines */}
                     <g clipPath="url(#shrinkage-plot-clip)">
-                        <g transform={`translate(${transform.panX}, ${transform.panY}) scale(${transform.zoom})`}>
-                            {/* parity 45-degree line */}
+                        {xTicks.map((tick) => {
+                            const x = projectX(tick);
+                            return (
+                                <line
+                                    key={`sgx-${tick}`}
+                                    x1={x}
+                                    y1={padding}
+                                    x2={x}
+                                    y2={height - padding}
+                                    className="stroke-border/25"
+                                    strokeDasharray="2 2"
+                                />
+                            );
+                        })}
+                        {yTicks.map((tick) => {
+                            const y = projectY(tick);
+                            return (
+                                <line
+                                    key={`sgy-${tick}`}
+                                    x1={padding}
+                                    y1={y}
+                                    x2={width - padding}
+                                    y2={y}
+                                    className="stroke-border/25"
+                                    strokeDasharray="2 2"
+                                />
+                            );
+                        })}
+
+                        {/* 45-degree parity reference line */}
+                        {hasParityLine && (
                             <line
-                                x1={scaleX(0)}
-                                y1={scaleY(0)}
-                                x2={scaleX(maxVal)}
-                                y2={scaleY(maxVal)}
-                                className="stroke-muted-foreground/40"
+                                x1={projectX(parityStart)}
+                                y1={projectY(parityStart)}
+                                x2={projectX(parityEnd)}
+                                y2={projectY(parityEnd)}
+                                className="stroke-muted-foreground/35"
                                 strokeDasharray="3 3"
                             />
+                        )}
 
-                            {/* items with anti-collision fan-out */}
-                            {(() => {
-                                const layoutItems = computeAntiCollisionLayout(
-                                    items.map((item) => {
-                                        const shortId = item.entryId.slice(0, 6);
-                                        const label =
-                                            item.title.length > 18
-                                                ? `${item.title.slice(0, 18)}… #${shortId}`
-                                                : `${item.title} #${shortId}`;
-                                        const reg = item.regularizedMeanScore ?? item.rawScore;
-                                        return {
-                                            data: item,
-                                            id: item.entryId,
-                                            cx: scaleX(item.rawScore),
-                                            cy: scaleY(reg),
-                                            label
-                                        };
-                                    }),
-                                    transform.zoom
-                                );
+                        {/* hover crosshair lines */}
+                        {activeItem !== null && (
+                            <g>
+                                <line
+                                    x1={padding}
+                                    y1={projectY(activeItem.regularizedMeanScore ?? activeItem.rawScore)}
+                                    x2={width - padding}
+                                    y2={projectY(activeItem.regularizedMeanScore ?? activeItem.rawScore)}
+                                    className="stroke-primary/40"
+                                    strokeDasharray="2 2"
+                                />
+                                <line
+                                    x1={projectX(activeItem.rawScore)}
+                                    y1={padding}
+                                    x2={projectX(activeItem.rawScore)}
+                                    y2={height - padding}
+                                    className="stroke-primary/40"
+                                    strokeDasharray="2 2"
+                                />
+                            </g>
+                        )}
 
-                                // render hovered item on top layer
-                                const sortedItems = [...layoutItems].sort((a, b) => {
-                                    const aSel = hoveredEntryId === a.data.entryId ? 1 : 0;
-                                    const bSel = hoveredEntryId === b.data.entryId ? 1 : 0;
-                                    return aSel - bSel;
-                                });
+                        {/* shrinkage connector drop lines and pins */}
+                        {items.map((datum) => {
+                            const raw = datum.rawScore;
+                            const reg = datum.regularizedMeanScore ?? datum.rawScore;
+                            const px = projectX(raw);
+                            const py = projectY(reg);
+                            const parityPy = projectY(raw);
+                            const isSelected = hoveredEntryId === datum.entryId;
 
-                                return sortedItems.map((item) => {
-                                    const datum = item.data;
-                                    const parityY = scaleY(datum.rawScore);
-                                    const isSelected = hoveredEntryId === datum.entryId;
-
-                                    return (
-                                        <g
-                                            key={datum.entryId}
-                                            onMouseEnter={() => setHoveredEntryId(datum.entryId)}
-                                            onMouseLeave={() => setHoveredEntryId(null)}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setHoveredEntryId(datum.entryId);
-                                            }}
-                                            className="cursor-pointer"
-                                        >
-                                            <line
-                                                x1={item.cx}
-                                                y1={parityY}
-                                                x2={item.cx}
-                                                y2={item.cy}
-                                                stroke="#3b82f6"
-                                                strokeWidth={isSelected ? 2 : 1.5}
-                                                strokeDasharray="2 2"
-                                                opacity={isSelected ? 1 : 0.7}
-                                            />
-                                            {item.hasOffset && (
-                                                <path
-                                                    d={`M ${item.cx} ${item.cy} Q ${item.cx + 4} ${item.labelY} ${item.labelX} ${item.labelY}`}
-                                                    stroke={isSelected ? "#3b82f6" : "rgba(148, 163, 184, 0.45)"}
-                                                    strokeWidth={isSelected ? 1.5 : 1}
-                                                    strokeDasharray="2 2"
-                                                    fill="none"
-                                                />
-                                            )}
-                                            <rect
-                                                x={item.labelX}
-                                                y={item.labelY - 9}
-                                                width={item.badgeWidth}
-                                                height={item.badgeHeight}
-                                                rx="3"
-                                                fill="#020817"
-                                                fillOpacity={isSelected ? 0.95 : 0.7}
-                                                stroke={isSelected ? "#3b82f6" : undefined}
-                                                strokeWidth={isSelected ? 1 : 0}
-                                            />
-                                            <text
-                                                x={item.labelX + 4}
-                                                y={item.labelY + 2}
-                                                fontSize="9"
-                                                className={cn(
-                                                    "font-mono select-none pointer-events-none transition-colors",
-                                                    isSelected ? "fill-foreground font-semibold" : "fill-foreground/85"
-                                                )}
-                                            >
-                                                {item.label}
-                                            </text>
-                                            <circle
-                                                cx={item.cx}
-                                                cy={item.cy}
-                                                r={isSelected ? 6 : 4.5}
-                                                fill="#10b981"
-                                                stroke="#1e293b"
-                                                strokeWidth={isSelected ? 2 : 1}
-                                            />
-                                        </g>
-                                    );
-                                });
-                            })()}
-                        </g>
+                            return (
+                                <g
+                                    key={datum.entryId}
+                                    onMouseEnter={() => setHoveredEntryId(datum.entryId)}
+                                    onMouseLeave={() => setHoveredEntryId(null)}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setHoveredEntryId(datum.entryId);
+                                    }}
+                                    className="cursor-pointer"
+                                >
+                                    {/* shrinkage drop line */}
+                                    <line
+                                        x1={px}
+                                        y1={parityPy}
+                                        x2={px}
+                                        y2={py}
+                                        stroke="#3b82f6"
+                                        strokeWidth={isSelected ? 2 : 1.2}
+                                        strokeDasharray="2 2"
+                                        opacity={isSelected ? 1 : 0.6}
+                                    />
+                                    {isSelected && (
+                                        <circle cx={px} cy={py} r={9} fill="#10b981" fillOpacity={0.2} className="animate-pulse" />
+                                    )}
+                                    <circle
+                                        cx={px}
+                                        cy={py}
+                                        r={isSelected ? 5.5 : 4}
+                                        fill="#10b981"
+                                        stroke="#0b0c10"
+                                        strokeWidth={isSelected ? 2 : 1}
+                                        className="transition-all"
+                                    />
+                                </g>
+                            );
+                        })}
                     </g>
 
-                    {/* static axes frame */}
-                    <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} className="stroke-border" />
-                    <line x1={padding} y1={padding} x2={padding} y2={height - padding} className="stroke-border" />
+                    {/* dynamic axes frame */}
+                    <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} className="stroke-border/80" />
+                    <line x1={padding} y1={padding} x2={padding} y2={height - padding} className="stroke-border/80" />
 
-                    <text x={width / 2} y={height - 4} fontSize="10" textAnchor="middle" className="fill-muted-foreground font-mono">
+                    {/* dynamic x ticks */}
+                    {xTicks.map((tick) => {
+                        const x = projectX(tick);
+                        if (x < padding || x > width - padding) return null;
+                        return (
+                            <g key={`stx-${tick}`}>
+                                <line
+                                    x1={x}
+                                    y1={height - padding}
+                                    x2={x}
+                                    y2={height - padding + 4}
+                                    className="stroke-muted-foreground/60"
+                                />
+                                <text
+                                    x={x}
+                                    y={height - padding + 14}
+                                    fontSize="9"
+                                    textAnchor="middle"
+                                    className="fill-muted-foreground font-mono select-none pointer-events-none"
+                                >
+                                    {formatTickValue(tick)}
+                                </text>
+                            </g>
+                        );
+                    })}
+
+                    {/* dynamic y ticks */}
+                    {yTicks.map((tick) => {
+                        const y = projectY(tick);
+                        if (y < padding || y > height - padding) return null;
+                        return (
+                            <g key={`sty-${tick}`}>
+                                <line x1={padding - 4} y1={y} x2={padding} y2={y} className="stroke-muted-foreground/60" />
+                                <text
+                                    x={padding - 6}
+                                    y={y + 3}
+                                    fontSize="9"
+                                    textAnchor="end"
+                                    className="fill-muted-foreground font-mono select-none pointer-events-none"
+                                >
+                                    {formatTickValue(tick)}
+                                </text>
+                            </g>
+                        );
+                    })}
+
+                    {/* axis labels */}
+                    <text x={width / 2} y={height - 4} fontSize="9" textAnchor="middle" className="fill-muted-foreground/80 font-mono">
                         Raw Points &rarr;
                     </text>
                     <text
                         x={-height / 2}
                         y={12}
                         transform="rotate(-90)"
-                        fontSize="10"
+                        fontSize="9"
                         textAnchor="middle"
-                        className="fill-muted-foreground font-mono"
+                        className="fill-muted-foreground/80 font-mono"
                     >
                         Regularized Score &rarr;
                     </text>
                 </svg>
             </div>
 
+            {/* details footer when selected */}
             {activeItem !== null && (
-                <div className="flex flex-wrap items-center gap-3 rounded border bg-muted/30 px-3 py-1.5 text-xs font-mono">
+                <div className="flex flex-wrap items-center gap-3 rounded border bg-card/60 px-3 py-1.5 text-xs font-mono bezel">
                     <span className="font-semibold text-foreground">
                         {activeItem.title} (#{activeItem.entryId.slice(0, 6)})
                     </span>
@@ -671,7 +878,7 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
                     <span>
                         Raw: {formatNumber(activeItem.rawScore)} pts (#{activeItem.position})
                     </span>
-                    <span>Regularized: {formatNumber(activeItem.regularizedTotalScore ?? activeItem.rawScore)}</span>
+                    <span>Regularized: {formatNumber(activeItem.regularizedTotalScore ?? activeItem.rawScore)} pts</span>
                 </div>
             )}
         </div>
