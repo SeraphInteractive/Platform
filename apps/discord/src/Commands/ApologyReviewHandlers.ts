@@ -36,6 +36,21 @@ export const banApologyCommand: SlashCommand = {
         .toJSON(),
     async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
         const apologyText = interaction.options.getString("apology", true).trim();
+        const guild =
+            interaction.client.guilds.cache.get(context.configuration.guildId) ??
+            (await interaction.client.guilds.fetch(context.configuration.guildId).catch(() => null));
+
+        if (guild === null) {
+            await interaction.reply(notice("Server could not be reached.", Accent.Danger));
+            return;
+        }
+
+        const isBannedOnDiscord = await guild.bans.fetch(interaction.user.id).then(() => true).catch(() => false);
+        if (!isBannedOnDiscord) {
+            await interaction.reply(notice("You are not currently banned from the server.", Accent.Warning));
+            return;
+        }
+
         const record = context.warnings.getRecord(interaction.user.id);
         if (record === undefined || record.offenceLevel < 3) {
             await interaction.reply(notice("Only members with an active ban can submit an apology review.", Accent.Warning));
@@ -59,7 +74,7 @@ export const banApologyCommand: SlashCommand = {
             message(
                 panel(
                     Accent.Success,
-                    `📜 **Ban Apology Submitted Successfully**`,
+                    `**Ban Apology Submitted Successfully**`,
                     `Your apology has been forwarded to the Project Stairway supervisor team for review.\n` +
                         `You will receive a direct message when a decision has been reached.`
                 )
@@ -83,7 +98,7 @@ export const banApologyCommand: SlashCommand = {
 
                 await (ch as SendableChannels).send({
                     content:
-                        `# 📜 Ban Apology Review Request\n` +
+                        `# Ban Apology Review Request\n` +
                         `**User:** <@${interaction.user.id}> (${plain(interaction.user.tag ?? interaction.user.username)})\n` +
                         `**User ID:** \`${interaction.user.id}\`\n` +
                         `**Submitted At:** <t:${Math.floor(Date.now() / 1000)}:f>\n\n` +
@@ -113,6 +128,15 @@ function isStaffMember(interaction: ButtonInteraction): boolean {
 export const apologyRequestButtonHandler: ComponentHandler = {
     prefix: "apology_request",
     async handle(interaction: ButtonInteraction, context: BotContext): Promise<void> {
+        const guild =
+            interaction.client.guilds.cache.get(context.configuration.guildId) ??
+            (await interaction.client.guilds.fetch(context.configuration.guildId).catch(() => null));
+        const isBannedOnDiscord = guild !== null && (await guild.bans.fetch(interaction.user.id).then(() => true).catch(() => false));
+        if (!isBannedOnDiscord) {
+            await interaction.reply(notice("You are not currently banned from the server.", Accent.Warning));
+            return;
+        }
+
         const record = context.warnings.getRecord(interaction.user.id);
         if (record === undefined || record.offenceLevel < 3) {
             await interaction.reply(notice("Only members with an active ban can request an apology review.", Accent.Warning));
@@ -148,6 +172,14 @@ export const apologyModalHandler: ComponentHandler = {
     prefix: "apology_modal",
     async handle(interaction: ModalSubmitInteraction, context: BotContext): Promise<void> {
         const apologyText = interaction.fields.getTextInputValue("apology_text").trim();
+        const guild =
+            interaction.client.guilds.cache.get(context.configuration.guildId) ??
+            (await interaction.client.guilds.fetch(context.configuration.guildId).catch(() => null));
+        const isBannedOnDiscord = guild !== null && (await guild.bans.fetch(interaction.user.id).then(() => true).catch(() => false));
+        if (!isBannedOnDiscord) {
+            await interaction.reply(notice("You are not currently banned from the server.", Accent.Warning));
+            return;
+        }
 
         try {
             context.warnings.submitApology(interaction.user.id, apologyText);
@@ -161,7 +193,7 @@ export const apologyModalHandler: ComponentHandler = {
             ephemeral(
                 panel(
                     Accent.Success,
-                    `📜 **Apology Submitted Successfully**`,
+                    `**Apology Submitted Successfully**`,
                     `Your ban apology has been forwarded to the Project Stairway supervisor team for review.\n` +
                         `You will receive a direct message when a decision is made.`
                 )
@@ -186,7 +218,7 @@ export const apologyModalHandler: ComponentHandler = {
 
                 await (ch as SendableChannels).send({
                     content:
-                        `# 📜 Ban Apology Review Request\n` +
+                        `# Ban Apology Review Request\n` +
                         `**User:** <@${interaction.user.id}> (${plain(interaction.user.tag ?? interaction.user.username)})\n` +
                         `**User ID:** \`${interaction.user.id}\`\n` +
                         `**Submitted At:** <t:${Math.floor(Date.now() / 1000)}:f>\n\n` +
@@ -225,6 +257,12 @@ export const apologyDecisionButtonHandler: ComponentHandler = {
         const targetUser = await interaction.client.users.fetch(targetUserId).catch(() => null);
 
         if (action === "approve") {
+            const isBannedOnDiscord = guild !== null && (await guild.bans.fetch(targetUserId).then(() => true).catch(() => false));
+            if (!isBannedOnDiscord) {
+                await interaction.followUp(notice("User is not currently banned on Discord.", Accent.Warning));
+                return;
+            }
+
             try {
                 context.warnings.reviewApology(targetUserId, true, interaction.user.id);
             } catch (error: unknown) {
@@ -244,7 +282,7 @@ export const apologyDecisionButtonHandler: ComponentHandler = {
                         message(
                             panel(
                                 Accent.Success,
-                                `🎉 **Ban Apology Approved — Welcome Back**`,
+                                `**Ban Apology Approved - Welcome Back**`,
                                 `Your ban apology has been reviewed and **APPROVED** by <@${interaction.user.id}>.\n\n` +
                                     `Your offences and warnings have been **automatically reset**.\n` +
                                     `Please review the server rules to avoid future disciplinary action:\n` +
@@ -257,7 +295,7 @@ export const apologyDecisionButtonHandler: ComponentHandler = {
 
             await interaction.editReply({
                 content:
-                    `# 📜 Ban Apology Review — APPROVED ✅\n` +
+                    `# Ban Apology Review - APPROVED\n` +
                     `**User:** <@${targetUserId}>\n` +
                     `**Reviewed By:** <@${interaction.user.id}>\n` +
                     `**Result:** User was unbanned and offences were automatically reset to 0.\n` +
@@ -280,7 +318,7 @@ export const apologyDecisionButtonHandler: ComponentHandler = {
                         message(
                             panel(
                                 Accent.Danger,
-                                `⚠️ **Ban Apology Rejected**`,
+                                `**Ban Apology Rejected**`,
                                 `Your ban apology review was evaluated by the supervisor team and **REJECTED**.\n` +
                                     `Your server ban remains in effect.`
                             )
@@ -291,10 +329,10 @@ export const apologyDecisionButtonHandler: ComponentHandler = {
 
             await interaction.editReply({
                 content:
-                    `# 📜 Ban Apology Review — REJECTED ❌\n` +
+                    `# Ban Apology Review - REJECTED\n` +
                     `**User:** <@${targetUserId}>\n` +
                     `**Reviewed By:** <@${interaction.user.id}>\n` +
-                    `**Result:** Apology rejected. Ban remains in effect.\n` +
+                    `**Result:** Apology was rejected. Ban remains in effect.\n` +
                     `**Timestamp:** <t:${Math.floor(Date.now() / 1000)}:R>`,
                 components: []
             });

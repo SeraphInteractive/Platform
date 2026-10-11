@@ -25,6 +25,11 @@ import {
     apologyRequestButtonHandler,
     banApologyCommand
 } from "../Commands/ApologyReviewHandlers.js";
+import {
+    modResetButtonHandler,
+    modStatusCommand,
+    modStepDownButtonHandler
+} from "../Commands/ModStatusCommands.js";
 
 export const slashCommands: readonly SlashCommand[] = [
     helpCommand,
@@ -42,7 +47,8 @@ export const slashCommands: readonly SlashCommand[] = [
     syncRolesCommand,
     statusCommand,
     reminderCommand,
-    banApologyCommand
+    banApologyCommand,
+    modStatusCommand
 ];
 
 const componentHandlers: readonly ComponentHandler[] = [
@@ -54,7 +60,9 @@ const componentHandlers: readonly ComponentHandler[] = [
     deliverablesButtonHandler,
     apologyRequestButtonHandler,
     apologyModalHandler,
-    apologyDecisionButtonHandler
+    apologyDecisionButtonHandler,
+    modStepDownButtonHandler,
+    modResetButtonHandler
 ];
 
 export class InteractionRouter {

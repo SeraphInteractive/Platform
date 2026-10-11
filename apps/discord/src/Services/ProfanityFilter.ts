@@ -12,7 +12,7 @@ import type { Logger } from "pino";
 import { Accent, message, panel, plain } from "../Discord/Ui.js";
 import { ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
 import { type InfractionPenalty, type WarningStore } from "../State/WarningStore.js";
-import { isLeadership, studioRoles } from "./StudioRoles.js";
+import { isExecutive, isLeadership, studioRoles } from "./StudioRoles.js";
 
 // word boundaries and exact root patterns for banned profanity & slurs
 const profanityPatterns: readonly RegExp[] = Object.freeze([
@@ -131,18 +131,14 @@ export class ProfanityFilter {
 
         // bypass check for staff / leadership roles
         const member = messageInstance.member ?? (await messageInstance.guild?.members.fetch(messageInstance.author.id).catch(() => null));
-        if (member !== null && member !== undefined) {
-            if (member.permissions.has(PermissionFlagsBits.Administrator)) {
-                return;
-            }
-            const isStaff = member.roles.cache.some((role) => {
-                const studio = studioRoles.find((r) => r.name === role.name);
-                return studio !== undefined && isLeadership(studio.tier);
-            });
-            if (isStaff) {
-                return;
-            }
-        }
+        const isStaff =
+            member !== null &&
+            member !== undefined &&
+            (member.permissions.has(PermissionFlagsBits.Administrator) ||
+                member.roles.cache.some((role) => {
+                    const studio = studioRoles.find((r) => r.name === role.name);
+                    return studio !== undefined && isLeadership(studio.tier);
+                }));
 
         const check = detectProfanity(messageInstance.content);
         if (!check.matched) {
@@ -171,7 +167,8 @@ export class ProfanityFilter {
                 userId: author.id,
                 channelId: channel.id,
                 penaltyType: penalty.type,
-                terms: check.terms
+                terms: check.terms,
+                isStaff
             },
             "profanity detected by automod"
         );
@@ -184,7 +181,7 @@ export class ProfanityFilter {
                         message(
                             panel(
                                 Accent.Warning,
-                                `⚠️ **Warning: Inappropriate Language (${penalty.current}/${penalty.max})**`,
+                                `**Warning: Prohibited Language (${penalty.current}/${penalty.max})**`,
                                 `Your message in <#${channel.id}> was removed by AutoMod for prohibited language.\n\n` +
                                     `**Removed content:**\n> ${snippet}\n\n` +
                                     `*Current progress:* **${penalty.current}/${penalty.max} warnings** (${stageLabel}).\n` +
@@ -196,10 +193,11 @@ export class ProfanityFilter {
 
                 await this.logToModChannel(
                     Accent.Warning,
-                    `⚠️ **AutoMod Warning (${penalty.current}/${penalty.max})**`,
+                    `**AutoMod Warning (${penalty.current}/${penalty.max})**`,
                     `**User:** <@${author.id}> (${plain(author.tag ?? author.username)})\n` +
                         `**Channel:** <#${channel.id}>\n` +
                         `**Warning count:** **${penalty.current}/${penalty.max}** (${stageLabel})\n` +
+                        `**Staff member:** ${isStaff ? "Yes" : "No"}\n` +
                         `**Matched terms:** \`${check.terms.join("`, `")}\`\n` +
                         `**Message snippet:**\n> ${snippet}`
                 );
@@ -207,6 +205,35 @@ export class ProfanityFilter {
             }
 
             case "first_offence_24h": {
+                if (isStaff) {
+                    await author
+                        .send(
+                            message(
+                                panel(
+                                    Accent.Warning,
+                                    `**1st Offence Reached: 5 Warnings**`,
+                                    `You have reached **5 warnings** for prohibited language in Project Stairway.\n\n` +
+                                        `**Violation snippet:**\n> ${snippet}\n\n` +
+                                        `Staff notice: Timeouts are bypassed for staff roles. Next penalty threshold is 3 additional warnings (2nd offence).\n` +
+                                        `Please review our [Discord Rules](https://dev-api.seraphinteractive.com/rules).`
+                                )
+                            )
+                        )
+                        .catch(() => undefined);
+
+                    await this.logToModChannel(
+                        Accent.Warning,
+                        `**1st Offence: Staff Warning Reached (Timeout Bypassed)**`,
+                        `**User:** <@${author.id}> (${plain(author.tag ?? author.username)})\n` +
+                            `**Channel:** <#${channel.id}>\n` +
+                            `**Status:** Reached 5 warnings (Staff role: 24h timeout bypassed)\n` +
+                            `**Next stage:** 3 warnings to 2nd offence stage\n` +
+                            `**Matched terms:** \`${check.terms.join("`, `")}\`\n` +
+                            `**Message snippet:**\n> ${snippet}`
+                    );
+                    return;
+                }
+
                 if (member !== null && member !== undefined) {
                     await member.timeout(penalty.durationMs, "1st offence: 5 profanity warnings reached (24h timeout)").catch((err) => {
                         this.logger.error({ err, userId: author.id }, "failed to apply 24h timeout");
@@ -218,7 +245,7 @@ export class ProfanityFilter {
                         message(
                             panel(
                                 Accent.Danger,
-                                `🚨 **1st Offence: You have been timed out for 24 hours**`,
+                                `**1st Offence: You have been timed out for 24 hours**`,
                                 `You have reached **5 warnings** for prohibited language in Project Stairway.\n\n` +
                                     `**Violation snippet:**\n> ${snippet}\n\n` +
                                     `*Next penalty:* 3 more warnings will trigger a **1-week timeout (2nd offence)**.\n` +
@@ -230,7 +257,7 @@ export class ProfanityFilter {
 
                 await this.logToModChannel(
                     Accent.Danger,
-                    `🚨 **1st Offence: 24-Hour Timeout Applied**`,
+                    `**1st Offence: 24-Hour Timeout Applied**`,
                     `**User:** <@${author.id}> (${plain(author.tag ?? author.username)})\n` +
                         `**Channel:** <#${channel.id}>\n` +
                         `**Status:** Reached 5 warnings (24h timeout executed)\n` +
@@ -242,6 +269,35 @@ export class ProfanityFilter {
             }
 
             case "second_offence_1w": {
+                if (isStaff) {
+                    await author
+                        .send(
+                            message(
+                                panel(
+                                    Accent.Danger,
+                                    `**2nd Offence Reached: 3 Additional Warnings**`,
+                                    `You have reached **3 additional warnings** after your previous offence threshold.\n\n` +
+                                        `**Violation snippet:**\n> ${snippet}\n\n` +
+                                        `Staff notice: 1-week timeout was bypassed for staff roles.\n` +
+                                        `Final warning: Exceeding this stage will alert Executive Leadership for administrative review.`
+                                )
+                            )
+                        )
+                        .catch(() => undefined);
+
+                    await this.logToModChannel(
+                        Accent.Danger,
+                        `**2nd Offence: Staff Warning Reached (Timeout Bypassed)**`,
+                        `**User:** <@${author.id}> (${plain(author.tag ?? author.username)})\n` +
+                            `**Channel:** <#${channel.id}>\n` +
+                            `**Status:** Reached 2nd offence stage (Staff role: 1-week timeout bypassed)\n` +
+                            `**Next stage:** 1 warning triggers Executive Leadership escalation alert\n` +
+                            `**Matched terms:** \`${check.terms.join("`, `")}\`\n` +
+                            `**Message snippet:**\n> ${snippet}`
+                    );
+                    return;
+                }
+
                 if (member !== null && member !== undefined) {
                     await member.timeout(penalty.durationMs, "2nd offence: 3 additional warnings reached (1-week timeout)").catch((err) => {
                         this.logger.error({ err, userId: author.id }, "failed to apply 1-week timeout");
@@ -253,10 +309,10 @@ export class ProfanityFilter {
                         message(
                             panel(
                                 Accent.Danger,
-                                `🚨 **2nd Offence: You have been timed out for 1 WEEK**`,
+                                `**2nd Offence: You have been timed out for 1 week**`,
                                 `You have reached **3 additional warnings** after your previous timeout.\n\n` +
                                     `**Violation snippet:**\n> ${snippet}\n\n` +
-                                    `⚠️ **FINAL WARNING:** 1 more violation will result in a **1-MONTH SERVER BAN**.\n` +
+                                    `**Final Warning:** 1 more violation will result in a **1-month server ban**.\n` +
                                     `Please review our [Discord Rules](https://dev-api.seraphinteractive.com/rules).`
                             )
                         )
@@ -265,7 +321,7 @@ export class ProfanityFilter {
 
                 await this.logToModChannel(
                     Accent.Danger,
-                    `🚨 **2nd Offence: 1-Week Timeout Applied**`,
+                    `**2nd Offence: 1-Week Timeout Applied**`,
                     `**User:** <@${author.id}> (${plain(author.tag ?? author.username)})\n` +
                         `**Channel:** <#${channel.id}>\n` +
                         `**Status:** Reached 2nd offence (1-week timeout executed)\n` +
@@ -279,6 +335,45 @@ export class ProfanityFilter {
             case "third_offence_ban": {
                 const guild = this.client.guilds.cache.get(this.guildId) ?? (await this.client.guilds.fetch(this.guildId).catch(() => null));
 
+                if (isStaff) {
+                    // find executive roles to ping
+                    const executiveRoles = guild?.roles.cache.filter((role) => {
+                        const studio = studioRoles.find((r) => r.name === role.name);
+                        return studio !== undefined && isExecutive(studio.tier);
+                    });
+                    const execPings =
+                        executiveRoles && executiveRoles.size > 0
+                            ? executiveRoles.map((r) => `<@&${r.id}>`).join(" ")
+                            : "@here";
+
+                    await author
+                        .send(
+                            message(
+                                panel(
+                                    Accent.Danger,
+                                    `**Staff Escalation: Stage 2 Offences Exceeded**`,
+                                    `You have exceeded Stage 2 offences for prohibited language in Project Stairway.\n\n` +
+                                        `**Violation snippet:**\n> ${snippet}\n\n` +
+                                        `Staff notice: Automatic server bans are bypassed for staff roles. Executive Leadership has been notified for administrative review.`
+                                )
+                            )
+                        )
+                        .catch(() => undefined);
+
+                    await this.logToModChannel(
+                        Accent.Danger,
+                        `**Staff Escalation: Supervisor Exceeded Stage 2 Offences**`,
+                        `${execPings}\n` +
+                            `**User:** <@${author.id}> (${plain(author.tag ?? author.username)})\n` +
+                            `**Channel:** <#${channel.id}>\n` +
+                            `**Status:** Exceeded Stage 2 offences (Automatic ban bypassed for staff)\n` +
+                            `**Notice:** Executive leadership review required.\n` +
+                            `**Matched terms:** \`${check.terms.join("`, `")}\`\n` +
+                            `**Message snippet:**\n> ${snippet}`
+                    );
+                    return;
+                }
+
                 const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
                     new ButtonBuilder()
                         .setCustomId("apology_request")
@@ -290,7 +385,7 @@ export class ProfanityFilter {
                 await author
                     .send({
                         content:
-                            `🚨 **3rd Offence: You have been banned from Project Stairway**\n\n` +
+                            `**3rd Offence: You have been banned from Project Stairway**\n\n` +
                             `You have accumulated repeated profanity violations after multiple timeouts.\n` +
                             `**Violation snippet:**\n> ${snippet}\n\n` +
                             `Only banned members who submit a sincere apology may be reviewed by leadership for unbanning.\n` +
@@ -311,7 +406,7 @@ export class ProfanityFilter {
 
                 await this.logToModChannel(
                     Accent.Danger,
-                    `🔨 **3rd Offence: User Banned from Server**`,
+                    `**3rd Offence: User Banned from Server**`,
                     `**User:** <@${author.id}> (${plain(author.tag ?? author.username)})\n` +
                         `**Channel:** <#${channel.id}>\n` +
                         `**Status:** Reached 3rd offence (Server ban executed)\n` +

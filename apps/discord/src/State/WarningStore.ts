@@ -206,6 +206,17 @@ export class WarningStore {
         return record;
     }
 
+    public stepDownStage(userId: string): UserWarningRecord {
+        const record = this.getOrCreate(userId);
+        if (record.offenceLevel > 0) {
+            record.offenceLevel -= 1;
+        }
+        record.stageWarnings = 0;
+        record.apology = { status: "none", text: null, submittedAt: null };
+        void this.persist();
+        return record;
+    }
+
     public resetUser(userId: string): void {
         const record = this.getOrCreate(userId);
         record.offenceLevel = 0;

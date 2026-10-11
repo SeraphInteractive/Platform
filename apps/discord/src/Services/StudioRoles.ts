@@ -170,6 +170,10 @@ export function isLeadership(tier: StudioTier): boolean {
     return tier === StudioTier.Executive || tier === StudioTier.Department;
 }
 
+export function isExecutive(tier: StudioTier): boolean {
+    return tier === StudioTier.Executive;
+}
+
 export function permissionsForRole(role: StudioRole): readonly bigint[] {
     if (role.name === "Members") {
         return memberPermissions;

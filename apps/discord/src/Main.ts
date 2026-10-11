@@ -1,10 +1,11 @@
 import { Role } from "@platform/contracts";
-import { ActivityType, Client, Events, GatewayIntentBits, REST, Routes } from "discord.js";
+import { ActivityType, Client, Events, GatewayIntentBits, REST, Routes, type SendableChannels } from "discord.js";
 import { NotificationConsumer } from "./Api/NotificationConsumer.js";
 import { PlatformApiClient } from "./Api/PlatformApiClient.js";
 import type { BotContext } from "./Commands/Command.js";
 import { createLogger } from "./Common/Logger.js";
 import { ConfigurationError, loadBotConfiguration } from "./Configuration/BotConfiguration.js";
+import { Accent, message, panel } from "./Discord/Ui.js";
 import { InteractionRouter, slashCommands } from "./Interactions/InteractionRouter.js";
 import { NotificationDispatcher } from "./Services/NotificationDispatcher.js";
 import { ReminderScheduler } from "./Services/ReminderScheduler.js";
@@ -137,7 +138,7 @@ async function main(): Promise<void> {
                     if (channel?.isSendable() && !channel.isDMBased() && channel.guildId === member.guild.id) {
                         await channel
                             .send({
-                                content: `👋 Welcome <@${member.id}> to the studio! Sign in at ${configuration.webAppUrl} to get started.`,
+                                content: `Welcome <@${member.id}> to the studio! Sign in at ${configuration.webAppUrl} to get started.`,
                                 allowedMentions: { users: [member.id] }
                             })
                             .catch(() => undefined);
@@ -145,6 +146,53 @@ async function main(): Promise<void> {
                 }
             } catch (error: unknown) {
                 logger.warn({ err: error, member: member.id }, "failed to handle member add");
+            }
+        })();
+    });
+
+    client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
+        void (async (): Promise<void> => {
+            if (newMember.guild.id !== configuration.guildId) {
+                return;
+            }
+
+            // detect when timeout was removed via Discord client UI
+            const wasTimedOut =
+                oldMember.communicationDisabledUntilTimestamp !== null &&
+                oldMember.communicationDisabledUntilTimestamp > Date.now();
+            const isNowTimedOut =
+                newMember.communicationDisabledUntilTimestamp !== null &&
+                newMember.communicationDisabledUntilTimestamp > Date.now();
+
+            if (wasTimedOut && !isNowTimedOut) {
+                const record = warnings.getRecord(newMember.id);
+                if (record !== undefined && record.offenceLevel > 0) {
+                    const updated = warnings.stepDownStage(newMember.id);
+                    logger.info(
+                        { userId: newMember.id, newStage: updated.offenceLevel },
+                        "timeout removed via Discord client, stepped down offence stage"
+                    );
+
+                    const modChannelId = settings.channel(ChannelPurpose.ModerationLogs);
+                    if (modChannelId !== undefined) {
+                        const ch = await client.channels.fetch(modChannelId).catch(() => null);
+                        if (ch !== null && ch.isSendable() && !ch.isDMBased()) {
+                            await (ch as SendableChannels)
+                                .send(
+                                    message(
+                                        panel(
+                                            Accent.Info,
+                                            "**Timeout Removed in Discord Client**",
+                                            `**Member:** <@${newMember.id}>\n` +
+                                                `**Status:** Built-in timeout removed. Offence level stepped down to Stage ${updated.offenceLevel}.\n` +
+                                                `**Stage Warnings:** Reset to 0`
+                                        )
+                                    )
+                                )
+                                .catch(() => undefined);
+                        }
+                    }
+                }
             }
         })();
     });

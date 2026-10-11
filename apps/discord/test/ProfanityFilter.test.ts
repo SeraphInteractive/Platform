@@ -143,4 +143,46 @@ describe("WarningStore progressive discipline", () => {
         expect(updated.offenceLevel).toBe(3);
         expect(updated.apology.status).toBe("rejected");
     });
+
+    it("steps down offence stage by 1 and resets stage warnings", () => {
+        const userId = "stageUser123";
+
+        // trigger up to 2nd offence (offenceLevel 2)
+        for (let i = 0; i < 8; i++) {
+            store.addWarning(userId, "profanity", "ch1", "bad");
+        }
+        expect(store.getRecord(userId)?.offenceLevel).toBe(2);
+
+        // step down from stage 2 -> stage 1
+        const steppedDown1 = store.stepDownStage(userId);
+        expect(steppedDown1.offenceLevel).toBe(1);
+        expect(steppedDown1.stageWarnings).toBe(0);
+
+        // step down from stage 1 -> stage 0
+        const steppedDown2 = store.stepDownStage(userId);
+        expect(steppedDown2.offenceLevel).toBe(0);
+        expect(steppedDown2.stageWarnings).toBe(0);
+
+        // step down at stage 0 stays at 0
+        const steppedDown3 = store.stepDownStage(userId);
+        expect(steppedDown3.offenceLevel).toBe(0);
+        expect(steppedDown3.stageWarnings).toBe(0);
+    });
+
+    it("resets user completely to clean slate", () => {
+        const userId = "resetUser123";
+
+        for (let i = 0; i < 6; i++) {
+            store.addWarning(userId, "profanity", "ch1", "bad");
+        }
+        expect(store.getRecord(userId)?.offenceLevel).toBe(1);
+
+        store.resetUser(userId);
+        const record = store.getRecord(userId);
+        expect(record?.offenceLevel).toBe(0);
+        expect(record?.stageWarnings).toBe(0);
+        expect(record?.infractions.length).toBe(0);
+        expect(record?.timeouts.length).toBe(0);
+        expect(record?.apology.status).toBe("none");
+    });
 });
