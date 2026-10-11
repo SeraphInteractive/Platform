@@ -9,6 +9,7 @@ import {
     type SendableChannels
 } from "discord.js";
 import type { Logger } from "pino";
+import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
 import { Accent, message, panel, plain } from "../Discord/Ui.js";
 import { ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
 import { type InfractionPenalty, type WarningStore } from "../State/WarningStore.js";
@@ -47,7 +48,16 @@ const profanityPatterns: readonly RegExp[] = Object.freeze([
     /\bd+[i1!|]+c+k+h+e+a+d+(?:s+)?\b/iu,
     /\bp+[u_*\-.\s]+s+s+y+(?:i+e+s+)?\b/iu,
     /\bw+h+[o0]+r+e+(?:s+)?\b/iu,
-    /\bs+l+[u_*\-.\s04]+t+(?:s+)?\b/iu
+    /\bs+l+[u_*\-.\s04]+t+(?:s+)?\b/iu,
+    // nsfw brainrot
+    /\bg+y+a+t+t*(?:s+)?\b/iu,
+    /\bg+[o0]+[o0]+n+(?:e+r+|i+n+g+|s+)?\b/iu,
+    // avoid blocking "edge" alone to preserve 3d modeling context
+    /\be+d+g+(?:i+n+g+|e+r+)\b/iu,
+    /\bd+[i1!|]+d+d+y+\s+p+a+r+t+y+\b/iu,
+    /\bo+[i1!|]+l+\s+u+p+\b/iu,
+    /\bf+r+e+a+k+y+\s+b+o+b+\b/iu,
+    /\bt+h+u+g+\s+s+h+a+k+e+r+\b/iu
 ]);
 
 export function normalizeContent(raw: string): string {
@@ -75,16 +85,36 @@ export function normalizeContent(raw: string): string {
     return normalized;
 }
 
-export function detectProfanity(content: string): { matched: boolean; terms: string[] } {
+export function compileAutoModRule(pattern: string, isRegex: boolean): RegExp | null {
+    try {
+        if (isRegex) {
+            return new RegExp(pattern, "iu");
+        }
+        const escaped = pattern.trim().replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+        if (!escaped) {
+            return null;
+        }
+        const segmented = escaped
+            .split("")
+            .map((char) => `${char}+`)
+            .join("[_.*\\-\\s]*");
+        return new RegExp(`\\b${segmented}\\b`, "iu");
+    } catch {
+        return null;
+    }
+}
+
+export function detectProfanity(content: string, customPatterns: readonly RegExp[] = []): { matched: boolean; terms: string[] } {
     if (!content || content.trim().length === 0) {
         return { matched: false, terms: [] };
     }
 
     const matchedTerms = new Set<string>();
     const normalized = normalizeContent(content);
+    const allPatterns = customPatterns.length > 0 ? [...profanityPatterns, ...customPatterns] : profanityPatterns;
 
     // check direct patterns on raw content and normalized content
-    for (const pattern of profanityPatterns) {
+    for (const pattern of allPatterns) {
         const rawMatch = content.match(pattern);
         if (rawMatch !== null) {
             matchedTerms.add(rawMatch[0].toLowerCase());
@@ -97,7 +127,7 @@ export function detectProfanity(content: string): { matched: boolean; terms: str
 
     // also check collapsed spaced text (e.g. "f u c k" -> "fuck")
     const collapsed = normalized.replace(/\s+/gu, "");
-    for (const pattern of profanityPatterns) {
+    for (const pattern of allPatterns) {
         const match = collapsed.match(pattern);
         if (match !== null) {
             matchedTerms.add(match[0].toLowerCase());
@@ -111,13 +141,54 @@ export function detectProfanity(content: string): { matched: boolean; terms: str
 }
 
 export class ProfanityFilter {
+    private customPatterns: readonly RegExp[] = [];
+    private syncTimer: NodeJS.Timeout | undefined;
+
     public constructor(
         private readonly client: Client,
         private readonly guildId: string,
         private readonly settings: SettingsStore,
         private readonly warningStore: WarningStore,
-        private readonly logger: Logger
+        private readonly logger: Logger,
+        private readonly api?: PlatformApiClient
     ) {}
+
+    public start(): void {
+        if (this.api !== undefined) {
+            void this.syncRules();
+            this.syncTimer = setInterval(() => {
+                void this.syncRules();
+            }, 60_000);
+        }
+    }
+
+    public stop(): void {
+        if (this.syncTimer !== undefined) {
+            clearInterval(this.syncTimer);
+            this.syncTimer = undefined;
+        }
+    }
+
+    public async syncRules(): Promise<void> {
+        if (this.api === undefined) {
+            return;
+        }
+        try {
+            const rules = await this.api.listAutoModRules();
+            const compiled: RegExp[] = [];
+            for (const rule of rules) {
+                const reg = compileAutoModRule(rule.pattern, rule.isRegex);
+                if (reg !== null) {
+                    compiled.push(reg);
+                } else {
+                    this.logger.warn({ pattern: rule.pattern, isRegex: rule.isRegex }, "invalid automod rule skipped");
+                }
+            }
+            this.customPatterns = compiled;
+        } catch (error: unknown) {
+            this.logger.warn({ err: error }, "failed to sync automod rules from platform api");
+        }
+    }
 
     public async inspectMessage(messageInstance: Message | PartialMessage): Promise<void> {
         if (
@@ -140,7 +211,7 @@ export class ProfanityFilter {
                     return studio !== undefined && isLeadership(studio.tier);
                 }));
 
-        const check = detectProfanity(messageInstance.content);
+        const check = detectProfanity(messageInstance.content, this.customPatterns);
         if (!check.matched) {
             return;
         }
@@ -333,7 +404,8 @@ export class ProfanityFilter {
             }
 
             case "third_offence_ban": {
-                const guild = this.client.guilds.cache.get(this.guildId) ?? (await this.client.guilds.fetch(this.guildId).catch(() => null));
+                const guild =
+                    this.client.guilds.cache.get(this.guildId) ?? (await this.client.guilds.fetch(this.guildId).catch(() => null));
 
                 if (isStaff) {
                     // find executive roles to ping
@@ -342,9 +414,7 @@ export class ProfanityFilter {
                         return studio !== undefined && isExecutive(studio.tier);
                     });
                     const execPings =
-                        executiveRoles && executiveRoles.size > 0
-                            ? executiveRoles.map((r) => `<@&${r.id}>`).join(" ")
-                            : "@here";
+                        executiveRoles && executiveRoles.size > 0 ? executiveRoles.map((r) => `<@&${r.id}>`).join(" ") : "@here";
 
                     await author
                         .send(
@@ -375,10 +445,7 @@ export class ProfanityFilter {
                 }
 
                 const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-                    new ButtonBuilder()
-                        .setCustomId("apology_request")
-                        .setLabel("Request Ban Apology Review")
-                        .setStyle(ButtonStyle.Primary)
+                    new ButtonBuilder().setCustomId("apology_request").setLabel("Request Ban Apology Review").setStyle(ButtonStyle.Primary)
                 );
 
                 // send DM with apology review request button before banning

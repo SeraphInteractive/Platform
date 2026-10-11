@@ -1,5 +1,6 @@
 import {
     actingUserHeader,
+    autoModRuleSchema,
     ballotSchema,
     dataEnvelope,
     entrySchema,
@@ -40,8 +41,10 @@ import {
     type ShotThreadMapDto,
     type Specialty,
     type SubmissionDto,
-    type UserDto
+    type UserDto,
+    type AutoModRuleDto
 } from "@platform/contracts";
+
 import type { Logger } from "pino";
 import { z } from "zod";
 
@@ -177,6 +180,10 @@ export class PlatformApiClient {
             }
             throw error;
         }
+    }
+
+    public async listAutoModRules(): Promise<readonly AutoModRuleDto[]> {
+        return (await this.send("/automod", dataEnvelope(z.array(autoModRuleSchema)))).data;
     }
 
     public async isHealthy(): Promise<{ healthy: boolean; latencyMs: number }> {

@@ -35,6 +35,7 @@ import { uploadsRoutes } from "./Modules/Uploads/UploadsRoutes.js";
 import { documentsRoutes } from "./Modules/Documents/DocumentsRoutes.js";
 import { verificationRoutes } from "./Modules/Verification/VerificationRoutes.js";
 import { usersRoutes } from "./Modules/Users/UsersRoutes.js";
+import { autoModRoutes } from "./Modules/AutoMod/AutoModRoutes.js";
 
 export const apiPrefix = "/api/v1";
 
@@ -228,7 +229,9 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
             await api.register(notificationRoutes, { services });
             await api.register(verificationRoutes, { services });
             await api.register(documentsRoutes, { services });
+            await api.register(autoModRoutes, { prefix: "/automod", services });
         },
+
         { prefix: apiPrefix }
     );
 

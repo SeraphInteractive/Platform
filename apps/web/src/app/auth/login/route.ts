@@ -11,7 +11,7 @@ export function GET(request: NextRequest): NextResponse {
     const { verifier, challenge } = createPkcePair();
 
     const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-    const proto = request.headers.get("x-forwarded-proto") ?? (new URL(WEB_APP_URL).protocol.replace(":", ""));
+    const proto = request.headers.get("x-forwarded-proto") ?? new URL(WEB_APP_URL).protocol.replace(":", "");
     const currentOrigin = host !== null && host.length > 0 ? `${proto}://${host}` : WEB_APP_URL;
     const baseOrigin = CORS_ORIGINS.includes(currentOrigin) || currentOrigin === WEB_APP_URL ? currentOrigin : WEB_APP_URL;
 

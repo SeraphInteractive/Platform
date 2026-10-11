@@ -25,6 +25,7 @@ import { RaidMonitor, type RaidMonitorOptions } from "../Modules/Telemetry/RaidM
 import { DocumentsService } from "../Modules/Documents/DocumentsService.js";
 import { VerificationService } from "../Modules/Verification/VerificationService.js";
 import { UsersService } from "../Modules/Users/UsersService.js";
+import { AutoModService } from "../Modules/AutoMod/AutoModService.js";
 
 export interface Infrastructure {
     readonly database: Database;
@@ -61,6 +62,7 @@ export interface ServiceContainer extends Infrastructure {
     readonly reviewsService: ReviewsService;
     readonly verificationService: VerificationService;
     readonly documentsService: DocumentsService;
+    readonly autoModService: AutoModService;
 }
 
 export function createServiceContainer(
@@ -101,6 +103,7 @@ export function createServiceContainer(
         shotsService: new ShotsService(database, notifier, objectStorage, configuration.storage),
         reviewsService: new ReviewsService(database, notifier, objectStorage),
         documentsService,
+        autoModService: new AutoModService(database),
         verificationService: new VerificationService(
             database,
             keyValueStore,

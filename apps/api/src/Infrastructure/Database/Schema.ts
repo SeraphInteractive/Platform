@@ -335,6 +335,18 @@ export const deletedStorageObjects = pgTable(
     (table) => [index("deleted_storage_objects_scheduled_idx").on(table.scheduledDeleteAt)]
 );
 
+export const automodRules = pgTable(
+    "automod_rules",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        pattern: varchar("pattern", { length: 255 }).notNull(),
+        isRegex: boolean("is_regex").notNull().default(false),
+        createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+        ...timestamps
+    },
+    (table) => [index("automod_rules_created_at_idx").on(table.createdAt)]
+);
+
 export type UserRecord = typeof users.$inferSelect;
 export type DocumentRecord = typeof documents.$inferSelect;
 export type DocumentRevisionRecord = typeof documentRevisions.$inferSelect;
@@ -348,3 +360,4 @@ export type SubmissionRecord = typeof submissions.$inferSelect;
 export type ShotThreadMapRecord = typeof shotThreadMaps.$inferSelect;
 export type PipelineProgressRecord = typeof pipelineProgress.$inferSelect;
 export type DeletedStorageObjectRecord = typeof deletedStorageObjects.$inferSelect;
+export type AutomodRuleRecord = typeof automodRules.$inferSelect;

@@ -19,15 +19,7 @@ import { uploadToStorage } from "@/Api/Uploads";
 import { FilePicker } from "@/Components/Common/FilePicker";
 import { RichTextInputField } from "@/Components/Common/FormField";
 import { Button } from "@/Components/Ui/button";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger
-} from "@/Components/Ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/Components/Ui/dialog";
 import { Label } from "@/Components/Ui/label";
 import { Progress } from "@/Components/Ui/progress";
 
@@ -142,9 +134,7 @@ export function SubmitWorkDialog({ shot }: { readonly shot: ShotDetailDto }): Re
             </DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
                 <DialogHeader>
-                    <DialogTitle>
-                        {isRevision ? `Submit revision: ${shot.shotCode}` : `Submit work: ${shot.shotCode}`}
-                    </DialogTitle>
+                    <DialogTitle>{isRevision ? `Submit revision: ${shot.shotCode}` : `Submit work: ${shot.shotCode}`}</DialogTitle>
                     <DialogDescription>
                         Attach your rendered video and Blender project file. Your work will be submitted for supervisor review.
                     </DialogDescription>

@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { detectProfanity, normalizeContent } from "../src/Services/ProfanityFilter.js";
+import { compileAutoModRule, detectProfanity, normalizeContent } from "../src/Services/ProfanityFilter.js";
 import { WarningStore } from "../src/State/WarningStore.js";
 
 describe("ProfanityFilter pattern matching", () => {
@@ -23,6 +23,50 @@ describe("ProfanityFilter pattern matching", () => {
         expect(detectProfanity("what the f0ck").matched).toBe(true);
         expect(detectProfanity("total sh!t").matched).toBe(true);
         expect(detectProfanity("you a$$hole").matched).toBe(true);
+    });
+
+    it("detects nsfw brainrot and suggestive terms", () => {
+        expect(detectProfanity("look at that gyatt").matched).toBe(true);
+        expect(detectProfanity("gyaaatt").matched).toBe(true);
+        expect(detectProfanity("stop being a gooner").matched).toBe(true);
+        expect(detectProfanity("he is gooning again").matched).toBe(true);
+        expect(detectProfanity("edging is crazy").matched).toBe(true);
+        expect(detectProfanity("invite to diddy party").matched).toBe(true);
+        expect(detectProfanity("go oil up lil bro").matched).toBe(true);
+        expect(detectProfanity("thug shaker dance").matched).toBe(true);
+    });
+
+    it("allows casual meme slang and 3d animation terminology", () => {
+        // whitelisted meme slang
+        expect(detectProfanity("skibidi toilet").matched).toBe(false);
+        expect(detectProfanity("no cap that was crazy").matched).toBe(false);
+        expect(detectProfanity("he has infinite aura").matched).toBe(false);
+        expect(detectProfanity("negative aura blud").matched).toBe(false);
+        expect(detectProfanity("literal npc vibes").matched).toBe(false);
+        expect(detectProfanity("stop the glaze").matched).toBe(false);
+        expect(detectProfanity("we are cooked").matched).toBe(false);
+        expect(detectProfanity("bro is yapping").matched).toBe(false);
+        expect(detectProfanity("amogus sus").matched).toBe(false);
+        expect(detectProfanity("rizz god").matched).toBe(false);
+        expect(detectProfanity("quandale dingle").matched).toBe(false);
+        expect(detectProfanity("caseoh stream").matched).toBe(false);
+
+        // 3d modeling edge terms
+        expect(detectProfanity("select the edge loop").matched).toBe(false);
+        expect(detectProfanity("bevel the edge").matched).toBe(false);
+    });
+
+    it("supports custom automod plain word and regex rules", () => {
+        const plainRule = compileAutoModRule("spammer", false);
+        expect(plainRule).not.toBeNull();
+        const regexRule = compileAutoModRule("bad\\d+", true);
+        expect(regexRule).not.toBeNull();
+
+        const custom = [plainRule!, regexRule!];
+        expect(detectProfanity("hello spammer friend", custom).matched).toBe(true);
+        expect(detectProfanity("hello s-p-a-m-m-e-r", custom).matched).toBe(true);
+        expect(detectProfanity("error code bad123", custom).matched).toBe(true);
+        expect(detectProfanity("clean message", custom).matched).toBe(false);
     });
 
     it("avoids false positives on benign words containing sub-strings", () => {

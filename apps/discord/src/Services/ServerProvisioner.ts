@@ -288,12 +288,7 @@ export class ServerProvisioner {
             "Round results and studio news.",
             readOnlyOverwrites
         );
-        const telemetry = await ensureText(
-            ChannelPurpose.Telemetry,
-            staff,
-            "Voting activity, bans and raid alerts.",
-            privateOverwrites
-        );
+        const telemetry = await ensureText(ChannelPurpose.Telemetry, staff, "Voting activity, bans and raid alerts.", privateOverwrites);
         const submissions = await ensureText(ChannelPurpose.TaskSubmissions, pipeline, "Deliverables waiting for review.", [
             { id: everyone, deny: [PermissionFlagsBits.ViewChannel] },
             ...staffRead,

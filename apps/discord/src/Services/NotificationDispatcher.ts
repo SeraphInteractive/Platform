@@ -136,7 +136,10 @@ export class NotificationDispatcher {
                             );
                         }
                     } catch (error: unknown) {
-                        this.logger.warn({ err: error, discordId: notification.contributor.discordId }, "failed to DM contributor on submission review");
+                        this.logger.warn(
+                            { err: error, discordId: notification.contributor.discordId },
+                            "failed to DM contributor on submission review"
+                        );
                     }
                 }
                 return;

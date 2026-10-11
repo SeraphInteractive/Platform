@@ -191,35 +191,25 @@ function ContributorTierDialog({ open, onOpenChange, target, busy, onSave }: Con
                         Choose whether this contributor receives standard task access or senior priority privileges.
                     </DialogDescription>
                 </DialogHeader>
-                <RadioGroup
-                    value={selectedTier}
-                    onValueChange={(val) => setSelectedTier(val as Role)}
-                    className="gap-3 py-2"
-                >
+                <RadioGroup value={selectedTier} onValueChange={(val) => setSelectedTier(val as Role)} className="gap-3 py-2">
                     <label
                         htmlFor={`tier-base-${target.id}`}
                         className={cn(
                             "flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
-                            selectedTier === Role.Contributor
-                                ? "border-primary bg-accent/30"
-                                : "border-border hover:bg-muted/50"
+                            selectedTier === Role.Contributor ? "border-primary bg-accent/30" : "border-border hover:bg-muted/50"
                         )}
                     >
                         <RadioGroupItem value={Role.Contributor} id={`tier-base-${target.id}`} className="mt-0.5" />
                         <div className="space-y-1 text-sm">
                             <div className="font-medium text-foreground">Base Contributor</div>
-                            <p className="text-muted-foreground text-xs leading-relaxed">
-                                Standard contributor access to grab-box tasks.
-                            </p>
+                            <p className="text-muted-foreground text-xs leading-relaxed">Standard contributor access to grab-box tasks.</p>
                         </div>
                     </label>
                     <label
                         htmlFor={`tier-senior-${target.id}`}
                         className={cn(
                             "flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
-                            selectedTier === Role.SeniorContributor
-                                ? "border-primary bg-accent/30"
-                                : "border-border hover:bg-muted/50"
+                            selectedTier === Role.SeniorContributor ? "border-primary bg-accent/30" : "border-border hover:bg-muted/50"
                         )}
                     >
                         <RadioGroupItem value={Role.SeniorContributor} id={`tier-senior-${target.id}`} className="mt-0.5" />

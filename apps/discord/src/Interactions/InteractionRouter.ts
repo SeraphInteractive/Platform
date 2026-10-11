@@ -25,11 +25,7 @@ import {
     apologyRequestButtonHandler,
     banApologyCommand
 } from "../Commands/ApologyReviewHandlers.js";
-import {
-    modResetButtonHandler,
-    modStatusCommand,
-    modStepDownButtonHandler
-} from "../Commands/ModStatusCommands.js";
+import { modResetButtonHandler, modStatusCommand, modStepDownButtonHandler } from "../Commands/ModStatusCommands.js";
 
 export const slashCommands: readonly SlashCommand[] = [
     helpCommand,

@@ -46,7 +46,7 @@ async function main(): Promise<void> {
     const reminderScheduler = new ReminderScheduler(client, reminders, logger);
     const roleReconciler = new RoleReconciliationService(api, provisioner, settings, client, logger);
     const roleScheduler = new RoleSyncScheduler(roleReconciler, configuration.guildId, client, logger);
-    const profanityFilter = new ProfanityFilter(client, configuration.guildId, settings, warnings, logger);
+    const profanityFilter = new ProfanityFilter(client, configuration.guildId, settings, warnings, logger, api);
     const context: BotContext = {
         configuration,
         api,
@@ -89,6 +89,7 @@ async function main(): Promise<void> {
             consumer.start();
             reminderScheduler.start();
             roleScheduler.start();
+            profanityFilter.start();
             if (client.ws.ping >= 0) {
                 void api.sendHeartbeat(client.ws.ping);
             }
@@ -158,11 +159,9 @@ async function main(): Promise<void> {
 
             // detect when timeout was removed via Discord client UI
             const wasTimedOut =
-                oldMember.communicationDisabledUntilTimestamp !== null &&
-                oldMember.communicationDisabledUntilTimestamp > Date.now();
+                oldMember.communicationDisabledUntilTimestamp !== null && oldMember.communicationDisabledUntilTimestamp > Date.now();
             const isNowTimedOut =
-                newMember.communicationDisabledUntilTimestamp !== null &&
-                newMember.communicationDisabledUntilTimestamp > Date.now();
+                newMember.communicationDisabledUntilTimestamp !== null && newMember.communicationDisabledUntilTimestamp > Date.now();
 
             if (wasTimedOut && !isNowTimedOut) {
                 const record = warnings.getRecord(newMember.id);
@@ -215,6 +214,7 @@ async function main(): Promise<void> {
         consumer.stop();
         reminderScheduler.stop();
         roleScheduler.stop();
+        profanityFilter.stop();
         void client.destroy().finally(() => process.exit(0));
     };
     process.once("SIGTERM", () => {

@@ -45,7 +45,10 @@ export const banApologyCommand: SlashCommand = {
             return;
         }
 
-        const isBannedOnDiscord = await guild.bans.fetch(interaction.user.id).then(() => true).catch(() => false);
+        const isBannedOnDiscord = await guild.bans
+            .fetch(interaction.user.id)
+            .then(() => true)
+            .catch(() => false);
         if (!isBannedOnDiscord) {
             await interaction.reply(notice("You are not currently banned from the server.", Accent.Warning));
             return;
@@ -131,7 +134,12 @@ export const apologyRequestButtonHandler: ComponentHandler = {
         const guild =
             interaction.client.guilds.cache.get(context.configuration.guildId) ??
             (await interaction.client.guilds.fetch(context.configuration.guildId).catch(() => null));
-        const isBannedOnDiscord = guild !== null && (await guild.bans.fetch(interaction.user.id).then(() => true).catch(() => false));
+        const isBannedOnDiscord =
+            guild !== null &&
+            (await guild.bans
+                .fetch(interaction.user.id)
+                .then(() => true)
+                .catch(() => false));
         if (!isBannedOnDiscord) {
             await interaction.reply(notice("You are not currently banned from the server.", Accent.Warning));
             return;
@@ -175,7 +183,12 @@ export const apologyModalHandler: ComponentHandler = {
         const guild =
             interaction.client.guilds.cache.get(context.configuration.guildId) ??
             (await interaction.client.guilds.fetch(context.configuration.guildId).catch(() => null));
-        const isBannedOnDiscord = guild !== null && (await guild.bans.fetch(interaction.user.id).then(() => true).catch(() => false));
+        const isBannedOnDiscord =
+            guild !== null &&
+            (await guild.bans
+                .fetch(interaction.user.id)
+                .then(() => true)
+                .catch(() => false));
         if (!isBannedOnDiscord) {
             await interaction.reply(notice("You are not currently banned from the server.", Accent.Warning));
             return;
@@ -257,7 +270,12 @@ export const apologyDecisionButtonHandler: ComponentHandler = {
         const targetUser = await interaction.client.users.fetch(targetUserId).catch(() => null);
 
         if (action === "approve") {
-            const isBannedOnDiscord = guild !== null && (await guild.bans.fetch(targetUserId).then(() => true).catch(() => false));
+            const isBannedOnDiscord =
+                guild !== null &&
+                (await guild.bans
+                    .fetch(targetUserId)
+                    .then(() => true)
+                    .catch(() => false));
             if (!isBannedOnDiscord) {
                 await interaction.followUp(notice("User is not currently banned on Discord.", Accent.Warning));
                 return;

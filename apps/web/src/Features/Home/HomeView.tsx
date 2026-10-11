@@ -56,16 +56,14 @@ export function HomeView(): ReactNode {
                     <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                         {user === null ? "Project Stairway" : `Welcome back, ${user.username}`}
                     </h1>
-                    <p className="text-muted-foreground mt-1 text-sm sm:text-base">
-                        A community-made Minecraft animated film.
-                    </p>
+                    <p className="text-muted-foreground mt-1 text-sm sm:text-base">A community-made Minecraft animated film.</p>
                 </div>
 
                 <VideoPlayer src={videoUrl} title="Project Stairway announcement trailer" />
 
                 <blockquote className="border-border border-l-2 pl-4 text-xs italic text-muted-foreground sm:text-sm">
-                    An independent community animation project bringing together artists to build an original Minecraft
-                    cinematic narrative from the ground up.
+                    An independent community animation project bringing together artists to build an original Minecraft cinematic narrative
+                    from the ground up.
                 </blockquote>
             </header>
 
@@ -89,13 +87,14 @@ export function HomeView(): ReactNode {
                 <section className="space-y-2">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                         <div className="flex items-center gap-2">
-                            <Link href="/roadmap" className="text-muted-foreground hover:text-foreground text-xs font-semibold uppercase tracking-wider transition-colors">
+                            <Link
+                                href="/roadmap"
+                                className="text-muted-foreground hover:text-foreground text-xs font-semibold uppercase tracking-wider transition-colors"
+                            >
                                 Production Roadmap
                             </Link>
                             <span className="text-muted-foreground text-xs">·</span>
-                            <span className="text-xs text-muted-foreground">
-                                {progress.phaseTitle}
-                            </span>
+                            <span className="text-xs text-muted-foreground">{progress.phaseTitle}</span>
                         </div>
                         <span className="text-xs font-medium tabular-nums text-muted-foreground">
                             Step {progress.stepId}: {progress.stepTitle} · {Math.round(progress.progressPercent)}%
@@ -120,7 +119,8 @@ export function HomeView(): ReactNode {
                             <div className="space-y-1">
                                 <h3 className="font-semibold text-base">Grab-Box</h3>
                                 <p className="text-muted-foreground text-xs leading-relaxed">
-                                    <span className="font-medium text-foreground tabular-nums">{availableCount}</span> available to claim · <span className="font-medium text-foreground tabular-nums">{inProgressCount}</span> in progress
+                                    <span className="font-medium text-foreground tabular-nums">{availableCount}</span> available to claim ·{" "}
+                                    <span className="font-medium text-foreground tabular-nums">{inProgressCount}</span> in progress
                                 </p>
                             </div>
                         </div>
@@ -138,7 +138,9 @@ export function HomeView(): ReactNode {
                             <div className="space-y-1">
                                 <h3 className="font-semibold text-base">Ballots</h3>
                                 <p className="text-muted-foreground text-xs leading-relaxed">
-                                    <span className="font-medium text-foreground tabular-nums">{votingCount}</span> voting · <span className="font-medium text-foreground tabular-nums">{openCount}</span> submissions · <span className="font-medium text-foreground tabular-nums">{closedCount}</span> closed
+                                    <span className="font-medium text-foreground tabular-nums">{votingCount}</span> voting ·{" "}
+                                    <span className="font-medium text-foreground tabular-nums">{openCount}</span> submissions ·{" "}
+                                    <span className="font-medium text-foreground tabular-nums">{closedCount}</span> closed
                                 </p>
                             </div>
                         </div>

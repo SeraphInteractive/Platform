@@ -1,4 +1,5 @@
 import {
+    autoModRuleSchema,
     ballotSchema,
     PresenceStatus,
     shotThreadMapSchema,
@@ -61,8 +62,11 @@ import {
     type Specialty,
     type SubmissionDto,
     type ShotThreadMapDto,
-    type UserDto
+    type UserDto,
+    type AutoModRuleDto,
+    type CreateAutoModRuleDto
 } from "@platform/contracts";
+
 import { z } from "zod";
 import { request, requestNoContent } from "./ApiClient";
 
@@ -401,6 +405,18 @@ export class PlatformApi {
 
     public async telemetry(roundId: string): Promise<RaidTelemetryDto[]> {
         return (await request(`/rounds/${segment(roundId)}/telemetry`, dataEnvelope(z.array(raidTelemetrySchema)))).data;
+    }
+
+    public async automodRules(): Promise<AutoModRuleDto[]> {
+        return (await request("/automod", dataEnvelope(z.array(autoModRuleSchema)))).data;
+    }
+
+    public async addAutomodRule(input: CreateAutoModRuleDto): Promise<AutoModRuleDto> {
+        return (await request("/automod", dataEnvelope(autoModRuleSchema), { method: "POST", body: input })).data;
+    }
+
+    public async deleteAutomodRule(id: string): Promise<void> {
+        await requestNoContent(`/automod/${segment(id)}`, { method: "DELETE" });
     }
 }
 

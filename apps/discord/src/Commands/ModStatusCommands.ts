@@ -50,8 +50,7 @@ export function formatModStatus(
         stageLabel = "3rd Offence (Banned)";
     }
 
-    const timeoutStr =
-        isTimedOut && timeoutUntil ? `Active until <t:${Math.floor(timeoutUntil / 1000)}:R>` : "Inactive";
+    const timeoutStr = isTimedOut && timeoutUntil ? `Active until <t:${Math.floor(timeoutUntil / 1000)}:R>` : "Inactive";
     const apologyStr = record?.apology.status ?? "none";
     const infractionsCount = record?.infractions.length ?? 0;
 
@@ -67,14 +66,8 @@ export function formatModStatus(
     ];
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder()
-            .setCustomId(`mod_step_down:${userId}`)
-            .setLabel("Step Down Stage")
-            .setStyle(ButtonStyle.Primary),
-        new ButtonBuilder()
-            .setCustomId(`mod_reset:${userId}`)
-            .setLabel("Reset Warnings")
-            .setStyle(ButtonStyle.Danger)
+        new ButtonBuilder().setCustomId(`mod_step_down:${userId}`).setLabel("Step Down Stage").setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`mod_reset:${userId}`).setLabel("Reset Warnings").setStyle(ButtonStyle.Danger)
     );
 
     return { text: lines.join("\n"), row };
@@ -92,9 +85,7 @@ export const modStatusCommand: SlashCommand = {
         }
 
         const targetUser = interaction.options.getUser("user", true);
-        const guild =
-            interaction.guild ??
-            (await interaction.client.guilds.fetch(context.configuration.guildId).catch(() => null));
+        const guild = interaction.guild ?? (await interaction.client.guilds.fetch(context.configuration.guildId).catch(() => null));
 
         if (guild === null) {
             throw new UserFacingError("Server could not be reached.");
@@ -104,7 +95,10 @@ export const modStatusCommand: SlashCommand = {
         const targetMember = await guild.members.fetch(targetUser.id).catch(() => null);
         const isTimedOut = targetMember?.isCommunicationDisabled() ?? false;
         const timeoutUntil = targetMember?.communicationDisabledUntilTimestamp;
-        const isBanned = await guild.bans.fetch(targetUser.id).then(() => true).catch(() => false);
+        const isBanned = await guild.bans
+            .fetch(targetUser.id)
+            .then(() => true)
+            .catch(() => false);
 
         const { text, row } = formatModStatus(
             targetUser.id,
@@ -136,9 +130,7 @@ export const modStepDownButtonHandler: ComponentHandler = {
             return;
         }
 
-        const guild =
-            interaction.guild ??
-            (await interaction.client.guilds.fetch(context.configuration.guildId).catch(() => null));
+        const guild = interaction.guild ?? (await interaction.client.guilds.fetch(context.configuration.guildId).catch(() => null));
 
         if (guild === null) {
             await interaction.reply(notice("Server could not be reached.", Accent.Danger));
@@ -150,7 +142,10 @@ export const modStepDownButtonHandler: ComponentHandler = {
         const targetUser = await interaction.client.users.fetch(targetUserId).catch(() => null);
         const isTimedOut = targetMember?.isCommunicationDisabled() ?? false;
         const timeoutUntil = targetMember?.communicationDisabledUntilTimestamp;
-        const isBanned = await guild.bans.fetch(targetUserId).then(() => true).catch(() => false);
+        const isBanned = await guild.bans
+            .fetch(targetUserId)
+            .then(() => true)
+            .catch(() => false);
 
         // log to #moderation-logs
         const modChannelId = context.settings.channel(ChannelPurpose.ModerationLogs);
@@ -201,9 +196,7 @@ export const modResetButtonHandler: ComponentHandler = {
             return;
         }
 
-        const guild =
-            interaction.guild ??
-            (await interaction.client.guilds.fetch(context.configuration.guildId).catch(() => null));
+        const guild = interaction.guild ?? (await interaction.client.guilds.fetch(context.configuration.guildId).catch(() => null));
 
         if (guild === null) {
             await interaction.reply(notice("Server could not be reached.", Accent.Danger));
@@ -216,7 +209,10 @@ export const modResetButtonHandler: ComponentHandler = {
         const targetUser = await interaction.client.users.fetch(targetUserId).catch(() => null);
         const isTimedOut = targetMember?.isCommunicationDisabled() ?? false;
         const timeoutUntil = targetMember?.communicationDisabledUntilTimestamp;
-        const isBanned = await guild.bans.fetch(targetUserId).then(() => true).catch(() => false);
+        const isBanned = await guild.bans
+            .fetch(targetUserId)
+            .then(() => true)
+            .catch(() => false);
 
         // log to #moderation-logs
         const modChannelId = context.settings.channel(ChannelPurpose.ModerationLogs);

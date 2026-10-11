@@ -21,6 +21,7 @@ import { Progress } from "@/Components/Ui/progress";
 import { useNow } from "@/Hooks/UseNow";
 import { useSession } from "@/Hooks/UseSession";
 import { hasAtLeast } from "@/Lib/Roles";
+import { AutoModDialog } from "./AutoModDialog";
 
 function useActiveRounds(): { readonly rounds: readonly RoundDto[]; readonly isPending: boolean } {
     const results = useQueries({
@@ -262,9 +263,12 @@ function Dashboard(): ReactNode {
 }
 
 export function DashboardPage(): ReactNode {
+    const { user } = useSession();
+    const isAdmin = hasAtLeast(user, Role.Admin);
+
     return (
         <RequireRole role={Role.Moderator}>
-            <PageHeader title="Studio" />
+            <PageHeader title="Studio" actions={isAdmin ? <AutoModDialog /> : undefined} />
             <Dashboard />
         </RequireRole>
     );

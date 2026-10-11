@@ -6,11 +6,7 @@ export interface VideoPlayerProps {
     readonly className?: string;
 }
 
-export function VideoPlayer({
-    src,
-    title = "Project Stairway announcement video",
-    className = "",
-}: VideoPlayerProps): ReactNode {
+export function VideoPlayer({ src, title = "Project Stairway announcement video", className = "" }: VideoPlayerProps): ReactNode {
     return (
         <div className={`relative aspect-video w-full overflow-hidden rounded-xl border border-border/80 bg-black shadow-xl ${className}`}>
             <iframe

@@ -85,7 +85,7 @@ export type InfractionPenalty =
     | { readonly type: "third_offence_ban"; readonly durationMs: number; readonly current: number; readonly max: number };
 
 export class WarningStore {
-    private records: Map<string, UserWarningRecord> = new Map();
+    private records = new Map<string, UserWarningRecord>();
     private writeChain: Promise<void> = Promise.resolve();
     private readonly path: string;
 
