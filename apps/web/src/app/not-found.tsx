@@ -1,11 +1,13 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { StairwayLoader } from "@/Components/Common/StairwayLoader";
 import { Button } from "@/Components/Ui/button";
 
 export default function NotFound(): ReactNode {
     return (
-        <div className="flex flex-col items-center gap-4 py-24 text-center">
-            <p className="text-muted-foreground text-xs tracking-wider uppercase">404</p>
+        <div className="flex flex-col items-center gap-4 py-20 text-center">
+            <StairwayLoader size="md" />
+            <p className="text-muted-foreground font-mono text-xs tracking-wider uppercase">404</p>
             <h1 className="text-xl font-semibold">This page wandered off</h1>
             <p className="text-muted-foreground max-w-sm text-sm">
                 The link may be old, or the round or task was removed. Search with Ctrl K, or head back to the overview.
