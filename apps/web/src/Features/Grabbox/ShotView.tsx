@@ -30,7 +30,7 @@ import { loginHref, useSession } from "@/Hooks/UseSession";
 import { difficultyLabels, formatDateTime, pluralize } from "@/Lib/Format";
 import { hasAtLeast } from "@/Lib/Roles";
 import { safeHttpUrl } from "@/Lib/SafeUrl";
-import { SubmitWorkForm } from "./SubmitWorkForm";
+import { SubmitWorkDialog } from "./SubmitWorkDialog";
 
 function ClaimDialog({ shot }: { readonly shot: ShotDetailDto }): ReactNode {
     const checkboxId = useId();
@@ -129,7 +129,6 @@ function ReleaseButton({ shot, isClaimant }: { readonly shot: ShotDetailDto; rea
 
 function ActionPanel({ shot, user }: { readonly shot: ShotDetailDto; readonly user: UserDto | null }): ReactNode {
     const pathname = usePathname();
-    const [showForm, setShowForm] = useState(false);
     const isClaimant = user !== null && shot.claimer?.id === user.id;
     const isStaff = hasAtLeast(user, Role.Supervisor);
     const latest = shot.submissions[0];
@@ -180,25 +179,10 @@ function ActionPanel({ shot, user }: { readonly shot: ShotDetailDto; readonly us
                     )}
                     .{latest?.status === SubmissionStatus.RevisionRequested && " Your reviewer asked for changes; their notes are below."}
                 </p>
-                {showForm ? (
-                    <SubmitWorkForm
-                        shot={shot}
-                        onSubmitted={() => {
-                            setShowForm(false);
-                        }}
-                    />
-                ) : (
-                    <div className="flex flex-wrap gap-2">
-                        <Button
-                            onClick={() => {
-                                setShowForm(true);
-                            }}
-                        >
-                            Submit your work
-                        </Button>
-                        <ReleaseButton shot={shot} isClaimant />
-                    </div>
-                )}
+                <div className="flex flex-wrap gap-2">
+                    <SubmitWorkDialog shot={shot} />
+                    <ReleaseButton shot={shot} isClaimant />
+                </div>
             </div>
         );
     }
