@@ -57,6 +57,47 @@ function formatTickValue(val: number): string {
     return val.toFixed(1).replace(/\.0$/, "");
 }
 
+interface CartesianPadding {
+    readonly left: number;
+    readonly right: number;
+    readonly top: number;
+    readonly bottom: number;
+}
+
+// measures container width dynamically so the svg fills 100% of the card
+function useContainerDimensions(initialHeight = 320, defaultWidth = 800) {
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const [dimensions, setDimensions] = useState({ width: defaultWidth, height: initialHeight });
+
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+
+        const update = (w: number) => {
+            if (w > 0) {
+                setDimensions((prev) => (prev.width === w ? prev : { width: w, height: initialHeight }));
+            }
+        };
+
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0) {
+            update(Math.round(rect.width));
+        }
+
+        const observer = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                const w = Math.round(entry.contentRect.width);
+                if (w > 0) update(w);
+            }
+        });
+
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [initialHeight]);
+
+    return { containerRef, width: dimensions.width, height: dimensions.height };
+}
+
 function useCartesianZoom({
     width,
     height,
@@ -66,7 +107,7 @@ function useCartesianZoom({
 }: {
     readonly width: number;
     readonly height: number;
-    readonly padding: number;
+    readonly padding: CartesianPadding | number;
     readonly initialBounds: CartesianBounds;
     readonly maxZoom?: number;
 }) {
@@ -80,32 +121,38 @@ function useCartesianZoom({
     const [mouseDataPos, setMouseDataPos] = useState<{ x: number; y: number; px: number; py: number } | null>(null);
     const svgRef = useRef<SVGSVGElement | null>(null);
 
+    // normalize padding to asymmetric directional margins
+    const padLeft = typeof padding === "number" ? padding : padding.left;
+    const padRight = typeof padding === "number" ? padding : padding.right;
+    const padTop = typeof padding === "number" ? padding : padding.top;
+    const padBottom = typeof padding === "number" ? padding : padding.bottom;
+
     // sync bounds when initialBounds change from external data updates
     useEffect(() => {
         setBounds(initialBounds);
     }, [initialBounds.minX, initialBounds.maxX, initialBounds.minY, initialBounds.maxY]);
 
-    const plotW = Math.max(1, width - 2 * padding);
-    const plotH = Math.max(1, height - 2 * padding);
+    const plotW = Math.max(1, width - padLeft - padRight);
+    const plotH = Math.max(1, height - padTop - padBottom);
 
     const projectX = useCallback(
-        (val: number): number => padding + ((val - bounds.minX) / (bounds.maxX - bounds.minX)) * plotW,
-        [bounds.minX, bounds.maxX, padding, plotW]
+        (val: number): number => padLeft + ((val - bounds.minX) / (bounds.maxX - bounds.minX)) * plotW,
+        [bounds.minX, bounds.maxX, padLeft, plotW]
     );
 
     const projectY = useCallback(
-        (val: number): number => height - padding - ((val - bounds.minY) / (bounds.maxY - bounds.minY)) * plotH,
-        [bounds.minY, bounds.maxY, height, padding, plotH]
+        (val: number): number => height - padBottom - ((val - bounds.minY) / (bounds.maxY - bounds.minY)) * plotH,
+        [bounds.minY, bounds.maxY, height, padBottom, plotH]
     );
 
     const invertX = useCallback(
-        (screenX: number): number => bounds.minX + ((screenX - padding) / plotW) * (bounds.maxX - bounds.minX),
-        [bounds.minX, bounds.maxX, padding, plotW]
+        (screenX: number): number => bounds.minX + ((screenX - padLeft) / plotW) * (bounds.maxX - bounds.minX),
+        [bounds.minX, bounds.maxX, padLeft, plotW]
     );
 
     const invertY = useCallback(
-        (screenY: number): number => bounds.minY + ((height - padding - screenY) / plotH) * (bounds.maxY - bounds.minY),
-        [bounds.minY, bounds.maxY, height, padding, plotH]
+        (screenY: number): number => bounds.minY + ((height - padBottom - screenY) / plotH) * (bounds.maxY - bounds.minY),
+        [bounds.minY, bounds.maxY, height, padBottom, plotH]
     );
 
     const initSpanX = initialBounds.maxX - initialBounds.minX;
@@ -130,7 +177,7 @@ function useCartesianZoom({
             const svgX = (mouseX / rect.width) * width;
             const svgY = (mouseY / rect.height) * height;
 
-            if (svgX < padding || svgX > width - padding || svgY < padding || svgY > height - padding) {
+            if (svgX < padLeft || svgX > width - padRight || svgY < padTop || svgY > height - padBottom) {
                 return;
             }
 
@@ -148,8 +195,8 @@ function useCartesianZoom({
                     return prev;
                 }
 
-                const ratioX = (svgX - padding) / plotW;
-                const ratioY = (height - padding - svgY) / plotH;
+                const ratioX = (svgX - padLeft) / plotW;
+                const ratioY = (height - padBottom - svgY) / plotH;
 
                 const pivotX = prev.minX + ratioX * prevSpanX;
                 const pivotY = prev.minY + ratioY * prevSpanY;
@@ -168,7 +215,7 @@ function useCartesianZoom({
 
         svg.addEventListener("wheel", onWheel, { passive: false });
         return () => svg.removeEventListener("wheel", onWheel);
-    }, [width, height, padding, plotW, plotH, initSpanX, initialBounds, maxZoom]);
+    }, [width, height, padLeft, padRight, padTop, padBottom, plotW, plotH, initSpanX, initialBounds, maxZoom]);
 
     const onMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
         if (e.button !== 0) return;
@@ -182,7 +229,7 @@ function useCartesianZoom({
             const rect = svg.getBoundingClientRect();
             const svgX = ((e.clientX - rect.left) / rect.width) * width;
             const svgY = ((e.clientY - rect.top) / rect.height) * height;
-            if (svgX >= padding && svgX <= width - padding && svgY >= padding && svgY <= height - padding) {
+            if (svgX >= padLeft && svgX <= width - padRight && svgY >= padTop && svgY <= height - padBottom) {
                 setMouseDataPos({
                     x: invertX(svgX),
                     y: invertY(svgY),
@@ -223,12 +270,15 @@ function useCartesianZoom({
         setMouseDataPos(null);
     };
 
-    const xTicks = generateNiceTicks(bounds.minX, bounds.maxX, 5);
-    const yTicks = generateNiceTicks(bounds.minY, bounds.maxY, 4);
+    const xTicks = generateNiceTicks(bounds.minX, bounds.maxX, 6);
+    const yTicks = generateNiceTicks(bounds.minY, bounds.maxY, 5);
 
     return {
         svgRef,
         bounds,
+        padding: { left: padLeft, right: padRight, top: padTop, bottom: padBottom },
+        plotW,
+        plotH,
         projectX,
         projectY,
         invertX,
@@ -260,14 +310,21 @@ export function ScatterChart({ telemetryList, leaderboardItems = [], titleOf, on
     const activeHover = hovered !== undefined ? hovered : localHovered;
     const setActiveHover = onHover ?? setLocalHovered;
 
-    const width = 640;
-    const height = 240;
-    const padding = 38;
+    // fluid container measurement for 100% responsive width
+    const { containerRef, width, height } = useContainerDimensions(320);
+    const padding: CartesianPadding = useMemo(
+        () => ({
+            left: 64,
+            right: 24,
+            top: 28,
+            bottom: 44
+        }),
+        []
+    );
 
     const initialBounds = useMemo(() => ({ minX: -2, maxX: 8, minY: 0.0, maxY: 1.0 }), []);
     const {
         svgRef,
-        bounds,
         projectX,
         projectY,
         zoomLevel,
@@ -315,23 +372,19 @@ export function ScatterChart({ telemetryList, leaderboardItems = [], titleOf, on
                   createdAt: new Date().toISOString()
               }));
 
-    // calculate dynamic threat zone rectangle in screen space
-    const threatMinX = Math.max(padding, projectX(2.5));
-    const threatMaxX = Math.min(width - padding, projectX(Math.max(8, bounds.maxX)));
-    const threatMinY = Math.max(padding, projectY(0.35));
-    const threatMaxY = Math.min(height - padding, projectY(Math.min(0.0, bounds.minY)));
-    const hasThreatZone = threatMaxX > threatMinX && threatMaxY > threatMinY;
-
     return (
-        <div className="w-full space-y-2">
+        <div ref={containerRef} className="w-full space-y-2">
             <div className="relative overflow-hidden rounded-md border bg-card p-2 bezel">
                 {/* top corner toolbar with reset and active zoom indicator */}
                 <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
+                    <span className="hidden sm:inline text-[10px] font-mono text-muted-foreground/60 select-none">
+                        Scroll to zoom · Drag to pan
+                    </span>
                     {isZoomed && (
                         <button
                             type="button"
                             onClick={resetZoom}
-                            className="flex items-center gap-1 rounded border bg-background/90 px-2 py-0.5 text-[10px] font-mono text-muted-foreground shadow-xs backdrop-blur-xs hover:text-foreground"
+                            className="flex items-center gap-1 rounded border bg-background/95 px-2 py-0.5 text-[10px] font-mono text-muted-foreground shadow-xs backdrop-blur-xs hover:text-foreground"
                         >
                             <RotateCcw className="size-2.5" />
                             <span>{zoomLevel.toFixed(1)}x · Reset</span>
@@ -341,7 +394,7 @@ export function ScatterChart({ telemetryList, leaderboardItems = [], titleOf, on
 
                 {/* compact corner hud metric telemetry */}
                 {activeHover !== null ? (
-                    <div className="absolute left-3 top-3 z-10 flex max-w-[70%] items-center gap-2 rounded border bg-background/95 px-2.5 py-1 text-[11px] font-mono shadow-xs backdrop-blur-xs">
+                    <div className="absolute left-3 top-3 z-10 flex max-w-[65%] items-center gap-2 rounded border bg-background/95 px-2.5 py-1 text-[11px] font-mono shadow-xs backdrop-blur-xs">
                         <span
                             className={cn(
                                 "size-2 shrink-0 rounded-full",
@@ -373,16 +426,27 @@ export function ScatterChart({ telemetryList, leaderboardItems = [], titleOf, on
                     onMouseUp={onMouseUp}
                     onMouseLeave={onMouseLeave}
                     onDoubleClick={onDoubleClick}
-                    className={cn(
-                        "h-auto max-h-64 w-full select-none",
-                        isZoomed ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"
-                    )}
+                    className={cn("w-full block select-none", isZoomed ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair")}
                 >
                     <defs>
                         <clipPath id="scatter-plot-clip">
-                            <rect x={padding} y={padding} width={width - 2 * padding} height={height - 2 * padding} />
+                            <rect
+                                x={padding.left}
+                                y={padding.top}
+                                width={width - padding.left - padding.right}
+                                height={height - padding.top - padding.bottom}
+                            />
                         </clipPath>
                     </defs>
+
+                    {/* precision plot boundary frame */}
+                    <rect
+                        x={padding.left}
+                        y={padding.top}
+                        width={width - padding.left - padding.right}
+                        height={height - padding.top - padding.bottom}
+                        className="stroke-border/40 fill-none"
+                    />
 
                     {/* dynamic hairline grid lines */}
                     <g clipPath="url(#scatter-plot-clip)">
@@ -392,11 +456,10 @@ export function ScatterChart({ telemetryList, leaderboardItems = [], titleOf, on
                                 <line
                                     key={`gx-${tick}`}
                                     x1={x}
-                                    y1={padding}
+                                    y1={padding.top}
                                     x2={x}
-                                    y2={height - padding}
-                                    className="stroke-border/25"
-                                    strokeDasharray="2 2"
+                                    y2={height - padding.bottom}
+                                    className="stroke-border/15"
                                 />
                             );
                         })}
@@ -405,63 +468,59 @@ export function ScatterChart({ telemetryList, leaderboardItems = [], titleOf, on
                             return (
                                 <line
                                     key={`gy-${tick}`}
-                                    x1={padding}
+                                    x1={padding.left}
                                     y1={y}
-                                    x2={width - padding}
+                                    x2={width - padding.right}
                                     y2={y}
-                                    className="stroke-border/25"
-                                    strokeDasharray="2 2"
+                                    className="stroke-border/15"
                                 />
                             );
                         })}
 
-                        {/* threat zone box */}
-                        {hasThreatZone && (
-                            <g>
-                                <rect
-                                    x={threatMinX}
-                                    y={threatMinY}
-                                    width={threatMaxX - threatMinX}
-                                    height={threatMaxY - threatMinY}
-                                    className="fill-destructive/10 stroke-destructive/30"
-                                    strokeDasharray="3 3"
-                                />
-                                <text
-                                    x={threatMaxX - 6}
-                                    y={threatMaxY - 8}
-                                    textAnchor="end"
-                                    fontSize="8"
-                                    className="fill-destructive/80 font-mono font-medium pointer-events-none select-none"
-                                >
-                                    THREAT ZONE (Z &gt; 2.5, H &lt; 0.35)
-                                </text>
-                            </g>
-                        )}
+                        {/* declarative threat zone box */}
+                        <g>
+                            <rect
+                                x={projectX(2.5)}
+                                y={projectY(0.35)}
+                                width={Math.max(0, projectX(100) - projectX(2.5))}
+                                height={Math.max(0, projectY(-50) - projectY(0.35))}
+                                className="fill-destructive/15 stroke-destructive/40"
+                                strokeDasharray="4 4"
+                            />
+                            <text
+                                x={Math.max(padding.left + 8, projectX(2.5) + 8)}
+                                y={Math.max(padding.top + 16, projectY(0.35) + 16)}
+                                fontSize="9"
+                                className="fill-destructive font-mono font-medium pointer-events-none select-none"
+                            >
+                                THREAT ZONE (Z &gt; 2.5, H &lt; 0.35)
+                            </text>
+                        </g>
 
                         {/* hover crosshair lines */}
                         {activeHover !== null && (
                             <g>
                                 <line
-                                    x1={padding}
+                                    x1={padding.left}
                                     y1={projectY(activeHover.rankEntropy)}
-                                    x2={width - padding}
+                                    x2={width - padding.right}
                                     y2={projectY(activeHover.rankEntropy)}
                                     className="stroke-primary/40"
                                     strokeDasharray="2 2"
                                 />
                                 <line
                                     x1={projectX(activeHover.velocityZScore)}
-                                    y1={padding}
+                                    y1={padding.top}
                                     x2={projectX(activeHover.velocityZScore)}
-                                    y2={height - padding}
+                                    y2={height - padding.bottom}
                                     className="stroke-primary/40"
                                     strokeDasharray="2 2"
                                 />
                             </g>
                         )}
 
-                        {/* minimal point pins */}
-                        {points.map((p) => {
+                        {/* data points with contextual rank chips */}
+                        {points.map((p, idx) => {
                             const cx = projectX(p.velocityZScore);
                             const cy = projectY(p.rankEntropy);
                             const isSelected = activeHover?.entryId === p.entryId;
@@ -471,6 +530,7 @@ export function ScatterChart({ telemetryList, leaderboardItems = [], titleOf, on
                                     : p.severity === RaidSeverity.Suspicious
                                       ? "#f59e0b"
                                       : "#10b981";
+                            const label = `#${idx + 1} ${getTitle(p.entryId).slice(0, 10)}`;
 
                             return (
                                 <g
@@ -484,42 +544,65 @@ export function ScatterChart({ telemetryList, leaderboardItems = [], titleOf, on
                                     className="cursor-pointer"
                                 >
                                     {isSelected && (
-                                        <circle cx={cx} cy={cy} r={9} fill={fillColor} fillOpacity={0.2} className="animate-pulse" />
+                                        <circle cx={cx} cy={cy} r={11} fill={fillColor} fillOpacity={0.2} className="animate-pulse" />
                                     )}
                                     <circle
                                         cx={cx}
                                         cy={cy}
-                                        r={isSelected ? 5.5 : 3.8}
+                                        r={isSelected ? 6 : 4}
                                         fill={fillColor}
                                         stroke="#0b0c10"
-                                        strokeWidth={isSelected ? 2 : 1}
+                                        strokeWidth={isSelected ? 2 : 1.2}
                                         className="transition-all"
                                     />
+                                    {points.length <= 12 && (
+                                        <g className="pointer-events-none select-none">
+                                            <rect
+                                                x={cx + 8}
+                                                y={cy - 14}
+                                                width={label.length * 5.6 + 8}
+                                                height={13}
+                                                rx="3"
+                                                className={cn(
+                                                    "transition-colors",
+                                                    isSelected ? "fill-card stroke-primary/80" : "fill-card/85 stroke-border/60"
+                                                )}
+                                                strokeWidth="0.8"
+                                            />
+                                            <text
+                                                x={cx + 12}
+                                                y={cy - 4.5}
+                                                fontSize="8"
+                                                className={cn(
+                                                    "font-mono",
+                                                    isSelected ? "fill-foreground font-semibold" : "fill-muted-foreground"
+                                                )}
+                                            >
+                                                {label}
+                                            </text>
+                                        </g>
+                                    )}
                                 </g>
                             );
                         })}
                     </g>
 
-                    {/* dynamic axes frame */}
-                    <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} className="stroke-border/80" />
-                    <line x1={padding} y1={padding} x2={padding} y2={height - padding} className="stroke-border/80" />
-
                     {/* dynamic x ticks */}
                     {xTicks.map((tick) => {
                         const x = projectX(tick);
-                        if (x < padding || x > width - padding) return null;
+                        if (x < padding.left || x > width - padding.right) return null;
                         return (
                             <g key={`tx-${tick}`}>
                                 <line
                                     x1={x}
-                                    y1={height - padding}
+                                    y1={height - padding.bottom}
                                     x2={x}
-                                    y2={height - padding + 4}
+                                    y2={height - padding.bottom + 4}
                                     className="stroke-muted-foreground/60"
                                 />
                                 <text
                                     x={x}
-                                    y={height - padding + 14}
+                                    y={height - padding.bottom + 16}
                                     fontSize="9"
                                     textAnchor="middle"
                                     className="fill-muted-foreground font-mono select-none pointer-events-none"
@@ -533,12 +616,12 @@ export function ScatterChart({ telemetryList, leaderboardItems = [], titleOf, on
                     {/* dynamic y ticks */}
                     {yTicks.map((tick) => {
                         const y = projectY(tick);
-                        if (y < padding || y > height - padding) return null;
+                        if (y < padding.top || y > height - padding.bottom) return null;
                         return (
                             <g key={`ty-${tick}`}>
-                                <line x1={padding - 4} y1={y} x2={padding} y2={y} className="stroke-muted-foreground/60" />
+                                <line x1={padding.left - 4} y1={y} x2={padding.left} y2={y} className="stroke-muted-foreground/60" />
                                 <text
-                                    x={padding - 6}
+                                    x={padding.left - 7}
                                     y={y + 3}
                                     fontSize="9"
                                     textAnchor="end"
@@ -550,20 +633,67 @@ export function ScatterChart({ telemetryList, leaderboardItems = [], titleOf, on
                         );
                     })}
 
-                    {/* axis labels */}
-                    <text x={width / 2} y={height - 4} fontSize="9" textAnchor="middle" className="fill-muted-foreground/80 font-mono">
+                    {/* axis titles with generous non-overlapping spacing */}
+                    <text
+                        x={(padding.left + width - padding.right) / 2}
+                        y={height - 8}
+                        fontSize="9.5"
+                        textAnchor="middle"
+                        className="fill-muted-foreground/80 font-mono"
+                    >
                         Velocity Z-Score &rarr;
                     </text>
                     <text
-                        x={-height / 2}
-                        y={12}
+                        x={-(padding.top + height - padding.bottom) / 2}
+                        y={16}
                         transform="rotate(-90)"
-                        fontSize="9"
+                        fontSize="9.5"
                         textAnchor="middle"
                         className="fill-muted-foreground/80 font-mono"
                     >
                         Rank Entropy (H) &rarr;
                     </text>
+
+                    {/* axis callout pills on active hover */}
+                    {activeHover !== null && (
+                        <g className="pointer-events-none select-none">
+                            <rect
+                                x={projectX(activeHover.velocityZScore) - 17}
+                                y={height - padding.bottom + 2}
+                                width={34}
+                                height={13}
+                                rx="2"
+                                className="fill-primary stroke-primary/30"
+                            />
+                            <text
+                                x={projectX(activeHover.velocityZScore)}
+                                y={height - padding.bottom + 11}
+                                fontSize="8"
+                                textAnchor="middle"
+                                className="fill-primary-foreground font-mono font-semibold"
+                            >
+                                {formatNumber(activeHover.velocityZScore, 2)}
+                            </text>
+
+                            <rect
+                                x={padding.left - 39}
+                                y={projectY(activeHover.rankEntropy) - 6.5}
+                                width={34}
+                                height={13}
+                                rx="2"
+                                className="fill-primary stroke-primary/30"
+                            />
+                            <text
+                                x={padding.left - 22}
+                                y={projectY(activeHover.rankEntropy) + 3}
+                                fontSize="8"
+                                textAnchor="middle"
+                                className="fill-primary-foreground font-mono font-semibold"
+                            >
+                                {formatNumber(activeHover.rankEntropy, 2)}
+                            </text>
+                        </g>
+                    )}
                 </svg>
             </div>
 
@@ -590,9 +720,18 @@ interface ShrinkageChartProps {
 
 export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
     const [hoveredEntryId, setHoveredEntryId] = useState<string | null>(null);
-    const width = 640;
-    const height = 220;
-    const padding = 38;
+
+    // fluid container measurement for 100% responsive width
+    const { containerRef, width, height } = useContainerDimensions(280);
+    const padding: CartesianPadding = useMemo(
+        () => ({
+            left: 64,
+            right: 24,
+            top: 28,
+            bottom: 44
+        }),
+        []
+    );
 
     const maxRaw = items.length > 0 ? Math.max(...items.map((i) => i.rawScore), 10) : 10;
     const maxReg = items.length > 0 ? Math.max(...items.map((i) => i.regularizedMeanScore ?? i.rawScore), 10) : 10;
@@ -601,7 +740,6 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
     const initialBounds = useMemo(() => ({ minX: 0, maxX: maxVal, minY: 0, maxY: maxVal }), [maxVal]);
     const {
         svgRef,
-        bounds,
         projectX,
         projectY,
         zoomLevel,
@@ -628,21 +766,19 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
 
     const activeItem = items.find((i) => i.entryId === hoveredEntryId) ?? null;
 
-    // 45-degree parity reference line coordinates in visible bounds
-    const parityStart = Math.max(bounds.minX, bounds.minY);
-    const parityEnd = Math.min(bounds.maxX, bounds.maxY);
-    const hasParityLine = parityEnd > parityStart;
-
     return (
-        <div className="w-full space-y-2">
+        <div ref={containerRef} className="w-full space-y-2">
             <div className="relative overflow-hidden rounded-md border bg-card p-2 bezel">
                 {/* top corner toolbar with reset and active zoom indicator */}
                 <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
+                    <span className="hidden sm:inline text-[10px] font-mono text-muted-foreground/60 select-none">
+                        Scroll to zoom · Drag to pan
+                    </span>
                     {isZoomed && (
                         <button
                             type="button"
                             onClick={resetZoom}
-                            className="flex items-center gap-1 rounded border bg-background/90 px-2 py-0.5 text-[10px] font-mono text-muted-foreground shadow-xs backdrop-blur-xs hover:text-foreground"
+                            className="flex items-center gap-1 rounded border bg-background/95 px-2 py-0.5 text-[10px] font-mono text-muted-foreground shadow-xs backdrop-blur-xs hover:text-foreground"
                         >
                             <RotateCcw className="size-2.5" />
                             <span>{zoomLevel.toFixed(1)}x · Reset</span>
@@ -652,7 +788,7 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
 
                 {/* compact corner hud metric telemetry */}
                 {activeItem !== null ? (
-                    <div className="absolute left-3 top-3 z-10 flex max-w-[70%] items-center gap-2 rounded border bg-background/95 px-2.5 py-1 text-[11px] font-mono shadow-xs backdrop-blur-xs">
+                    <div className="absolute left-3 top-3 z-10 flex max-w-[65%] items-center gap-2 rounded border bg-background/95 px-2.5 py-1 text-[11px] font-mono shadow-xs backdrop-blur-xs">
                         <span className="size-2 shrink-0 rounded-full bg-emerald-500" />
                         <span className="truncate font-semibold text-foreground">{activeItem.title}</span>
                         <span className="text-muted-foreground shrink-0">·</span>
@@ -677,16 +813,27 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
                     onMouseUp={onMouseUp}
                     onMouseLeave={onMouseLeave}
                     onDoubleClick={onDoubleClick}
-                    className={cn(
-                        "h-auto max-h-60 w-full select-none",
-                        isZoomed ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"
-                    )}
+                    className={cn("w-full block select-none", isZoomed ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair")}
                 >
                     <defs>
                         <clipPath id="shrinkage-plot-clip">
-                            <rect x={padding} y={padding} width={width - 2 * padding} height={height - 2 * padding} />
+                            <rect
+                                x={padding.left}
+                                y={padding.top}
+                                width={width - padding.left - padding.right}
+                                height={height - padding.top - padding.bottom}
+                            />
                         </clipPath>
                     </defs>
+
+                    {/* precision plot boundary frame */}
+                    <rect
+                        x={padding.left}
+                        y={padding.top}
+                        width={width - padding.left - padding.right}
+                        height={height - padding.top - padding.bottom}
+                        className="stroke-border/40 fill-none"
+                    />
 
                     {/* dynamic hairline grid lines */}
                     <g clipPath="url(#shrinkage-plot-clip)">
@@ -696,11 +843,10 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
                                 <line
                                     key={`sgx-${tick}`}
                                     x1={x}
-                                    y1={padding}
+                                    y1={padding.top}
                                     x2={x}
-                                    y2={height - padding}
-                                    className="stroke-border/25"
-                                    strokeDasharray="2 2"
+                                    y2={height - padding.bottom}
+                                    className="stroke-border/15"
                                 />
                             );
                         })}
@@ -709,44 +855,41 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
                             return (
                                 <line
                                     key={`sgy-${tick}`}
-                                    x1={padding}
+                                    x1={padding.left}
                                     y1={y}
-                                    x2={width - padding}
+                                    x2={width - padding.right}
                                     y2={y}
-                                    className="stroke-border/25"
-                                    strokeDasharray="2 2"
+                                    className="stroke-border/15"
                                 />
                             );
                         })}
 
-                        {/* 45-degree parity reference line */}
-                        {hasParityLine && (
-                            <line
-                                x1={projectX(parityStart)}
-                                y1={projectY(parityStart)}
-                                x2={projectX(parityEnd)}
-                                y2={projectY(parityEnd)}
-                                className="stroke-muted-foreground/35"
-                                strokeDasharray="3 3"
-                            />
-                        )}
+                        {/* declarative 45-degree parity reference line */}
+                        <line
+                            x1={projectX(-1000)}
+                            y1={projectY(-1000)}
+                            x2={projectX(10000)}
+                            y2={projectY(10000)}
+                            className="stroke-muted-foreground/35"
+                            strokeDasharray="3 3"
+                        />
 
                         {/* hover crosshair lines */}
                         {activeItem !== null && (
                             <g>
                                 <line
-                                    x1={padding}
+                                    x1={padding.left}
                                     y1={projectY(activeItem.regularizedMeanScore ?? activeItem.rawScore)}
-                                    x2={width - padding}
+                                    x2={width - padding.right}
                                     y2={projectY(activeItem.regularizedMeanScore ?? activeItem.rawScore)}
                                     className="stroke-primary/40"
                                     strokeDasharray="2 2"
                                 />
                                 <line
                                     x1={projectX(activeItem.rawScore)}
-                                    y1={padding}
+                                    y1={padding.top}
                                     x2={projectX(activeItem.rawScore)}
-                                    y2={height - padding}
+                                    y2={height - padding.bottom}
                                     className="stroke-primary/40"
                                     strokeDasharray="2 2"
                                 />
@@ -761,6 +904,7 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
                             const py = projectY(reg);
                             const parityPy = projectY(raw);
                             const isSelected = hoveredEntryId === datum.entryId;
+                            const label = `#${datum.position} ${datum.title.slice(0, 10)}`;
 
                             return (
                                 <g
@@ -785,42 +929,65 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
                                         opacity={isSelected ? 1 : 0.6}
                                     />
                                     {isSelected && (
-                                        <circle cx={px} cy={py} r={9} fill="#10b981" fillOpacity={0.2} className="animate-pulse" />
+                                        <circle cx={px} cy={py} r={11} fill="#10b981" fillOpacity={0.2} className="animate-pulse" />
                                     )}
                                     <circle
                                         cx={px}
                                         cy={py}
-                                        r={isSelected ? 5.5 : 4}
+                                        r={isSelected ? 6 : 4}
                                         fill="#10b981"
                                         stroke="#0b0c10"
-                                        strokeWidth={isSelected ? 2 : 1}
+                                        strokeWidth={isSelected ? 2 : 1.2}
                                         className="transition-all"
                                     />
+                                    {items.length <= 15 && (
+                                        <g className="pointer-events-none select-none">
+                                            <rect
+                                                x={px + 8}
+                                                y={py - 14}
+                                                width={label.length * 5.6 + 8}
+                                                height={13}
+                                                rx="3"
+                                                className={cn(
+                                                    "transition-colors",
+                                                    isSelected ? "fill-card stroke-primary/80" : "fill-card/85 stroke-border/60"
+                                                )}
+                                                strokeWidth="0.8"
+                                            />
+                                            <text
+                                                x={px + 12}
+                                                y={py - 4.5}
+                                                fontSize="8"
+                                                className={cn(
+                                                    "font-mono",
+                                                    isSelected ? "fill-foreground font-semibold" : "fill-muted-foreground"
+                                                )}
+                                            >
+                                                {label}
+                                            </text>
+                                        </g>
+                                    )}
                                 </g>
                             );
                         })}
                     </g>
 
-                    {/* dynamic axes frame */}
-                    <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} className="stroke-border/80" />
-                    <line x1={padding} y1={padding} x2={padding} y2={height - padding} className="stroke-border/80" />
-
                     {/* dynamic x ticks */}
                     {xTicks.map((tick) => {
                         const x = projectX(tick);
-                        if (x < padding || x > width - padding) return null;
+                        if (x < padding.left || x > width - padding.right) return null;
                         return (
                             <g key={`stx-${tick}`}>
                                 <line
                                     x1={x}
-                                    y1={height - padding}
+                                    y1={height - padding.bottom}
                                     x2={x}
-                                    y2={height - padding + 4}
+                                    y2={height - padding.bottom + 4}
                                     className="stroke-muted-foreground/60"
                                 />
                                 <text
                                     x={x}
-                                    y={height - padding + 14}
+                                    y={height - padding.bottom + 16}
                                     fontSize="9"
                                     textAnchor="middle"
                                     className="fill-muted-foreground font-mono select-none pointer-events-none"
@@ -834,12 +1001,12 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
                     {/* dynamic y ticks */}
                     {yTicks.map((tick) => {
                         const y = projectY(tick);
-                        if (y < padding || y > height - padding) return null;
+                        if (y < padding.top || y > height - padding.bottom) return null;
                         return (
                             <g key={`sty-${tick}`}>
-                                <line x1={padding - 4} y1={y} x2={padding} y2={y} className="stroke-muted-foreground/60" />
+                                <line x1={padding.left - 4} y1={y} x2={padding.left} y2={y} className="stroke-muted-foreground/60" />
                                 <text
-                                    x={padding - 6}
+                                    x={padding.left - 7}
                                     y={y + 3}
                                     fontSize="9"
                                     textAnchor="end"
@@ -851,20 +1018,67 @@ export function ShrinkageChart({ items }: ShrinkageChartProps): ReactNode {
                         );
                     })}
 
-                    {/* axis labels */}
-                    <text x={width / 2} y={height - 4} fontSize="9" textAnchor="middle" className="fill-muted-foreground/80 font-mono">
+                    {/* axis titles with generous non-overlapping spacing */}
+                    <text
+                        x={(padding.left + width - padding.right) / 2}
+                        y={height - 8}
+                        fontSize="9.5"
+                        textAnchor="middle"
+                        className="fill-muted-foreground/80 font-mono"
+                    >
                         Raw Points &rarr;
                     </text>
                     <text
-                        x={-height / 2}
-                        y={12}
+                        x={-(padding.top + height - padding.bottom) / 2}
+                        y={16}
                         transform="rotate(-90)"
-                        fontSize="9"
+                        fontSize="9.5"
                         textAnchor="middle"
                         className="fill-muted-foreground/80 font-mono"
                     >
                         Regularized Score &rarr;
                     </text>
+
+                    {/* axis callout pills on active hover */}
+                    {activeItem !== null && (
+                        <g className="pointer-events-none select-none">
+                            <rect
+                                x={projectX(activeItem.rawScore) - 17}
+                                y={height - padding.bottom + 2}
+                                width={34}
+                                height={13}
+                                rx="2"
+                                className="fill-primary stroke-primary/30"
+                            />
+                            <text
+                                x={projectX(activeItem.rawScore)}
+                                y={height - padding.bottom + 11}
+                                fontSize="8"
+                                textAnchor="middle"
+                                className="fill-primary-foreground font-mono font-semibold"
+                            >
+                                {formatNumber(activeItem.rawScore, 1)}
+                            </text>
+
+                            <rect
+                                x={padding.left - 39}
+                                y={projectY(activeItem.regularizedMeanScore ?? activeItem.rawScore) - 6.5}
+                                width={34}
+                                height={13}
+                                rx="2"
+                                className="fill-primary stroke-primary/30"
+                            />
+                            <text
+                                x={padding.left - 22}
+                                y={projectY(activeItem.regularizedMeanScore ?? activeItem.rawScore) + 3}
+                                fontSize="8"
+                                textAnchor="middle"
+                                className="fill-primary-foreground font-mono font-semibold"
+                            >
+                                {formatNumber(activeItem.regularizedMeanScore ?? activeItem.rawScore, 1)}
+                            </text>
+                        </g>
+                    )}
                 </svg>
             </div>
 
