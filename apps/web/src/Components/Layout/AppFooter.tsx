@@ -12,7 +12,7 @@ import type { ReactNode } from "react";
 
 export function AppFooter(): ReactNode {
     return (
-        <footer className="mt-auto border-t text-xs text-muted-foreground">
+        <footer className="mt-auto border-t border-border/80 text-xs text-muted-foreground shadow-[inset_0_1px_0_0_rgba(255,255,255,0.03)]">
             <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-3 sm:px-6">
                 <span>&copy; {new Date().getFullYear()} Seraph Interactive, Inc.</span>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

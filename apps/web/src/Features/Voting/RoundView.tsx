@@ -143,8 +143,8 @@ function EntryCard({ entry, onClick }: { readonly entry: EntryDto; readonly onCl
                 }
             }}
             className={cn(
-                "group bg-card text-card-foreground hover:border-primary/50 focus-visible:ring-ring flex flex-col overflow-hidden rounded-xl border shadow-xs transition-all duration-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 cursor-pointer",
-                isMyEntry && "border-primary/30 bg-primary/[0.02]"
+                "group bg-card text-card-foreground bezel-interactive flex flex-col overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer dark:surface-sheen",
+                isMyEntry && "border-primary/40 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.15)]"
             )}
         >
             <div className="relative aspect-video w-full overflow-hidden bg-muted/40 border-b">
@@ -225,7 +225,7 @@ function EntriesGrid({
         return (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {Array.from({ length: 4 }, (_, i) => (
-                    <div key={i} className="bg-card flex flex-col overflow-hidden rounded-xl border">
+                    <div key={i} className="bg-card bezel flex flex-col overflow-hidden rounded-xl">
                         <Skeleton className="aspect-video w-full rounded-none" />
                         <div className="flex flex-1 flex-col p-3.5 gap-2.5">
                             <Skeleton className="h-4 w-4/5" />

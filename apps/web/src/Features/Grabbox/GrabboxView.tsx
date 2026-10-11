@@ -62,7 +62,7 @@ export function LoadingCards({ count = 8 }: { readonly count?: number }): ReactN
     return (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-busy="true" aria-label="Loading tasks">
             {Array.from({ length: count }, (_, index) => (
-                <div key={index} className="bg-card flex flex-col overflow-hidden rounded-xl border">
+                <div key={index} className="bg-card bezel flex flex-col overflow-hidden rounded-xl">
                     <Skeleton className="aspect-video w-full rounded-none" />
                     <div className="flex flex-1 flex-col p-3.5 gap-2.5">
                         <div className="flex justify-between">
@@ -87,7 +87,7 @@ function ShotCard({ shot }: { readonly shot: ShotDto }): ReactNode {
     return (
         <Link
             href={`/grabbox/${shot.id}` as Route}
-            className="group bg-card text-card-foreground hover:border-primary/50 focus-visible:ring-ring flex flex-col overflow-hidden rounded-xl border shadow-xs transition-all duration-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2"
+            className="group bg-card text-card-foreground bezel-interactive flex flex-col overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:surface-sheen"
         >
             <div className="relative aspect-video w-full overflow-hidden bg-muted/40 border-b">
                 {shot.imageUrls.length > 0 ? (
@@ -109,9 +109,6 @@ function ShotCard({ shot }: { readonly shot: ShotDto }): ReactNode {
                     </span>
                 </div>
                 <div className="absolute top-2 right-2 flex items-center gap-1.5">
-                    {shot.isSeniorLocked && shot.seniorPriorityUntil !== null && (
-                        <CountdownTimer targetDate={shot.seniorPriorityUntil} prefix="Lock" icon="lock" />
-                    )}
                     {shot.status !== ShotStatus.Available && <ShotStatusBadge status={shot.status} />}
                 </div>
                 {shot.imageUrls.length > 1 && (

@@ -166,7 +166,7 @@ function UserEntriesSection(): ReactNode {
                         <Link
                             key={entry.id}
                             href={`/voting/${entry.roundId}` as Route}
-                            className="group bg-card text-card-foreground hover:border-primary/50 flex flex-col overflow-hidden rounded-xl border shadow-xs transition-all hover:shadow-md"
+                            className="group bg-card text-card-foreground bezel-interactive flex flex-col overflow-hidden rounded-xl dark:surface-sheen"
                         >
                             <div className="relative aspect-video w-full overflow-hidden bg-muted/40 border-b">
                                 {entry.mediaUrl !== null ? (

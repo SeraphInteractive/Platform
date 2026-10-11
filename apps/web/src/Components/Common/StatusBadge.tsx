@@ -22,7 +22,13 @@ const toneClasses: Readonly<Record<Tone, string>> = {
 
 export function ToneBadge({ tone, children }: { readonly tone: Tone; readonly children: ReactNode }): ReactNode {
     return (
-        <Badge variant="secondary" className={cn("h-5 rounded-sm border-0 px-1.5 text-[11px] font-medium", toneClasses[tone])}>
+        <Badge
+            variant="secondary"
+            className={cn(
+                "h-5 rounded-sm border border-current/20 px-1.5 text-[11px] font-medium shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]",
+                toneClasses[tone]
+            )}
+        >
             {children}
         </Badge>
     );

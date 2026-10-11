@@ -15,7 +15,7 @@ export function Toolbar({
     return (
         <div
             className={cn(
-                "bg-card mb-4 flex min-h-12 max-w-full flex-wrap items-center justify-between gap-2 rounded-md border p-1.5 sm:px-2 sm:py-[7px]",
+                "bg-card mb-4 flex min-h-12 max-w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-border/80 p-1.5 sm:px-2 sm:py-[7px] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_1px_2px_0_rgba(0,0,0,0.25)] dark:bg-card/80 backdrop-blur-xs",
                 className
             )}
         >
@@ -26,7 +26,11 @@ export function Toolbar({
 }
 
 export function DataList({ children }: { readonly children: ReactNode }): ReactNode {
-    return <ul className="bg-card divide-y overflow-hidden rounded-md border">{children}</ul>;
+    return (
+        <ul className="bg-card divide-y overflow-hidden rounded-lg border border-border/80 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_1px_2px_0_rgba(0,0,0,0.25)] dark:bg-card/80">
+            {children}
+        </ul>
+    );
 }
 
 interface DataRowProps {
