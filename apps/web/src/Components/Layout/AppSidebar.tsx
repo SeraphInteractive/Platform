@@ -111,7 +111,7 @@ export function AppSidebar(): ReactNode {
                     </SidebarMenuItem>
                     {toDiscordAppInviteUrl(discordInviteUrl) !== null && (
                         <SidebarMenuItem>
-                            <SidebarMenuButton asChild tooltip="Join the Discord">
+                            <SidebarMenuButton asChild tooltip="Discord">
                                 <a
                                     href={toDiscordWebInviteUrl(discordInviteUrl) ?? toDiscordAppInviteUrl(discordInviteUrl)!}
                                     onClick={(event) => {
@@ -122,7 +122,7 @@ export function AppSidebar(): ReactNode {
                                     rel="noopener noreferrer"
                                 >
                                     <DiscordIcon />
-                                    <span>Join the Discord</span>
+                                    <span>Discord</span>
                                 </a>
                             </SidebarMenuButton>
                         </SidebarMenuItem>

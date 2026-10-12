@@ -33,7 +33,10 @@ const environmentSchema = z.object({
         )
         .pipe(z.array(originSchema)),
     DISCORD_GUILD_ID: optional(z.string().regex(/^\d{17,20}$/u)),
-    DISCORD_INVITE_URL: z.string().min(1).default("https://discord.gg/WP7dhVzkaV"),
+    DISCORD_INVITE_URL: z.preprocess(
+        (value) => (value === "" || value === undefined ? "https://discord.gg/WP7dhVzkaV" : value),
+        z.string().min(1)
+    ),
     TURNSTILE_SITE_KEY: optional(z.string().regex(/^[A-Za-z0-9_-]{8,128}$/u)),
     ADMIN_DISCORD_IDS: z
         .string()

@@ -16,7 +16,7 @@ export function SeniorLock({ shot }: { readonly shot: ShotDto }): ReactNode {
         return null;
     }
     return (
-        <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
+        <span className="text-warning inline-flex items-center gap-1.5 text-xs">
             <CountdownTimer targetDate={shot.seniorPriorityUntil} prefix="Senior lock:" icon="lock" />
         </span>
     );
