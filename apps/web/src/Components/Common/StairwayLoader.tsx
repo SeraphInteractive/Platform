@@ -10,7 +10,7 @@ interface StairwayLoaderProps {
 const sizeClasses = {
     sm: "size-24",
     md: "size-36",
-    lg: "size-48",
+    lg: "size-48"
 } as const;
 
 export function StairwayLoader({ size = "md", className, label }: StairwayLoaderProps): ReactNode {
@@ -36,9 +36,7 @@ export function StairwayLoader({ size = "md", className, label }: StairwayLoader
                     <source src="/branding/stairway-loop.mp4" type="video/mp4" />
                 </video>
             </div>
-            {label !== undefined && label !== "" && (
-                <p className="text-muted-foreground font-mono text-xs tracking-wider">{label}</p>
-            )}
+            {label !== undefined && label !== "" && <p className="text-muted-foreground font-mono text-xs tracking-wider">{label}</p>}
         </div>
     );
 }
