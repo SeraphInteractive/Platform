@@ -14,7 +14,7 @@
         "build": "tsc -b",
         "clean": "tsc -b --clean",
         "typecheck": "tsc -b && tsc -p tsconfig.eslint.json && npm run typecheck -w @platform/web",
-        "lint": "eslint . && npm run lint -w @platform/web",
+        "lint": "tsc -b packages/scoring packages/contracts && eslint . && npm run lint -w @platform/web",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "test": "tsc -b packages/scoring packages/contracts && vitest run",
