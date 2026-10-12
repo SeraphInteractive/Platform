@@ -110,7 +110,8 @@ export const studioRules = [
 export class ServerProvisioner {
     public constructor(
         private readonly settings: SettingsStore,
-        private readonly logger: Logger
+        private readonly logger: Logger,
+        private readonly announcementsChannelId?: string
     ) {}
 
     public async bindExisting(guild: Guild): Promise<void> {
@@ -132,6 +133,10 @@ export class ServerProvisioner {
                     return aliases.some((alias) => normalizeName(alias) === normalized);
                 });
                 settings.channels[purpose] ??= match?.id;
+            }
+            if (this.announcementsChannelId !== undefined) {
+                // explicit configured announcements channel overrides name heuristic
+                settings.channels[ChannelPurpose.Announcements] = this.announcementsChannelId;
             }
             const forum = channels.find(
                 (channel) => channel !== null && channel.type === ChannelType.GuildForum && normalizeName(channel.name) === forumName
@@ -216,13 +221,17 @@ export class ServerProvisioner {
         ): Promise<TextChannel> => {
             const name = channelNames[purpose];
             const aliases = channelAliases[purpose];
-            const existing = channels.find((channel) => {
-                if (channel === null || channel.type !== ChannelType.GuildText) {
-                    return false;
-                }
-                const normalized = normalizeName(channel.name);
-                return aliases.some((alias) => normalizeName(alias) === normalized);
-            }) as TextChannel | undefined;
+            const configuredId = this.settings.channel(purpose);
+            const channelById = configuredId !== undefined ? channels.get(configuredId) : undefined;
+            const existing =
+                (channelById?.type === ChannelType.GuildText ? channelById : undefined) ??
+                (channels.find((channel) => {
+                    if (channel === null || channel.type !== ChannelType.GuildText) {
+                        return false;
+                    }
+                    const normalized = normalizeName(channel.name);
+                    return aliases.some((alias) => normalizeName(alias) === normalized);
+                }) as TextChannel | undefined);
 
             if (existing !== undefined) {
                 boundChannels.push(`#${existing.name}`);

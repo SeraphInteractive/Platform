@@ -155,9 +155,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                 )
             ];
         case NotificationType.ContributorPromoted:
-            return [
-                post(ChannelPurpose.Announcements, Accent.Success, `${person(notification.user, isMember)} is now a senior contributor.`)
-            ];
+            return [post(telemetry, Accent.Success, `${person(notification.user, isMember)} is now a senior contributor.`)];
         case NotificationType.RaidAlert:
             return [
                 post(
@@ -343,7 +341,7 @@ export function renderNotification(notification: PlatformNotification, context: 
             ];
         case NotificationType.SubmissionReviewed: {
             const approved = notification.decision === ReviewDecision.Approved;
-            const rendered = [
+            return [
                 post(
                     taskLogs,
                     approved ? Accent.Success : Accent.Warning,
@@ -352,16 +350,6 @@ export function renderNotification(notification: PlatformNotification, context: 
                     notification.notes === null ? null : quote(notification.notes, 600)
                 )
             ];
-            if (approved) {
-                rendered.push(
-                    post(
-                        ChannelPurpose.Announcements,
-                        Accent.Success,
-                        `**${shotName(notification.shot)} is finished.** Delivered by ${person(notification.contributor, isMember)}.`
-                    )
-                );
-            }
-            return rendered;
         }
         case NotificationType.PipelineUpdated: {
             if (notification.isPhaseTransition) {
@@ -377,7 +365,7 @@ export function renderNotification(notification: PlatformNotification, context: 
             }
             return [
                 post(
-                    ChannelPurpose.Announcements,
+                    telemetry,
                     Accent.Info,
                     `**Pipeline Update: Step ${plain(notification.stepId)} - ${plain(notification.stepTitle)}**`,
                     `In **${plain(notification.phaseTitle)}** (${notification.progressPercent}% completed).`,

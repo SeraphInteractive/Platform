@@ -10,6 +10,7 @@ const environmentSchema = z
         DISCORD_BOT_TOKEN: z.string().min(50),
         DISCORD_CLIENT_ID: snowflake,
         DISCORD_GUILD_ID: snowflake,
+        DISCORD_ANNOUNCEMENTS_CHANNEL_ID: snowflake.optional(),
         API_BASE_URL: z.url({ protocol: /^https?$/u }).transform((value) => value.replace(/\/+$/u, "")),
         SERVICE_TOKEN: z.string().min(32, "must be at least 32 characters"),
         WEB_APP_URL: z.url({ protocol: /^https?$/u }).transform((value) => value.replace(/\/+$/u, "")),
@@ -32,6 +33,7 @@ export interface BotConfiguration {
     readonly discordToken: string;
     readonly clientId: string;
     readonly guildId: string;
+    readonly announcementsChannelId?: string;
     readonly apiBaseUrl: string;
     readonly serviceToken: string;
     readonly webAppUrl: string;
@@ -58,6 +60,7 @@ export function loadBotConfiguration(source: NodeJS.ProcessEnv = process.env): B
         discordToken: environment.DISCORD_BOT_TOKEN,
         clientId: environment.DISCORD_CLIENT_ID,
         guildId: environment.DISCORD_GUILD_ID,
+        announcementsChannelId: environment.DISCORD_ANNOUNCEMENTS_CHANNEL_ID,
         apiBaseUrl: environment.API_BASE_URL,
         serviceToken: environment.SERVICE_TOKEN,
         webAppUrl: environment.WEB_APP_URL,

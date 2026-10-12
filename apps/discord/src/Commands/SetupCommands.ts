@@ -1,6 +1,7 @@
 import { Role } from "@platform/contracts";
 import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder, type ChatInputCommandInteraction } from "discord.js";
 import { Accent, asEdit, ephemeral, panel, pluralize } from "../Discord/Ui.js";
+import { ChannelPurpose } from "../State/SettingsStore.js";
 import { requireManageGuild, requirePlatformRole, UserFacingError, type BotContext, type SlashCommand } from "./Command.js";
 
 export const botSetupCommand: SlashCommand = {
@@ -49,10 +50,27 @@ export const syncRolesCommand: SlashCommand = {
             "## Role Hierarchy & Member Sync Complete",
             `• Positioned **${summary.reorderedRoles}** studio roles by hierarchy (Executive > Supervisor > Contributor > Community).`,
             `• Checked **${summary.totalUsersChecked}** registered users, reconciled **${summary.driftedMembersSynced}** drifted ${pluralize(summary.driftedMembersSynced, "member")}.`,
-            summary.errors.length > 0 ? `⚠️ Encountered ${summary.errors.length} error(s) during sync.` : null
+            summary.errors.length > 0 ? `Encountered ${summary.errors.length} error(s) during sync.` : null
         ].filter((line): line is string => line !== null);
 
         const accent = summary.errors.length > 0 ? Accent.Warning : Accent.Success;
         await interaction.editReply(asEdit(ephemeral(panel(accent, lines.join("\n")))));
+    }
+};
+
+export const setAnnouncementsCommand: SlashCommand = {
+    definition: new SlashCommandBuilder()
+        .setName("set-announcements")
+        .setDescription("Bind the announcements channel for important public bot announcements")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+        .addChannelOption((option) => option.setName("channel").setDescription("Text channel for public announcements").setRequired(true))
+        .toJSON(),
+    async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
+        requireManageGuild(interaction);
+        const channel = interaction.options.getChannel("channel", true);
+        await context.settings.update((settings) => {
+            settings.channels[ChannelPurpose.Announcements] = channel.id;
+        });
+        await interaction.reply(ephemeral(panel(Accent.Success, `Announcements channel bound to <#${channel.id}>.`)));
     }
 };

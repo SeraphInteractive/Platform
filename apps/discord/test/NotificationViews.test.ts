@@ -410,7 +410,7 @@ describe("every notification", () => {
         );
     });
 
-    it("announces phase unlocks and step progress to announcements channel", () => {
+    it("announces phase unlocks to announcements and routes step progress to telemetry", () => {
         const phaseUnlock = only({
             type: NotificationType.PipelineUpdated,
             occurredAt,
@@ -438,7 +438,7 @@ describe("every notification", () => {
             isPhaseTransition: false,
             actor: supervisor
         });
-        expect(stepProgress.purpose).toBe(ChannelPurpose.Announcements);
+        expect(stepProgress.purpose).toBe(ChannelPurpose.Telemetry);
         expect(stepProgress.text).toContain("Rigging and Deformation");
         expect(stepProgress.text).toContain("Phase 2: LookDev");
         expect(stepProgress.text).toContain("41% completed");
