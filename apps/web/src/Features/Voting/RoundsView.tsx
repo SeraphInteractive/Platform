@@ -63,8 +63,8 @@ function RoundCard({ round }: RoundCardProps): ReactNode {
     return (
         <div
             className={cn(
-                "group bg-card relative flex flex-col justify-between rounded-xl bezel-interactive p-5 dark:surface-sheen",
-                isLiveVoting && "border-primary/50 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.18),0_2px_8px_0_rgba(0,0,0,0.4)]"
+                "group bg-card relative flex flex-col justify-between rounded-lg border p-5 transition-all hover:border-primary/50 hover:shadow-md",
+                isLiveVoting && "border-primary/40 bg-gradient-to-b from-primary/5 to-transparent"
             )}
         >
             <div className="space-y-3">

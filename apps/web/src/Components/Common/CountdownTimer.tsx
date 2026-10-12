@@ -56,12 +56,25 @@ export function CountdownTimer({ targetDate, prefix, expiredLabel = "Ended", ico
     }
 
     const isExpired = diff <= 0;
+    const isUrgent = diff > 0 && diff <= 3_600_000;
+    const isWarning = diff > 3_600_000 && diff <= 86_400_000;
+
     const IconComponent = icon === "lock" ? Lock : icon === "clock" ? Clock : null;
 
     return (
         <span
             title={typeof targetDate === "string" ? formatDateTime(targetDate) : undefined}
-            className={cn("inline-flex items-center gap-1 font-mono text-[11px] leading-none text-muted-foreground", className)}
+            className={cn(
+                "inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[11px] leading-none border transition-colors shadow-2xs",
+                isExpired
+                    ? "bg-muted/50 text-muted-foreground border-border/40"
+                    : isUrgent
+                      ? "bg-destructive/15 text-destructive border-destructive/40 font-semibold"
+                      : isWarning
+                        ? "bg-amber-500/15 text-amber-500 border-amber-500/30 font-medium"
+                        : "bg-background/80 text-muted-foreground border-border/50 backdrop-blur-xs font-medium",
+                className
+            )}
         >
             {IconComponent && <IconComponent className="size-3 shrink-0" />}
             <span>{isExpired ? expiredLabel : formatRemaining(diff, prefix)}</span>

@@ -131,20 +131,6 @@ async function main(): Promise<void> {
                     // auto-grant base member role to new joiners
                     await syncMemberStudioRoles(member, Role.Member, [], "New member joined Discord");
                 }
-
-                // prefer dedicated welcome channel; fall back to announcements if unconfigured
-                const welcomeChannelId = settings.channel(ChannelPurpose.Welcome) ?? settings.channel(ChannelPurpose.Announcements);
-                if (welcomeChannelId !== undefined) {
-                    const channel = await client.channels.fetch(welcomeChannelId).catch(() => null);
-                    if (channel?.isSendable() && !channel.isDMBased() && channel.guildId === member.guild.id) {
-                        await channel
-                            .send({
-                                content: `Welcome <@${member.id}> to the studio! Sign in at ${configuration.webAppUrl} to get started.`,
-                                allowedMentions: { users: [member.id] }
-                            })
-                            .catch(() => undefined);
-                    }
-                }
             } catch (error: unknown) {
                 logger.warn({ err: error, member: member.id }, "failed to handle member add");
             }

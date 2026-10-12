@@ -109,7 +109,7 @@ export function HomeView(): ReactNode {
                 <div className="grid gap-4 sm:grid-cols-2">
                     <Link
                         href="/grabbox"
-                        className="group bezel-interactive flex flex-col justify-between rounded-xl bg-card p-5 dark:surface-sheen"
+                        className="group flex flex-col justify-between rounded-xl border border-border/80 bg-card p-5 transition-all hover:border-foreground/40 hover:bg-accent/10"
                     >
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
@@ -128,7 +128,7 @@ export function HomeView(): ReactNode {
 
                     <Link
                         href="/voting"
-                        className="group bezel-interactive flex flex-col justify-between rounded-xl bg-card p-5 dark:surface-sheen"
+                        className="group flex flex-col justify-between rounded-xl border border-border/80 bg-card p-5 transition-all hover:border-foreground/40 hover:bg-accent/10"
                     >
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
