@@ -120,12 +120,12 @@ export function ArcShortcutDock({
                 />
 
                 {/* Arc Studio Floating Shortcut Capsule */}
-                <div className="flex items-center gap-0.5 px-2 py-1.5 bg-[#18181b]/98 border border-[#28282e] rounded-2xl shadow-2xl shadow-black/80 backdrop-blur-md text-zinc-400">
+                <div className="flex items-center gap-0.5 px-2 py-1.5 bg-[#16171a]/98 border border-[#33353a] rounded-2xl shadow-2xl shadow-black/80 backdrop-blur-md text-zinc-400">
                     {/* Group 1: History */}
                     <button
                         onClick={() => editor.chain().focus().undo().run()}
                         disabled={!editor.can().undo()}
-                        className="p-1.5 hover:text-zinc-100 hover:bg-[#252529] disabled:opacity-30 rounded-lg transition-colors"
+                        className="p-1.5 hover:text-zinc-100 hover:bg-[#25262a] disabled:opacity-30 rounded-lg transition-colors"
                         title="Undo (Cmd+Z)"
                     >
                         <Undo2 className="w-3.5 h-3.5" />
@@ -133,20 +133,20 @@ export function ArcShortcutDock({
                     <button
                         onClick={() => editor.chain().focus().redo().run()}
                         disabled={!editor.can().redo()}
-                        className="p-1.5 hover:text-zinc-100 hover:bg-[#252529] disabled:opacity-30 rounded-lg transition-colors"
+                        className="p-1.5 hover:text-zinc-100 hover:bg-[#25262a] disabled:opacity-30 rounded-lg transition-colors"
                         title="Redo (Cmd+Shift+Z)"
                     >
                         <Redo2 className="w-3.5 h-3.5" />
                     </button>
 
-                    <div className="w-px h-3.5 bg-[#28282e] mx-1" />
+                    <div className="w-px h-3.5 bg-[#33353a] mx-1" />
 
                     {/* Group 2: View / Page Toggle, Page Theme & Page Break */}
                     {onTogglePageView && (
                         <button
                             onClick={onTogglePageView}
                             className={`p-1.5 rounded-lg transition-colors ${
-                                isPageView ? "text-zinc-100 bg-[#252529]" : "hover:text-zinc-100 hover:bg-[#252529]"
+                                isPageView ? "text-zinc-100 bg-[#25262a]" : "hover:text-zinc-100 hover:bg-[#25262a]"
                             }`}
                             title={isPageView ? "Switch to Continuous View" : "Switch to Page View"}
                         >
@@ -158,7 +158,7 @@ export function ArcShortcutDock({
                         <button
                             onClick={onTogglePageTheme}
                             className={`p-1.5 rounded-lg transition-colors ${
-                                pageTheme === "light" ? "text-amber-400 bg-[#252529]" : "hover:text-zinc-100 hover:bg-[#252529]"
+                                pageTheme === "light" ? "text-amber-400 bg-[#25262a]" : "hover:text-zinc-100 hover:bg-[#25262a]"
                             }`}
                             title={pageTheme === "light" ? "Switch to Dark Page Theme" : "Switch to Light Page Theme"}
                         >
@@ -168,7 +168,7 @@ export function ArcShortcutDock({
 
                     <button
                         onClick={() => editor.chain().focus().setPageBreak().run()}
-                        className="p-1.5 hover:text-zinc-100 hover:bg-[#252529] rounded-lg transition-colors"
+                        className="p-1.5 hover:text-zinc-100 hover:bg-[#25262a] rounded-lg transition-colors"
                         title="Insert Page Break (Cmd+Enter)"
                     >
                         <SeparatorHorizontal className="w-3.5 h-3.5" />
@@ -178,7 +178,7 @@ export function ArcShortcutDock({
                     <button
                         onClick={() => setShowElementMenu(!showElementMenu)}
                         className={`flex items-center gap-1 px-1.5 py-1 rounded-lg transition-colors ${
-                            showElementMenu ? "bg-[#252529] text-white" : "hover:text-zinc-100 hover:bg-[#252529]"
+                            showElementMenu ? "bg-[#25262a] text-white" : "hover:text-zinc-100 hover:bg-[#25262a]"
                         }`}
                         title="Screenplay Elements (Cmd+1..6)"
                     >
@@ -186,13 +186,13 @@ export function ArcShortcutDock({
                         <ChevronUp className="w-2.5 h-2.5 text-zinc-500" />
                     </button>
 
-                    <div className="w-px h-3.5 bg-[#28282e] mx-1" />
+                    <div className="w-px h-3.5 bg-[#33353a] mx-1" />
 
                     {/* Group 4: Rich Text Marks */}
                     <button
                         onClick={() => editor.chain().focus().toggleBold().run()}
                         className={`p-1.5 rounded-lg font-bold text-xs transition-colors ${
-                            isBold ? "bg-[#6366f1]/20 text-[#818cf8] font-semibold" : "hover:text-zinc-100 hover:bg-[#252529]"
+                            isBold ? "bg-[#4c8aec]/20 text-[#60a5fa] font-semibold" : "hover:text-zinc-100 hover:bg-[#25262a]"
                         }`}
                         title="Bold (Cmd+B)"
                     >
@@ -202,7 +202,7 @@ export function ArcShortcutDock({
                     <button
                         onClick={() => editor.chain().focus().toggleItalic().run()}
                         className={`p-1.5 rounded-lg text-xs transition-colors ${
-                            isItalic ? "bg-[#6366f1]/20 text-[#818cf8]" : "hover:text-zinc-100 hover:bg-[#252529]"
+                            isItalic ? "bg-[#4c8aec]/20 text-[#60a5fa]" : "hover:text-zinc-100 hover:bg-[#25262a]"
                         }`}
                         title="Italic (Cmd+I)"
                     >
@@ -212,7 +212,7 @@ export function ArcShortcutDock({
                     <button
                         onClick={() => editor.chain().focus().toggleUnderline().run()}
                         className={`p-1.5 rounded-lg text-xs transition-colors ${
-                            isUnderline ? "bg-[#6366f1]/20 text-[#818cf8]" : "hover:text-zinc-100 hover:bg-[#252529]"
+                            isUnderline ? "bg-[#4c8aec]/20 text-[#60a5fa]" : "hover:text-zinc-100 hover:bg-[#25262a]"
                         }`}
                         title="Underline (Cmd+U)"
                     >
@@ -222,7 +222,7 @@ export function ArcShortcutDock({
                     <button
                         onClick={() => editor.chain().focus().toggleStrike().run()}
                         className={`p-1.5 rounded-lg text-xs transition-colors ${
-                            isStrike ? "bg-[#6366f1]/20 text-[#818cf8]" : "hover:text-zinc-100 hover:bg-[#252529]"
+                            isStrike ? "bg-[#4c8aec]/20 text-[#60a5fa]" : "hover:text-zinc-100 hover:bg-[#25262a]"
                         }`}
                         title="Strikethrough"
                     >
@@ -231,7 +231,7 @@ export function ArcShortcutDock({
 
                     <button
                         onClick={handleToggleCase}
-                        className="px-1.5 py-1 rounded-lg font-mono font-bold text-[11px] hover:text-zinc-100 hover:bg-[#252529] transition-colors"
+                        className="px-1.5 py-1 rounded-lg font-mono font-bold text-[11px] hover:text-zinc-100 hover:bg-[#25262a] transition-colors"
                         title="Toggle Case (Uppercase / lowercase)"
                     >
                         Aa
@@ -240,7 +240,7 @@ export function ArcShortcutDock({
                     <button
                         onClick={() => editor.chain().focus().toggleHighlight().run()}
                         className={`p-1.5 rounded-lg transition-colors ${
-                            isHighlight ? "bg-amber-500/20 text-amber-300" : "hover:text-zinc-100 hover:bg-[#252529]"
+                            isHighlight ? "bg-amber-500/20 text-amber-300" : "hover:text-zinc-100 hover:bg-[#25262a]"
                         }`}
                         title="Highlighter"
                     >
@@ -249,32 +249,32 @@ export function ArcShortcutDock({
 
                     <button
                         onClick={handleClearFormat}
-                        className="p-1.5 hover:text-zinc-100 hover:bg-[#252529] rounded-lg transition-colors"
+                        className="p-1.5 hover:text-zinc-100 hover:bg-[#25262a] rounded-lg transition-colors"
                         title="Clear Formatting"
                     >
                         <Paintbrush className="w-3.5 h-3.5" />
                     </button>
 
-                    <div className="w-px h-3.5 bg-[#28282e] mx-1" />
+                    <div className="w-px h-3.5 bg-[#33353a] mx-1" />
 
                     {/* Group 5: Embed Storyboard Still */}
                     {onOpenImageModal && (
                         <button
                             onClick={onOpenImageModal}
-                            className="p-1.5 hover:text-indigo-400 hover:bg-[#252529] rounded-lg transition-colors"
+                            className="p-1.5 hover:text-[#4c8aec] hover:bg-[#25262a] rounded-lg transition-colors"
                             title="Embed Storyboard Still"
                         >
                             <ImagePlus className="w-3.5 h-3.5" />
                         </button>
                     )}
 
-                    <div className="w-px h-3.5 bg-[#28282e] mx-1" />
+                    <div className="w-px h-3.5 bg-[#33353a] mx-1" />
 
                     {/* Group 6: Stash, Layers, Comments */}
                     {onStashSelection && (
                         <button
                             onClick={onStashSelection}
-                            className="p-1.5 hover:text-zinc-100 hover:bg-[#252529] rounded-lg transition-colors"
+                            className="p-1.5 hover:text-zinc-100 hover:bg-[#25262a] rounded-lg transition-colors"
                             title="Cut & Send to Stash (Alt+Backspace)"
                         >
                             <Copy className="w-3.5 h-3.5" />
@@ -284,7 +284,7 @@ export function ArcShortcutDock({
                     {onTogglePlotBoard && (
                         <button
                             onClick={onTogglePlotBoard}
-                            className="p-1.5 hover:text-zinc-100 hover:bg-[#252529] rounded-lg transition-colors"
+                            className="p-1.5 hover:text-zinc-100 hover:bg-[#25262a] rounded-lg transition-colors"
                             title="Plot Board"
                         >
                             <Layers className="w-3.5 h-3.5" />
@@ -294,7 +294,7 @@ export function ArcShortcutDock({
                     {onToggleStash && (
                         <button
                             onClick={onToggleStash}
-                            className="p-1.5 hover:text-zinc-100 hover:bg-[#252529] rounded-lg transition-colors"
+                            className="p-1.5 hover:text-zinc-100 hover:bg-[#25262a] rounded-lg transition-colors"
                             title="The Stash & Notes"
                         >
                             <MessageSquare className="w-3.5 h-3.5" />

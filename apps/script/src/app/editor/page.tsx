@@ -35,73 +35,17 @@ const DEFAULT_SCRIPT_CONTENT = {
     content: [
         {
             type: "sceneHeading",
-            content: [{ type: "text", text: "INT. PRODUCTION VAULT - NIGHT" }]
-        },
-        {
-            type: "action",
-            content: [
-                {
-                    type: "text",
-                    text: "A bank of workstation monitors illuminates the dark studio. Rows of Blender viewport renders churn through the queue."
-                }
-            ]
-        },
-        {
-            type: "character",
-            content: [{ type: "text", text: "LEAD ARTIST" }]
-        },
-        {
-            type: "dialogue",
-            content: [
-                {
-                    type: "text",
-                    text: "The sequence cache completed ahead of schedule. We are ready for layout review."
-                }
-            ]
-        },
-        {
-            type: "character",
-            content: [{ type: "text", text: "DIRECTOR" }]
-        },
-        {
-            type: "parenthetical",
-            content: [{ type: "text", text: "(studying the telemetry)" }]
-        },
-        {
-            type: "dialogue",
-            content: [
-                {
-                    type: "text",
-                    text: "Push the scene files into production and notify the department leads."
-                }
-            ]
-        },
-        {
-            type: "transition",
-            content: [{ type: "text", text: "CUT TO:" }]
-        },
-        {
-            type: "sceneHeading",
-            content: [{ type: "text", text: "EXT. CITY OUTPOST - DAWN" }]
-        },
-        {
-            type: "action",
-            content: [
-                {
-                    type: "text",
-                    text: "Sunrise pierces through the industrial skyline. The day begins."
-                }
-            ]
+            content: [{ type: "text", text: "INT. SCENE - DAY" }]
         }
     ]
 };
 
 const DEFAULT_TITLE_PAGE: TitlePageData = {
-    title: "PROJECT STAIRWAY",
-    author: "Creative Division",
-    basedOn: "Original Cinematic Story Arc",
-    contact: "studio@projectstairway.net\nDiscord: /project-stairway",
-    draftInfo: "Production Draft 1"
+    title: "UNTITLED SCREENPLAY",
+    author: "",
+    basedOn: "",
+    contact: "",
+    draftInfo: ""
 };
 
 const STASH_STORAGE_KEY = "stairway_screenplay_stash_v1";
@@ -120,7 +64,7 @@ function ScreenplayEditorContent() {
     const [isStashOpen, setIsStashOpen] = useState(false);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [insertImageOpen, setInsertImageOpen] = useState(false);
-    const [scriptTitle, setScriptTitle] = useState("Project Stairway - Episode 1");
+    const [scriptTitle, setScriptTitle] = useState("Untitled Screenplay");
     const [titlePageData, setTitlePageData] = useState<TitlePageData>(DEFAULT_TITLE_PAGE);
 
     const handleTogglePageTheme = useCallback(() => {
@@ -175,6 +119,16 @@ function ScreenplayEditorContent() {
     const updateActiveSuggestionsRef = useRef<(ed: any) => void>(() => {});
 
     const lastSnapshotTime = useRef<number>(Date.now());
+    const [isSaving, setIsSaving] = useState(false);
+    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    const triggerSaveIndicator = useCallback(() => {
+        setIsSaving(true);
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(() => {
+            setIsSaving(false);
+        }, 600);
+    }, []);
 
     const currentStorageKey = useMemo(() => {
         return scriptId ? `stairway_script_doc_${scriptId}` : "stairway_screenplay_draft_v1";
@@ -290,6 +244,7 @@ function ScreenplayEditorContent() {
             }
         },
         onUpdate: ({ editor: ed }) => {
+            triggerSaveIndicator();
             try {
                 const json = ed.getJSON();
                 localStorage.setItem(currentStorageKey, JSON.stringify(json));
@@ -934,6 +889,7 @@ function ScreenplayEditorContent() {
 
     const handleTitleChange = (newTitle: string) => {
         setScriptTitle(newTitle);
+        triggerSaveIndicator();
         if (scriptId) {
             updateScript(scriptId, { title: newTitle });
         }
@@ -941,7 +897,7 @@ function ScreenplayEditorContent() {
 
     if (!mounted) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-[#0e1015] text-slate-500 font-mono text-xs select-none">
+            <div className="flex items-center justify-center min-h-screen bg-[#1a1c1f] text-zinc-500 font-mono text-xs select-none">
                 Initializing Studio...
             </div>
         );
@@ -949,12 +905,13 @@ function ScreenplayEditorContent() {
 
     return (
         <AccessGuard>
-            <div className="flex flex-col h-screen overflow-hidden bg-[#0e1015] script-editor-page">
+            <div className="flex flex-col h-screen overflow-hidden bg-[#1a1c1f] script-editor-page">
                 {/* Arc Studio Pure Minimalist Header */}
                 <ScreenplayToolbar
                     editor={editor}
                     scriptTitle={scriptTitle}
                     setScriptTitle={handleTitleChange}
+                    isSaving={isSaving}
                     layoutMode={layoutMode}
                     setLayoutMode={setLayoutMode}
                     isFocusMode={isFocusMode}
@@ -1008,8 +965,8 @@ function ScreenplayEditorContent() {
                                     e.preventDefault();
                                     setContextMenuPos({ x: e.clientX, y: e.clientY });
                                     setIsContextMenuOpen(true);
-                                }}
-                                className="flex-1 overflow-y-auto relative bg-[#131315] border-r border-[#242429]"
+                                    }}
+                                className="flex-1 overflow-y-auto relative bg-[#1a1c1f] border-r border-[#33353a]"
                             >
                                 {isPageView ? (
                                     <div className="flex flex-col items-center pt-8 pb-72 md:pb-[55vh] px-4 space-y-8 select-text">
@@ -1035,12 +992,12 @@ function ScreenplayEditorContent() {
                                         />
                                         <div
                                             className={`relative my-8 border-t flex items-center justify-center ${
-                                                pageTheme === "light" ? "border-zinc-300" : "border-[#242429]"
+                                                pageTheme === "light" ? "border-zinc-300" : "border-[#33353a]"
                                             }`}
                                         >
                                             <span
                                                 className={`px-3 text-[10px] font-mono uppercase tracking-widest ${
-                                                    pageTheme === "light" ? "bg-white text-zinc-500" : "bg-[#131315] text-zinc-500"
+                                                    pageTheme === "light" ? "bg-white text-zinc-500" : "bg-[#1a1c1f] text-zinc-500"
                                                 }`}
                                             >
                                                 Screenplay Start - Page 1
@@ -1052,7 +1009,7 @@ function ScreenplayEditorContent() {
                             </main>
 
                             {/* Right half: Arc Studio Plot Board */}
-                            <aside className="w-1/2 overflow-hidden bg-[#18181b]">
+                            <aside className="w-1/2 overflow-hidden bg-[#16171a]">
                                 <BeatBoard
                                     scriptId={scriptId || undefined}
                                     onInsertBeatToScript={handleInsertBeat}
@@ -1068,14 +1025,14 @@ function ScreenplayEditorContent() {
                                 setContextMenuPos({ x: e.clientX, y: e.clientY });
                                 setIsContextMenuOpen(true);
                             }}
-                            className="flex-1 overflow-y-auto relative bg-[#131315]"
+                            className="flex-1 overflow-y-auto relative bg-[#1a1c1f]"
                         >
                             {activePreviewId && (
-                                <div className="no-print sticky top-0 z-20 flex items-center justify-between px-4 py-2 bg-[#18181b] border-b border-[#242429] text-zinc-300 text-xs backdrop-blur-md font-mono">
+                                <div className="no-print sticky top-0 z-20 flex items-center justify-between px-4 py-2 bg-[#16171a] border-b border-[#33353a] text-zinc-300 text-xs backdrop-blur-md font-mono">
                                     <span>Viewing historical snapshot preview (Read-only)</span>
                                     <button
                                         onClick={() => handlePreviewVersion(null)}
-                                        className="px-2.5 py-0.5 bg-[#252529] hover:bg-[#2e2e34] border border-[#303036] text-zinc-200 rounded text-[11px]"
+                                        className="px-2.5 py-0.5 bg-[#27292c] hover:bg-[#25262a] border border-[#33353a] text-zinc-200 rounded text-[11px]"
                                     >
                                         Exit Preview
                                     </button>
@@ -1106,12 +1063,12 @@ function ScreenplayEditorContent() {
                                     />
                                     <div
                                         className={`relative my-8 border-t flex items-center justify-center ${
-                                            pageTheme === "light" ? "border-zinc-300" : "border-[#242429]"
+                                            pageTheme === "light" ? "border-zinc-300" : "border-[#33353a]"
                                         }`}
                                     >
                                         <span
                                             className={`px-3 text-[10px] font-mono uppercase tracking-widest ${
-                                                pageTheme === "light" ? "bg-white text-zinc-500" : "bg-[#131315] text-zinc-500"
+                                                pageTheme === "light" ? "bg-white text-zinc-500" : "bg-[#1a1c1f] text-zinc-500"
                                             }`}
                                         >
                                             Screenplay Start - Page 1
@@ -1221,7 +1178,7 @@ function ScreenplayEditorContent() {
 
                     {/* Arc Studio Bottom-Right Status Telemetry Capsule */}
                     {!isFocusMode && layoutMode !== "beatboard" && (
-                        <div className="no-print fixed bottom-6 right-6 z-30 flex items-center gap-2 px-3 py-1.5 bg-[#18181b]/95 hover:bg-[#202024] border border-[#28282e] rounded-full text-xs font-mono text-zinc-400 shadow-xl backdrop-blur-md select-none transition-colors">
+                        <div className="no-print fixed bottom-6 right-6 z-30 flex items-center gap-2 px-3 py-1.5 bg-[#16171a]/95 hover:bg-[#212326] border border-[#33353a] rounded-full text-xs font-mono text-zinc-400 shadow-xl backdrop-blur-md select-none transition-colors">
                             <span>{wordCount} words</span>
                             <span className="text-zinc-600">|</span>
                             <span className="text-zinc-200 font-semibold">
@@ -1239,7 +1196,7 @@ export default function ScreenplayEditorPage() {
     return (
         <Suspense
             fallback={
-                <div className="flex items-center justify-center min-h-screen bg-[#131315] text-zinc-500 font-mono text-xs select-none">
+                <div className="flex items-center justify-center min-h-screen bg-[#1a1c1f] text-zinc-500 font-mono text-xs select-none">
                     Loading Screenplay Editor...
                 </div>
             }

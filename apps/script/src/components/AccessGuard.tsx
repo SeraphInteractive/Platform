@@ -15,17 +15,8 @@ export interface ScriptUserProfile {
     isInvited?: boolean;
 }
 
-const CONFIGURED_ADMIN_IDS = (process.env.NEXT_PUBLIC_ADMIN_DISCORD_IDS || "965511204372086814")
-    .split(",")
-    .map((id) => id.trim())
-    .filter(Boolean);
-
 export function checkUserAuthorized(data: ScriptUserProfile): boolean {
-    const isSuperadmin =
-        Boolean(data.discordId && CONFIGURED_ADMIN_IDS.includes(data.discordId)) ||
-        CONFIGURED_ADMIN_IDS.includes(data.id) ||
-        data.role === "super_admin";
-
+    const isSuperadmin = data.role === "super_admin";
     const isAdmin = data.role === "admin";
     const isInvited = Boolean(data.isInvited);
 
@@ -34,12 +25,7 @@ export function checkUserAuthorized(data: ScriptUserProfile): boolean {
 
 export function isUserAdminRole(data: ScriptUserProfile | null): boolean {
     if (!data) return false;
-    return (
-        Boolean(data.discordId && CONFIGURED_ADMIN_IDS.includes(data.discordId)) ||
-        CONFIGURED_ADMIN_IDS.includes(data.id) ||
-        data.role === "super_admin" ||
-        data.role === "admin"
-    );
+    return data.role === "super_admin" || data.role === "admin";
 }
 
 interface AuthContextValue {

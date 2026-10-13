@@ -13,7 +13,6 @@ import {
     LayoutGrid,
     Trash2,
     Copy,
-    Archive,
     X,
     ArrowUpRight,
     Edit2,
@@ -27,8 +26,7 @@ import {
     Download,
     UserPlus,
     LogOut,
-    LayoutDashboard,
-    FolderKanban
+    LayoutDashboard
 } from "lucide-react";
 import { useStudioAuth } from "@/components/AccessGuard";
 import { InviteUserModal } from "@/components/InviteUserModal";
@@ -39,7 +37,6 @@ import {
     createNewScript,
     duplicateScript,
     deleteScript,
-    toggleArchiveScript,
     updateScript,
     createShelf,
     renameShelf,
@@ -57,7 +54,7 @@ const DEFAULT_SCRIPT_CONTENT = {
     content: [
         {
             type: "sceneHeading",
-            content: [{ type: "text", text: "INT. STUDIO - DAY" }]
+            content: [{ type: "text", text: "INT. SCENE - DAY" }]
         }
     ]
 };
@@ -172,12 +169,6 @@ export function ScriptDashboard() {
 
     const handleDeleteScript = (id: string) => {
         deleteScript(id);
-        refreshData();
-        setMenuOpenId(null);
-    };
-
-    const handleToggleArchiveScript = (id: string) => {
-        toggleArchiveScript(id);
         refreshData();
         setMenuOpenId(null);
     };
@@ -342,20 +333,16 @@ export function ScriptDashboard() {
 
     // script counts per shelf
     const shelfCountMap = useMemo(() => {
-        const counts: Record<string, number> = { all: 0, unfiled: 0, archived: 0 };
+        const counts: Record<string, number> = { all: 0, unfiled: 0 };
         for (const s of shelves) {
             counts[s.id] = 0;
         }
         for (const sc of scripts) {
-            if (sc.category === "archived") {
-                counts.archived = (counts.archived || 0) + 1;
+            counts.all = (counts.all || 0) + 1;
+            if (sc.shelfId && counts[sc.shelfId] !== undefined) {
+                counts[sc.shelfId] = (counts[sc.shelfId] || 0) + 1;
             } else {
-                counts.all = (counts.all || 0) + 1;
-                if (sc.shelfId && counts[sc.shelfId] !== undefined) {
-                    counts[sc.shelfId] = (counts[sc.shelfId] || 0) + 1;
-                } else {
-                    counts.unfiled = (counts.unfiled || 0) + 1;
-                }
+                counts.unfiled = (counts.unfiled || 0) + 1;
             }
         }
         return counts;
@@ -375,16 +362,11 @@ export function ScriptDashboard() {
     }, [shelves, activeFilterId]);
 
     const unfiledScripts = useMemo(() => {
-        return searchFilteredScripts.filter((s) => s.category !== "archived" && !s.shelfId);
-    }, [searchFilteredScripts]);
-
-    const archivedScripts = useMemo(() => {
-        return searchFilteredScripts.filter((s) => s.category === "archived");
+        return searchFilteredScripts.filter((s) => !s.shelfId);
     }, [searchFilteredScripts]);
 
     const recentlyEditedScripts = useMemo(() => {
         return [...searchFilteredScripts]
-            .filter((s) => s.category !== "archived")
             .sort((a, b) => b.lastModified - a.lastModified)
             .slice(0, 4);
     }, [searchFilteredScripts]);
@@ -403,15 +385,15 @@ export function ScriptDashboard() {
     };
 
     return (
-        <div className="script-dashboard flex flex-col h-screen bg-[#131315] text-zinc-200 select-none overflow-hidden font-[family-name:var(--font-nunito)] text-[15px]">
+        <div className="script-dashboard flex flex-col h-screen bg-[#1a1c1f] text-zinc-200 select-none overflow-hidden font-sans text-sm">
             {/* Top Application Header */}
-            <header className="h-[48px] px-4 bg-[#18181b] border-b border-[#242429] flex items-center justify-between text-sm text-zinc-300 shrink-0 z-30">
+            <header className="h-[48px] px-4 bg-[#16171a] border-b border-[#33353a] flex items-center justify-between text-sm text-zinc-300 shrink-0 z-30">
                 <div className="flex items-center gap-3.5">
                     <div className="flex items-center text-zinc-400">
                         <button
                             onClick={() => setIsSidebarOpen((prev) => !prev)}
                             className={`p-1.5 rounded-lg transition-colors ${
-                                isSidebarOpen ? "text-white bg-[#252529]" : "hover:text-white hover:bg-[#252529]"
+                                isSidebarOpen ? "text-white bg-[#27292c]" : "hover:text-white hover:bg-[#27292c]"
                             }`}
                             title="Toggle Sidebar"
                         >
@@ -419,10 +401,10 @@ export function ScriptDashboard() {
                         </button>
                     </div>
 
-                    <div className="h-4 w-px bg-[#28282e]" />
+                    <div className="h-4 w-px bg-[#33353a]" />
 
                     <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-[#6366f1]" />
+                        <span className="w-2 h-2 rounded-full bg-[#4c8aec]" />
                         <span className="font-semibold text-zinc-100 tracking-wide text-sm">Studio</span>
                     </div>
                 </div>
@@ -430,7 +412,7 @@ export function ScriptDashboard() {
                 <div className="flex items-center gap-2.5">
                     <button
                         onClick={refreshData}
-                        className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-[#242429] rounded-lg transition-colors"
+                        className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-[#27292c] rounded-lg transition-colors"
                         title="Refresh"
                     >
                         <RotateCcw className="w-4 h-4" />
@@ -441,7 +423,7 @@ export function ScriptDashboard() {
                             setTargetShelfIdForCreate("");
                             setIsCreateOpen(true);
                         }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#6366f1] hover:bg-[#5254e0] text-white rounded-lg text-xs font-semibold transition-colors shadow-xs"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#4c8aec] hover:bg-[#3b7be0] text-white rounded-lg text-xs font-semibold transition-colors shadow-xs"
                     >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Create Screenplay</span>
@@ -453,7 +435,7 @@ export function ScriptDashboard() {
             <div className="flex flex-1 overflow-hidden">
                 {/* Minimalist Left Navigation */}
                 {isSidebarOpen && (
-                    <aside className="w-60 bg-[#18181b] border-r border-[#242429] flex flex-col justify-between shrink-0 p-3">
+                    <aside className="w-60 bg-[#16171a] border-r border-[#33353a] flex flex-col justify-between shrink-0 p-3">
                         <div className="space-y-4">
                             {/* User Profile - seamless, unboxed */}
                             <div className="relative">
@@ -463,13 +445,13 @@ export function ScriptDashboard() {
                                         e.stopPropagation();
                                         setIsProfileMenuOpen((prev) => !prev);
                                     }}
-                                    className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-[#222226] cursor-pointer transition-colors group text-left"
+                                    className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-[#27292c] cursor-pointer transition-colors group text-left"
                                 >
                                     <div className="flex items-center gap-2.5 min-w-0">
                                         {user?.avatarUrl ? (
                                             <img src={user.avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
                                         ) : (
-                                            <div className="w-7 h-7 rounded-full bg-[#6366f1]/20 text-[#a5b4fc] flex items-center justify-center font-bold text-xs shrink-0 uppercase">
+                                            <div className="w-7 h-7 rounded-full bg-[#4c8aec]/20 text-[#60a5fa] flex items-center justify-center font-bold text-xs shrink-0 uppercase">
                                                 {(user?.globalName || user?.username || "PS").slice(0, 2)}
                                             </div>
                                         )}
@@ -499,9 +481,9 @@ export function ScriptDashboard() {
                                 {isProfileMenuOpen && (
                                     <div
                                         onClick={(e) => e.stopPropagation()}
-                                        className="absolute left-0 top-full mt-1.5 w-60 bg-[#1c1c20] border border-[#2e2e34] rounded-xl shadow-2xl p-1.5 z-50 text-xs animate-in fade-in slide-in-from-top-1 select-none"
+                                        className="absolute left-0 top-full mt-1.5 w-60 bg-[#212326] border border-[#33353a] rounded-xl shadow-2xl p-1.5 z-50 text-xs animate-in fade-in slide-in-from-top-1 select-none"
                                     >
-                                        <div className="px-2.5 py-2 border-b border-[#28282e]">
+                                        <div className="px-2.5 py-2 border-b border-[#33353a]">
                                             <div className="font-semibold text-zinc-100 truncate">{user?.globalName || user?.username}</div>
                                             <div className="flex items-center justify-between text-[11px] text-zinc-500 font-mono mt-0.5">
                                                 <span className="truncate">ID: {user?.discordId || user?.id}</span>
@@ -515,7 +497,7 @@ export function ScriptDashboard() {
                                                             setTimeout(() => setCopiedId(false), 2000);
                                                         }
                                                     }}
-                                                    className="text-[10px] text-[#818cf8] hover:text-[#a5b4fc] ml-1 shrink-0"
+                                                    className="text-[10px] text-[#60a5fa] hover:text-[#93c5fd] ml-1 shrink-0"
                                                 >
                                                     {copiedId ? "Copied" : "Copy"}
                                                 </button>
@@ -530,15 +512,15 @@ export function ScriptDashboard() {
                                                         setIsProfileMenuOpen(false);
                                                         setIsInviteModalOpen(true);
                                                     }}
-                                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-zinc-300 hover:text-white hover:bg-[#252529] transition-colors text-left"
+                                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-zinc-300 hover:text-white hover:bg-[#27292c] transition-colors text-left"
                                                 >
-                                                    <UserPlus className="w-3.5 h-3.5 text-[#818cf8]" />
+                                                    <UserPlus className="w-3.5 h-3.5 text-[#60a5fa]" />
                                                     <span>Invite User</span>
                                                 </button>
                                             )}
                                         </div>
 
-                                        <div className="pt-1 border-t border-[#28282e]">
+                                        <div className="pt-1 border-t border-[#33353a]">
                                             <button
                                                 type="button"
                                                 onClick={() => logout()}
@@ -558,13 +540,13 @@ export function ScriptDashboard() {
                                     onClick={() => setActiveFilterId("all")}
                                     className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                                         activeFilterId === "all"
-                                            ? "bg-[#252529] text-[#818cf8]"
-                                            : "text-zinc-400 hover:text-zinc-200 hover:bg-[#202024]"
+                                            ? "bg-[#27292c] text-[#60a5fa]"
+                                            : "text-zinc-400 hover:text-zinc-200 hover:bg-[#27292c]"
                                     }`}
                                 >
                                     <div className="flex items-center gap-2.5">
                                         <LayoutDashboard
-                                            className={`w-4 h-4 ${activeFilterId === "all" ? "text-[#818cf8]" : "text-zinc-400"}`}
+                                            className={`w-4 h-4 ${activeFilterId === "all" ? "text-[#60a5fa]" : "text-zinc-400"}`}
                                         />
                                         <span>Dashboard</span>
                                     </div>
@@ -573,8 +555,8 @@ export function ScriptDashboard() {
                                 <div
                                     className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors group ${
                                         activeFilterId === "unfiled"
-                                            ? "bg-[#252529] text-white"
-                                            : "text-zinc-400 hover:text-zinc-200 hover:bg-[#202024]"
+                                            ? "bg-[#27292c] text-white"
+                                            : "text-zinc-400 hover:text-zinc-200 hover:bg-[#27292c]"
                                     }`}
                                 >
                                     <button
@@ -590,26 +572,15 @@ export function ScriptDashboard() {
                                             setTargetShelfIdForCreate("");
                                             setIsCreateOpen(true);
                                         }}
-                                        className="p-1 rounded text-zinc-500 hover:text-white hover:bg-[#28282e] transition-colors"
+                                        className="p-1 rounded text-zinc-500 hover:text-white hover:bg-[#33353a] transition-colors"
                                         title="New Screenplay"
                                     >
                                         <Plus className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
-
-                                <button
-                                    onClick={() => setActiveFilterId("all")}
-                                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium text-zinc-400 hover:text-zinc-200 hover:bg-[#202024] transition-colors"
-                                >
-                                    <div className="flex items-center gap-2.5">
-                                        <FolderKanban className="w-4 h-4 text-zinc-400" />
-                                        <span>Projects</span>
-                                    </div>
-                                    <span className="text-xs font-mono text-zinc-500">{shelves.length}</span>
-                                </button>
                             </nav>
 
-                            <div className="h-px bg-[#242429] my-2" />
+                            <div className="h-px bg-[#33353a] my-2" />
 
                             {/* Custom Shelves List in Sidebar with Drop Targets */}
                             <div>
@@ -617,7 +588,7 @@ export function ScriptDashboard() {
                                     <span className="font-semibold uppercase tracking-wider text-zinc-500">Shelves</span>
                                     <button
                                         onClick={() => setIsCreateShelfOpen(true)}
-                                        className="p-1 rounded hover:bg-[#252529] hover:text-white transition-colors"
+                                        className="p-1 rounded hover:bg-[#27292c] hover:text-white transition-colors"
                                         title="Create Shelf"
                                     >
                                         <Plus className="w-4 h-4" />
@@ -641,14 +612,14 @@ export function ScriptDashboard() {
                                                 onDrop={(e) => handleDropOnShelfContainer(e, shelf.id)}
                                                 className={`group flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium cursor-pointer transition-all ${
                                                     activeFilterId === shelf.id
-                                                        ? "bg-[#252529] text-white"
+                                                        ? "bg-[#27292c] text-white"
                                                         : isDropHover
-                                                          ? "bg-[#6366f1]/20 text-white ring-1 ring-[#6366f1]"
-                                                          : "text-zinc-400 hover:text-zinc-200 hover:bg-[#202024]"
+                                                          ? "bg-[#4c8aec]/20 text-white ring-1 ring-[#4c8aec]"
+                                                          : "text-zinc-400 hover:text-zinc-200 hover:bg-[#27292c]"
                                                 }`}
                                             >
                                                 <div className="flex items-center gap-2.5 min-w-0">
-                                                    <Bookmark className="w-4 h-4 text-[#818cf8] shrink-0" />
+                                                    <Bookmark className="w-4 h-4 text-[#60a5fa] shrink-0" />
                                                     <span className="truncate">{shelf.name}</span>
                                                 </div>
 
@@ -684,35 +655,15 @@ export function ScriptDashboard() {
                                     })}
                                 </div>
                             </div>
-
-                            <div className="h-px bg-[#242429] my-2" />
-
-                            {/* Archive Link */}
-                            <nav className="space-y-0.5">
-                                <button
-                                    onClick={() => setActiveFilterId("archived")}
-                                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                        activeFilterId === "archived"
-                                            ? "bg-[#252529] text-white"
-                                            : "text-zinc-400 hover:text-zinc-200 hover:bg-[#202024]"
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-2.5">
-                                        <Archive className="w-4 h-4 text-zinc-500" />
-                                        <span>Archived</span>
-                                    </div>
-                                    <span className="text-xs font-mono text-zinc-500">{shelfCountMap.archived || 0}</span>
-                                </button>
-                            </nav>
                         </div>
 
                         {/* Quick Create Shelf button in sidebar footer */}
-                        <div className="pt-3 border-t border-[#242429]">
+                        <div className="pt-3 border-t border-[#33353a]">
                             <button
                                 onClick={() => setIsCreateShelfOpen(true)}
-                                className="w-full py-2 px-3.5 bg-[#202024] hover:bg-[#28282e] border border-[#2c2c32] text-zinc-300 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                                className="w-full py-2 px-3.5 bg-[#212326] hover:bg-[#27292c] border border-[#33353a] text-zinc-300 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
                             >
-                                <FolderPlus className="w-4 h-4 text-[#818cf8]" />
+                                <FolderPlus className="w-4 h-4 text-[#60a5fa]" />
                                 <span>New Shelf</span>
                             </button>
                         </div>
@@ -720,7 +671,7 @@ export function ScriptDashboard() {
                 )}
 
                 {/* Center Main Stage */}
-                <main className="flex-1 bg-[#131315] overflow-y-auto px-8 py-6 space-y-6">
+                <main className="flex-1 bg-[#1a1c1f] overflow-y-auto px-8 py-6 space-y-6">
                     <div className="max-w-5xl w-full mx-auto space-y-6">
                         {/* Header Row: Title & Actions */}
                         <div className="flex items-center justify-between">
@@ -731,17 +682,17 @@ export function ScriptDashboard() {
                             <div className="flex items-center gap-3">
                                 <button
                                     onClick={() => setIsCreateShelfOpen(true)}
-                                    className="px-3.5 py-1.5 bg-[#202024] hover:bg-[#28282e] border border-[#2e2e34] text-zinc-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-2"
+                                    className="px-3.5 py-1.5 bg-[#212326] hover:bg-[#27292c] border border-[#33353a] text-zinc-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-2"
                                 >
-                                    <FolderPlus className="w-3.5 h-3.5 text-[#818cf8]" />
+                                    <FolderPlus className="w-3.5 h-3.5 text-[#60a5fa]" />
                                     <span>New Shelf</span>
                                 </button>
 
-                                <div className="flex items-center gap-1 text-zinc-400 bg-[#202024] p-0.5 rounded-lg border border-[#2e2e34]">
+                                <div className="flex items-center gap-1 text-zinc-400 bg-[#212326] p-0.5 rounded-lg border border-[#33353a]">
                                     <button
                                         onClick={() => setIsGridView(false)}
                                         className={`p-1.5 rounded-md transition-colors ${
-                                            !isGridView ? "text-white bg-[#28282e]" : "hover:text-zinc-200"
+                                            !isGridView ? "text-white bg-[#27292c]" : "hover:text-zinc-200"
                                         }`}
                                         title="List View"
                                     >
@@ -750,7 +701,7 @@ export function ScriptDashboard() {
                                     <button
                                         onClick={() => setIsGridView(true)}
                                         className={`p-1.5 rounded-md transition-colors ${
-                                            isGridView ? "text-white bg-[#28282e]" : "hover:text-zinc-200"
+                                            isGridView ? "text-white bg-[#27292c]" : "hover:text-zinc-200"
                                         }`}
                                         title="Grid View"
                                     >
@@ -760,8 +711,8 @@ export function ScriptDashboard() {
                             </div>
                         </div>
 
-                        {/* Arc Studio Full-Width Pill Search (media_1791875444451.png) */}
-                        <div className="w-full flex items-center gap-3.5 px-4.5 py-2.5 bg-[#252529] border border-[#303036] rounded-full focus-within:border-[#6366f1] focus-within:ring-1 focus-within:ring-[#6366f1]/30 transition-all">
+                        {/* Arc Studio Full-Width Pill Search */}
+                        <div className="w-full flex items-center gap-3.5 px-4.5 py-2.5 bg-[#212326] border border-[#33353a] rounded-full focus-within:border-[#4c8aec] focus-within:ring-1 focus-within:ring-[#4c8aec]/30 transition-all">
                             <Search className="w-4 h-4 text-zinc-400 shrink-0" />
                             <input
                                 type="text"
@@ -777,46 +728,77 @@ export function ScriptDashboard() {
                             )}
                         </div>
 
-                        {/* Recently Edited Section (media_1791875444451.png) */}
-                        {activeFilterId !== "archived" && !searchQuery.trim() && recentlyEditedScripts.length > 0 && (
-                            <section className="space-y-3">
-                                <h2 className="text-sm font-semibold text-zinc-200">Recently edited</h2>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
-                                    {recentlyEditedScripts.map((script) => (
-                                        <div
-                                            key={`recent-${script.id}`}
-                                            onClick={() => handleOpenScript(script.id)}
-                                            className="group p-4 bg-[#1c1c20] hover:bg-[#222227] border border-[#28282e] hover:border-[#383842] rounded-xl transition-all cursor-pointer flex flex-col justify-between h-36 relative shadow-xs"
-                                        >
-                                            <div>
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <FileText className="w-4 h-4 text-[#818cf8]" />
-                                                    {script.shelfId && shelfMap.has(script.shelfId) && (
-                                                        <span className="text-[10px] text-zinc-400 bg-[#252529] px-2 py-0.5 rounded-full border border-[#2e2e34] truncate max-w-[100px]">
-                                                            {shelfMap.get(script.shelfId)}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <h3 className="text-sm font-medium text-zinc-100 group-hover:text-white line-clamp-2">
-                                                    {script.title}
-                                                </h3>
-                                            </div>
-                                            <div className="text-xs text-zinc-500 pt-2 border-t border-[#26262c] flex items-center justify-between">
-                                                <span>{formatTimestamp(script.lastModified)}</span>
-                                            </div>
-                                        </div>
-                                    ))}
+                        {scripts.length === 0 && shelves.length === 0 ? (
+                            <div className="py-20 flex flex-col items-center justify-center text-center border border-dashed border-[#33353a] rounded-2xl bg-[#212326]/40 p-8 space-y-4">
+                                <div className="w-12 h-12 rounded-xl bg-[#212326] border border-[#33353a] flex items-center justify-center text-zinc-400">
+                                    <FileText className="w-6 h-6 text-[#60a5fa]" />
                                 </div>
-                            </section>
-                        )}
+                                <div className="space-y-1">
+                                    <h3 className="text-base font-semibold text-zinc-200">No screenplays yet</h3>
+                                    <p className="text-xs text-zinc-500 max-w-sm">
+                                        Create your first screenplay or shelf to get started with Screenplay Studio.
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-3 pt-2">
+                                    <button
+                                        onClick={() => {
+                                            setTargetShelfIdForCreate("");
+                                            setIsCreateOpen(true);
+                                        }}
+                                        className="px-4 py-2 bg-[#4c8aec] hover:bg-[#3b7be0] text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 shadow-xs"
+                                    >
+                                        <Plus className="w-3.5 h-3.5" />
+                                        <span>Create Screenplay</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setIsCreateShelfOpen(true)}
+                                        className="px-4 py-2 bg-[#212326] hover:bg-[#27292c] border border-[#33353a] text-zinc-300 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2"
+                                    >
+                                        <FolderPlus className="w-3.5 h-3.5 text-[#60a5fa]" />
+                                        <span>New Shelf</span>
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                {/* Recently Edited Section */}
+                                {!searchQuery.trim() && recentlyEditedScripts.length > 0 && (
+                                    <section className="space-y-3">
+                                        <h2 className="text-sm font-semibold text-zinc-200">Recently edited</h2>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
+                                            {recentlyEditedScripts.map((script) => (
+                                                <div
+                                                    key={`recent-${script.id}`}
+                                                    onClick={() => handleOpenScript(script.id)}
+                                                    className="group p-4 bg-[#212326] hover:bg-[#27292c] border border-[#33353a] hover:border-[#4c8aec]/50 rounded-xl transition-all cursor-pointer flex flex-col justify-between h-36 relative shadow-xs"
+                                                >
+                                                    <div>
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <FileText className="w-4 h-4 text-[#60a5fa]" />
+                                                            {script.shelfId && shelfMap.has(script.shelfId) && (
+                                                                <span className="text-[10px] text-zinc-400 bg-[#27292c] px-2 py-0.5 rounded-full border border-[#33353a] truncate max-w-[100px]">
+                                                                    {shelfMap.get(script.shelfId)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <h3 className="text-sm font-medium text-zinc-100 group-hover:text-white line-clamp-2">
+                                                            {script.title}
+                                                        </h3>
+                                                    </div>
+                                                    <div className="text-xs text-zinc-500 pt-2 border-t border-[#33353a] flex items-center justify-between">
+                                                        <span>{formatTimestamp(script.lastModified)}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </section>
+                                )}
 
-                        {/* Shelves Stacked One Under The Other with Drag & Drop */}
-                        <div className="space-y-6 pt-1">
-                            {activeFilterId !== "archived" && (
-                                <>
+                                {/* Shelves Stacked One Under The Other with Drag & Drop */}
+                                <div className="space-y-6 pt-1">
                                     {displayShelves.map((shelf) => {
                                         const shelfScripts = searchFilteredScripts.filter(
-                                            (s) => s.category !== "archived" && s.shelfId === shelf.id
+                                            (s) => s.shelfId === shelf.id
                                         );
                                         const isShelfOver = dragOverShelfId === shelf.id;
 
@@ -830,21 +812,21 @@ export function ScriptDashboard() {
                                                     }
                                                 }}
                                                 onDrop={(e) => handleDropOnShelfContainer(e, shelf.id)}
-                                                className={`bg-[#1c1c20] border rounded-xl p-4.5 space-y-3 transition-all ${
+                                                className={`bg-[#212326] border rounded-xl p-4.5 space-y-3 transition-all ${
                                                     isShelfOver
-                                                        ? "border-[#6366f1] ring-2 ring-[#6366f1]/40 bg-[#6366f1]/5"
-                                                        : "border-[#28282e] hover:border-[#383842]"
+                                                        ? "border-[#4c8aec] ring-2 ring-[#4c8aec]/40 bg-[#4c8aec]/5"
+                                                        : "border-[#33353a] hover:border-[#4c8aec]/50"
                                                 }`}
                                             >
                                                 {/* Shelf Header */}
-                                                <div className="flex items-center justify-between pb-2.5 border-b border-[#28282e]">
+                                                <div className="flex items-center justify-between pb-2.5 border-b border-[#33353a]">
                                                     <div className="flex items-center gap-3">
-                                                        <Bookmark className="w-4 h-4 text-[#818cf8]" />
+                                                        <Bookmark className="w-4 h-4 text-[#60a5fa]" />
                                                         <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-100">
                                                             {shelf.name}
                                                         </h2>
                                                         {shelfScripts.length > 0 && (
-                                                            <span className="text-xs font-mono text-zinc-400 px-2.5 py-0.5 rounded-full bg-[#18181b] border border-[#28282e]">
+                                                            <span className="text-xs font-mono text-zinc-400 px-2.5 py-0.5 rounded-full bg-[#27292c] border border-[#33353a]">
                                                                 {shelfScripts.length}
                                                             </span>
                                                         )}
@@ -853,7 +835,7 @@ export function ScriptDashboard() {
                                                     <div className="flex items-center gap-2.5">
                                                         <button
                                                             onClick={() => openCreateForShelf(shelf.id)}
-                                                            className="text-xs text-[#818cf8] hover:text-white px-2.5 py-1 rounded-lg hover:bg-[#252529] transition-colors flex items-center gap-1.5 font-medium"
+                                                            className="text-xs text-[#60a5fa] hover:text-white px-2.5 py-1 rounded-lg hover:bg-[#27292c] transition-colors flex items-center gap-1.5 font-medium"
                                                             title="Add script to this shelf"
                                                         >
                                                             <Plus className="w-3.5 h-3.5" />
@@ -874,7 +856,7 @@ export function ScriptDashboard() {
                                                             {shelfMenuOpenId === shelf.id && (
                                                                 <div
                                                                     onClick={(e) => e.stopPropagation()}
-                                                                    className="absolute right-0 top-full mt-1 w-36 bg-[#1c1c20] border border-[#2e2e34] rounded-xl shadow-2xl py-1 z-50 text-xs"
+                                                                    className="absolute right-0 top-full mt-1 w-36 bg-[#212326] border border-[#33353a] rounded-xl shadow-2xl py-1 z-50 text-xs"
                                                                 >
                                                                     <button
                                                                         onClick={(e) => {
@@ -883,14 +865,14 @@ export function ScriptDashboard() {
                                                                             setRenameShelfValue(shelf.name);
                                                                             setShelfMenuOpenId(null);
                                                                         }}
-                                                                        className="w-full flex items-center gap-2 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                        className="w-full flex items-center gap-2 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                     >
                                                                         <Edit2 className="w-3.5 h-3.5 text-zinc-400" />
                                                                         <span>Rename</span>
                                                                     </button>
                                                                     <button
                                                                         onClick={(e) => handleDeleteShelf(shelf.id, e)}
-                                                                        className="w-full flex items-center gap-2 text-left px-3.5 py-2 hover:bg-[#252529] text-rose-400"
+                                                                        className="w-full flex items-center gap-2 text-left px-3.5 py-2 hover:bg-[#27292c] text-rose-400"
                                                                     >
                                                                         <Trash2 className="w-3.5 h-3.5 text-rose-400" />
                                                                         <span>Delete</span>
@@ -903,47 +885,47 @@ export function ScriptDashboard() {
 
                                                 {/* Shelf Content */}
                                                 {shelfScripts.length === 0 ? (
-                                                    <div
-                                                        onDragOver={(e) => handleShelfDragOver(e, shelf.id)}
-                                                        onDrop={(e) => handleDropOnShelfContainer(e, shelf.id)}
-                                                        className={`h-11 rounded-lg border border-dashed flex items-center justify-center transition-colors ${
-                                                            isShelfOver
-                                                                ? "border-[#6366f1] bg-[#6366f1]/10 text-[#818cf8]"
-                                                                : "border-[#28282e] text-zinc-600"
-                                                        }`}
-                                                    >
-                                                        <span className="text-xs">
-                                                            {isShelfOver ? "Drop to add to shelf" : "Drop screenplays here"}
-                                                        </span>
-                                                    </div>
-                                                ) : isGridView ? (
-                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-                                                        {shelfScripts.map((script) => {
-                                                            const isDragging = draggedScriptId === script.id;
-                                                            const isHovered = dragOverScriptId === script.id;
+                                                     <div
+                                                         onDragOver={(e) => handleShelfDragOver(e, shelf.id)}
+                                                         onDrop={(e) => handleDropOnShelfContainer(e, shelf.id)}
+                                                         className={`h-11 rounded-lg border border-dashed flex items-center justify-center transition-colors ${
+                                                             isShelfOver
+                                                                 ? "border-[#4c8aec] bg-[#4c8aec]/10 text-[#60a5fa]"
+                                                                 : "border-[#33353a] text-zinc-500"
+                                                         }`}
+                                                     >
+                                                         <span className="text-xs">
+                                                             {isShelfOver ? "Drop to add to shelf" : "Drop screenplays here"}
+                                                         </span>
+                                                     </div>
+                                                 ) : isGridView ? (
+                                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                                                         {shelfScripts.map((script) => {
+                                                             const isDragging = draggedScriptId === script.id;
+                                                             const isHovered = dragOverScriptId === script.id;
 
-                                                            return (
-                                                                <div
-                                                                    key={script.id}
-                                                                    draggable
-                                                                    onDragStart={(e) => handleDragStart(e, script.id)}
-                                                                    onDragEnd={handleDragEnd}
-                                                                    onDragOver={(e) => handleScriptDragOver(e, script.id)}
-                                                                    onDrop={(e) => handleDropOnScript(e, script.id, shelf.id)}
-                                                                    onClick={() => handleOpenScript(script.id)}
-                                                                    className={`group p-4 bg-[#242429] hover:bg-[#2a2a30] border rounded-lg transition-all cursor-grab active:cursor-grabbing flex flex-col justify-between h-36 relative ${
-                                                                        isDragging
-                                                                            ? "opacity-30 border-dashed border-[#6366f1] scale-[0.98]"
-                                                                            : isHovered
-                                                                              ? "border-[#6366f1] ring-1 ring-[#6366f1]"
-                                                                              : "border-[#2e2e34] hover:border-[#3a3a42]"
-                                                                    }`}
-                                                                >
+                                                             return (
+                                                                 <div
+                                                                     key={script.id}
+                                                                     draggable
+                                                                     onDragStart={(e) => handleDragStart(e, script.id)}
+                                                                     onDragEnd={handleDragEnd}
+                                                                     onDragOver={(e) => handleScriptDragOver(e, script.id)}
+                                                                     onDrop={(e) => handleDropOnScript(e, script.id, shelf.id)}
+                                                                     onClick={() => handleOpenScript(script.id)}
+                                                                     className={`group p-4 bg-[#212326] hover:bg-[#27292c] border rounded-lg transition-all cursor-grab active:cursor-grabbing flex flex-col justify-between h-36 relative ${
+                                                                         isDragging
+                                                                             ? "opacity-30 border-dashed border-[#4c8aec] scale-[0.98]"
+                                                                             : isHovered
+                                                                               ? "border-[#4c8aec] ring-1 ring-[#4c8aec]"
+                                                                               : "border-[#33353a] hover:border-[#4c8aec]/50"
+                                                                     }`}
+                                                                 >
                                                                     <div>
                                                                         <div className="flex items-center justify-between mb-2">
                                                                             <div className="flex items-center gap-2">
                                                                                 <GripVertical className="w-3.5 h-3.5 text-zinc-600 group-hover:text-zinc-400 shrink-0" />
-                                                                                <FileText className="w-4 h-4 text-zinc-400 group-hover:text-[#818cf8]" />
+                                                                                <FileText className="w-4 h-4 text-zinc-400 group-hover:text-[#60a5fa]" />
                                                                             </div>
                                                                             <div onClick={(e) => e.stopPropagation()}>
                                                                                 <button
@@ -963,7 +945,7 @@ export function ScriptDashboard() {
                                                                         </h3>
                                                                     </div>
 
-                                                                    <div className="text-xs text-zinc-500 pt-2 border-t border-[#2c2c34] flex items-center justify-between">
+                                                                    <div className="text-xs text-zinc-500 pt-2 border-t border-[#33353a] flex items-center justify-between">
                                                                         <span>{formatTimestamp(script.lastModified)}</span>
                                                                     </div>
 
@@ -971,11 +953,11 @@ export function ScriptDashboard() {
                                                                     {menuOpenId === script.id && (
                                                                         <div
                                                                             onClick={(e) => e.stopPropagation()}
-                                                                            className="absolute right-3 top-9 w-44 bg-[#1c1c20] border border-[#2e2e34] rounded-xl shadow-2xl py-1 z-50 text-xs text-left"
+                                                                            className="absolute right-3 top-9 w-44 bg-[#212326] border border-[#33353a] rounded-xl shadow-2xl py-1 z-50 text-xs text-left"
                                                                         >
                                                                             <Link
                                                                                 href={`/editor?id=${encodeURIComponent(script.id)}`}
-                                                                                className="w-full flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                                className="w-full flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                             >
                                                                                 <ArrowUpRight className="w-3.5 h-3.5 text-zinc-400" />
                                                                                 <span>Open</span>
@@ -985,7 +967,7 @@ export function ScriptDashboard() {
                                                                                     setMovingScript(script);
                                                                                     setMenuOpenId(null);
                                                                                 }}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                             >
                                                                                 <MoveRight className="w-3.5 h-3.5 text-zinc-400" />
                                                                                 <span>Move to Shelf...</span>
@@ -996,44 +978,37 @@ export function ScriptDashboard() {
                                                                                     setRenameValue(script.title);
                                                                                     setMenuOpenId(null);
                                                                                 }}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                             >
                                                                                 <Edit2 className="w-3.5 h-3.5 text-zinc-400" />
                                                                                 <span>Rename</span>
                                                                             </button>
                                                                             <button
                                                                                 onClick={() => handleDuplicateScript(script.id)}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                             >
                                                                                 <Copy className="w-3.5 h-3.5 text-zinc-400" />
                                                                                 <span>Duplicate</span>
                                                                             </button>
-                                                                            <button
-                                                                                onClick={() => handleToggleArchiveScript(script.id)}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
-                                                                            >
-                                                                                <Archive className="w-3.5 h-3.5 text-zinc-400" />
-                                                                                <span>Archive</span>
-                                                                            </button>
-                                                                            <div className="border-t border-[#28282e] my-1" />
+                                                                            <div className="border-t border-[#33353a] my-1" />
                                                                             <button
                                                                                 onClick={() => handleExportScriptFdx(script)}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                             >
                                                                                 <Download className="w-3.5 h-3.5 text-zinc-400" />
                                                                                 <span>Export (.fdx)</span>
                                                                             </button>
                                                                             <button
                                                                                 onClick={() => handleExportScriptFountain(script)}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                             >
                                                                                 <Download className="w-3.5 h-3.5 text-zinc-400" />
                                                                                 <span>Export (.fountain)</span>
                                                                             </button>
-                                                                            <div className="border-t border-[#28282e] my-1" />
+                                                                            <div className="border-t border-[#33353a] my-1" />
                                                                             <button
                                                                                 onClick={() => handleDeleteScript(script.id)}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-rose-400"
+                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-rose-400"
                                                                             >
                                                                                 <Trash2 className="w-3.5 h-3.5 text-rose-400" />
                                                                                 <span>Delete</span>
@@ -1064,15 +1039,15 @@ export function ScriptDashboard() {
                                                                     onClick={() => handleOpenScript(script.id)}
                                                                     className={`group flex items-center justify-between px-3.5 py-2 rounded-lg cursor-grab active:cursor-grabbing transition-all relative ${
                                                                         isDragging
-                                                                            ? "opacity-30 border border-dashed border-[#6366f1] bg-[#6366f1]/10 scale-[0.99]"
-                                                                            : "hover:bg-[#242429]"
+                                                                            ? "opacity-30 border border-dashed border-[#4c8aec] bg-[#4c8aec]/10 scale-[0.99]"
+                                                                            : "hover:bg-[#27292c]"
                                                                     } ${
                                                                         isTargetBefore
-                                                                            ? "before:absolute before:top-0 before:left-2 before:right-2 before:h-0.5 before:bg-[#6366f1] before:rounded-full before:shadow-[0_0_8px_#6366f1]"
+                                                                            ? "before:absolute before:top-0 before:left-2 before:right-2 before:h-0.5 before:bg-[#4c8aec] before:rounded-full before:shadow-[0_0_8px_#4c8aec]"
                                                                             : ""
                                                                     } ${
                                                                         isTargetAfter
-                                                                            ? "after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-[#6366f1] after:rounded-full after:shadow-[0_0_8px_#6366f1]"
+                                                                            ? "after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-[#4c8aec] after:rounded-full after:shadow-[0_0_8px_#4c8aec]"
                                                                             : ""
                                                                     }`}
                                                                 >
@@ -1105,11 +1080,11 @@ export function ScriptDashboard() {
                                                                             {menuOpenId === script.id && (
                                                                                 <div
                                                                                     onClick={(e) => e.stopPropagation()}
-                                                                                    className="absolute right-0 top-full mt-1 w-44 bg-[#1c1c20] border border-[#2e2e34] rounded-xl shadow-2xl py-1 z-50 text-xs"
+                                                                                    className="absolute right-0 top-full mt-1 w-44 bg-[#212326] border border-[#33353a] rounded-xl shadow-2xl py-1 z-50 text-xs"
                                                                                 >
                                                                                     <Link
                                                                                         href={`/editor?id=${encodeURIComponent(script.id)}`}
-                                                                                        className="w-full flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                                        className="w-full flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                                     >
                                                                                         <ArrowUpRight className="w-3.5 h-3.5 text-zinc-400" />
                                                                                         <span>Open</span>
@@ -1119,7 +1094,7 @@ export function ScriptDashboard() {
                                                                                             setMovingScript(script);
                                                                                             setMenuOpenId(null);
                                                                                         }}
-                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                                     >
                                                                                         <MoveRight className="w-3.5 h-3.5 text-zinc-400" />
                                                                                         <span>Move to Shelf...</span>
@@ -1130,44 +1105,37 @@ export function ScriptDashboard() {
                                                                                             setRenameValue(script.title);
                                                                                             setMenuOpenId(null);
                                                                                         }}
-                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                                     >
                                                                                         <Edit2 className="w-3.5 h-3.5 text-zinc-400" />
                                                                                         <span>Rename</span>
                                                                                     </button>
                                                                                     <button
                                                                                         onClick={() => handleDuplicateScript(script.id)}
-                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                                     >
                                                                                         <Copy className="w-3.5 h-3.5 text-zinc-400" />
                                                                                         <span>Duplicate</span>
                                                                                     </button>
-                                                                                    <button
-                                                                                        onClick={() => handleToggleArchiveScript(script.id)}
-                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
-                                                                                    >
-                                                                                        <Archive className="w-3.5 h-3.5 text-zinc-400" />
-                                                                                        <span>Archive</span>
-                                                                                    </button>
-                                                                                    <div className="border-t border-[#28282e] my-1" />
+                                                                                    <div className="border-t border-[#33353a] my-1" />
                                                                                     <button
                                                                                         onClick={() => handleExportScriptFdx(script)}
-                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                                     >
                                                                                         <Download className="w-3.5 h-3.5 text-zinc-400" />
                                                                                         <span>Export (.fdx)</span>
                                                                                     </button>
                                                                                     <button
                                                                                         onClick={() => handleExportScriptFountain(script)}
-                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                                     >
                                                                                         <Download className="w-3.5 h-3.5 text-zinc-400" />
                                                                                         <span>Export (.fountain)</span>
                                                                                     </button>
-                                                                                    <div className="border-t border-[#28282e] my-1" />
+                                                                                    <div className="border-t border-[#33353a] my-1" />
                                                                                     <button
                                                                                         onClick={() => handleDeleteScript(script.id)}
-                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-rose-400"
+                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-rose-400"
                                                                                     >
                                                                                         <Trash2 className="w-3.5 h-3.5 text-rose-400" />
                                                                                         <span>Delete</span>
@@ -1195,17 +1163,17 @@ export function ScriptDashboard() {
                                                 }
                                             }}
                                             onDrop={(e) => handleDropOnShelfContainer(e, null)}
-                                            className={`bg-[#1c1c20] border rounded-xl p-4.5 space-y-3 shadow-xs transition-all ${
+                                            className={`bg-[#212326] border rounded-xl p-4.5 space-y-3 shadow-xs transition-all ${
                                                 dragOverShelfId === "unfiled"
-                                                    ? "border-[#6366f1] ring-2 ring-[#6366f1]/40 bg-[#6366f1]/5"
-                                                    : "border-[#28282e] hover:border-[#383842]"
+                                                    ? "border-[#4c8aec] ring-2 ring-[#4c8aec]/40 bg-[#4c8aec]/5"
+                                                    : "border-[#33353a] hover:border-[#4c8aec]/50"
                                             }`}
                                         >
-                                            <div className="flex items-center justify-between pb-2.5 border-b border-[#28282e]">
+                                            <div className="flex items-center justify-between pb-2.5 border-b border-[#33353a]">
                                                 <div className="flex items-center gap-3">
                                                     <FileText className="w-4 h-4 text-zinc-400" />
                                                     <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-200">Unfiled</h2>
-                                                    <span className="text-xs font-mono text-zinc-400 px-2.5 py-0.5 rounded-full bg-[#18181b] border border-[#28282e]">
+                                                    <span className="text-xs font-mono text-zinc-400 px-2.5 py-0.5 rounded-full bg-[#27292c] border border-[#33353a]">
                                                         {unfiledScripts.length}
                                                     </span>
                                                 </div>
@@ -1229,15 +1197,15 @@ export function ScriptDashboard() {
                                                             onClick={() => handleOpenScript(script.id)}
                                                             className={`group flex items-center justify-between px-3.5 py-2 rounded-lg cursor-grab active:cursor-grabbing transition-all relative ${
                                                                 isDragging
-                                                                    ? "opacity-30 border border-dashed border-[#6366f1] bg-[#6366f1]/10 scale-[0.99]"
-                                                                    : "hover:bg-[#242429]"
+                                                                    ? "opacity-30 border border-dashed border-[#4c8aec] bg-[#4c8aec]/10 scale-[0.99]"
+                                                                    : "hover:bg-[#27292c]"
                                                             } ${
                                                                 isTargetBefore
-                                                                    ? "before:absolute before:top-0 before:left-2 before:right-2 before:h-0.5 before:bg-[#6366f1] before:rounded-full before:shadow-[0_0_8px_#6366f1]"
+                                                                    ? "before:absolute before:top-0 before:left-2 before:right-2 before:h-0.5 before:bg-[#4c8aec] before:rounded-full before:shadow-[0_0_8px_#4c8aec]"
                                                                     : ""
                                                             } ${
                                                                 isTargetAfter
-                                                                    ? "after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-[#6366f1] after:rounded-full after:shadow-[0_0_8px_#6366f1]"
+                                                                    ? "after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-[#4c8aec] after:rounded-full after:shadow-[0_0_8px_#4c8aec]"
                                                                     : ""
                                                             }`}
                                                         >
@@ -1267,11 +1235,11 @@ export function ScriptDashboard() {
                                                                     {menuOpenId === script.id && (
                                                                         <div
                                                                             onClick={(e) => e.stopPropagation()}
-                                                                            className="absolute right-0 top-full mt-1 w-44 bg-[#1c1c20] border border-[#2e2e34] rounded-xl shadow-2xl py-1 z-50 text-xs"
+                                                                            className="absolute right-0 top-full mt-1 w-44 bg-[#212326] border border-[#33353a] rounded-xl shadow-2xl py-1 z-50 text-xs"
                                                                         >
                                                                             <Link
                                                                                 href={`/editor?id=${encodeURIComponent(script.id)}`}
-                                                                                className="w-full flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                                className="w-full flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                             >
                                                                                 <ArrowUpRight className="w-3.5 h-3.5 text-zinc-400" />
                                                                                 <span>Open</span>
@@ -1281,7 +1249,7 @@ export function ScriptDashboard() {
                                                                                     setMovingScript(script);
                                                                                     setMenuOpenId(null);
                                                                                 }}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                             >
                                                                                 <MoveRight className="w-3.5 h-3.5 text-zinc-400" />
                                                                                 <span>Move to Shelf...</span>
@@ -1292,44 +1260,37 @@ export function ScriptDashboard() {
                                                                                     setRenameValue(script.title);
                                                                                     setMenuOpenId(null);
                                                                                 }}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                             >
                                                                                 <Edit2 className="w-3.5 h-3.5 text-zinc-400" />
                                                                                 <span>Rename</span>
                                                                             </button>
                                                                             <button
                                                                                 onClick={() => handleDuplicateScript(script.id)}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                             >
                                                                                 <Copy className="w-3.5 h-3.5 text-zinc-400" />
                                                                                 <span>Duplicate</span>
                                                                             </button>
-                                                                            <button
-                                                                                onClick={() => handleToggleArchiveScript(script.id)}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
-                                                                            >
-                                                                                <Archive className="w-3.5 h-3.5 text-zinc-400" />
-                                                                                <span>Archive</span>
-                                                                            </button>
-                                                                            <div className="border-t border-[#28282e] my-1" />
+                                                                            <div className="border-t border-[#33353a] my-1" />
                                                                             <button
                                                                                 onClick={() => handleExportScriptFdx(script)}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                             >
                                                                                 <Download className="w-3.5 h-3.5 text-zinc-400" />
                                                                                 <span>Export (.fdx)</span>
                                                                             </button>
                                                                             <button
                                                                                 onClick={() => handleExportScriptFountain(script)}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-zinc-200"
+                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
                                                                             >
                                                                                 <Download className="w-3.5 h-3.5 text-zinc-400" />
                                                                                 <span>Export (.fountain)</span>
                                                                             </button>
-                                                                            <div className="border-t border-[#28282e] my-1" />
+                                                                            <div className="border-t border-[#33353a] my-1" />
                                                                             <button
                                                                                 onClick={() => handleDeleteScript(script.id)}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#252529] text-rose-400"
+                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-rose-400"
                                                                             >
                                                                                 <Trash2 className="w-3.5 h-3.5 text-rose-400" />
                                                                                 <span>Delete</span>
@@ -1345,64 +1306,33 @@ export function ScriptDashboard() {
                                         </section>
                                     )}
 
+                                    {/* Empty unfiled state when filtering */}
+                                    {activeFilterId === "unfiled" && unfiledScripts.length === 0 && (
+                                        <div className="py-16 text-center text-xs text-zinc-500 border border-dashed border-[#33353a] rounded-xl bg-[#212326]/40">
+                                            No unfiled screenplays found.
+                                        </div>
+                                    )}
+
+                                    {/* Search empty fallback */}
+                                    {searchQuery.trim() && searchFilteredScripts.length === 0 && (
+                                        <div className="py-12 text-center text-xs text-zinc-500">
+                                            No screenplays matching &quot;{searchQuery}&quot; found.
+                                        </div>
+                                    )}
+
                                     {/* Add New Shelf Button at the bottom */}
                                     {activeFilterId === "all" && (
                                         <button
                                             onClick={() => setIsCreateShelfOpen(true)}
-                                            className="w-full py-3.5 border border-dashed border-[#28282e] hover:border-[#6366f1]/60 hover:bg-[#1c1c20] rounded-xl text-xs text-zinc-400 hover:text-white transition-all flex items-center justify-center gap-2"
+                                            className="w-full py-3.5 border border-dashed border-[#33353a] hover:border-[#4c8aec]/60 hover:bg-[#212326] rounded-xl text-xs text-zinc-400 hover:text-white transition-all flex items-center justify-center gap-2"
                                         >
-                                            <Plus className="w-4 h-4 text-[#818cf8]" />
+                                            <Plus className="w-4 h-4 text-[#60a5fa]" />
                                             <span>Create New Shelf</span>
                                         </button>
                                     )}
-                                </>
-                            )}
-
-                            {/* Archived Section */}
-                            {activeFilterId === "archived" && (
-                                <section className="bg-[#1c1c20] border border-[#28282e] rounded-xl p-4.5 space-y-3">
-                                    <div className="flex items-center gap-3 pb-2.5 border-b border-[#28282e]">
-                                        <Archive className="w-4 h-4 text-zinc-400" />
-                                        <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-200">Archived</h2>
-                                        <span className="text-xs font-mono text-zinc-400 px-2.5 py-0.5 rounded-full bg-[#18181b]">
-                                            {archivedScripts.length}
-                                        </span>
-                                    </div>
-
-                                    {archivedScripts.length === 0 ? (
-                                        <div className="py-8 text-center text-xs text-zinc-500">No archived screenplays found.</div>
-                                    ) : (
-                                        <div className="space-y-1">
-                                            {archivedScripts.map((script) => (
-                                                <div
-                                                    key={script.id}
-                                                    className="flex items-center justify-between px-3.5 py-2 rounded-lg hover:bg-[#242429] transition-colors"
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <FileText className="w-4 h-4 text-zinc-500" />
-                                                        <span className="text-sm text-zinc-300">{script.title}</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-3">
-                                                        <button
-                                                            onClick={() => handleToggleArchiveScript(script.id)}
-                                                            className="text-xs text-[#818cf8] hover:text-[#a5b4fc]"
-                                                        >
-                                                            Restore
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDeleteScript(script.id)}
-                                                            className="text-xs text-rose-400 hover:text-rose-300"
-                                                        >
-                                                            Delete
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </section>
-                            )}
-                        </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </main>
             </div>
@@ -1410,7 +1340,7 @@ export function ScriptDashboard() {
             {/* Modal: Create Screenplay */}
             {isCreateOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs">
-                    <div className="w-[420px] bg-[#1c1c20] border border-[#2e2e34] rounded-2xl shadow-2xl p-6 space-y-5 animate-in fade-in">
+                    <div className="w-[420px] bg-[#212326] border border-[#33353a] rounded-2xl shadow-2xl p-6 space-y-5 animate-in fade-in">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-200">New Screenplay</h3>
                             <button onClick={() => setIsCreateOpen(false)} className="text-zinc-500 hover:text-zinc-300 rounded-lg p-1">
@@ -1427,7 +1357,7 @@ export function ScriptDashboard() {
                                     onChange={(e) => setNewTitle(e.target.value)}
                                     placeholder="e.g. Project Stairway - Episode 2"
                                     autoFocus
-                                    className="w-full px-3.5 py-2.5 bg-[#18181b] border border-[#2e2e34] rounded-lg text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[#6366f1]"
+                                    className="w-full px-3.5 py-2.5 bg-[#27292c] border border-[#33353a] rounded-lg text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[#4c8aec]"
                                 />
                             </div>
 
@@ -1436,7 +1366,7 @@ export function ScriptDashboard() {
                                 <select
                                     value={targetShelfIdForCreate}
                                     onChange={(e) => setTargetShelfIdForCreate(e.target.value)}
-                                    className="w-full px-3.5 py-2.5 bg-[#18181b] border border-[#2e2e34] rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-[#6366f1]"
+                                    className="w-full px-3.5 py-2.5 bg-[#27292c] border border-[#33353a] rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-[#4c8aec]"
                                 >
                                     <option value="">Unfiled (No shelf)</option>
                                     {shelves.map((s) => (
@@ -1447,7 +1377,7 @@ export function ScriptDashboard() {
                                 </select>
                             </div>
 
-                            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#28282e]">
+                            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#33353a]">
                                 <button
                                     type="button"
                                     onClick={() => setIsCreateOpen(false)}
@@ -1457,7 +1387,7 @@ export function ScriptDashboard() {
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-4 py-2 bg-[#6366f1] hover:bg-[#5254e0] text-white rounded-lg text-xs font-semibold transition-colors"
+                                    className="px-4 py-2 bg-[#4c8aec] hover:bg-[#3b7be0] text-white rounded-lg text-xs font-semibold transition-colors"
                                 >
                                     Create
                                 </button>
@@ -1470,7 +1400,7 @@ export function ScriptDashboard() {
             {/* Modal: Create Shelf */}
             {isCreateShelfOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs">
-                    <div className="w-96 bg-[#1c1c20] border border-[#2e2e34] rounded-2xl shadow-2xl p-6 space-y-5 animate-in fade-in">
+                    <div className="w-96 bg-[#212326] border border-[#33353a] rounded-2xl shadow-2xl p-6 space-y-5 animate-in fade-in">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-200">Create Shelf</h3>
                             <button
@@ -1490,11 +1420,11 @@ export function ScriptDashboard() {
                                     onChange={(e) => setNewShelfName(e.target.value)}
                                     placeholder="e.g. Season 1, Feature Drafts"
                                     autoFocus
-                                    className="w-full px-3.5 py-2.5 bg-[#18181b] border border-[#2e2e34] rounded-lg text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[#6366f1]"
+                                    className="w-full px-3.5 py-2.5 bg-[#27292c] border border-[#33353a] rounded-lg text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[#4c8aec]"
                                 />
                             </div>
 
-                            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#28282e]">
+                            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#33353a]">
                                 <button
                                     type="button"
                                     onClick={() => setIsCreateShelfOpen(false)}
@@ -1504,7 +1434,7 @@ export function ScriptDashboard() {
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-4 py-2 bg-[#6366f1] hover:bg-[#5254e0] text-white rounded-lg text-xs font-semibold transition-colors"
+                                    className="px-4 py-2 bg-[#4c8aec] hover:bg-[#3b7be0] text-white rounded-lg text-xs font-semibold transition-colors"
                                 >
                                     Create Shelf
                                 </button>
@@ -1517,7 +1447,7 @@ export function ScriptDashboard() {
             {/* Modal: Rename Shelf */}
             {renamingShelf && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs">
-                    <div className="w-96 bg-[#1c1c20] border border-[#2e2e34] rounded-2xl shadow-2xl p-6 space-y-5 animate-in fade-in">
+                    <div className="w-96 bg-[#212326] border border-[#33353a] rounded-2xl shadow-2xl p-6 space-y-5 animate-in fade-in">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-200">Rename Shelf</h3>
                             <button onClick={() => setRenamingShelf(null)} className="text-zinc-500 hover:text-zinc-300 rounded-lg p-1">
@@ -1532,11 +1462,11 @@ export function ScriptDashboard() {
                                     value={renameShelfValue}
                                     onChange={(e) => setRenameShelfValue(e.target.value)}
                                     autoFocus
-                                    className="w-full px-3.5 py-2.5 bg-[#18181b] border border-[#2e2e34] rounded-lg text-sm text-zinc-100 focus:outline-none focus:border-[#6366f1]"
+                                    className="w-full px-3.5 py-2.5 bg-[#27292c] border border-[#33353a] rounded-lg text-sm text-zinc-100 focus:outline-none focus:border-[#4c8aec]"
                                 />
                             </div>
 
-                            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#28282e]">
+                            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#33353a]">
                                 <button
                                     type="button"
                                     onClick={() => setRenamingShelf(null)}
@@ -1546,7 +1476,7 @@ export function ScriptDashboard() {
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-4 py-2 bg-[#6366f1] hover:bg-[#5254e0] text-white rounded-lg text-xs font-semibold transition-colors"
+                                    className="px-4 py-2 bg-[#4c8aec] hover:bg-[#3b7be0] text-white rounded-lg text-xs font-semibold transition-colors"
                                 >
                                     Save
                                 </button>
@@ -1559,7 +1489,7 @@ export function ScriptDashboard() {
             {/* Modal: Move Script to Shelf */}
             {movingScript && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs">
-                    <div className="w-[420px] bg-[#1c1c20] border border-[#2e2e34] rounded-2xl shadow-2xl p-6 space-y-5 animate-in fade-in">
+                    <div className="w-[420px] bg-[#212326] border border-[#33353a] rounded-2xl shadow-2xl p-6 space-y-5 animate-in fade-in">
                         <div className="flex items-center justify-between">
                             <div>
                                 <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-200">Move to Shelf</h3>
@@ -1575,8 +1505,8 @@ export function ScriptDashboard() {
                                 onClick={() => handleMoveToShelf(null)}
                                 className={`w-full flex items-center justify-between px-3.5 py-2 rounded-lg text-xs transition-colors ${
                                     !movingScript.shelfId
-                                        ? "bg-[#6366f1]/20 text-[#818cf8] border border-[#6366f1]/40"
-                                        : "hover:bg-[#252529] text-zinc-300"
+                                        ? "bg-[#4c8aec]/20 text-[#60a5fa] border border-[#4c8aec]/40"
+                                        : "hover:bg-[#27292c] text-zinc-300"
                                 }`}
                             >
                                 <div className="flex items-center gap-2.5">
@@ -1592,12 +1522,12 @@ export function ScriptDashboard() {
                                     onClick={() => handleMoveToShelf(shelf.id)}
                                     className={`w-full flex items-center justify-between px-3.5 py-2 rounded-lg text-xs transition-colors ${
                                         movingScript.shelfId === shelf.id
-                                            ? "bg-[#6366f1]/20 text-[#818cf8] border border-[#6366f1]/40"
-                                            : "hover:bg-[#252529] text-zinc-300"
+                                            ? "bg-[#4c8aec]/20 text-[#60a5fa] border border-[#4c8aec]/40"
+                                            : "hover:bg-[#27292c] text-zinc-300"
                                     }`}
                                 >
                                     <div className="flex items-center gap-2.5">
-                                        <Bookmark className="w-4 h-4 text-[#818cf8]" />
+                                        <Bookmark className="w-4 h-4 text-[#60a5fa]" />
                                         <span>{shelf.name}</span>
                                     </div>
                                     {movingScript.shelfId === shelf.id && <span className="text-[11px] font-bold">Active</span>}
@@ -1605,7 +1535,7 @@ export function ScriptDashboard() {
                             ))}
                         </div>
 
-                        <div className="flex items-center justify-end pt-3 border-t border-[#28282e]">
+                        <div className="flex items-center justify-end pt-3 border-t border-[#33353a]">
                             <button
                                 onClick={() => setMovingScript(null)}
                                 className="px-3.5 py-2 text-xs text-zinc-400 hover:text-zinc-200 rounded-lg"
@@ -1620,7 +1550,7 @@ export function ScriptDashboard() {
             {/* Modal: Rename Screenplay */}
             {renamingScript && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs">
-                    <div className="w-[420px] bg-[#1c1c20] border border-[#2e2e34] rounded-2xl shadow-2xl p-6 space-y-5 animate-in fade-in">
+                    <div className="w-[420px] bg-[#212326] border border-[#33353a] rounded-2xl shadow-2xl p-6 space-y-5 animate-in fade-in">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-200">Rename Screenplay</h3>
                             <button onClick={() => setRenamingScript(null)} className="text-zinc-500 hover:text-zinc-300 rounded-lg p-1">
@@ -1635,11 +1565,11 @@ export function ScriptDashboard() {
                                     value={renameValue}
                                     onChange={(e) => setRenameValue(e.target.value)}
                                     autoFocus
-                                    className="w-full px-3.5 py-2.5 bg-[#18181b] border border-[#2e2e34] rounded-lg text-sm text-zinc-100 focus:outline-none focus:border-[#6366f1]"
+                                    className="w-full px-3.5 py-2.5 bg-[#27292c] border border-[#33353a] rounded-lg text-sm text-zinc-100 focus:outline-none focus:border-[#4c8aec]"
                                 />
                             </div>
 
-                            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#28282e]">
+                            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#33353a]">
                                 <button
                                     type="button"
                                     onClick={() => setRenamingScript(null)}
@@ -1649,7 +1579,7 @@ export function ScriptDashboard() {
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-4 py-2 bg-[#6366f1] hover:bg-[#5254e0] text-white rounded-lg text-xs font-semibold transition-colors"
+                                    className="px-4 py-2 bg-[#4c8aec] hover:bg-[#3b7be0] text-white rounded-lg text-xs font-semibold transition-colors"
                                 >
                                     Save
                                 </button>

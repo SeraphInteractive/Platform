@@ -3,41 +3,11 @@ import type { ScriptDocument, Shelf } from "@/types/script";
 const STORAGE_KEY = "stairway_screenplay_documents_v2";
 const SHELVES_STORAGE_KEY = "stairway_screenplay_shelves_v1";
 
-const INITIAL_SHELVES: Shelf[] = [
-    { id: "shelf-main-series", name: "Main Series", createdAt: Date.now() - 3600000 * 24 },
-    { id: "shelf-features", name: "Feature Drafts", createdAt: Date.now() - 3600000 * 12 },
-    { id: "shelf-shorts", name: "Shorts", createdAt: Date.now() - 3600000 * 6 }
-];
+const DUMMY_SCRIPT_IDS = new Set(["project-stairway-ep1", "project-stairway-exulans", "project-stairway-rebellions"]);
+const DUMMY_SHELF_IDS = new Set(["shelf-main-series", "shelf-features", "shelf-shorts"]);
 
-const INITIAL_SCRIPTS: ScriptDocument[] = [
-    {
-        id: "project-stairway-ep1",
-        title: "PROJECT STAIRWAY - ANNOUNCEMENT VIDEO",
-        author: "Creative Division",
-        logline: "Official production screenplay for Project Stairway.",
-        lastModified: Date.now() - 3600000,
-        shelfId: "shelf-main-series",
-        category: "mine"
-    },
-    {
-        id: "project-stairway-exulans",
-        title: "Exulans - A callous conformity!",
-        author: "Creative Division",
-        logline: "Exploring conformity and solitude in an expanding world.",
-        lastModified: Date.now() - 7200000,
-        shelfId: "shelf-features",
-        category: "mine"
-    },
-    {
-        id: "project-stairway-rebellions",
-        title: "Amorphic rebellions",
-        author: "Creative Division",
-        logline: "An exploration of shapeless resistance and unseen forces.",
-        lastModified: Date.now() - 14400000,
-        shelfId: "shelf-shorts",
-        category: "mine"
-    }
-];
+const INITIAL_SHELVES: Shelf[] = [];
+const INITIAL_SCRIPTS: ScriptDocument[] = [];
 
 // shelves storage functions
 export function getStoredShelves(): Shelf[] {
@@ -51,12 +21,17 @@ export function getStoredShelves(): Shelf[] {
         }
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-            if (parsed.length === 0) return [];
+            // strip legacy mock shelves
+            const filtered = parsed.filter((s) => s && !DUMMY_SHELF_IDS.has(s.id));
+            if (filtered.length !== parsed.length) {
+                saveStoredShelves(filtered);
+            }
+            if (filtered.length === 0) return [];
 
             // guard against clock collisions when batch creating
             const seenIds = new Set<string>();
             let changed = false;
-            const repaired = parsed.map((s, idx) => {
+            const repaired = filtered.map((s, idx) => {
                 if (!s.id || seenIds.has(s.id)) {
                     changed = true;
                     const freshId = `shelf-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 7)}`;
@@ -168,7 +143,23 @@ export function getStoredScripts(): ScriptDocument[] {
             return INITIAL_SCRIPTS;
         }
         const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : INITIAL_SCRIPTS;
+        if (Array.isArray(parsed)) {
+            // purge legacy mock/simulated scripts and prune their doc keys
+            const filtered = parsed.filter((s) => {
+                if (s && DUMMY_SCRIPT_IDS.has(s.id)) {
+                    try {
+                        localStorage.removeItem(`stairway_script_doc_${s.id}`);
+                    } catch {}
+                    return false;
+                }
+                return true;
+            });
+            if (filtered.length !== parsed.length) {
+                saveStoredScripts(filtered);
+            }
+            return filtered;
+        }
+        return INITIAL_SCRIPTS;
     } catch {
         return INITIAL_SCRIPTS;
     }
@@ -184,6 +175,7 @@ export function saveStoredScripts(scripts: ScriptDocument[]): void {
 }
 
 export function getScriptById(id: string): ScriptDocument | undefined {
+    if (DUMMY_SCRIPT_IDS.has(id)) return undefined;
     const scripts = getStoredScripts();
     return scripts.find((s) => s.id === id);
 }

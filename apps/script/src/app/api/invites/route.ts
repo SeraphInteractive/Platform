@@ -5,11 +5,6 @@ import { sendDiscordDm, fetchDiscordUser } from "@/server/DiscordBot";
 
 export const dynamic = "force-dynamic";
 
-const CONFIGURED_ADMIN_IDS = (process.env.NEXT_PUBLIC_ADMIN_DISCORD_IDS || "965511204372086814")
-    .split(",")
-    .map((id) => id.trim())
-    .filter(Boolean);
-
 async function getCallerUser(request: NextRequest): Promise<{ id: string; username: string; discordId?: string; role: string } | null> {
     const token = readSessionToken(request);
     if (!token) return null;
@@ -29,12 +24,7 @@ async function getCallerUser(request: NextRequest): Promise<{ id: string; userna
 
 function isCallerAdmin(caller: { id: string; discordId?: string; role: string } | null): boolean {
     if (!caller) return false;
-    const isSuperadmin =
-        Boolean(caller.discordId && CONFIGURED_ADMIN_IDS.includes(caller.discordId)) ||
-        CONFIGURED_ADMIN_IDS.includes(caller.id) ||
-        caller.role === "super_admin";
-    const isAdmin = caller.role === "admin";
-    return isSuperadmin || isAdmin;
+    return caller.role === "super_admin" || caller.role === "admin";
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {

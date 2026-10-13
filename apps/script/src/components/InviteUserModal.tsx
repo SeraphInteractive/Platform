@@ -131,18 +131,18 @@ export function InviteUserModal({ isOpen, onClose }: InviteUserModalProps) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm select-none">
             <div
-                className="relative w-full max-w-lg bg-[#1c1c20] border border-[#2e2e34] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+                className="relative w-full max-w-lg bg-[#212326] border border-[#33353a] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-[#28282e] bg-[#18181b]">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-[#33353a] bg-[#16171a]">
                     <div className="flex items-center gap-2">
-                        <UserPlus className="w-4 h-4 text-[#818cf8]" />
+                        <UserPlus className="w-4 h-4 text-[#4c8aec]" />
                         <span className="text-sm font-semibold text-zinc-100">Studio Access & Invites</span>
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-1 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-[#252529] transition-colors"
+                        className="p-1 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-[#25262a] transition-colors"
                         title="Close"
                     >
                         <X className="w-4 h-4" />
@@ -150,14 +150,14 @@ export function InviteUserModal({ isOpen, onClose }: InviteUserModalProps) {
                 </div>
 
                 {/* tab switcher */}
-                <div className="flex border-b border-[#28282e] bg-[#141416] px-5 pt-2">
+                <div className="flex border-b border-[#33353a] bg-[#1a1c1f] px-5 pt-2">
                     <button
                         onClick={() => {
                             setActiveTab("invite");
                             setFeedback(null);
                         }}
                         className={`flex items-center gap-2 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
-                            activeTab === "invite" ? "border-[#6366f1] text-white" : "border-transparent text-zinc-400 hover:text-zinc-200"
+                            activeTab === "invite" ? "border-[#4c8aec] text-white" : "border-transparent text-zinc-400 hover:text-zinc-200"
                         }`}
                     >
                         <UserPlus className="w-3.5 h-3.5" />
@@ -170,7 +170,7 @@ export function InviteUserModal({ isOpen, onClose }: InviteUserModalProps) {
                             fetchInvites();
                         }}
                         className={`flex items-center gap-2 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
-                            activeTab === "list" ? "border-[#6366f1] text-white" : "border-transparent text-zinc-400 hover:text-zinc-200"
+                            activeTab === "list" ? "border-[#4c8aec] text-white" : "border-transparent text-zinc-400 hover:text-zinc-200"
                         }`}
                     >
                         <Users className="w-3.5 h-3.5" />
@@ -190,8 +190,8 @@ export function InviteUserModal({ isOpen, onClose }: InviteUserModalProps) {
                                 type="text"
                                 value={targetId}
                                 onChange={(e) => setTargetId(e.target.value)}
-                                placeholder="e.g. 965511204372086814 or user UUID"
-                                className="w-full px-3 py-2 bg-[#252529] border border-[#303036] focus:border-[#6366f1] rounded-lg text-xs font-mono text-zinc-200 placeholder-zinc-500 outline-none transition-colors"
+                                placeholder="Discord Snowflake or User UUID"
+                                className="w-full px-3 py-2 bg-[#27292c] border border-[#33353a] focus:border-[#4c8aec] rounded-lg text-xs font-mono text-zinc-200 placeholder-zinc-500 outline-none transition-colors"
                                 autoFocus
                             />
                             <p className="text-[11px] text-zinc-500 font-mono">
@@ -207,7 +207,7 @@ export function InviteUserModal({ isOpen, onClose }: InviteUserModalProps) {
                                 id="inviteRole"
                                 value={role}
                                 onChange={(e) => setRole(e.target.value as "editor" | "viewer")}
-                                className="w-full px-3 py-2 bg-[#252529] border border-[#303036] focus:border-[#6366f1] rounded-lg text-xs font-mono text-zinc-200 outline-none transition-colors"
+                                className="w-full px-3 py-2 bg-[#27292c] border border-[#33353a] focus:border-[#4c8aec] rounded-lg text-xs font-mono text-zinc-200 outline-none transition-colors"
                             >
                                 <option value="editor">Screenplay Editor (Full read/write)</option>
                                 <option value="viewer">Screenplay Viewer (Read-only)</option>
@@ -231,18 +231,18 @@ export function InviteUserModal({ isOpen, onClose }: InviteUserModalProps) {
                             </div>
                         )}
 
-                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#28282e]">
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#33353a]">
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="px-4 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-[#252529] transition-colors"
+                                className="px-4 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-[#25262a] transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="submit"
                                 disabled={isSubmitting || !targetId.trim()}
-                                className="flex items-center gap-2 px-4 py-2 bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-50 disabled:hover:bg-[#6366f1] text-white rounded-lg text-xs font-medium transition-colors shadow-lg"
+                                className="flex items-center gap-2 px-4 py-2 bg-[#4c8aec] hover:bg-[#3b7be0] disabled:opacity-50 disabled:hover:bg-[#4c8aec] text-white rounded-lg text-xs font-medium transition-colors shadow-lg"
                             >
                                 {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                                 <span>Send Invite</span>
@@ -268,12 +268,12 @@ export function InviteUserModal({ isOpen, onClose }: InviteUserModalProps) {
                                 {invites.map((invite) => (
                                     <div
                                         key={invite.id}
-                                        className="flex items-center justify-between p-3 rounded-xl bg-[#252529] border border-[#2e2e34] text-xs font-mono"
+                                        className="flex items-center justify-between p-3 rounded-xl bg-[#27292c] border border-[#33353a] text-xs font-mono"
                                     >
                                         <div className="min-w-0 flex-1 pr-3">
                                             <div className="flex items-center gap-2">
                                                 <span className="font-semibold text-zinc-200 truncate">{invite.username}</span>
-                                                <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-[#1c1c20] text-[#a5b4fc] border border-[#303036]">
+                                                <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-[#212326] text-[#70a6f8] border border-[#33353a]">
                                                     {invite.role}
                                                 </span>
                                             </div>
@@ -298,11 +298,11 @@ export function InviteUserModal({ isOpen, onClose }: InviteUserModalProps) {
                             </div>
                         )}
 
-                        <div className="flex items-center justify-end pt-2 border-t border-[#28282e]">
+                        <div className="flex items-center justify-end pt-2 border-t border-[#33353a]">
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="px-4 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-[#252529] transition-colors"
+                                className="px-4 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-[#25262a] transition-colors"
                             >
                                 Close
                             </button>

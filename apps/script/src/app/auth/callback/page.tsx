@@ -53,12 +53,12 @@ export default function AuthCallbackPage() {
 
     if (error) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-[#0e1015] p-6 text-center select-none">
+            <div className="flex flex-col items-center justify-center min-h-screen bg-[#1a1c1f] p-6 text-center select-none">
                 <StairwayLoader size="md" label="Authentication Error" />
                 <p className="mt-4 text-xs text-red-400 font-mono max-w-sm">{error}</p>
                 <button
                     onClick={() => router.push("/auth/login")}
-                    className="mt-4 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium transition-colors"
+                    className="mt-4 px-4 py-1.5 bg-[#4c8aec] hover:bg-[#3b7be0] text-white rounded text-xs font-medium transition-colors"
                 >
                     Try Again
                 </button>
@@ -67,7 +67,7 @@ export default function AuthCallbackPage() {
     }
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-[#0e1015] select-none">
+        <div className="flex items-center justify-center min-h-screen bg-[#1a1c1f] select-none">
             <StairwayLoader size="md" label="Authenticating Administrator..." />
         </div>
     );
