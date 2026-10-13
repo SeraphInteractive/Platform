@@ -1,31 +1,7 @@
 import "server-only";
-import fs from "node:fs";
-import path from "node:path";
 
 export function getDiscordBotToken(): string | null {
-    if (process.env.DISCORD_BOT_TOKEN) {
-        return process.env.DISCORD_BOT_TOKEN;
-    }
-
-    // check root monorepo .env files when running under next.js
-    try {
-        const candidatePaths = [
-            path.resolve(process.cwd(), ".env"),
-            path.resolve(process.cwd(), "../../.env"),
-            path.resolve(process.cwd(), "../.env")
-        ];
-        for (const p of candidatePaths) {
-            if (fs.existsSync(p)) {
-                const content = fs.readFileSync(p, "utf-8");
-                const match = content.match(/^DISCORD_BOT_TOKEN=(.+)$/m);
-                if (match && match[1]) {
-                    return match[1].trim().replace(/^["']|["']$/g, "");
-                }
-            }
-        }
-    } catch {}
-
-    return null;
+    return process.env.DISCORD_BOT_TOKEN ?? null;
 }
 
 export async function fetchDiscordUser(

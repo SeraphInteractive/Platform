@@ -26,7 +26,8 @@ const nextConfig: NextConfig = {
         ];
     },
     async rewrites() {
-        const scriptInternalUrl = process.env.SCRIPT_INTERNAL_URL || "http://localhost:3002";
+        const scriptInternalUrl =
+            process.env.SCRIPT_INTERNAL_URL || (process.env.NODE_ENV === "production" ? "http://script:3000" : "http://localhost:3002");
         return [
             {
                 source: "/studio/script",

@@ -30,12 +30,15 @@ COPY apps/discord/src apps/discord/src
 RUN npx tsc -b
 
 FROM build AS web-build
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NODE_ENV=production \
+    SCRIPT_INTERNAL_URL=http://script:3000
 COPY apps/web apps/web
 RUN npm run build -w @platform/web
 
 FROM build AS script-build
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NODE_ENV=production
 COPY apps/script apps/script
 RUN npm run build -w @platform/script
 

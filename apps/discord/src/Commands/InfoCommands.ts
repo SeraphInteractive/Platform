@@ -61,7 +61,7 @@ export const statusCommand: SlashCommand = {
             `Platform API: ${health.healthy ? `healthy, ${health.latencyMs} ms` : "unreachable"}`,
             `Notification stream: ${stream.connected ? "connected" : "disconnected"}${stream.lastEventAt === null ? "" : `, last event ${when(stream.lastEventAt.toISOString())}`}`,
             "",
-            `Welcome: ${context.configuration.welcomeWebhookUrl ? "webhook configured" : channel(ChannelPurpose.Welcome)}`,
+            `Welcome: ${channel(ChannelPurpose.Welcome)}`,
             `Announcements: ${channel(ChannelPurpose.Announcements)}`,
             `Telemetry: ${context.configuration.telemetryWebhookUrl ? "webhook configured" : channel(ChannelPurpose.Telemetry)}`,
             `Task forum: ${channel(ChannelPurpose.TaskForum)}`,

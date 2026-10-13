@@ -25,7 +25,6 @@ export interface ProvisionSummary {
 }
 
 export interface ServerProvisionerWebhooks {
-    readonly welcome?: string;
     readonly telemetry?: string;
     readonly taskLogs?: string;
     readonly moderationLogs?: string;
@@ -316,22 +315,12 @@ export class ServerProvisioner {
         const pipeline = await ensureCategory("Task pipeline", []);
         const staff = await ensureCategory("Staff", privateOverwrites);
 
-        // welcome channel (skip creating if webhook URL configured and channel not found)
-        const welcomeExisting = channels.find(
-            (channel) =>
-                channel !== null &&
-                channel.type === ChannelType.GuildText &&
-                channelAliases[ChannelPurpose.Welcome].some((alias) => normalizeName(alias) === normalizeName(channel.name))
-        ) as TextChannel | undefined;
-        const welcome =
-            this.webhooks?.welcome !== undefined && welcomeExisting === undefined
-                ? undefined
-                : await ensureText(
-                      ChannelPurpose.Welcome,
-                      platform,
-                      "Welcome to the studio! Member arrivals and onboarding.",
-                      readOnlyOverwrites
-                  );
+        const welcome = await ensureText(
+            ChannelPurpose.Welcome,
+            platform,
+            "Welcome to the studio! Member arrivals and onboarding.",
+            readOnlyOverwrites
+        );
 
         const announcements = await ensureText(
             ChannelPurpose.Announcements,
