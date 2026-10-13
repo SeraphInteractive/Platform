@@ -5,7 +5,6 @@ import Link from "next/link";
 import type { Editor } from "@tiptap/react";
 import {
     ArrowLeft,
-    Home,
     FileText,
     Layers,
     Columns,
@@ -114,22 +113,14 @@ export function ScreenplayToolbar({
 
     return (
         <header className="no-print h-[42px] flex items-center justify-between px-3 bg-[#16171a] border-b border-[#33353a] text-xs text-zinc-300 select-none shrink-0 z-30">
-            {/* Left: Back to Platform, Home, Outline Toggle & Title */}
+            {/* Left: Back to Dashboard, Outline Toggle & Title */}
             <div className="flex items-center gap-1.5 sm:gap-2">
-                <a
-                    href="/studio"
-                    className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-[#25262a] rounded-lg transition-colors"
-                    title="Back to Platform Studio"
-                >
-                    <ArrowLeft className="w-3.5 h-3.5" />
-                </a>
-
                 <Link
                     href="/"
                     className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-[#25262a] rounded-lg transition-colors"
                     title="Back to Dashboard"
                 >
-                    <Home className="w-3.5 h-3.5" />
+                    <ArrowLeft className="w-3.5 h-3.5" />
                 </Link>
 
                 <button

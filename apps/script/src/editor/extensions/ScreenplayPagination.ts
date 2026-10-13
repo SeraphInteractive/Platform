@@ -3,7 +3,8 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { Node as PMNode } from "@tiptap/pm/model";
 
-export const SCREENPLAY_PAGE_BUDGET_LINES = 54;
+// A4 international standard line budget (58 lines at 6 lines per inch)
+export const SCREENPLAY_PAGE_BUDGET_LINES = 58;
 
 export interface PageBoundary {
     pos: number;
@@ -182,14 +183,14 @@ function computePagination(doc: PMNode, storage?: PaginationStorage) {
                         // arc studio continuous view: sleek horizontal divider line
                         container.innerHTML = `
               <div class="relative my-8 select-none">
-                <div class="relative flex items-center justify-between border-t border-dashed border-[#262a38] pt-3">
+                <div class="relative flex items-center justify-between border-t border-dashed border-[#26282d] pt-3">
                   <div class="flex items-center gap-2">
-                    <span class="text-[10px] font-mono uppercase tracking-widest text-slate-500 bg-[#0e1015] px-2">
+                    <span class="text-[10px] font-mono uppercase tracking-widest text-zinc-500 bg-[#16171a] px-2">
                       Page ${targetPageNum}
                     </span>
                   </div>
                   <div class="flex items-center gap-2">
-                    <span class="font-mono text-xs text-slate-400 font-semibold bg-[#0e1015] px-2">
+                    <span class="font-mono text-xs text-zinc-400 font-semibold bg-[#16171a] px-2">
                       ${targetPageNum}.
                     </span>
                   </div>
@@ -197,18 +198,19 @@ function computePagination(doc: PMNode, storage?: PaginationStorage) {
               </div>
             `;
                     } else {
-                        // physical page view: desk gap with clean right-aligned page number
+                        // physical page view: 1.0in bottom margin buffer, 48px desk gap, 0.5in top clearance
                         container.innerHTML = `
-              <div class="relative select-none -ml-[1.5in] -mr-[1.0in] my-8">
-                <div class="h-10 bg-[#1a1c1f] flex items-center justify-center relative border-y border-[#282a30]">
-                  <div class="flex items-center gap-2 text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+              <div class="relative select-none -ml-[1.5in] -mr-[1.0in] my-0">
+                <div class="h-[1.0in] bg-transparent"></div>
+                <div class="h-12 bg-[#141618] flex items-center justify-center relative border-y border-[#26282d] shadow-inner">
+                  <div class="flex items-center gap-2 text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
                     <span>End of Page ${targetPageNum - 1}</span>
                     <span class="text-zinc-600">-</span>
                     <span>Page ${targetPageNum}</span>
                   </div>
                 </div>
-                <div class="pl-[1.5in] pr-[1.0in] pt-4 pb-2 flex justify-end items-center text-xs font-mono text-zinc-400">
-                  <span class="font-semibold">${targetPageNum}.</span>
+                <div class="pl-[1.5in] pr-[1.0in] pt-[0.5in] pb-[0.5in] flex justify-end items-center font-mono text-xs text-zinc-400">
+                  <span class="font-semibold text-[12pt]">${targetPageNum}.</span>
                 </div>
               </div>
             `;

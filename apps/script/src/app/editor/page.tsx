@@ -1038,7 +1038,7 @@ function ScreenplayEditorContent() {
                                     <div
                                         className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}
                                         style={{
-                                            minHeight: `calc(${Math.max(1, totalPages)} * 11in + ${Math.max(0, totalPages - 1)} * 5rem)`
+                                            minHeight: `calc(${Math.max(1, totalPages)} * 297mm + ${Math.max(0, totalPages - 1)} * 2.5in)`
                                         }}
                                         onClick={(e) => {
                                             // focus editor at end if clicking empty bottom paper space
@@ -1120,7 +1120,7 @@ function ScreenplayEditorContent() {
                                 <div
                                     className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}
                                     style={{
-                                        minHeight: `calc(${Math.max(1, totalPages)} * 11in + ${Math.max(0, totalPages - 1)} * 5rem)`
+                                        minHeight: `calc(${Math.max(1, totalPages)} * 297mm + ${Math.max(0, totalPages - 1)} * 2.5in)`
                                     }}
                                     onClick={(e) => {
                                         // focus editor at end if clicking empty bottom paper space

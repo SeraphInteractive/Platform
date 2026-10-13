@@ -171,11 +171,11 @@
     counter-reset: scene-counter;
 }
 
-/* Page View Sheet: Standard US Letter (8.5in x 11in) */
+/* Page View Sheet: Standard A4 (210mm x 297mm / 8.27in x 11.69in) */
 .screenplay-page-sheet,
 .screenplay-page-mode {
-    width: 8.5in;
-    min-height: 11in;
+    width: 210mm;
+    min-height: 297mm;
     padding: 1in 1in 1in 1.5in;
     margin: 0 auto;
     background-color: var(--page-bg);
@@ -382,7 +382,7 @@
 /* Print Styling */
 @media print {
     @page {
-        size: letter portrait;
+        size: A4 portrait;
         margin: 1in 1in 1in 1.5in;
     }
 
