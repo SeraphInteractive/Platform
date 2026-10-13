@@ -61,13 +61,13 @@ export const statusCommand: SlashCommand = {
             `Platform API: ${health.healthy ? `healthy, ${health.latencyMs} ms` : "unreachable"}`,
             `Notification stream: ${stream.connected ? "connected" : "disconnected"}${stream.lastEventAt === null ? "" : `, last event ${when(stream.lastEventAt.toISOString())}`}`,
             "",
-            `Welcome: ${channel(ChannelPurpose.Welcome)}`,
+            `Welcome: ${context.configuration.welcomeWebhookUrl ? "webhook configured" : channel(ChannelPurpose.Welcome)}`,
             `Announcements: ${channel(ChannelPurpose.Announcements)}`,
-            `Telemetry: ${channel(ChannelPurpose.Telemetry)}`,
+            `Telemetry: ${context.configuration.telemetryWebhookUrl ? "webhook configured" : channel(ChannelPurpose.Telemetry)}`,
             `Task forum: ${channel(ChannelPurpose.TaskForum)}`,
             `Task submissions: ${channel(ChannelPurpose.TaskSubmissions)}`,
-            `Task log: ${channel(ChannelPurpose.TaskLogs)}`,
-            `Moderation logs: ${channel(ChannelPurpose.ModerationLogs)}`
+            `Task log: ${context.configuration.taskLogsWebhookUrl ? "webhook configured" : channel(ChannelPurpose.TaskLogs)}`,
+            `Moderation logs: ${context.configuration.moderationLogsWebhookUrl ? "webhook configured" : channel(ChannelPurpose.ModerationLogs)}`
         ];
         await interaction.editReply({
             components: [panel(null, lines.join("\n"))],

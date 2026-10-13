@@ -25,6 +25,19 @@ const nextConfig: NextConfig = {
             { source: "/progress", destination: "/roadmap", permanent: false }
         ];
     },
+    async rewrites() {
+        const scriptInternalUrl = process.env.SCRIPT_INTERNAL_URL || "http://localhost:3002";
+        return [
+            {
+                source: "/studio/script",
+                destination: `${scriptInternalUrl}/studio/script`
+            },
+            {
+                source: "/studio/script/:path*",
+                destination: `${scriptInternalUrl}/studio/script/:path*`
+            }
+        ];
+    },
     async headers() {
         return [{ source: "/:path*", headers: securityHeaders }];
     }

@@ -37,13 +37,18 @@ describe("settings store", () => {
             settings.channels[ChannelPurpose.Telemetry] = "100000000000000001";
             settings.forumTags[ShotStatus.Claimed] = "100000000000000002";
             settings.notificationCursor = "17-0";
+            settings.rulesMessageId = "100000000000000003";
         });
         const reloaded = new SettingsStore(directory);
         await reloaded.load();
         expect(reloaded.channel(ChannelPurpose.Telemetry)).toBe("100000000000000001");
         expect(reloaded.forumTag(ShotStatus.Claimed)).toBe("100000000000000002");
         expect(reloaded.notificationCursor).toBe("17-0");
-        expect(JSON.parse(await readFile(join(directory, "settings.json"), "utf8"))).toMatchObject({ notificationCursor: "17-0" });
+        expect(reloaded.rulesMessageId).toBe("100000000000000003");
+        expect(JSON.parse(await readFile(join(directory, "settings.json"), "utf8"))).toMatchObject({
+            notificationCursor: "17-0",
+            rulesMessageId: "100000000000000003"
+        });
     });
 });
 
@@ -65,5 +70,23 @@ describe("configuration", () => {
     it("rejects plain http to external hosts in production and short service tokens", () => {
         expect(() => loadBotConfiguration({ ...valid, API_BASE_URL: "http://api.example.com/api/v1" })).toThrow(/https/u);
         expect(() => loadBotConfiguration({ ...valid, SERVICE_TOKEN: "short" })).toThrow(/SERVICE_TOKEN/u);
+    });
+
+    it("parses optional webhook URLs and treats empty strings as undefined", () => {
+        const config = loadBotConfiguration({
+            ...valid,
+            DISCORD_ANNOUNCEMENTS_CHANNEL_ID: "",
+            DISCORD_WELCOME_WEBHOOK_URL: "https://discord.com/api/webhooks/1/welcome-token",
+            DISCORD_TELEMETRY_WEBHOOK_URL: "https://discord.com/api/webhooks/2/telemetry-token",
+            DISCORD_TASK_LOGS_WEBHOOK_URL: "",
+            DISCORD_MODERATION_LOGS_WEBHOOK_URL: "https://discord.com/api/webhooks/3/mod-token",
+            DISCORD_RULES_WEBHOOK_URL: "https://discord.com/api/webhooks/4/rules-token"
+        });
+        expect(config.announcementsChannelId).toBeUndefined();
+        expect(config.welcomeWebhookUrl).toBe("https://discord.com/api/webhooks/1/welcome-token");
+        expect(config.telemetryWebhookUrl).toBe("https://discord.com/api/webhooks/2/telemetry-token");
+        expect(config.taskLogsWebhookUrl).toBeUndefined();
+        expect(config.moderationLogsWebhookUrl).toBe("https://discord.com/api/webhooks/3/mod-token");
+        expect(config.rulesWebhookUrl).toBe("https://discord.com/api/webhooks/4/rules-token");
     });
 });

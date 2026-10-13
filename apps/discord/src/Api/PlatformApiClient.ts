@@ -3,6 +3,8 @@ import {
     autoModRuleSchema,
     ballotSchema,
     dataEnvelope,
+    documentSchema,
+    DocumentSlug,
     entrySchema,
     leaderboardSchema,
     moderatedUserSchema,
@@ -22,6 +24,7 @@ import {
     userSchema,
     type DeliverableKind,
     type DifficultyTier,
+    type DocumentDto,
     type EntryDto,
     type LeaderboardDto,
     type ModeratedUserDto,
@@ -215,6 +218,12 @@ export class PlatformApiClient {
             headers["Last-Event-ID"] = lastEventId;
         }
         return fetch(`${this.baseUrl}/notifications/stream`, { headers, signal, redirect: "error" });
+    }
+
+    public async getDocument(slug: DocumentSlug): Promise<DocumentDto | null> {
+        return this.send(`/documents/${slug}`, dataEnvelope(documentSchema))
+            .then((res) => res.data)
+            .catch(() => null);
     }
 
     public async send<T extends z.ZodType>(path: string, schema: T, options: RequestOptions = {}): Promise<z.infer<T>> {

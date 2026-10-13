@@ -256,7 +256,7 @@ export class ProfanityFilter {
                                 `Your message in <#${channel.id}> was removed by AutoMod for prohibited language.\n\n` +
                                     `**Removed content:**\n> ${snippet}\n\n` +
                                     `*Current progress:* **${penalty.current}/${penalty.max} warnings** (${stageLabel}).\n` +
-                                    `Please keep discussions respectful and PG-13 in accordance with our [Discord Rules](https://dev-api.seraphinteractive.com/rules).`
+                                    `Please keep discussions respectful and PG-13 in accordance with our [Discord Rules](https://dev-api.projectstairway.net/rules).`
                             )
                         )
                     )
@@ -286,7 +286,7 @@ export class ProfanityFilter {
                                     `You have reached **5 warnings** for prohibited language in Project Stairway.\n\n` +
                                         `**Violation snippet:**\n> ${snippet}\n\n` +
                                         `Staff notice: Timeouts are bypassed for staff roles. Next penalty threshold is 3 additional warnings (2nd offence).\n` +
-                                        `Please review our [Discord Rules](https://dev-api.seraphinteractive.com/rules).`
+                                        `Please review our [Discord Rules](https://dev-api.projectstairway.net/rules).`
                                 )
                             )
                         )
@@ -320,7 +320,7 @@ export class ProfanityFilter {
                                 `You have reached **5 warnings** for prohibited language in Project Stairway.\n\n` +
                                     `**Violation snippet:**\n> ${snippet}\n\n` +
                                     `*Next penalty:* 3 more warnings will trigger a **1-week timeout (2nd offence)**.\n` +
-                                    `Please review our [Discord Rules](https://dev-api.seraphinteractive.com/rules) before returning to chat.`
+                                    `Please review our [Discord Rules](https://dev-api.projectstairway.net/rules) before returning to chat.`
                             )
                         )
                     )
@@ -384,7 +384,7 @@ export class ProfanityFilter {
                                 `You have reached **3 additional warnings** after your previous timeout.\n\n` +
                                     `**Violation snippet:**\n> ${snippet}\n\n` +
                                     `**Final Warning:** 1 more violation will result in a **1-month server ban**.\n` +
-                                    `Please review our [Discord Rules](https://dev-api.seraphinteractive.com/rules).`
+                                    `Please review our [Discord Rules](https://dev-api.projectstairway.net/rules).`
                             )
                         )
                     )

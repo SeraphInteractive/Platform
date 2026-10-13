@@ -218,6 +218,7 @@ services:
       DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
       DISCORD_INVITE_URL: ${DISCORD_INVITE_URL:-}
       TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      SCRIPT_INTERNAL_URL: ${SCRIPT_INTERNAL_URL:-http://script:3000}
     networks:
       - edge
     depends_on:
@@ -240,6 +241,8 @@ services:
       API_PUBLIC_URL: ${APP_URL:?APP_URL is required}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+    volumes:
+      - script_data:/app/data
     networks:
       - edge
     depends_on:
@@ -254,3 +257,4 @@ networks:
 volumes:
   postgres_data:
   discord_data:
+  script_data:
