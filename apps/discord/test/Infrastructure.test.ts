@@ -76,12 +76,14 @@ describe("configuration", () => {
         const config = loadBotConfiguration({
             ...valid,
             DISCORD_ANNOUNCEMENTS_CHANNEL_ID: "",
+            DISCORD_ANNOUNCEMENTS_WEBHOOK_URL: "https://discord.com/api/webhooks/1/announcements-token",
             DISCORD_TELEMETRY_WEBHOOK_URL: "https://discord.com/api/webhooks/2/telemetry-token",
             DISCORD_TASK_LOGS_WEBHOOK_URL: "",
             DISCORD_MODERATION_LOGS_WEBHOOK_URL: "https://discord.com/api/webhooks/3/mod-token",
             DISCORD_RULES_WEBHOOK_URL: "https://discord.com/api/webhooks/4/rules-token"
         });
         expect(config.announcementsChannelId).toBeUndefined();
+        expect(config.announcementsWebhookUrl).toBe("https://discord.com/api/webhooks/1/announcements-token");
         expect(config.telemetryWebhookUrl).toBe("https://discord.com/api/webhooks/2/telemetry-token");
         expect(config.taskLogsWebhookUrl).toBeUndefined();
         expect(config.moderationLogsWebhookUrl).toBe("https://discord.com/api/webhooks/3/mod-token");

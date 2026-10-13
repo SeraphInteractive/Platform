@@ -17,6 +17,7 @@ import { syncMemberStudioRoles } from "./StudioRoles.js";
 import type { TaskForum } from "./TaskForum.js";
 
 export interface WebhookEndpoints {
+    readonly announcements?: string;
     readonly telemetry?: string;
     readonly taskLogs?: string;
     readonly moderationLogs?: string;
@@ -46,6 +47,9 @@ export class NotificationDispatcher {
         private readonly logger: Logger,
         webhooks: WebhookEndpoints = {}
     ) {
+        if (webhooks.announcements) {
+            this.webhookClients[ChannelPurpose.Announcements] = new WebhookClient({ url: webhooks.announcements });
+        }
         if (webhooks.telemetry) {
             this.webhookClients[ChannelPurpose.Telemetry] = new WebhookClient({ url: webhooks.telemetry });
         }

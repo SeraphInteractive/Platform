@@ -25,6 +25,7 @@ export interface ProvisionSummary {
 }
 
 export interface ServerProvisionerWebhooks {
+    readonly announcements?: string;
     readonly telemetry?: string;
     readonly taskLogs?: string;
     readonly moderationLogs?: string;

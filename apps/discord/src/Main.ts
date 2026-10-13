@@ -39,6 +39,7 @@ async function main(): Promise<void> {
     const api = new PlatformApiClient(configuration.apiBaseUrl, configuration.serviceToken, logger);
     const forum = new TaskForum(client, configuration.guildId, settings, api, logger);
     const webhookUrls = {
+        announcements: configuration.announcementsWebhookUrl,
         telemetry: configuration.telemetryWebhookUrl,
         taskLogs: configuration.taskLogsWebhookUrl,
         moderationLogs: configuration.moderationLogsWebhookUrl,
