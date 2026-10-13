@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { ChevronUp } from "lucide-react";
+import { ArcElementMenu } from "./ArcElementMenu";
 
 interface FloatingElementPillProps {
     editor: Editor | null;
@@ -68,11 +69,6 @@ export function FloatingElementPill({ editor, onStashSelection, hasSelection }: 
         dotColor: "bg-blue-400"
     };
 
-    const setType = (type: string) => {
-        editor.chain().focus().setNode(type).run();
-        setMenuOpen(false);
-    };
-
     return (
         <div className="no-print fixed bottom-4 left-6 z-30 flex items-center gap-2 select-none">
             <div className="relative">
@@ -86,29 +82,7 @@ export function FloatingElementPill({ editor, onStashSelection, hasSelection }: 
                     <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
                 </button>
 
-                {menuOpen && (
-                    <div className="absolute bottom-11 left-0 w-48 bg-[#12141a] border border-[#262933] rounded-lg shadow-2xl p-1 text-xs space-y-0.5 animate-in fade-in slide-in-from-bottom-2">
-                        {[
-                            { id: "sceneHeading", label: "Scene Heading", key: "Ctrl+1" },
-                            { id: "action", label: "Action", key: "Ctrl+2" },
-                            { id: "character", label: "Character", key: "Ctrl+3" },
-                            { id: "parenthetical", label: "Parenthetical", key: "Ctrl+5" },
-                            { id: "dialogue", label: "Dialogue", key: "Ctrl+4" },
-                            { id: "transition", label: "Transition", key: "Ctrl+6" }
-                        ].map((el) => (
-                            <button
-                                key={el.id}
-                                onClick={() => setType(el.id)}
-                                className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded transition-colors text-left ${
-                                    currentType === el.id ? "bg-[#1c1f2b] text-blue-400 font-semibold" : "text-slate-300 hover:bg-[#181a22]"
-                                }`}
-                            >
-                                <span>{el.label}</span>
-                                <span className="text-[10px] text-slate-500 font-mono">{el.key}</span>
-                            </button>
-                        ))}
-                    </div>
-                )}
+                <ArcElementMenu editor={editor} isOpen={menuOpen} onClose={() => setMenuOpen(false)} align="pill" />
             </div>
 
             {/* Keyboard Flow Guide */}

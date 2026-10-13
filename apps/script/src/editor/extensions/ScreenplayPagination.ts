@@ -197,21 +197,18 @@ function computePagination(doc: PMNode, storage?: PaginationStorage) {
               </div>
             `;
                     } else {
-                        // physical page view: desk gap with paper shadows and header
+                        // physical page view: desk gap with clean right-aligned page number
                         container.innerHTML = `
               <div class="relative select-none -ml-[1.5in] -mr-[1.0in] my-8">
-                <div class="h-12 bg-[#0e1015] flex items-center justify-center relative border-y border-[#181a24] shadow-inner">
-                  <div class="flex items-center gap-2 text-[10px] font-mono text-slate-500 uppercase tracking-wider">
+                <div class="h-10 bg-[#1a1c1f] flex items-center justify-center relative border-y border-[#282a30]">
+                  <div class="flex items-center gap-2 text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
                     <span>End of Page ${targetPageNum - 1}</span>
-                    <span class="text-slate-600">-</span>
+                    <span class="text-zinc-600">-</span>
                     <span>Page ${targetPageNum}</span>
                   </div>
                 </div>
-                <div class="pl-[1.5in] pr-[1.0in] pt-6 pb-4 flex justify-between items-center text-[11px] text-slate-500 font-mono border-b border-[#1f2230]/40">
-                  <span class="truncate max-w-xs uppercase tracking-tight text-slate-600 text-[10px]">
-                    Script Continued
-                  </span>
-                  <span class="font-semibold text-slate-400 text-xs">${targetPageNum}.</span>
+                <div class="pl-[1.5in] pr-[1.0in] pt-4 pb-2 flex justify-end items-center text-xs font-mono text-zinc-400">
+                  <span class="font-semibold">${targetPageNum}.</span>
                 </div>
               </div>
             `;

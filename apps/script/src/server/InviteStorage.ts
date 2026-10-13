@@ -11,6 +11,8 @@ export interface StudioInvite {
     invitedBy: string;
     invitedAt: string;
     role: "editor" | "viewer";
+    scriptId?: string | null;
+    scriptTitle?: string | null;
 }
 
 const STORAGE_DIR = path.resolve(process.cwd(), "data");
@@ -26,12 +28,16 @@ function ensureStorage(): void {
     }
 }
 
-export function getInvites(): StudioInvite[] {
+export function getInvites(scriptId?: string | null): StudioInvite[] {
     try {
         ensureStorage();
         const raw = fs.readFileSync(STORAGE_FILE, "utf-8");
         const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
+        const list: StudioInvite[] = Array.isArray(parsed) ? parsed : [];
+        if (scriptId) {
+            return list.filter((item) => !item.scriptId || item.scriptId === scriptId);
+        }
+        return list;
     } catch {
         return [];
     }
@@ -40,18 +46,27 @@ export function getInvites(): StudioInvite[] {
 export function saveInvite(invite: StudioInvite): void {
     ensureStorage();
     const existing = getInvites();
-    // upsert by targetId or discordId to prevent duplicates
-    const filtered = existing.filter((item) => item.targetId !== invite.targetId && item.discordId !== invite.discordId);
+    // upsert by user matching on the specific script
+    const filtered = existing.filter((item) => {
+        const matchesUser = item.targetId === invite.targetId || item.discordId === invite.discordId;
+        const matchesScript = (item.scriptId || null) === (invite.scriptId || null);
+        return !(matchesUser && matchesScript);
+    });
     const updated = [invite, ...filtered];
     fs.writeFileSync(STORAGE_FILE, JSON.stringify(updated, null, 2), "utf-8");
 }
 
-export function removeInvite(idOrTargetId: string): boolean {
+export function removeInvite(idOrTargetId: string, scriptId?: string | null): boolean {
     ensureStorage();
     const existing = getInvites();
-    const filtered = existing.filter(
-        (item) => item.id !== idOrTargetId && item.targetId !== idOrTargetId && item.discordId !== idOrTargetId
-    );
+    const filtered = existing.filter((item) => {
+        const isTarget = item.id === idOrTargetId || item.targetId === idOrTargetId || item.discordId === idOrTargetId;
+        if (!isTarget) return true;
+        if (scriptId) {
+            return item.scriptId !== scriptId;
+        }
+        return false;
+    });
     const changed = filtered.length !== existing.length;
     if (changed) {
         fs.writeFileSync(STORAGE_FILE, JSON.stringify(filtered, null, 2), "utf-8");
@@ -59,12 +74,39 @@ export function removeInvite(idOrTargetId: string): boolean {
     return changed;
 }
 
-export function isUserInvited(userId?: string | null, discordId?: string | null): boolean {
+export function isUserInvited(userId?: string | null, discordId?: string | null, scriptId?: string | null): boolean {
     if (!userId && !discordId) return false;
     const invites = getInvites();
     return invites.some((invite) => {
-        if (userId && (invite.targetId === userId || invite.id === userId)) return true;
-        if (discordId && (invite.discordId === discordId || invite.targetId === discordId)) return true;
-        return false;
+        const userMatches =
+            (userId && (invite.targetId === userId || invite.id === userId)) ||
+            (discordId && (invite.discordId === discordId || invite.targetId === discordId));
+        if (!userMatches) return false;
+
+        // check script-level permission if specific script requested
+        if (scriptId) {
+            return !invite.scriptId || invite.scriptId === scriptId;
+        }
+        return true;
     });
+}
+
+export function getUserInvitedScriptIds(userId?: string | null, discordId?: string | null): string[] {
+    if (!userId && !discordId) return [];
+    const invites = getInvites();
+    const scriptIds = new Set<string>();
+
+    for (const invite of invites) {
+        const userMatches =
+            (userId && (invite.targetId === userId || invite.id === userId)) ||
+            (discordId && (invite.discordId === discordId || invite.targetId === discordId));
+        if (userMatches) {
+            if (invite.scriptId) {
+                scriptIds.add(invite.scriptId);
+            } else {
+                scriptIds.add("*");
+            }
+        }
+    }
+    return Array.from(scriptIds);
 }

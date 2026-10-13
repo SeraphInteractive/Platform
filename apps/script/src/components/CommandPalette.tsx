@@ -109,20 +109,9 @@ export function CommandPalette({
             }
         },
         {
-            id: "elem-dialogue",
-            title: "Set to Dialogue",
-            shortcut: "⌘4",
-            category: "Formatting",
-            icon: <FileText className="w-4 h-4 text-zinc-400" />,
-            action: () => {
-                onSetElement("dialogue");
-                onClose();
-            }
-        },
-        {
             id: "elem-paren",
             title: "Set to Parenthetical",
-            shortcut: "⌘5",
+            shortcut: "⌘4",
             category: "Formatting",
             icon: <FileText className="w-4 h-4 text-zinc-400" />,
             action: () => {
@@ -131,9 +120,31 @@ export function CommandPalette({
             }
         },
         {
+            id: "elem-dialogue",
+            title: "Set to Dialogue",
+            shortcut: "⌘5",
+            category: "Formatting",
+            icon: <FileText className="w-4 h-4 text-zinc-400" />,
+            action: () => {
+                onSetElement("dialogue");
+                onClose();
+            }
+        },
+        {
+            id: "elem-shot",
+            title: "Set to Shot",
+            shortcut: "⌘6",
+            category: "Formatting",
+            icon: <Film className="w-4 h-4 text-zinc-400" />,
+            action: () => {
+                onSetElement("sceneHeading");
+                onClose();
+            }
+        },
+        {
             id: "elem-trans",
             title: "Set to Transition",
-            shortcut: "⌘6",
+            shortcut: "⌘7",
             category: "Formatting",
             icon: <FileText className="w-4 h-4 text-zinc-400" />,
             action: () => {

@@ -1,7 +1,32 @@
-import "server-only";
+import fs from "node:fs";
+import path from "node:path";
 
 export function getDiscordBotToken(): string | null {
-    return process.env.DISCORD_BOT_TOKEN ?? null;
+    const envToken = process.env.DISCORD_BOT_TOKEN || process.env.DISCORD_TOKEN;
+    if (envToken && !envToken.includes("placeholder")) {
+        return envToken.trim();
+    }
+
+    // fallback inspection of local environment files during development
+    try {
+        const candidateFiles = [
+            path.resolve(process.cwd(), ".env.local"),
+            path.resolve(process.cwd(), ".env"),
+            path.resolve(process.cwd(), "../../.env"),
+            path.resolve(process.cwd(), "../.env")
+        ];
+        for (const filePath of candidateFiles) {
+            if (fs.existsSync(filePath)) {
+                const content = fs.readFileSync(filePath, "utf-8");
+                const match = content.match(/^DISCORD_BOT_TOKEN=([^\r\n]+)/m);
+                if (match?.[1] && !match[1].includes("placeholder")) {
+                    return match[1].trim();
+                }
+            }
+        }
+    } catch {}
+
+    return envToken ?? null;
 }
 
 export async function fetchDiscordUser(

@@ -85,8 +85,8 @@ export function PageBreakView({ node, editor, getPos, selected }: NodeViewProps)
             data-page-number={pageNumber}
         >
             {/* bottom of previous sheet shadow & desk gap */}
-            <div className="h-12 bg-[#0e1015] flex items-center justify-center relative border-y border-[#181a24] shadow-inner">
-                <div className="flex items-center gap-2 text-[10px] font-mono text-slate-500 uppercase tracking-wider">
+            <div className="h-10 bg-[#1a1c1f] flex items-center justify-center relative border-y border-[#282a30]">
+                <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
                     <span>End of Page {pageNumber - 1}</span>
                     <span className="text-slate-600">-</span>
                     <span>Page {pageNumber}</span>

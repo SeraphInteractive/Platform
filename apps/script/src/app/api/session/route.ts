@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { readSessionToken, setSessionCookie, clearSessionCookie, readVerifier, clearVerifierCookie } from "@/server/Session";
-import { isUserInvited } from "@/server/InviteStorage";
+import { isUserInvited, getUserInvitedScriptIds } from "@/server/InviteStorage";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +32,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         const user = payload?.data ?? payload;
         if (user) {
             const invited = isUserInvited(user.id, user.discordId);
-            return NextResponse.json({ data: { ...user, isInvited: invited } }, { headers: { "Cache-Control": "no-store" } });
+            const scriptIds = getUserInvitedScriptIds(user.id, user.discordId);
+            return NextResponse.json(
+                { data: { ...user, isInvited: invited, invitedScriptIds: scriptIds } },
+                { headers: { "Cache-Control": "no-store" } }
+            );
         }
         return NextResponse.json({ data: null }, { headers: { "Cache-Control": "no-store" } });
     } catch {

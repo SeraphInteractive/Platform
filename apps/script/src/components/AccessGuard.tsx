@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { StairwayLoader } from "@/components/StairwayLoader";
+import { StairwayLoader } from "./StairwayLoader";
 
 export interface ScriptUserProfile {
     id: string;
@@ -13,6 +13,7 @@ export interface ScriptUserProfile {
     role: string;
     specialties?: string[];
     isInvited?: boolean;
+    invitedScriptIds?: string[];
 }
 
 export function checkUserAuthorized(data: ScriptUserProfile): boolean {
@@ -21,6 +22,15 @@ export function checkUserAuthorized(data: ScriptUserProfile): boolean {
     const isInvited = Boolean(data.isInvited);
 
     return Boolean(isSuperadmin || isAdmin || isInvited);
+}
+
+export function canAccessScript(user: ScriptUserProfile | null, scriptId: string): boolean {
+    if (!user) return false;
+    // administrators retain access to all screenplays automatically
+    if (user.role === "super_admin" || user.role === "admin") return true;
+    if (!user.isInvited) return false;
+    const permitted = user.invitedScriptIds || [];
+    return permitted.includes("*") || permitted.includes(scriptId);
 }
 
 export function isUserAdminRole(data: ScriptUserProfile | null): boolean {

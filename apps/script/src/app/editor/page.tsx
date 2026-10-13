@@ -27,7 +27,8 @@ import { ScriptStash, type StashItem } from "@/components/ScriptStash";
 import { VersionHistoryDrawer, type VersionSnapshot } from "@/components/VersionHistoryDrawer";
 import { TitlePage, type TitlePageData } from "@/components/TitlePage";
 import { InsertImageDialog } from "@/components/InsertImageDialog";
-import { AccessGuard } from "@/components/AccessGuard";
+import { InviteUserModal } from "@/components/InviteUserModal";
+import { AccessGuard, useStudioAuth, canAccessScript } from "@/components/AccessGuard";
 import { getScriptById, updateScript, getStoredPageTheme, setStoredPageTheme, type PageTheme } from "@/lib/ScriptStorage";
 
 const DEFAULT_SCRIPT_CONTENT = {
@@ -54,6 +55,7 @@ const VERSIONS_STORAGE_KEY = "stairway_screenplay_versions_v1";
 function ScreenplayEditorContent() {
     const searchParams = useSearchParams();
     const scriptId = searchParams.get("id");
+    const { user, isAdmin } = useStudioAuth();
 
     const [mounted, setMounted] = useState(false);
     const [layoutMode, setLayoutMode] = useState<ViewLayoutMode>("script");
@@ -64,6 +66,7 @@ function ScreenplayEditorContent() {
     const [isStashOpen, setIsStashOpen] = useState(false);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [insertImageOpen, setInsertImageOpen] = useState(false);
+    const [isInviteOpen, setIsInviteOpen] = useState(false);
     const [scriptTitle, setScriptTitle] = useState("Untitled Screenplay");
     const [titlePageData, setTitlePageData] = useState<TitlePageData>(DEFAULT_TITLE_PAGE);
 
@@ -281,11 +284,41 @@ function ScreenplayEditorContent() {
                     });
                 }
             } catch {}
+
+            // convert action to scene heading on slugline prefix matching Arc Studio
+            try {
+                const { selection } = ed.state;
+                const parentNode = selection.$from.parent;
+                if (parentNode.type.name === "action") {
+                    const text = parentNode.textContent.trim().toUpperCase();
+                    if (
+                        text === "INT." ||
+                        text === "EXT." ||
+                        text === "INT./EXT." ||
+                        text === "I/E." ||
+                        text.startsWith("INT. ") ||
+                        text.startsWith("EXT. ") ||
+                        text.startsWith("INT./EXT. ") ||
+                        text.startsWith("I/E. ")
+                    ) {
+                        const sceneHeadingType = ed.state.schema.nodes.sceneHeading;
+                        if (sceneHeadingType) {
+                            const tr = ed.state.tr;
+                            tr.setBlockType(selection.$from.start(), selection.$from.end(), sceneHeadingType, {});
+                            ed.view.dispatch(tr);
+                        }
+                    }
+                }
+            } catch {}
+
             analyzeScriptRef.current(ed);
             updateActiveSuggestionsRef.current(ed);
         },
         onSelectionUpdate: ({ editor: ed }) => {
-            updateActiveSuggestionsRef.current(ed);
+            if (suggestionsStateRef.current.isOpen && !suggestionsStateRef.current.userInteracted) {
+                suggestionsStateRef.current.isOpen = false;
+                setShowSuggestions(false);
+            }
             const pStorage = (ed.storage as any).screenplayPagination;
             if (pStorage) {
                 setCurrentPage(pStorage.currentPage || 1);
@@ -356,53 +389,48 @@ function ScreenplayEditorContent() {
         let newTitle = "";
 
         if (currentType === "sceneHeading") {
-            newTitle = "Scene Heading";
-            if (!text || text.length <= 4) {
-                newItems = COMMON_PREFIXES.filter((p) => !text || p.startsWith(text));
-                if (newItems.length === 0) newItems = COMMON_PREFIXES;
-            } else if (rawText.includes("-")) {
+            // only show suggestions when actively typing a location or time of day
+            if (rawText.includes("-")) {
                 newTitle = "Time of Day";
                 const parts = rawText.split(/-+/);
                 const afterDash = (parts[parts.length - 1] ?? "").trim();
                 newItems = COMMON_TIMES.filter((t) => (!afterDash || t.startsWith(afterDash)) && t !== afterDash);
-                if (newItems.length === 0 && !afterDash) newItems = COMMON_TIMES;
-            } else {
+            } else if (text.length >= 3) {
                 const ctx = extractScriptContext(ed);
                 newItems = ctx.sluglines.filter((s) => s.includes(text) && s !== text).slice(0, 5);
+                if (newItems.length > 0) newTitle = "Location";
             }
         } else if (currentType === "character") {
-            newTitle = "Character";
-            const ctx = extractScriptContext(ed);
-            if (!text) {
-                newItems = ctx.characters.slice(0, 6);
-            } else {
+            if (text.length >= 2) {
+                const ctx = extractScriptContext(ed);
                 newItems = ctx.characters.filter((c) => c.startsWith(text) && c !== text);
-                if (newItems.length === 0) {
-                    const exactMatch = ctx.characters.find((c) => c === text);
-                    if (exactMatch || text.length >= 2) {
-                        newItems = ["(V.O.)", "(O.S.)", "(CONT'D)"];
-                        newTitle = "Extension";
-                    }
+                if (newItems.length > 0) {
+                    newTitle = "Character";
+                } else if (ctx.characters.includes(text) || text.length >= 3) {
+                    newItems = ["(V.O.)", "(O.S.)", "(CONT'D)"];
+                    newTitle = "Extension";
                 }
             }
         } else if (currentType === "transition") {
-            newTitle = "Transition";
-            newItems = COMMON_TRANSITIONS.filter((t) => (!text || t.startsWith(text)) && t !== text);
+            if (text.length >= 2) {
+                newTitle = "Transition";
+                newItems = COMMON_TRANSITIONS.filter((t) => t.startsWith(text) && t !== text);
+            }
         } else if (currentType === "parenthetical") {
-            newTitle = "Direction";
-            const commonDirs = [
-                "(beat)",
-                "(pause)",
-                "(whispering)",
-                "(laughing)",
-                "(to himself)",
-                "(shouting)",
-                "(quietly)",
-                "(sarcastic)"
-            ];
-            newItems = commonDirs.filter(
-                (d) => (!text || d.toLowerCase().includes(text.toLowerCase())) && d.toLowerCase() !== text.toLowerCase()
-            );
+            if (text.length >= 2) {
+                newTitle = "Direction";
+                const commonDirs = [
+                    "(beat)",
+                    "(pause)",
+                    "(whispering)",
+                    "(laughing)",
+                    "(to himself)",
+                    "(shouting)",
+                    "(quietly)",
+                    "(sarcastic)"
+                ];
+                newItems = commonDirs.filter((d) => d.toLowerCase().includes(text.toLowerCase()) && d.toLowerCase() !== text.toLowerCase());
+            }
         }
 
         if (newItems.length > 0) {
@@ -443,11 +471,14 @@ function ScreenplayEditorContent() {
             const replaceTextAndAdvance = (newText: string, advanceToType?: string) => {
                 const tr = editor.state.tr;
                 tr.replaceWith(start, end, editor.state.schema.text(newText));
-                editor.view.dispatch(tr);
                 if (advanceToType) {
-                    editor.commands.splitBlock();
-                    editor.commands.setNode(advanceToType);
+                    const targetType = editor.state.schema.nodes[advanceToType];
+                    if (targetType) {
+                        const newPos = start + newText.length;
+                        tr.split(newPos, 1, [{ type: targetType, attrs: {} }]);
+                    }
                 }
+                editor.view.dispatch(tr.scrollIntoView());
                 setShowSuggestions(false);
                 suggestionsStateRef.current.isOpen = false;
             };
@@ -903,9 +934,32 @@ function ScreenplayEditorContent() {
         );
     }
 
+    // verify authorization for individual screenplay if script id is provided
+    const isPermittedScript = !scriptId || canAccessScript(user, scriptId);
+    if (!isPermittedScript) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-[#0e1015] p-6 text-center select-none text-zinc-300 font-mono">
+                <div className="w-12 h-12 rounded-full bg-red-950/40 border border-red-500/30 flex items-center justify-center text-red-400 mb-4 font-semibold text-lg">
+                    !
+                </div>
+                <h1 className="text-sm font-semibold tracking-wider text-zinc-200 uppercase mb-2">Access Restricted</h1>
+                <p className="text-xs text-zinc-400 max-w-md mb-6 leading-relaxed">
+                    You do not have access to this screenplay. Access to individual scripts requires an administrator role or an explicit invite from the author.
+                </p>
+                <div className="flex items-center gap-3">
+                    <a
+                        href="/studio/script"
+                        className="px-4 py-2 bg-[#1c1f2b] hover:bg-[#252a3a] border border-[#262933] hover:border-zinc-500 rounded text-xs text-zinc-200 transition-colors"
+                    >
+                        Return to Dashboard
+                    </a>
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <AccessGuard>
-            <div className="flex flex-col h-screen overflow-hidden bg-[#1a1c1f] script-editor-page">
+        <div className="flex flex-col h-screen overflow-hidden bg-[#1a1c1f] script-editor-page">
                 {/* Arc Studio Pure Minimalist Header */}
                 <ScreenplayToolbar
                     editor={editor}
@@ -922,6 +976,8 @@ function ScreenplayEditorContent() {
                     setIsStashOpen={setIsStashOpen}
                     isHistoryOpen={isHistoryOpen}
                     setIsHistoryOpen={setIsHistoryOpen}
+                    user={user}
+                    onOpenInviteModal={() => setIsInviteOpen(true)}
                     pageTheme={pageTheme}
                     onTogglePageTheme={handleTogglePageTheme}
                     onOpenCommandPalette={() => setCommandPaletteOpen(true)}
@@ -969,7 +1025,7 @@ function ScreenplayEditorContent() {
                                 className="flex-1 overflow-y-auto relative bg-[#1a1c1f] border-r border-[#33353a]"
                             >
                                 {isPageView ? (
-                                    <div className="flex flex-col items-center pt-8 pb-72 md:pb-[55vh] px-4 space-y-8 select-text">
+                                    <div className="flex flex-col items-center pt-8 pb-[65vh] px-4 space-y-8 select-text">
                                         <div className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}>
                                             <TitlePage
                                                 data={titlePageData}
@@ -978,7 +1034,18 @@ function ScreenplayEditorContent() {
                                                 theme={pageTheme}
                                             />
                                         </div>
-                                        <div className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}>
+                                        <div
+                                            className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}
+                                            style={{
+                                                minHeight: `calc(${Math.max(1, totalPages)} * 11in + ${Math.max(0, totalPages - 1)} * 5rem)`
+                                            }}
+                                            onClick={(e) => {
+                                                // focus editor at end if clicking empty bottom paper space
+                                                if (e.target === e.currentTarget && editor) {
+                                                    editor.commands.focus("end");
+                                                }
+                                            }}
+                                        >
                                             <EditorContent editor={editor} />
                                         </div>
                                     </div>
@@ -1040,7 +1107,7 @@ function ScreenplayEditorContent() {
                             )}
 
                             {isPageView ? (
-                                <div className="flex flex-col items-center pt-8 pb-72 md:pb-[55vh] px-4 space-y-8 select-text">
+                                <div className="flex flex-col items-center pt-8 pb-[65vh] px-4 space-y-8 select-text">
                                     <div className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}>
                                         <TitlePage
                                             data={titlePageData}
@@ -1049,7 +1116,18 @@ function ScreenplayEditorContent() {
                                             theme={pageTheme}
                                         />
                                     </div>
-                                    <div className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}>
+                                    <div
+                                        className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}
+                                        style={{
+                                            minHeight: `calc(${Math.max(1, totalPages)} * 11in + ${Math.max(0, totalPages - 1)} * 5rem)`
+                                        }}
+                                        onClick={(e) => {
+                                            // focus editor at end if clicking empty bottom paper space
+                                            if (e.target === e.currentTarget && editor) {
+                                                editor.commands.focus("end");
+                                            }
+                                        }}
+                                    >
                                         <EditorContent editor={editor} />
                                     </div>
                                 </div>
@@ -1148,6 +1226,14 @@ function ScreenplayEditorContent() {
                     {/* In-script Storyboard Image Dialog */}
                     <InsertImageDialog isOpen={insertImageOpen} onClose={() => setInsertImageOpen(false)} onInsert={handleInsertImage} />
 
+                    {/* Invite Collaborator Modal */}
+                    <InviteUserModal
+                        isOpen={isInviteOpen}
+                        onClose={() => setIsInviteOpen(false)}
+                        scriptId={scriptId || undefined}
+                        scriptTitle={titlePageData.title || scriptTitle || "Untitled Screenplay"}
+                    />
+
                     {/* Find & Replace Drawer */}
                     {layoutMode !== "beatboard" && (
                         <FindReplaceBar
@@ -1188,7 +1274,6 @@ function ScreenplayEditorContent() {
                     )}
                 </div>
             </div>
-        </AccessGuard>
     );
 }
 
@@ -1201,7 +1286,9 @@ export default function ScreenplayEditorPage() {
                 </div>
             }
         >
-            <ScreenplayEditorContent />
+            <AccessGuard>
+                <ScreenplayEditorContent />
+            </AccessGuard>
         </Suspense>
     );
 }

@@ -168,6 +168,7 @@
     line-height: 1.15;
     color: var(--page-text);
     tab-size: 4;
+    counter-reset: scene-counter;
 }
 
 /* Page View Sheet: Standard US Letter (8.5in x 11in) */
@@ -205,24 +206,37 @@
     font-family: var(--courier-font), "Courier Prime", Courier, monospace !important;
 }
 
-/* Scene Heading (Cyan slugline) */
+/* Scene Heading - monochrome Courier with gutter scene numbering */
 .screenplay-element.scene-heading {
     text-transform: uppercase;
     font-weight: 700;
     margin-top: 1.5em;
     margin-bottom: 0.5em;
-    color: #38bdf8;
-    letter-spacing: 0.05em;
+    color: #f4f4f5;
+    letter-spacing: 0.02em;
+    counter-increment: scene-counter;
+    position: relative;
+}
+
+.screenplay-element.scene-heading::before {
+    content: counter(scene-counter);
+    position: absolute;
+    left: -2.8rem;
+    color: #71717a;
+    font-size: 11pt;
+    font-weight: 400;
+    user-select: none;
+    pointer-events: none;
 }
 
 /* Action */
 .screenplay-element.action {
     margin-top: 0.75em;
     margin-bottom: 0.75em;
-    color: #cbd5e1;
+    color: #e4e4e7;
 }
 
-/* Character (Warm Amber) */
+/* Character */
 .screenplay-element.character {
     text-transform: uppercase;
     font-weight: 600;
@@ -230,7 +244,7 @@
     margin-bottom: 0;
     margin-left: 2.2in;
     max-width: 3.5in;
-    color: #fbbf24;
+    color: #f4f4f5;
 }
 
 /* Parenthetical */
@@ -239,7 +253,7 @@
     margin-bottom: 0;
     margin-left: 1.6in;
     max-width: 2.8in;
-    color: #94a3b8;
+    color: #a1a1aa;
 }
 
 /* Dialogue */
@@ -248,10 +262,10 @@
     margin-bottom: 0.75em;
     margin-left: 1in;
     max-width: 3.6in;
-    color: #f1f5f9;
+    color: #f4f4f5;
 }
 
-/* Transition (Violet) */
+/* Transition */
 .screenplay-element.transition {
     text-transform: uppercase;
     font-weight: 600;
@@ -259,7 +273,7 @@
     margin-bottom: 1em;
     margin-left: 4in;
     text-align: right;
-    color: #c084fc;
+    color: #f4f4f5;
 }
 
 /* Light Paper Theme (Classic Hollywood white page) */
@@ -302,6 +316,10 @@
     color: #000000 !important;
     font-weight: 700;
     letter-spacing: 0.04em;
+}
+
+.screenplay-page-light .screenplay-element.scene-heading::before {
+    color: #9ca3af !important;
 }
 
 .screenplay-page-light .screenplay-element.action {

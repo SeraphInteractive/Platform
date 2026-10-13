@@ -29,20 +29,22 @@ export function AutocompleteMenu({ suggestions, isOpen, selectedIndex, position,
 
     // clamp position within viewport
     const top = Math.min(position.top, typeof window !== "undefined" ? window.innerHeight - 240 : position.top);
-    const left = Math.min(position.left, typeof window !== "undefined" ? window.innerWidth - 280 : position.left);
+    const left = Math.min(position.left, typeof window !== "undefined" ? window.innerWidth - 260 : position.left);
 
     return (
         <div
             ref={menuRef}
             style={{ top: `${top}px`, left: `${left}px` }}
-            className="no-print fixed z-50 w-64 bg-[#141624]/95 border border-[#2b2f44] rounded-lg shadow-2xl shadow-black/90 backdrop-blur-md overflow-hidden text-xs animate-in fade-in duration-75 select-none"
+            className="no-print fixed z-50 min-w-[190px] max-w-[260px] bg-[#1e1f23] border border-[#33353a] rounded-xl shadow-2xl shadow-black/80 overflow-hidden text-xs animate-in fade-in zoom-in-95 duration-75 select-none p-1"
         >
-            <div className="px-3 py-1.5 bg-[#10121c] border-b border-[#242738] text-[10px] font-mono uppercase text-slate-400 tracking-wider flex items-center justify-between">
-                <span>{title}</span>
-                <span className="text-[9px] text-slate-500 font-mono">Tab / Enter</span>
-            </div>
+            {title && (
+                <div className="px-2.5 py-1 text-[10px] uppercase font-semibold tracking-wider text-zinc-500 font-sans flex items-center justify-between border-b border-[#2b2d33] mb-1">
+                    <span>{title}</span>
+                    <span className="text-[9px] text-zinc-600 font-mono lowercase">tab or ↵</span>
+                </div>
+            )}
 
-            <div className="max-h-52 overflow-y-auto p-1 space-y-0.5">
+            <div className="max-h-48 overflow-y-auto space-y-0.5 pr-0.5">
                 {suggestions.map((item, index) => {
                     const isSelected = index === selectedIndex;
                     return (
@@ -52,16 +54,13 @@ export function AutocompleteMenu({ suggestions, isOpen, selectedIndex, position,
                             type="button"
                             onMouseEnter={() => onHover(index)}
                             onClick={() => onSelect(item)}
-                            className={`w-full text-left px-2.5 py-1.5 rounded transition-colors flex items-center justify-between text-xs font-mono uppercase ${
-                                isSelected
-                                    ? "bg-indigo-600/30 text-white font-semibold border-l-2 border-indigo-400 pl-2"
-                                    : "text-slate-300 hover:bg-[#1a1d2e] pl-2.5"
+                            className={`w-full text-left px-2.5 py-1.5 rounded-lg transition-colors flex items-center justify-between text-xs font-mono uppercase cursor-pointer ${
+                                isSelected ? "bg-[#2f3136] text-white font-medium" : "text-zinc-300 hover:bg-[#26282c] hover:text-white"
                             }`}
-                            style={{ fontFamily: "var(--courier-font)" }}
                         >
                             <span className="truncate">{item}</span>
                             {isSelected && (
-                                <span className="text-[9px] text-indigo-300 font-sans normal-case tracking-normal shrink-0">Select</span>
+                                <span className="text-[10px] text-zinc-400 font-sans normal-case tracking-normal shrink-0 ml-2">↵</span>
                             )}
                         </button>
                     );

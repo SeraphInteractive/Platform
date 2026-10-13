@@ -26,6 +26,7 @@ import {
     Paintbrush,
     Check
 } from "lucide-react";
+import { SCREENPLAY_ELEMENT_ITEMS } from "./ArcElementMenu";
 
 export interface ArcFormattingMenuProps {
     editor: Editor | null;
@@ -220,32 +221,38 @@ export function ArcFormattingMenu({
                 {activeSubmenu === "element" && (
                     <div
                         onMouseLeave={() => setActiveSubmenu("none")}
-                        className="absolute left-full top-0 ml-1 w-52 bg-[#1a1a1e]/98 border border-[#2c2c34] rounded-xl shadow-2xl p-1 text-xs text-zinc-300 backdrop-blur-md space-y-0.5 animate-in fade-in duration-100"
+                        className="absolute left-full top-0 ml-1 w-56 bg-[#1a1b1f] border border-[#2d2f36] rounded-xl shadow-2xl p-1 text-xs text-zinc-300 backdrop-blur-md space-y-0.5 animate-in fade-in duration-100"
                     >
-                        {[
-                            { id: "sceneHeading", label: "Scene Heading", key: `${cmdKey} 1`, icon: Film },
-                            { id: "action", label: "Action", key: `${cmdKey} 2`, icon: Activity },
-                            { id: "character", label: "Character", key: `${cmdKey} 3`, icon: User },
-                            { id: "parenthetical", label: "Parenthetical", key: `${cmdKey} 4`, icon: Code },
-                            { id: "dialogue", label: "Dialogue", key: `${cmdKey} 5`, icon: MessageSquareQuote },
-                            { id: "shot", label: "Shot", key: `${cmdKey} 6`, icon: Video },
-                            { id: "transition", label: "Transition", key: `${cmdKey} 7`, icon: Flag }
-                        ].map((item) => {
+                        {SCREENPLAY_ELEMENT_ITEMS.map((item) => {
                             const Icon = item.icon;
                             const isSelected = currentType === item.id;
                             return (
                                 <button
                                     key={item.id}
-                                    onClick={() => setElementType(item.id === "shot" ? "sceneHeading" : item.id)}
-                                    className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg text-left transition-colors ${
-                                        isSelected ? "bg-[#282830] text-white font-semibold" : "hover:bg-[#25252b] text-zinc-300"
+                                    type="button"
+                                    onClick={() => setElementType(item.targetNode)}
+                                    className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg text-left transition-colors cursor-pointer group ${
+                                        isSelected
+                                            ? "bg-[#27292f] text-white font-semibold"
+                                            : "hover:bg-[#23242a] text-zinc-300 hover:text-white"
                                     }`}
                                 >
-                                    <div className="flex items-center gap-2">
-                                        <Icon className="w-3.5 h-3.5 text-zinc-400" />
-                                        <span>{item.label}</span>
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                        <Icon
+                                            className={`w-4 h-4 shrink-0 ${
+                                                isSelected ? "text-[#60a5fa]" : "text-zinc-400 group-hover:text-zinc-300"
+                                            }`}
+                                        />
+                                        <span className="text-[13px] font-medium tracking-wide truncate">{item.label}</span>
                                     </div>
-                                    <span className="text-[10px] font-mono text-zinc-500">{item.key}</span>
+                                    <div className="flex items-center gap-1 shrink-0 ml-3">
+                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium text-zinc-300 bg-[#282a30] leading-none select-none">
+                                            {cmdKey}
+                                        </span>
+                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium text-zinc-300 bg-[#282a30] leading-none select-none">
+                                            {item.num}
+                                        </span>
+                                    </div>
                                 </button>
                             );
                         })}

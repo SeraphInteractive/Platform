@@ -121,13 +121,24 @@ export function ScriptDashboard() {
             saveStoredShelves(uniqueShelves);
         }
 
+        // if user is not admin, only show permitted scripts they have been invited to
+        if (!isAdmin && user?.isInvited) {
+            const permitted = user.invitedScriptIds || [];
+            if (!permitted.includes("*")) {
+                const filtered = loadedScripts.filter((s) => permitted.includes(s.id));
+                setScripts(filtered);
+                setShelves(uniqueShelves);
+                return;
+            }
+        }
+
         setScripts(loadedScripts);
         setShelves(uniqueShelves);
     };
 
     useEffect(() => {
         refreshData();
-    }, []);
+    }, [user, isAdmin]);
 
     // auto close context menus on outside click
     useEffect(() => {
@@ -447,16 +458,6 @@ export function ScriptDashboard() {
                 {isSidebarOpen && (
                     <aside className="w-60 bg-[#16171a] border-r border-[#33353a] flex flex-col justify-between shrink-0 p-3">
                         <div className="space-y-3">
-                            {/* Back to Platform */}
-                            <a
-                                href="/studio"
-                                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-[#27292c] transition-colors group"
-                                title="Back to Platform Studio"
-                            >
-                                <ArrowLeft className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 transition-colors shrink-0" />
-                                <span>Back to Platform</span>
-                            </a>
-
                             {/* User Profile - seamless, unboxed */}
                             <div className="relative">
                                 <button
@@ -1616,7 +1617,11 @@ export function ScriptDashboard() {
                 </div>
             )}
             {/* Invite Registered User Modal */}
-            <InviteUserModal isOpen={isInviteModalOpen} onClose={() => setIsInviteModalOpen(false)} />
+            <InviteUserModal
+                isOpen={isInviteModalOpen}
+                onClose={() => setIsInviteModalOpen(false)}
+                availableScripts={scripts.map((s) => ({ id: s.id, title: s.title }))}
+            />
         </div>
     );
 }

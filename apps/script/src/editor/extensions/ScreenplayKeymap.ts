@@ -1,5 +1,52 @@
 import { Extension } from "@tiptap/core";
+import { canSplit } from "@tiptap/pm/transform";
 import { removePageBreak } from "../nodes/PageBreak";
+
+// atomic split into fresh block type avoiding schema attribute pollution
+function splitToType(editor: any, targetTypeName: string): boolean {
+    const { state, view } = editor;
+    const targetType = state.schema.nodes[targetTypeName];
+    if (!targetType) return false;
+
+    const { selection } = state;
+    const { $from } = selection;
+    const tr = state.tr;
+
+    if (!selection.empty) {
+        tr.deleteSelection();
+    }
+
+    const pos = tr.mapping.map($from.pos);
+    const typesAfter = [{ type: targetType, attrs: {} }];
+
+    if (canSplit(tr.doc, pos, 1, typesAfter)) {
+        tr.split(pos, 1, typesAfter);
+        view.dispatch(tr.scrollIntoView());
+        return true;
+    }
+
+    tr.split(pos, 1);
+    view.dispatch(tr.scrollIntoView());
+    return true;
+}
+
+// converts target block directly resetting attributes
+function setBlockToType(editor: any, targetTypeName: string): boolean {
+    const { state, view } = editor;
+    const targetType = state.schema.nodes[targetTypeName];
+    if (!targetType) return false;
+
+    const { selection } = state;
+    const tr = state.tr;
+
+    for (let i = 0; i < selection.ranges.length; i++) {
+        const { $from, $to } = selection.ranges[i];
+        tr.setBlockType($from.pos, $to.pos, targetType, {});
+    }
+
+    view.dispatch(tr.scrollIntoView());
+    return true;
+}
 
 export const ScreenplayKeymap = Extension.create({
     name: "screenplayKeymap",
@@ -14,43 +61,37 @@ export const ScreenplayKeymap = Extension.create({
                 const currentType = parentNode.type.name;
                 const isEmpty = parentNode.textContent.trim().length === 0;
 
-                const splitAndSet = (target: string) => {
-                    editor.commands.splitBlock();
-                    editor.commands.setNode(target);
-                    return true;
-                };
-
-                // on empty lines, convert to the logical next element or action
+                // empty lines convert to logical next element or action
                 if (isEmpty) {
                     if (currentType === "sceneHeading") {
-                        return editor.chain().setNode("action").run();
+                        return setBlockToType(editor, "action");
                     }
                     if (currentType === "character" || currentType === "dialogue" || currentType === "transition") {
-                        return editor.chain().setNode("action").run();
+                        return setBlockToType(editor, "action");
                     }
                     if (currentType === "parenthetical") {
-                        return editor.chain().setNode("dialogue").run();
+                        return setBlockToType(editor, "dialogue");
                     }
                 }
 
                 if (currentType === "sceneHeading") {
-                    return splitAndSet("action");
+                    return splitToType(editor, "action");
                 }
 
                 if (currentType === "character") {
-                    return splitAndSet("dialogue");
+                    return splitToType(editor, "dialogue");
                 }
 
                 if (currentType === "parenthetical") {
-                    return splitAndSet("dialogue");
+                    return splitToType(editor, "dialogue");
                 }
 
                 if (currentType === "dialogue") {
-                    return splitAndSet("action");
+                    return splitToType(editor, "action");
                 }
 
                 if (currentType === "transition") {
-                    return splitAndSet("sceneHeading");
+                    return splitToType(editor, "sceneHeading");
                 }
 
                 return false;
@@ -64,57 +105,50 @@ export const ScreenplayKeymap = Extension.create({
                 const currentType = parentNode.type.name;
                 const isEmpty = parentNode.textContent.trim().length === 0;
 
-                const splitAndSet = (target: string) => {
-                    editor.commands.splitBlock();
-                    editor.commands.setNode(target);
-                    return true;
-                };
-
-                // on blank lines, tab rotates the element type
+                // blank lines rotate element type
                 if (isEmpty) {
                     if (currentType === "action") {
-                        return editor.chain().setNode("character").run();
+                        return setBlockToType(editor, "character");
                     }
                     if (currentType === "character") {
-                        return editor.chain().setNode("transition").run();
+                        return setBlockToType(editor, "transition");
                     }
                     if (currentType === "transition") {
-                        return editor.chain().setNode("sceneHeading").run();
+                        return setBlockToType(editor, "sceneHeading");
                     }
                     if (currentType === "sceneHeading") {
-                        return editor.chain().setNode("action").run();
+                        return setBlockToType(editor, "action");
                     }
                     if (currentType === "dialogue") {
-                        return editor.chain().setNode("parenthetical").run();
+                        return setBlockToType(editor, "parenthetical");
                     }
                     if (currentType === "parenthetical") {
-                        return editor.chain().setNode("dialogue").run();
+                        return setBlockToType(editor, "dialogue");
                     }
                 }
 
-                // if typing with content: tab advances to the logical sub-element
                 if (currentType === "action") {
-                    return splitAndSet("character");
+                    return splitToType(editor, "character");
                 }
 
                 if (currentType === "character") {
-                    return splitAndSet("parenthetical");
+                    return splitToType(editor, "parenthetical");
                 }
 
                 if (currentType === "parenthetical") {
-                    return splitAndSet("dialogue");
+                    return splitToType(editor, "dialogue");
                 }
 
                 if (currentType === "dialogue") {
-                    return splitAndSet("parenthetical");
+                    return splitToType(editor, "parenthetical");
                 }
 
                 if (currentType === "transition") {
-                    return splitAndSet("sceneHeading");
+                    return splitToType(editor, "sceneHeading");
                 }
 
                 if (currentType === "sceneHeading") {
-                    return splitAndSet("action");
+                    return splitToType(editor, "action");
                 }
 
                 return false;
@@ -127,19 +161,19 @@ export const ScreenplayKeymap = Extension.create({
                 const currentType = $from.parent.type.name;
 
                 if (currentType === "character") {
-                    return editor.chain().setNode("action").run();
+                    return setBlockToType(editor, "action");
                 }
                 if (currentType === "parenthetical") {
-                    return editor.chain().setNode("character").run();
+                    return setBlockToType(editor, "character");
                 }
                 if (currentType === "dialogue") {
-                    return editor.chain().setNode("character").run();
+                    return setBlockToType(editor, "character");
                 }
                 if (currentType === "transition") {
-                    return editor.chain().setNode("character").run();
+                    return setBlockToType(editor, "character");
                 }
                 if (currentType === "sceneHeading") {
-                    return editor.chain().setNode("transition").run();
+                    return setBlockToType(editor, "transition");
                 }
                 return false;
             },
@@ -164,18 +198,12 @@ export const ScreenplayKeymap = Extension.create({
                 const isEmpty = parentNode.textContent.trim().length === 0;
                 const isAtStart = $from.parentOffset === 0;
 
-                // if at start of block and previous block was a scriptImage or pageBreak, delete it
+                // delete preceding atom block when cursor is at start
                 if (isAtStart && $from.depth >= 1) {
                     const index = $from.index(0);
                     if (index > 0) {
                         const prevBlock = state.doc.child(index - 1);
-                        if (prevBlock.type.name === "scriptImage") {
-                            const prevStart = $from.before(1) - prevBlock.nodeSize;
-                            const tr = state.tr.delete(prevStart, $from.before(1));
-                            editor.view.dispatch(tr);
-                            return true;
-                        }
-                        if (prevBlock.type.name === "pageBreak") {
+                        if (prevBlock.type.name === "scriptImage" || prevBlock.type.name === "pageBreak") {
                             const prevStart = $from.before(1) - prevBlock.nodeSize;
                             const tr = state.tr.delete(prevStart, $from.before(1));
                             editor.view.dispatch(tr);
@@ -187,10 +215,10 @@ export const ScreenplayKeymap = Extension.create({
                 // convert empty specialized blocks back to standard block on backspace
                 if (isEmpty || isAtStart) {
                     if (currentType === "parenthetical") {
-                        return editor.chain().setNode("dialogue").run();
+                        return setBlockToType(editor, "dialogue");
                     }
                     if (currentType === "character" || currentType === "transition" || currentType === "sceneHeading") {
-                        return editor.chain().setNode("action").run();
+                        return setBlockToType(editor, "action");
                     }
                 }
                 return false;
@@ -209,18 +237,19 @@ export const ScreenplayKeymap = Extension.create({
                 return false;
             },
 
-            // industry standard shortcut: Cmd+Enter / Ctrl+Enter inserts page break
+            // Cmd+Enter / Ctrl+Enter inserts page break
             "Mod-Enter": ({ editor }) => {
                 return editor.commands.setPageBreak();
             },
 
-            // numerical element shortcuts
-            "Mod-1": ({ editor }) => editor.chain().setNode("sceneHeading").run(),
-            "Mod-2": ({ editor }) => editor.chain().setNode("action").run(),
-            "Mod-3": ({ editor }) => editor.chain().setNode("character").run(),
-            "Mod-4": ({ editor }) => editor.chain().setNode("dialogue").run(),
-            "Mod-5": ({ editor }) => editor.chain().setNode("parenthetical").run(),
-            "Mod-6": ({ editor }) => editor.chain().setNode("transition").run()
+            // numerical element shortcuts matching Arc Studio
+            "Mod-1": ({ editor }) => setBlockToType(editor, "sceneHeading"),
+            "Mod-2": ({ editor }) => setBlockToType(editor, "action"),
+            "Mod-3": ({ editor }) => setBlockToType(editor, "character"),
+            "Mod-4": ({ editor }) => setBlockToType(editor, "parenthetical"),
+            "Mod-5": ({ editor }) => setBlockToType(editor, "dialogue"),
+            "Mod-6": ({ editor }) => setBlockToType(editor, "sceneHeading"),
+            "Mod-7": ({ editor }) => setBlockToType(editor, "transition")
         };
     }
 });

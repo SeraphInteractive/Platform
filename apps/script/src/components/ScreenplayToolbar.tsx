@@ -44,6 +44,8 @@ interface ScreenplayToolbarProps {
     setIsStashOpen: (val: boolean) => void;
     isHistoryOpen: boolean;
     setIsHistoryOpen: (val: boolean) => void;
+    user?: any;
+    onOpenInviteModal?: () => void;
     pageTheme?: "dark" | "light";
     onTogglePageTheme?: () => void;
     onOpenCommandPalette: () => void;
@@ -69,6 +71,8 @@ export function ScreenplayToolbar({
     setIsStashOpen,
     isHistoryOpen,
     setIsHistoryOpen,
+    user,
+    onOpenInviteModal,
     pageTheme = "dark",
     onTogglePageTheme,
     onOpenCommandPalette,
@@ -179,39 +183,35 @@ export function ScreenplayToolbar({
                 </div>
             </div>
 
-            {/* Center: Arc Studio Slim View Segment Switcher */}
-            <div className="flex items-center bg-[#27292c] p-0.5 rounded-lg border border-[#33353a]">
+            {/* Center: Arc Studio Tabs (Script | Beats | Outline) */}
+            <div className="flex items-center gap-1 sm:gap-2 text-xs font-medium">
                 <button
                     onClick={() => setLayoutMode("script")}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${
-                        layoutMode === "script" ? "bg-[#212326] text-white shadow-xs" : "text-zinc-400 hover:text-zinc-200"
+                    className={`px-2.5 py-1 rounded transition-colors ${
+                        layoutMode === "script"
+                            ? "text-zinc-100 font-semibold border-b-2 border-[#4c8aec]"
+                            : "text-zinc-400 hover:text-zinc-200"
                     }`}
-                    title="Script"
                 >
-                    <FileText className="w-3 h-3" />
-                    <span>Script</span>
-                </button>
-
-                <button
-                    onClick={() => setLayoutMode("split")}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${
-                        layoutMode === "split" ? "bg-[#212326] text-white shadow-xs" : "text-zinc-400 hover:text-zinc-200"
-                    }`}
-                    title="Split View"
-                >
-                    <Columns className="w-3 h-3" />
-                    <span>Split</span>
+                    Script
                 </button>
 
                 <button
                     onClick={() => setLayoutMode("beatboard")}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${
-                        layoutMode === "beatboard" ? "bg-[#212326] text-white shadow-xs" : "text-zinc-400 hover:text-zinc-200"
+                    className={`px-2.5 py-1 rounded transition-colors ${
+                        layoutMode === "beatboard"
+                            ? "text-zinc-100 font-semibold border-b-2 border-[#4c8aec]"
+                            : "text-zinc-400 hover:text-zinc-200"
                     }`}
-                    title="Plot Board"
                 >
-                    <Layers className="w-3 h-3" />
-                    <span>Board</span>
+                    Beats
+                </button>
+
+                <button
+                    onClick={() => setIsNavOpen(!isNavOpen)}
+                    className={`px-2.5 py-1 rounded transition-colors ${isNavOpen ? "text-zinc-200" : "text-zinc-400 hover:text-zinc-200"}`}
+                >
+                    Outline
                 </button>
             </div>
 
@@ -360,6 +360,26 @@ export function ScreenplayToolbar({
                         </div>
                     )}
                 </div>
+
+                {/* Invite Collaborator / Avatar matching Arc Studio */}
+                {onOpenInviteModal && (
+                    <button
+                        onClick={onOpenInviteModal}
+                        className="relative p-0.5 rounded-full hover:ring-2 hover:ring-[#4c8aec]/50 transition-all ml-1 group cursor-pointer"
+                        title="Invite collaborators to Studio"
+                    >
+                        {user?.avatarUrl ? (
+                            <img src={user.avatarUrl} alt="" className="w-6 h-6 rounded-full object-cover" />
+                        ) : (
+                            <div className="w-6 h-6 rounded-full bg-[#27292c] border border-[#3e4044] text-[#4c8aec] flex items-center justify-center font-bold text-[10px] uppercase">
+                                {(user?.globalName || user?.username || "PS").slice(0, 2)}
+                            </div>
+                        )}
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#4c8aec] text-white rounded-full flex items-center justify-center text-[9px] font-bold border border-[#16171a]">
+                            +
+                        </span>
+                    </button>
+                )}
             </div>
         </header>
     );

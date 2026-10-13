@@ -21,15 +21,13 @@ import {
     SeparatorHorizontal,
     Sun,
     Moon,
-    Film,
-    Activity,
+    Image,
     User,
-    Code,
-    MessageSquareQuote,
-    Video,
-    Flag
+    Parentheses,
+    MessageCircleMore,
+    Video
 } from "lucide-react";
-import { ArcFormattingMenu } from "./ArcFormattingMenu";
+import { ArcElementMenu, SCREENPLAY_ELEMENT_ITEMS } from "./ArcElementMenu";
 
 interface ArcShortcutDockProps {
     editor: Editor | null;
@@ -42,15 +40,6 @@ interface ArcShortcutDockProps {
     onTogglePlotBoard?: () => void;
     onToggleStash?: () => void;
 }
-
-const SCREENPLAY_ELEMENTS = [
-    { id: "sceneHeading", label: "Scene Heading", key: "Cmd+1" },
-    { id: "action", label: "Action", key: "Cmd+2" },
-    { id: "character", label: "Character", key: "Cmd+3" },
-    { id: "dialogue", label: "Dialogue", key: "Cmd+4" },
-    { id: "parenthetical", label: "Parenthetical", key: "Cmd+5" },
-    { id: "transition", label: "Transition", key: "Cmd+6" }
-];
 
 export function ArcShortcutDock({
     editor,
@@ -75,16 +64,8 @@ export function ArcShortcutDock({
     const isHighlight = editor.isActive("highlight");
 
     // dynamically map element type to icon matching arc studio dock
-    const elementIcons: Record<string, React.ComponentType<{ className?: string }>> = {
-        sceneHeading: Film,
-        action: Activity,
-        character: User,
-        parenthetical: Code,
-        dialogue: MessageSquareQuote,
-        shot: Video,
-        transition: Flag
-    };
-    const CurrentElementIcon = elementIcons[currentType] || Type;
+    const currentItem = SCREENPLAY_ELEMENT_ITEMS.find((item) => item.id === currentType);
+    const CurrentElementIcon = currentItem?.icon || Type;
 
     const setElementType = (type: string) => {
         editor.chain().focus().setNode(type).run();
@@ -109,15 +90,8 @@ export function ArcShortcutDock({
     return (
         <div className="no-print fixed bottom-6 left-1/2 -translate-x-1/2 z-40 select-none">
             <div className="relative">
-                {/* Arc Studio Formatting Menu (Exact replica) */}
-                <ArcFormattingMenu
-                    editor={editor}
-                    isOpen={showElementMenu}
-                    onClose={() => setShowElementMenu(false)}
-                    onOpenBeatBoard={onTogglePlotBoard}
-                    onOpenComments={onToggleStash}
-                    align="dock"
-                />
+                {/* Arc Studio Screenplay Element Menu (Exact replica) */}
+                <ArcElementMenu editor={editor} isOpen={showElementMenu} onClose={() => setShowElementMenu(false)} align="dock" />
 
                 {/* Arc Studio Floating Shortcut Capsule */}
                 <div className="flex items-center gap-0.5 px-2 py-1.5 bg-[#16171a]/98 border border-[#33353a] rounded-2xl shadow-2xl shadow-black/80 backdrop-blur-md text-zinc-400">
