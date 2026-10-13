@@ -26,7 +26,7 @@ import {
     Loader2
 } from "lucide-react";
 
-export type ViewLayoutMode = "script" | "split" | "beatboard";
+export type ViewLayoutMode = "script" | "split" | "beatboard" | "outline";
 
 interface ScreenplayToolbarProps {
     editor: Editor | null;
@@ -43,6 +43,8 @@ interface ScreenplayToolbarProps {
     setIsStashOpen: (val: boolean) => void;
     isHistoryOpen: boolean;
     setIsHistoryOpen: (val: boolean) => void;
+    isAdmin?: boolean;
+    isReadOnly?: boolean;
     user?: any;
     onOpenInviteModal?: () => void;
     pageTheme?: "dark" | "light";
@@ -70,6 +72,8 @@ export function ScreenplayToolbar({
     setIsStashOpen,
     isHistoryOpen,
     setIsHistoryOpen,
+    isAdmin: propIsAdmin,
+    isReadOnly = false,
     user,
     onOpenInviteModal,
     pageTheme = "dark",
@@ -81,6 +85,7 @@ export function ScreenplayToolbar({
     onExportFountain,
     onImportFile
 }: ScreenplayToolbarProps) {
+    const isAdmin = propIsAdmin ?? (user?.role === "admin" || user?.role === "super_admin");
     const [showExportMenu, setShowExportMenu] = useState(false);
     const [isEditingTitle, setIsEditingTitle] = useState(false);
 
@@ -151,26 +156,30 @@ export function ScreenplayToolbar({
                         />
                     ) : (
                         <span
-                            onClick={() => setIsEditingTitle(true)}
-                            className="font-medium text-zinc-200 hover:text-white cursor-pointer truncate max-w-[240px] tracking-wide"
-                            title="Click to rename"
+                            onClick={() => !isReadOnly && setIsEditingTitle(true)}
+                            className={`font-medium text-zinc-200 truncate max-w-[240px] tracking-wide ${
+                                isReadOnly ? "cursor-default" : "hover:text-white cursor-pointer"
+                            }`}
+                            title={isReadOnly ? scriptTitle : "Click to rename"}
                         >
                             {scriptTitle}
                         </span>
                     )}
 
-                    {/* Small colourless save indicator */}
-                    <div
-                        className="flex items-center gap-1.5 px-1.5 py-0.5 text-zinc-500 font-mono text-[11px] select-none"
-                        title={isSaving ? "Saving changes..." : "Saved to local storage"}
-                    >
-                        {isSaving ? (
-                            <Loader2 className="w-3 h-3 animate-spin text-zinc-500 shrink-0" />
-                        ) : (
-                            <Check className="w-3 h-3 text-zinc-500 shrink-0" />
-                        )}
-                        <span className="hidden sm:inline">{isSaving ? "Saving..." : "Saved"}</span>
-                    </div>
+                    {/* Small colourless save indicator (hidden when read-only) */}
+                    {!isReadOnly && (
+                        <div
+                            className="flex items-center gap-1.5 px-1.5 py-0.5 text-zinc-500 font-mono text-[11px] select-none"
+                            title={isSaving ? "Saving changes..." : "Saved to local storage"}
+                        >
+                            {isSaving ? (
+                                <Loader2 className="w-3 h-3 animate-spin text-zinc-500 shrink-0" />
+                            ) : (
+                                <Check className="w-3 h-3 text-zinc-500 shrink-0" />
+                            )}
+                            <span className="hidden sm:inline">{isSaving ? "Saving..." : "Saved"}</span>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -199,8 +208,12 @@ export function ScreenplayToolbar({
                 </button>
 
                 <button
-                    onClick={() => setIsNavOpen(!isNavOpen)}
-                    className={`px-2.5 py-1 rounded transition-colors ${isNavOpen ? "text-zinc-200" : "text-zinc-400 hover:text-zinc-200"}`}
+                    onClick={() => setLayoutMode("outline")}
+                    className={`px-2.5 py-1 rounded transition-colors ${
+                        layoutMode === "outline"
+                            ? "text-zinc-100 font-semibold border-b-2 border-[#4c8aec]"
+                            : "text-zinc-400 hover:text-zinc-200"
+                    }`}
                 >
                     Outline
                 </button>
@@ -334,26 +347,30 @@ export function ScreenplayToolbar({
                             >
                                 Print / PDF (.pdf)
                             </button>
-                            <div className="border-t border-[#33353a] my-1" />
-                            <label className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-[#25262a] text-zinc-200 cursor-pointer">
-                                <Upload className="w-3 h-3 text-[#4c8aec]" />
-                                <span>Import File</span>
-                                <input
-                                    type="file"
-                                    accept=".fdx,.fountain,.txt"
-                                    onChange={(e) => {
-                                        onImportFile(e);
-                                        setShowExportMenu(false);
-                                    }}
-                                    className="hidden"
-                                />
-                            </label>
+                            {isAdmin && (
+                                <>
+                                    <div className="border-t border-[#33353a] my-1" />
+                                    <label className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-[#25262a] text-zinc-200 cursor-pointer">
+                                        <Upload className="w-3 h-3 text-[#4c8aec]" />
+                                        <span>Import File</span>
+                                        <input
+                                            type="file"
+                                            accept=".fdx,.fountain,.txt"
+                                            onChange={(e) => {
+                                                onImportFile(e);
+                                                setShowExportMenu(false);
+                                            }}
+                                            className="hidden"
+                                        />
+                                    </label>
+                                </>
+                            )}
                         </div>
                     )}
                 </div>
 
                 {/* Invite Collaborator / Avatar matching Arc Studio */}
-                {onOpenInviteModal && (
+                {onOpenInviteModal && isAdmin && (
                     <button
                         onClick={onOpenInviteModal}
                         className="relative p-0.5 rounded-full hover:ring-2 hover:ring-[#4c8aec]/50 transition-all ml-1 group cursor-pointer"

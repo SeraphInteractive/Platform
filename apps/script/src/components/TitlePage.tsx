@@ -15,9 +15,10 @@ interface TitlePageProps {
     onChange: (updates: Partial<TitlePageData>) => void;
     isContinuous: boolean;
     theme?: "dark" | "light";
+    readOnly?: boolean;
 }
 
-export function TitlePage({ data, onChange, isContinuous, theme = "dark" }: TitlePageProps) {
+export function TitlePage({ data, onChange, isContinuous, theme = "dark", readOnly = false }: TitlePageProps) {
     const isLight = theme === "light";
 
     return (
@@ -35,11 +36,12 @@ export function TitlePage({ data, onChange, isContinuous, theme = "dark" }: Titl
                 <input
                     type="text"
                     value={data.title}
-                    onChange={(e) => onChange({ title: e.target.value.toUpperCase() })}
+                    readOnly={readOnly}
+                    onChange={(e) => !readOnly && onChange({ title: e.target.value.toUpperCase() })}
                     placeholder="UNTITLED SCREENPLAY"
                     className={`w-full bg-transparent text-center font-bold text-2xl tracking-widest uppercase focus:outline-none border-none py-1 ${
                         isLight ? "text-neutral-900 placeholder:text-neutral-300" : "text-[#e2e8f0] placeholder-zinc-600"
-                    }`}
+                    } ${readOnly ? "cursor-default" : ""}`}
                     style={{ fontFamily: "var(--courier-font)" }}
                 />
 
@@ -48,22 +50,24 @@ export function TitlePage({ data, onChange, isContinuous, theme = "dark" }: Titl
                 <input
                     type="text"
                     value={data.author}
-                    onChange={(e) => onChange({ author: e.target.value })}
+                    readOnly={readOnly}
+                    onChange={(e) => !readOnly && onChange({ author: e.target.value })}
                     placeholder="Writer"
                     className={`w-full bg-transparent text-center text-sm font-semibold tracking-wider focus:outline-none border-none py-1 ${
                         isLight ? "text-neutral-900 placeholder:text-neutral-300" : "text-[#e2e8f0] placeholder-zinc-600"
-                    }`}
+                    } ${readOnly ? "cursor-default" : ""}`}
                     style={{ fontFamily: "var(--courier-font)" }}
                 />
 
                 <input
                     type="text"
                     value={data.basedOn || ""}
-                    onChange={(e) => onChange({ basedOn: e.target.value })}
+                    readOnly={readOnly}
+                    onChange={(e) => !readOnly && onChange({ basedOn: e.target.value })}
                     placeholder="Based on..."
                     className={`w-full bg-transparent text-center text-xs focus:outline-none border-none py-1 ${
                         isLight ? "text-neutral-600 placeholder:text-neutral-300" : "text-zinc-400 placeholder-zinc-600"
-                    }`}
+                    } ${readOnly ? "cursor-default" : ""}`}
                     style={{ fontFamily: "var(--courier-font)" }}
                 />
             </div>
@@ -78,11 +82,12 @@ export function TitlePage({ data, onChange, isContinuous, theme = "dark" }: Titl
                     <textarea
                         rows={3}
                         value={data.contact || ""}
-                        onChange={(e) => onChange({ contact: e.target.value })}
+                        readOnly={readOnly}
+                        onChange={(e) => !readOnly && onChange({ contact: e.target.value })}
                         placeholder="Contact"
                         className={`w-full bg-transparent resize-none focus:outline-none border-none p-0 text-[11px] ${
                             isLight ? "text-neutral-700 placeholder:text-neutral-300" : "text-zinc-300 placeholder-zinc-600"
-                        }`}
+                        } ${readOnly ? "cursor-default" : ""}`}
                         style={{ fontFamily: "var(--courier-font)" }}
                     />
                 </div>
@@ -91,11 +96,12 @@ export function TitlePage({ data, onChange, isContinuous, theme = "dark" }: Titl
                     <input
                         type="text"
                         value={data.draftInfo || ""}
-                        onChange={(e) => onChange({ draftInfo: e.target.value })}
+                        readOnly={readOnly}
+                        onChange={(e) => !readOnly && onChange({ draftInfo: e.target.value })}
                         placeholder="Draft / Date"
                         className={`w-full bg-transparent text-right focus:outline-none border-none py-1 text-[11px] ${
                             isLight ? "text-neutral-700 placeholder:text-neutral-300" : "text-zinc-300 placeholder-zinc-600"
-                        }`}
+                        } ${readOnly ? "cursor-default" : ""}`}
                         style={{ fontFamily: "var(--courier-font)" }}
                     />
                 </div>

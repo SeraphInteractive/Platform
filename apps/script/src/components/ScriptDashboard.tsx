@@ -124,12 +124,30 @@ export function ScriptDashboard() {
         // if user is not admin, only show permitted scripts they have been invited to
         if (!isAdmin && user?.isInvited) {
             const permitted = user.invitedScriptIds || [];
-            if (!permitted.includes("*")) {
-                const filtered = loadedScripts.filter((s) => permitted.includes(s.id));
-                setScripts(filtered);
-                setShelves(uniqueShelves);
-                return;
+            let filtered = loadedScripts.filter((s) => permitted.includes("*") || permitted.includes(s.id));
+
+            // ensure accepted invites without local storage copy are populated
+            if (Array.isArray(user.acceptedInvites)) {
+                for (const inv of user.acceptedInvites) {
+                    if (inv.scriptId && !filtered.some((s) => s.id === inv.scriptId)) {
+                        const syntheticScript: ScriptDocument = {
+                            id: inv.scriptId,
+                            title: inv.scriptTitle || "Untitled Screenplay",
+                            author: "",
+                            lastModified: Date.now(),
+                            shelfId: null,
+                            category: "shared",
+                            wordCount: 0,
+                            sceneCount: 1
+                        };
+                        filtered.push(syntheticScript);
+                    }
+                }
             }
+
+            setScripts(filtered);
+            setShelves(uniqueShelves);
+            return;
         }
 
         setScripts(loadedScripts);
@@ -158,6 +176,7 @@ export function ScriptDashboard() {
 
     const handleCreateScript = (e?: React.FormEvent) => {
         if (e) e.preventDefault();
+        if (!isAdmin) return;
         const title = newTitle.trim() || "Untitled Screenplay";
         const targetShelf = targetShelfIdForCreate || null;
         const created = createNewScript(title, targetShelf);
@@ -168,18 +187,21 @@ export function ScriptDashboard() {
     };
 
     const openCreateForShelf = (shelfId: string) => {
+        if (!isAdmin) return;
         setTargetShelfIdForCreate(shelfId);
         setNewTitle("");
         setIsCreateOpen(true);
     };
 
     const handleDuplicateScript = (id: string) => {
+        if (!isAdmin) return;
         duplicateScript(id);
         refreshData();
         setMenuOpenId(null);
     };
 
     const handleDeleteScript = (id: string) => {
+        if (!isAdmin) return;
         deleteScript(id);
         refreshData();
         setMenuOpenId(null);
@@ -187,7 +209,7 @@ export function ScriptDashboard() {
 
     const handleSaveRenameScript = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!renamingScript) return;
+        if (!isAdmin || !renamingScript) return;
         const trimmed = renameValue.trim();
         if (trimmed) {
             updateScript(renamingScript.id, { title: trimmed });
@@ -199,6 +221,7 @@ export function ScriptDashboard() {
     // shelf actions
     const handleCreateShelf = (e: React.FormEvent) => {
         e.preventDefault();
+        if (!isAdmin) return;
         const trimmed = newShelfName.trim();
         if (trimmed) {
             createShelf(trimmed);
@@ -210,7 +233,7 @@ export function ScriptDashboard() {
 
     const handleSaveRenameShelf = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!renamingShelf) return;
+        if (!isAdmin || !renamingShelf) return;
         const trimmed = renameShelfValue.trim();
         if (trimmed) {
             renameShelf(renamingShelf.id, trimmed);
@@ -224,6 +247,7 @@ export function ScriptDashboard() {
             e.stopPropagation();
             e.preventDefault();
         }
+        if (!isAdmin) return;
         deleteShelf(shelfId);
         if (activeFilterId === shelfId) {
             setActiveFilterId("all");
@@ -259,7 +283,7 @@ export function ScriptDashboard() {
     };
 
     const handleMoveToShelf = (targetShelfId: string | null) => {
-        if (!movingScript) return;
+        if (!isAdmin || !movingScript) return;
         moveScriptToShelf(movingScript.id, targetShelfId);
         refreshData();
         setMovingScript(null);
@@ -267,6 +291,7 @@ export function ScriptDashboard() {
 
     // drag and drop handlers for visual reordering
     const handleDragStart = (e: React.DragEvent, scriptId: string) => {
+        if (!isAdmin) return;
         e.dataTransfer.setData("text/plain", scriptId);
         e.dataTransfer.effectAllowed = "move";
         setDraggedScriptId(scriptId);
@@ -280,6 +305,7 @@ export function ScriptDashboard() {
     };
 
     const handleShelfDragOver = (e: React.DragEvent, shelfId: string | null) => {
+        if (!isAdmin) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
         const key = shelfId || "unfiled";
@@ -289,6 +315,7 @@ export function ScriptDashboard() {
     };
 
     const handleScriptDragOver = (e: React.DragEvent, scriptId: string) => {
+        if (!isAdmin) return;
         e.preventDefault();
         e.stopPropagation();
         e.dataTransfer.dropEffect = "move";
@@ -308,7 +335,7 @@ export function ScriptDashboard() {
 
     const handleDropOnShelfContainer = (e: React.DragEvent, targetShelfId: string | null) => {
         e.preventDefault();
-        if (!draggedScriptId) return;
+        if (!isAdmin || !draggedScriptId) return;
 
         moveScriptToShelf(draggedScriptId, targetShelfId);
         refreshData();
@@ -319,7 +346,7 @@ export function ScriptDashboard() {
         e.preventDefault();
         e.stopPropagation();
 
-        if (!draggedScriptId || draggedScriptId === targetScriptId) {
+        if (!isAdmin || !draggedScriptId || draggedScriptId === targetScriptId) {
             handleDragEnd();
             return;
         }
@@ -441,10 +468,17 @@ export function ScriptDashboard() {
 
                     <button
                         onClick={() => {
+                            if (!isAdmin) return;
                             setTargetShelfIdForCreate("");
                             setIsCreateOpen(true);
                         }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#4c8aec] hover:bg-[#3b7be0] text-white rounded-lg text-xs font-semibold transition-colors shadow-xs"
+                        disabled={!isAdmin}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shadow-xs ${
+                            isAdmin
+                                ? "bg-[#4c8aec] hover:bg-[#3b7be0] text-white"
+                                : "bg-[#25272c] text-zinc-500 cursor-not-allowed border border-[#33353a]"
+                        }`}
+                        title={isAdmin ? "Create Screenplay" : "Creating screenplays requires an administrator role."}
                     >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Create Screenplay</span>
@@ -597,11 +631,17 @@ export function ScriptDashboard() {
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
+                                            if (!isAdmin) return;
                                             setTargetShelfIdForCreate("");
                                             setIsCreateOpen(true);
                                         }}
-                                        className="p-1 rounded text-zinc-500 hover:text-white hover:bg-[#33353a] transition-colors"
-                                        title="New Screenplay"
+                                        disabled={!isAdmin}
+                                        className={`p-1 rounded transition-colors ${
+                                            isAdmin
+                                                ? "text-zinc-500 hover:text-white hover:bg-[#33353a]"
+                                                : "text-zinc-600 cursor-not-allowed"
+                                        }`}
+                                        title={isAdmin ? "New Screenplay" : "Creating screenplays requires an administrator role."}
                                     >
                                         <Plus className="w-3.5 h-3.5" />
                                     </button>
@@ -615,9 +655,17 @@ export function ScriptDashboard() {
                                 <div className="flex items-center justify-between px-2.5 mb-2 text-xs text-zinc-400">
                                     <span className="font-semibold uppercase tracking-wider text-zinc-500">Shelves</span>
                                     <button
-                                        onClick={() => setIsCreateShelfOpen(true)}
-                                        className="p-1 rounded hover:bg-[#27292c] hover:text-white transition-colors"
-                                        title="Create Shelf"
+                                        onClick={() => {
+                                            if (!isAdmin) return;
+                                            setIsCreateShelfOpen(true);
+                                        }}
+                                        disabled={!isAdmin}
+                                        className={`p-1 rounded transition-colors ${
+                                            isAdmin
+                                                ? "hover:bg-[#27292c] hover:text-white text-zinc-400"
+                                                : "text-zinc-600 cursor-not-allowed"
+                                        }`}
+                                        title={isAdmin ? "Create Shelf" : "Creating screenplays requires an administrator role."}
                                     >
                                         <Plus className="w-4 h-4" />
                                     </button>
@@ -764,30 +812,36 @@ export function ScriptDashboard() {
                                     <FileText className="w-6 h-6 text-[#60a5fa]" />
                                 </div>
                                 <div className="space-y-1">
-                                    <h3 className="text-base font-semibold text-zinc-200">No screenplays yet</h3>
+                                    <h3 className="text-base font-semibold text-zinc-200">
+                                        {isAdmin ? "No screenplays yet" : "No screenplays available"}
+                                    </h3>
                                     <p className="text-xs text-zinc-500 max-w-sm">
-                                        Create your first screenplay or shelf to get started with Screenplay Studio.
+                                        {isAdmin
+                                            ? "Create your first screenplay or shelf to get started with Screenplay Studio."
+                                            : "You do not have access to any screenplays yet. Once an administrator invites you, they will appear here."}
                                     </p>
                                 </div>
-                                <div className="flex items-center gap-3 pt-2">
-                                    <button
-                                        onClick={() => {
-                                            setTargetShelfIdForCreate("");
-                                            setIsCreateOpen(true);
-                                        }}
-                                        className="px-4 py-2 bg-[#4c8aec] hover:bg-[#3b7be0] text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 shadow-xs"
-                                    >
-                                        <Plus className="w-3.5 h-3.5" />
-                                        <span>Create Screenplay</span>
-                                    </button>
-                                    <button
-                                        onClick={() => setIsCreateShelfOpen(true)}
-                                        className="px-4 py-2 bg-[#212326] hover:bg-[#27292c] border border-[#33353a] text-zinc-300 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2"
-                                    >
-                                        <FolderPlus className="w-3.5 h-3.5 text-[#60a5fa]" />
-                                        <span>New Shelf</span>
-                                    </button>
-                                </div>
+                                {isAdmin && (
+                                    <div className="flex items-center gap-3 pt-2">
+                                        <button
+                                            onClick={() => {
+                                                setTargetShelfIdForCreate("");
+                                                setIsCreateOpen(true);
+                                            }}
+                                            className="px-4 py-2 bg-[#4c8aec] hover:bg-[#3b7be0] text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 shadow-xs"
+                                        >
+                                            <Plus className="w-3.5 h-3.5" />
+                                            <span>Create Screenplay</span>
+                                        </button>
+                                        <button
+                                            onClick={() => setIsCreateShelfOpen(true)}
+                                            className="px-4 py-2 bg-[#212326] hover:bg-[#27292c] border border-[#33353a] text-zinc-300 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2"
+                                        >
+                                            <FolderPlus className="w-3.5 h-3.5 text-[#60a5fa]" />
+                                            <span>New Shelf</span>
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <>
@@ -990,34 +1044,38 @@ export function ScriptDashboard() {
                                                                                 <ArrowUpRight className="w-3.5 h-3.5 text-zinc-400" />
                                                                                 <span>Open</span>
                                                                             </Link>
-                                                                            <button
-                                                                                onClick={() => {
-                                                                                    setMovingScript(script);
-                                                                                    setMenuOpenId(null);
-                                                                                }}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
-                                                                            >
-                                                                                <MoveRight className="w-3.5 h-3.5 text-zinc-400" />
-                                                                                <span>Move to Shelf...</span>
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={() => {
-                                                                                    setRenamingScript(script);
-                                                                                    setRenameValue(script.title);
-                                                                                    setMenuOpenId(null);
-                                                                                }}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
-                                                                            >
-                                                                                <Edit2 className="w-3.5 h-3.5 text-zinc-400" />
-                                                                                <span>Rename</span>
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={() => handleDuplicateScript(script.id)}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
-                                                                            >
-                                                                                <Copy className="w-3.5 h-3.5 text-zinc-400" />
-                                                                                <span>Duplicate</span>
-                                                                            </button>
+                                                                            {isAdmin && (
+                                                                                <>
+                                                                                    <button
+                                                                                        onClick={() => {
+                                                                                            setMovingScript(script);
+                                                                                            setMenuOpenId(null);
+                                                                                        }}
+                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                                    >
+                                                                                        <MoveRight className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                        <span>Move to Shelf...</span>
+                                                                                    </button>
+                                                                                    <button
+                                                                                        onClick={() => {
+                                                                                            setRenamingScript(script);
+                                                                                            setRenameValue(script.title);
+                                                                                            setMenuOpenId(null);
+                                                                                        }}
+                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                                    >
+                                                                                        <Edit2 className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                        <span>Rename</span>
+                                                                                    </button>
+                                                                                    <button
+                                                                                        onClick={() => handleDuplicateScript(script.id)}
+                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                                    >
+                                                                                        <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                        <span>Duplicate</span>
+                                                                                    </button>
+                                                                                </>
+                                                                            )}
                                                                             <div className="border-t border-[#33353a] my-1" />
                                                                             <button
                                                                                 onClick={() => handleExportScriptFdx(script)}
@@ -1033,14 +1091,18 @@ export function ScriptDashboard() {
                                                                                 <Download className="w-3.5 h-3.5 text-zinc-400" />
                                                                                 <span>Export (.fountain)</span>
                                                                             </button>
-                                                                            <div className="border-t border-[#33353a] my-1" />
-                                                                            <button
-                                                                                onClick={() => handleDeleteScript(script.id)}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-rose-400"
-                                                                            >
-                                                                                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                                                                                <span>Delete</span>
-                                                                            </button>
+                                                                            {isAdmin && (
+                                                                                <>
+                                                                                    <div className="border-t border-[#33353a] my-1" />
+                                                                                    <button
+                                                                                        onClick={() => handleDeleteScript(script.id)}
+                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-rose-400"
+                                                                                    >
+                                                                                        <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                                                                                        <span>Delete</span>
+                                                                                    </button>
+                                                                                </>
+                                                                            )}
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -1117,34 +1179,40 @@ export function ScriptDashboard() {
                                                                                         <ArrowUpRight className="w-3.5 h-3.5 text-zinc-400" />
                                                                                         <span>Open</span>
                                                                                     </Link>
-                                                                                    <button
-                                                                                        onClick={() => {
-                                                                                            setMovingScript(script);
-                                                                                            setMenuOpenId(null);
-                                                                                        }}
-                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
-                                                                                    >
-                                                                                        <MoveRight className="w-3.5 h-3.5 text-zinc-400" />
-                                                                                        <span>Move to Shelf...</span>
-                                                                                    </button>
-                                                                                    <button
-                                                                                        onClick={() => {
-                                                                                            setRenamingScript(script);
-                                                                                            setRenameValue(script.title);
-                                                                                            setMenuOpenId(null);
-                                                                                        }}
-                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
-                                                                                    >
-                                                                                        <Edit2 className="w-3.5 h-3.5 text-zinc-400" />
-                                                                                        <span>Rename</span>
-                                                                                    </button>
-                                                                                    <button
-                                                                                        onClick={() => handleDuplicateScript(script.id)}
-                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
-                                                                                    >
-                                                                                        <Copy className="w-3.5 h-3.5 text-zinc-400" />
-                                                                                        <span>Duplicate</span>
-                                                                                    </button>
+                                                                                    {isAdmin && (
+                                                                                        <>
+                                                                                            <button
+                                                                                                onClick={() => {
+                                                                                                    setMovingScript(script);
+                                                                                                    setMenuOpenId(null);
+                                                                                                }}
+                                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                                            >
+                                                                                                <MoveRight className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                                <span>Move to Shelf...</span>
+                                                                                            </button>
+                                                                                            <button
+                                                                                                onClick={() => {
+                                                                                                    setRenamingScript(script);
+                                                                                                    setRenameValue(script.title);
+                                                                                                    setMenuOpenId(null);
+                                                                                                }}
+                                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                                            >
+                                                                                                <Edit2 className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                                <span>Rename</span>
+                                                                                            </button>
+                                                                                            <button
+                                                                                                onClick={() =>
+                                                                                                    handleDuplicateScript(script.id)
+                                                                                                }
+                                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                                            >
+                                                                                                <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                                <span>Duplicate</span>
+                                                                                            </button>
+                                                                                        </>
+                                                                                    )}
                                                                                     <div className="border-t border-[#33353a] my-1" />
                                                                                     <button
                                                                                         onClick={() => handleExportScriptFdx(script)}
@@ -1160,14 +1228,20 @@ export function ScriptDashboard() {
                                                                                         <Download className="w-3.5 h-3.5 text-zinc-400" />
                                                                                         <span>Export (.fountain)</span>
                                                                                     </button>
-                                                                                    <div className="border-t border-[#33353a] my-1" />
-                                                                                    <button
-                                                                                        onClick={() => handleDeleteScript(script.id)}
-                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-rose-400"
-                                                                                    >
-                                                                                        <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                                                                                        <span>Delete</span>
-                                                                                    </button>
+                                                                                    {isAdmin && (
+                                                                                        <>
+                                                                                            <div className="border-t border-[#33353a] my-1" />
+                                                                                            <button
+                                                                                                onClick={() =>
+                                                                                                    handleDeleteScript(script.id)
+                                                                                                }
+                                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-rose-400"
+                                                                                            >
+                                                                                                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                                                                                                <span>Delete</span>
+                                                                                            </button>
+                                                                                        </>
+                                                                                    )}
                                                                                 </div>
                                                                             )}
                                                                         </div>
@@ -1272,34 +1346,38 @@ export function ScriptDashboard() {
                                                                                 <ArrowUpRight className="w-3.5 h-3.5 text-zinc-400" />
                                                                                 <span>Open</span>
                                                                             </Link>
-                                                                            <button
-                                                                                onClick={() => {
-                                                                                    setMovingScript(script);
-                                                                                    setMenuOpenId(null);
-                                                                                }}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
-                                                                            >
-                                                                                <MoveRight className="w-3.5 h-3.5 text-zinc-400" />
-                                                                                <span>Move to Shelf...</span>
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={() => {
-                                                                                    setRenamingScript(script);
-                                                                                    setRenameValue(script.title);
-                                                                                    setMenuOpenId(null);
-                                                                                }}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
-                                                                            >
-                                                                                <Edit2 className="w-3.5 h-3.5 text-zinc-400" />
-                                                                                <span>Rename</span>
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={() => handleDuplicateScript(script.id)}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
-                                                                            >
-                                                                                <Copy className="w-3.5 h-3.5 text-zinc-400" />
-                                                                                <span>Duplicate</span>
-                                                                            </button>
+                                                                            {isAdmin && (
+                                                                                <>
+                                                                                    <button
+                                                                                        onClick={() => {
+                                                                                            setMovingScript(script);
+                                                                                            setMenuOpenId(null);
+                                                                                        }}
+                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                                    >
+                                                                                        <MoveRight className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                        <span>Move to Shelf...</span>
+                                                                                    </button>
+                                                                                    <button
+                                                                                        onClick={() => {
+                                                                                            setRenamingScript(script);
+                                                                                            setRenameValue(script.title);
+                                                                                            setMenuOpenId(null);
+                                                                                        }}
+                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                                    >
+                                                                                        <Edit2 className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                        <span>Rename</span>
+                                                                                    </button>
+                                                                                    <button
+                                                                                        onClick={() => handleDuplicateScript(script.id)}
+                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                                    >
+                                                                                        <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                        <span>Duplicate</span>
+                                                                                    </button>
+                                                                                </>
+                                                                            )}
                                                                             <div className="border-t border-[#33353a] my-1" />
                                                                             <button
                                                                                 onClick={() => handleExportScriptFdx(script)}
@@ -1315,14 +1393,18 @@ export function ScriptDashboard() {
                                                                                 <Download className="w-3.5 h-3.5 text-zinc-400" />
                                                                                 <span>Export (.fountain)</span>
                                                                             </button>
-                                                                            <div className="border-t border-[#33353a] my-1" />
-                                                                            <button
-                                                                                onClick={() => handleDeleteScript(script.id)}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-rose-400"
-                                                                            >
-                                                                                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                                                                                <span>Delete</span>
-                                                                            </button>
+                                                                            {isAdmin && (
+                                                                                <>
+                                                                                    <div className="border-t border-[#33353a] my-1" />
+                                                                                    <button
+                                                                                        onClick={() => handleDeleteScript(script.id)}
+                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-rose-400"
+                                                                                    >
+                                                                                        <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                                                                                        <span>Delete</span>
+                                                                                    </button>
+                                                                                </>
+                                                                            )}
                                                                         </div>
                                                                     )}
                                                                 </div>

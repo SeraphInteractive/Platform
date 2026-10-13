@@ -18,6 +18,7 @@ import { exportToFountain, parseFountain } from "@/editor/format/fountain";
 import { ScreenplayToolbar, type ViewLayoutMode } from "@/components/ScreenplayToolbar";
 import { SceneNavigator, type SceneItem } from "@/components/SceneNavigator";
 import { BeatBoard } from "@/components/BeatBoard";
+import { OutlineView } from "@/components/OutlineView";
 import { AutocompleteMenu } from "@/components/AutocompleteMenu";
 import { CommandPalette } from "@/components/CommandPalette";
 import { FindReplaceBar } from "@/components/FindReplaceBar";
@@ -56,6 +57,18 @@ function ScreenplayEditorContent() {
     const searchParams = useSearchParams();
     const scriptId = searchParams.get("id");
     const { user, isAdmin } = useStudioAuth();
+
+    const userRole = useMemo(() => {
+        if (isAdmin) return "admin";
+        const invite = user?.acceptedInvites?.find((i: any) => !i.scriptId || i.scriptId === scriptId);
+        return invite?.role || (user?.isInvited ? "editor" : "viewer");
+    }, [isAdmin, user, scriptId]);
+
+    const isReadOnly = !isAdmin && userRole === "viewer";
+    const isReadOnlyRef = useRef(isReadOnly);
+    useEffect(() => {
+        isReadOnlyRef.current = isReadOnly;
+    }, [isReadOnly]);
 
     const [mounted, setMounted] = useState(false);
     const [layoutMode, setLayoutMode] = useState<ViewLayoutMode>("script");
@@ -247,6 +260,7 @@ function ScreenplayEditorContent() {
             }
         },
         onUpdate: ({ editor: ed }) => {
+            if (isReadOnlyRef.current) return;
             triggerSaveIndicator();
             try {
                 const json = ed.getJSON();
@@ -528,9 +542,14 @@ function ScreenplayEditorContent() {
         }
     }, [editor]);
 
+    useEffect(() => {
+        if (!editor) return;
+        editor.setEditable(!isReadOnly);
+    }, [editor, isReadOnly]);
+
     // Stash cut handler
     const handleStashCut = useCallback(() => {
-        if (!editor) return;
+        if (isReadOnly || !editor) return;
         const { state } = editor;
         const { from, to, empty } = state.selection;
 
@@ -576,12 +595,12 @@ function ScreenplayEditorContent() {
         });
 
         setIsStashOpen(true);
-    }, [editor]);
+    }, [editor, isReadOnly]);
 
     // Restore item from Stash into editor at cursor
     const handleRestoreStashItem = useCallback(
         (item: StashItem) => {
-            if (!editor) return;
+            if (isReadOnly || !editor) return;
             editor
                 .chain()
                 .focus()
@@ -591,7 +610,7 @@ function ScreenplayEditorContent() {
                 })
                 .run();
         },
-        [editor]
+        [editor, isReadOnly]
     );
 
     const handleDeleteStashItem = useCallback((id: string) => {
@@ -604,27 +623,31 @@ function ScreenplayEditorContent() {
         });
     }, []);
 
-    const handleAddManualStashNote = useCallback((title: string, text: string) => {
-        const newItem: StashItem = {
-            id: `stash-${Date.now()}`,
-            title,
-            text,
-            type: "note",
-            createdAt: "Just now"
-        };
-        setStashItems((prev) => {
-            const updated = [newItem, ...prev];
-            try {
-                localStorage.setItem(STASH_STORAGE_KEY, JSON.stringify(updated));
-            } catch {}
-            return updated;
-        });
-    }, []);
+    const handleAddManualStashNote = useCallback(
+        (title: string, text: string) => {
+            if (isReadOnly) return;
+            const newItem: StashItem = {
+                id: `stash-${Date.now()}`,
+                title,
+                text,
+                type: "note",
+                createdAt: "Just now"
+            };
+            setStashItems((prev) => {
+                const updated = [newItem, ...prev];
+                try {
+                    localStorage.setItem(STASH_STORAGE_KEY, JSON.stringify(updated));
+                } catch {}
+                return updated;
+            });
+        },
+        [isReadOnly]
+    );
 
     // Version History: Create named milestone snapshot
     const handleCreateNamedVersion = useCallback(
         (name: string) => {
-            if (!editor) return;
+            if (isReadOnly || !editor) return;
             const snapshot: VersionSnapshot = {
                 id: `milestone-${Date.now()}`,
                 name,
@@ -650,7 +673,7 @@ function ScreenplayEditorContent() {
     // Version History: Restore previous snapshot
     const handleRestoreVersion = useCallback(
         (snapshot: VersionSnapshot) => {
-            if (!editor) return;
+            if (isReadOnly || !editor) return;
             const currentJson = editor.getJSON();
             const backup: VersionSnapshot = {
                 id: `auto-backup-${Date.now()}`,
@@ -675,7 +698,7 @@ function ScreenplayEditorContent() {
                 return updated;
             });
         },
-        [editor, wordCount, scenes.length]
+        [editor, wordCount, scenes.length, isReadOnly]
     );
 
     const handlePreviewVersion = useCallback(
@@ -700,7 +723,7 @@ function ScreenplayEditorContent() {
     // Image embed handler
     const handleInsertImage = useCallback(
         (src: string, caption?: string) => {
-            if (!editor) return;
+            if (isReadOnly || !editor) return;
             const { state } = editor;
             const { selection } = state;
             const parentNode = selection.$from.parent;
@@ -792,6 +815,7 @@ function ScreenplayEditorContent() {
     }, [editor, analyzeScript, currentStorageKey]);
 
     const handleUpdateTitlePage = (updates: Partial<TitlePageData>) => {
+        if (isReadOnly) return;
         setTitlePageData((prev) => ({ ...prev, ...updates }));
     };
 
@@ -802,7 +826,7 @@ function ScreenplayEditorContent() {
 
     const handleDeleteScene = useCallback(
         (scenePos: number) => {
-            if (!editor) return;
+            if (isReadOnly || !editor) return;
             const { doc } = editor.state;
             let targetPos: number | null = null;
             let targetSize = 0;
@@ -833,11 +857,11 @@ function ScreenplayEditorContent() {
                 analyzeScript(editor);
             }
         },
-        [editor, analyzeScript]
+        [editor, analyzeScript, isReadOnly]
     );
 
     const handleAddScene = () => {
-        if (!editor) return;
+        if (isReadOnly || !editor) return;
         editor
             .chain()
             .focus()
@@ -855,7 +879,7 @@ function ScreenplayEditorContent() {
     };
 
     const handleInsertBeat = (title: string, synopsis: string) => {
-        if (!editor) return;
+        if (isReadOnly || !editor) return;
         editor
             .chain()
             .focus()
@@ -897,6 +921,7 @@ function ScreenplayEditorContent() {
     };
 
     const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (isReadOnly) return;
         const file = e.target.files?.[0];
         if (!file || !editor) return;
 
@@ -919,6 +944,7 @@ function ScreenplayEditorContent() {
     };
 
     const handleTitleChange = (newTitle: string) => {
+        if (isReadOnly) return;
         setScriptTitle(newTitle);
         triggerSaveIndicator();
         if (scriptId) {
@@ -977,6 +1003,8 @@ function ScreenplayEditorContent() {
                 setIsStashOpen={setIsStashOpen}
                 isHistoryOpen={isHistoryOpen}
                 setIsHistoryOpen={setIsHistoryOpen}
+                isAdmin={isAdmin}
+                isReadOnly={isReadOnly}
                 user={user}
                 onOpenInviteModal={() => setIsInviteOpen(true)}
                 pageTheme={pageTheme}
@@ -991,22 +1019,35 @@ function ScreenplayEditorContent() {
 
             <div className="flex flex-1 overflow-hidden relative">
                 {/* Left Scenes Outline Navigator */}
-                {!isFocusMode && layoutMode !== "beatboard" && (
+                {!isFocusMode && layoutMode !== "beatboard" && layoutMode !== "outline" && (
                     <SceneNavigator
                         scenes={scenes}
                         characters={characters}
                         isOpen={isNavOpen}
                         setIsOpen={setIsNavOpen}
                         onSelectScene={handleSelectScene}
-                        onAddScene={handleAddScene}
-                        onDeleteScene={handleDeleteScene}
+                        onAddScene={isReadOnly ? undefined : handleAddScene}
+                        onDeleteScene={isReadOnly ? undefined : handleDeleteScene}
                         totalPages={totalPages}
                         scenePages={scenePages}
                     />
                 )}
 
                 {/* Center Main Stage */}
-                {layoutMode === "beatboard" && !isFocusMode ? (
+                {layoutMode === "outline" && !isFocusMode ? (
+                    <main className="flex-1 overflow-hidden">
+                        <OutlineView
+                            scriptId={scriptId || undefined}
+                            onInsertBeatToScript={handleInsertBeat}
+                            onJumpToScene={(slugline) => {
+                                const matched = scenes.find((s) => s.slugline.toLowerCase() === slugline.toLowerCase());
+                                setLayoutMode("script");
+                                if (matched) setTimeout(() => handleSelectScene(matched.pos), 50);
+                            }}
+                            sceneHeadings={scenes.map((s) => s.slugline)}
+                        />
+                    </main>
+                ) : layoutMode === "beatboard" && !isFocusMode ? (
                     <main className="flex-1 overflow-hidden">
                         <BeatBoard
                             scriptId={scriptId || undefined}
@@ -1017,14 +1058,129 @@ function ScreenplayEditorContent() {
                 ) : layoutMode === "split" && !isFocusMode ? (
                     <div className="flex flex-1 overflow-hidden">
                         {/* Left half: Screenplay Canvas */}
+                        <div className="flex-1 flex flex-col relative overflow-hidden bg-[#1a1c1f] border-r border-[#33353a]">
+                            <main
+                                onContextMenu={(e) => {
+                                    e.preventDefault();
+                                    setContextMenuPos({ x: e.clientX, y: e.clientY });
+                                    setIsContextMenuOpen(true);
+                                }}
+                                className="flex-1 overflow-y-auto relative"
+                            >
+                                {isPageView ? (
+                                    <div className="flex flex-col items-center pt-8 pb-[65vh] px-4 space-y-8 select-text">
+                                        <div className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}>
+                                            <TitlePage
+                                                data={titlePageData}
+                                                onChange={handleUpdateTitlePage}
+                                                isContinuous={false}
+                                                theme={pageTheme}
+                                                readOnly={isReadOnly}
+                                            />
+                                        </div>
+                                        <div
+                                            className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}
+                                            style={{
+                                                minHeight: `calc(${Math.max(1, totalPages)} * 297mm + ${Math.max(0, totalPages - 1)} * 2.5in)`
+                                            }}
+                                            onClick={(e) => {
+                                                // focus editor at end if clicking empty bottom paper space
+                                                if (e.target === e.currentTarget && editor) {
+                                                    editor.commands.focus("end");
+                                                }
+                                            }}
+                                        >
+                                            <EditorContent editor={editor} />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className={`screenplay-continuous-mode ${pageTheme === "light" ? "screenplay-page-light" : ""}`}>
+                                        <TitlePage
+                                            data={titlePageData}
+                                            onChange={handleUpdateTitlePage}
+                                            isContinuous={true}
+                                            theme={pageTheme}
+                                            readOnly={isReadOnly}
+                                        />
+                                        <div
+                                            className={`relative my-8 border-t flex items-center justify-center ${
+                                                pageTheme === "light" ? "border-zinc-300" : "border-[#33353a]"
+                                            }`}
+                                        >
+                                            <span
+                                                className={`px-3 text-[10px] font-mono uppercase tracking-widest ${
+                                                    pageTheme === "light" ? "bg-white text-zinc-500" : "bg-[#1a1c1f] text-zinc-500"
+                                                }`}
+                                            >
+                                                Screenplay Start - Page 1
+                                            </span>
+                                        </div>
+                                        <EditorContent editor={editor} />
+                                    </div>
+                                )}
+                            </main>
+
+                            {/* Floating Arc Studio Format Dock (Centered to screenplay page canvas) */}
+                            {!isReadOnly && !isFocusMode && (
+                                <ArcShortcutDock
+                                    editor={editor}
+                                    isPageView={isPageView}
+                                    onTogglePageView={() => setIsPageView((v) => !v)}
+                                    pageTheme={pageTheme}
+                                    onTogglePageTheme={handleTogglePageTheme}
+                                    onOpenImageModal={() => setInsertImageOpen(true)}
+                                    onStashSelection={handleStashCut}
+                                    onTogglePlotBoard={() => setLayoutMode((m) => (m === "beatboard" ? "script" : "beatboard"))}
+                                    onToggleStash={() => setIsStashOpen((v) => !v)}
+                                />
+                            )}
+
+                            {/* Right-click Context Menu */}
+                            {!isReadOnly && (
+                                <ArcFormattingMenu
+                                    editor={editor}
+                                    isOpen={isContextMenuOpen}
+                                    onClose={() => setIsContextMenuOpen(false)}
+                                    onOpenBeatBoard={() => setLayoutMode("beatboard")}
+                                    onOpenComments={() => setIsStashOpen(true)}
+                                    position={contextMenuPos}
+                                    align="context"
+                                />
+                            )}
+                        </div>
+
+                        {/* Right half: Arc Studio Plot Board */}
+                        <aside className="w-1/2 overflow-hidden bg-[#16171a]">
+                            <BeatBoard
+                                scriptId={scriptId || undefined}
+                                onInsertBeatToScript={handleInsertBeat}
+                                sceneHeadings={scenes.map((s) => s.slugline)}
+                            />
+                        </aside>
+                    </div>
+                ) : (
+                    /* Script Full Mode */
+                    <div className="flex-1 flex flex-col relative overflow-hidden bg-[#1a1c1f]">
                         <main
                             onContextMenu={(e) => {
                                 e.preventDefault();
                                 setContextMenuPos({ x: e.clientX, y: e.clientY });
                                 setIsContextMenuOpen(true);
                             }}
-                            className="flex-1 overflow-y-auto relative bg-[#1a1c1f] border-r border-[#33353a]"
+                            className="flex-1 overflow-y-auto relative"
                         >
+                            {activePreviewId && (
+                                <div className="no-print sticky top-0 z-20 flex items-center justify-between px-4 py-2 bg-[#16171a] border-b border-[#33353a] text-zinc-300 text-xs backdrop-blur-md font-mono">
+                                    <span>Viewing historical snapshot preview (Read-only)</span>
+                                    <button
+                                        onClick={() => handlePreviewVersion(null)}
+                                        className="px-2.5 py-0.5 bg-[#27292c] hover:bg-[#25262a] border border-[#33353a] text-zinc-200 rounded text-[11px]"
+                                    >
+                                        Exit Preview
+                                    </button>
+                                </div>
+                            )}
+
                             {isPageView ? (
                                 <div className="flex flex-col items-center pt-8 pb-[65vh] px-4 space-y-8 select-text">
                                     <div className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}>
@@ -1033,6 +1189,7 @@ function ScreenplayEditorContent() {
                                             onChange={handleUpdateTitlePage}
                                             isContinuous={false}
                                             theme={pageTheme}
+                                            readOnly={isReadOnly}
                                         />
                                     </div>
                                     <div
@@ -1057,6 +1214,7 @@ function ScreenplayEditorContent() {
                                         onChange={handleUpdateTitlePage}
                                         isContinuous={true}
                                         theme={pageTheme}
+                                        readOnly={isReadOnly}
                                     />
                                     <div
                                         className={`relative my-8 border-t flex items-center justify-center ${
@@ -1076,106 +1234,34 @@ function ScreenplayEditorContent() {
                             )}
                         </main>
 
-                        {/* Right half: Arc Studio Plot Board */}
-                        <aside className="w-1/2 overflow-hidden bg-[#16171a]">
-                            <BeatBoard
-                                scriptId={scriptId || undefined}
-                                onInsertBeatToScript={handleInsertBeat}
-                                sceneHeadings={scenes.map((s) => s.slugline)}
+                        {/* Floating Arc Studio Format Dock (Centered to screenplay page canvas) */}
+                        {!isReadOnly && !isFocusMode && (
+                            <ArcShortcutDock
+                                editor={editor}
+                                isPageView={isPageView}
+                                onTogglePageView={() => setIsPageView((v) => !v)}
+                                pageTheme={pageTheme}
+                                onTogglePageTheme={handleTogglePageTheme}
+                                onOpenImageModal={() => setInsertImageOpen(true)}
+                                onStashSelection={handleStashCut}
+                                onTogglePlotBoard={() => setLayoutMode((m) => (m === "beatboard" ? "script" : "beatboard"))}
+                                onToggleStash={() => setIsStashOpen((v) => !v)}
                             />
-                        </aside>
-                    </div>
-                ) : (
-                    /* Script Full Mode */
-                    <main
-                        onContextMenu={(e) => {
-                            e.preventDefault();
-                            setContextMenuPos({ x: e.clientX, y: e.clientY });
-                            setIsContextMenuOpen(true);
-                        }}
-                        className="flex-1 overflow-y-auto relative bg-[#1a1c1f]"
-                    >
-                        {activePreviewId && (
-                            <div className="no-print sticky top-0 z-20 flex items-center justify-between px-4 py-2 bg-[#16171a] border-b border-[#33353a] text-zinc-300 text-xs backdrop-blur-md font-mono">
-                                <span>Viewing historical snapshot preview (Read-only)</span>
-                                <button
-                                    onClick={() => handlePreviewVersion(null)}
-                                    className="px-2.5 py-0.5 bg-[#27292c] hover:bg-[#25262a] border border-[#33353a] text-zinc-200 rounded text-[11px]"
-                                >
-                                    Exit Preview
-                                </button>
-                            </div>
                         )}
-
-                        {isPageView ? (
-                            <div className="flex flex-col items-center pt-8 pb-[65vh] px-4 space-y-8 select-text">
-                                <div className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}>
-                                    <TitlePage
-                                        data={titlePageData}
-                                        onChange={handleUpdateTitlePage}
-                                        isContinuous={false}
-                                        theme={pageTheme}
-                                    />
-                                </div>
-                                <div
-                                    className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}
-                                    style={{
-                                        minHeight: `calc(${Math.max(1, totalPages)} * 297mm + ${Math.max(0, totalPages - 1)} * 2.5in)`
-                                    }}
-                                    onClick={(e) => {
-                                        // focus editor at end if clicking empty bottom paper space
-                                        if (e.target === e.currentTarget && editor) {
-                                            editor.commands.focus("end");
-                                        }
-                                    }}
-                                >
-                                    <EditorContent editor={editor} />
-                                </div>
-                            </div>
-                        ) : (
-                            <div className={`screenplay-continuous-mode ${pageTheme === "light" ? "screenplay-page-light" : ""}`}>
-                                <TitlePage data={titlePageData} onChange={handleUpdateTitlePage} isContinuous={true} theme={pageTheme} />
-                                <div
-                                    className={`relative my-8 border-t flex items-center justify-center ${
-                                        pageTheme === "light" ? "border-zinc-300" : "border-[#33353a]"
-                                    }`}
-                                >
-                                    <span
-                                        className={`px-3 text-[10px] font-mono uppercase tracking-widest ${
-                                            pageTheme === "light" ? "bg-white text-zinc-500" : "bg-[#1a1c1f] text-zinc-500"
-                                        }`}
-                                    >
-                                        Screenplay Start - Page 1
-                                    </span>
-                                </div>
-                                <EditorContent editor={editor} />
-                            </div>
-                        )}
-
-                        {/* Floating Arc Studio Format Dock (Always visible in Script Mode) */}
-                        <ArcShortcutDock
-                            editor={editor}
-                            isPageView={isPageView}
-                            onTogglePageView={() => setIsPageView((v) => !v)}
-                            pageTheme={pageTheme}
-                            onTogglePageTheme={handleTogglePageTheme}
-                            onOpenImageModal={() => setInsertImageOpen(true)}
-                            onStashSelection={handleStashCut}
-                            onTogglePlotBoard={() => setLayoutMode((m) => (m === "beatboard" ? "script" : "beatboard"))}
-                            onToggleStash={() => setIsStashOpen((v) => !v)}
-                        />
 
                         {/* Right-click Context Menu */}
-                        <ArcFormattingMenu
-                            editor={editor}
-                            isOpen={isContextMenuOpen}
-                            onClose={() => setIsContextMenuOpen(false)}
-                            onOpenBeatBoard={() => setLayoutMode("beatboard")}
-                            onOpenComments={() => setIsStashOpen(true)}
-                            position={contextMenuPos}
-                            align="context"
-                        />
-                    </main>
+                        {!isReadOnly && (
+                            <ArcFormattingMenu
+                                editor={editor}
+                                isOpen={isContextMenuOpen}
+                                onClose={() => setIsContextMenuOpen(false)}
+                                onOpenBeatBoard={() => setLayoutMode("beatboard")}
+                                onOpenComments={() => setIsStashOpen(true)}
+                                position={contextMenuPos}
+                                align="context"
+                            />
+                        )}
+                    </div>
                 )}
 
                 {/* Autocomplete Popup */}
@@ -1231,7 +1317,7 @@ function ScreenplayEditorContent() {
                 />
 
                 {/* Find & Replace Drawer */}
-                {layoutMode !== "beatboard" && (
+                {layoutMode !== "beatboard" && layoutMode !== "outline" && (
                     <FindReplaceBar
                         editor={editor}
                         isOpen={findReplaceOpen}
@@ -1244,8 +1330,12 @@ function ScreenplayEditorContent() {
                 <CommandPalette
                     isOpen={commandPaletteOpen}
                     onClose={() => setCommandPaletteOpen(false)}
-                    onSetElement={(t) => editor?.chain().focus().setNode(t).run()}
-                    onInsertPageBreak={() => editor?.chain().focus().setPageBreak().run()}
+                    onSetElement={(t) => {
+                        if (!isReadOnly) editor?.chain().focus().setNode(t).run();
+                    }}
+                    onInsertPageBreak={() => {
+                        if (!isReadOnly) editor?.chain().focus().setPageBreak().run();
+                    }}
                     onJumpToScene={handleSelectScene}
                     scenes={scenes}
                     onExportFdx={handleExportFdx}
@@ -1259,7 +1349,7 @@ function ScreenplayEditorContent() {
                 />
 
                 {/* Arc Studio Bottom-Right Status Telemetry Capsule */}
-                {!isFocusMode && layoutMode !== "beatboard" && (
+                {!isFocusMode && layoutMode !== "beatboard" && layoutMode !== "outline" && (
                     <div className="no-print fixed bottom-6 right-6 z-30 flex items-center gap-2 px-3 py-1.5 bg-[#16171a]/95 hover:bg-[#212326] border border-[#33353a] rounded-full text-xs font-mono text-zinc-400 shadow-xl backdrop-blur-md select-none transition-colors">
                         <span>{wordCount} words</span>
                         <span className="text-zinc-600">|</span>

@@ -55,6 +55,19 @@ export async function fetchDiscordUser(
     }
 }
 
+function formatDiscordError(errPayload: any, statusText: string): string {
+    const detail = errPayload?.message || statusText;
+    if (typeof detail === "string") {
+        if (detail.toLowerCase().includes("no mutual guilds")) {
+            return "user not in Discord server";
+        }
+        if (errPayload?.code === 50007 || detail.toLowerCase().includes("cannot send messages")) {
+            return "user direct messages disabled";
+        }
+    }
+    return typeof detail === "string" ? detail.replace(/^Could not deliver Discord DM:\s*/i, "") : "delivery failed";
+}
+
 export async function sendDiscordDm(recipientDiscordId: string, content: string): Promise<{ ok: boolean; error?: string }> {
     const token = getDiscordBotToken();
     if (!token) {
@@ -74,8 +87,7 @@ export async function sendDiscordDm(recipientDiscordId: string, content: string)
 
         if (!channelRes.ok) {
             const err = await channelRes.json().catch(() => null);
-            const detail = err?.message || channelRes.statusText;
-            return { ok: false, error: `Could not open Discord DM channel: ${detail}` };
+            return { ok: false, error: formatDiscordError(err, channelRes.statusText) };
         }
 
         const channelData = await channelRes.json();
@@ -93,8 +105,7 @@ export async function sendDiscordDm(recipientDiscordId: string, content: string)
 
         if (!messageRes.ok) {
             const err = await messageRes.json().catch(() => null);
-            const detail = err?.message || messageRes.statusText;
-            return { ok: false, error: `Could not deliver Discord DM: ${detail}` };
+            return { ok: false, error: formatDiscordError(err, messageRes.statusText) };
         }
 
         return { ok: true };

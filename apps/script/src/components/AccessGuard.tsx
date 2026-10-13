@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StairwayLoader } from "./StairwayLoader";
+import { AcceptInviteModal, type PendingInvite } from "./AcceptInviteModal";
 
 export interface ScriptUserProfile {
     id: string;
@@ -14,14 +15,29 @@ export interface ScriptUserProfile {
     specialties?: string[];
     isInvited?: boolean;
     invitedScriptIds?: string[];
+    pendingInvites?: {
+        id: string;
+        scriptId?: string | null;
+        scriptTitle?: string | null;
+        invitedBy: string;
+        role: "editor" | "viewer";
+    }[];
+    acceptedInvites?: {
+        id: string;
+        scriptId?: string | null;
+        scriptTitle?: string | null;
+        invitedBy: string;
+        role: "editor" | "viewer";
+    }[];
 }
 
 export function checkUserAuthorized(data: ScriptUserProfile): boolean {
     const isSuperadmin = data.role === "super_admin";
     const isAdmin = data.role === "admin";
     const isInvited = Boolean(data.isInvited);
+    const hasPending = Array.isArray(data.pendingInvites) && data.pendingInvites.length > 0;
 
-    return Boolean(isSuperadmin || isAdmin || isInvited);
+    return Boolean(isSuperadmin || isAdmin || isInvited || hasPending);
 }
 
 export function canAccessScript(user: ScriptUserProfile | null, scriptId: string): boolean {
@@ -175,5 +191,42 @@ export function AccessGuard({ children }: AccessGuardProps) {
         );
     }
 
-    return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
+    const pendingInvites = user?.pendingInvites || [];
+    const activePendingInvite: PendingInvite | undefined = pendingInvites[0];
+
+    if (!isUserAdminRole(user) && !user?.isInvited && activePendingInvite) {
+        return (
+            <AuthContext.Provider value={contextValue}>
+                <div className="flex items-center justify-center min-h-screen bg-[#0e1015]">
+                    <StairwayLoader size="md" label="Project Stairway Studio" />
+                    <AcceptInviteModal
+                        invite={activePendingInvite}
+                        isOpen={true}
+                        onAccept={checkAuth}
+                        onDecline={() => {
+                            checkAuth();
+                            window.location.href = "/";
+                        }}
+                    />
+                </div>
+            </AuthContext.Provider>
+        );
+    }
+
+    return (
+        <AuthContext.Provider value={contextValue}>
+            {children}
+            {activePendingInvite && (
+                <AcceptInviteModal
+                    invite={activePendingInvite}
+                    isOpen={true}
+                    onAccept={checkAuth}
+                    onDecline={() => {
+                        checkAuth();
+                        window.location.href = "/";
+                    }}
+                />
+            )}
+        </AuthContext.Provider>
+    );
 }

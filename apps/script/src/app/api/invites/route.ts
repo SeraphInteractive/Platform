@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { readSessionToken } from "@/server/Session";
-import { getInvites, saveInvite, removeInvite, type StudioInvite } from "@/server/InviteStorage";
+import { getInvites, saveInvite, removeInvite, acceptInvite, type StudioInvite } from "@/server/InviteStorage";
 import { sendDiscordDm, fetchDiscordUser } from "@/server/DiscordBot";
 
 export const dynamic = "force-dynamic";
@@ -145,7 +145,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             dmSent = dmRes.ok;
             dmError = dmRes.error;
         } else {
-            dmError = "Could not resolve a Discord ID for the user to deliver DM.";
+            dmError = "no Discord ID linked";
         }
 
         const invite: StudioInvite = {
@@ -156,6 +156,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             avatarUrl: resolvedAvatarUrl,
             invitedBy: caller.username,
             invitedAt: new Date().toISOString(),
+            status: "pending",
             role,
             scriptId: scriptId || null,
             scriptTitle: scriptTitle || null
@@ -166,7 +167,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         return NextResponse.json({
             data: invite,
             dmSent,
-            dmError
+            dmError,
+            scriptUrl: targetScriptUrl
         });
     } catch (err: any) {
         return NextResponse.json({ error: err?.message || "Failed to invite user." }, { status: 500 });
@@ -187,4 +189,31 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
 
     const removed = removeInvite(id);
     return NextResponse.json({ success: removed });
+}
+
+export async function PATCH(request: NextRequest): Promise<NextResponse> {
+    const caller = await getCallerUser(request);
+    if (!caller) {
+        return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
+
+    const body = await request.json().catch(() => null);
+    const inviteId = typeof body?.inviteId === "string" ? body.inviteId : "";
+    const action = body?.action === "decline" ? "decline" : "accept";
+
+    if (!inviteId) {
+        return NextResponse.json({ error: "Missing invite ID." }, { status: 400 });
+    }
+
+    if (action === "decline") {
+        const removed = removeInvite(inviteId);
+        return NextResponse.json({ success: removed, action: "decline" });
+    }
+
+    const accepted = acceptInvite(inviteId, caller.id, caller.discordId);
+    if (!accepted) {
+        return NextResponse.json({ error: "Invite not found or not addressed to caller." }, { status: 404 });
+    }
+
+    return NextResponse.json({ data: accepted, action: "accept" });
 }

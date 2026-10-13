@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { X, UserPlus, Users, Trash2, CheckCircle2, AlertCircle, Loader2, Search, ShieldCheck } from "lucide-react";
+import { X, UserPlus, Users, Trash2, CheckCircle2, AlertCircle, Loader2, Search, ShieldCheck, Copy, Check } from "lucide-react";
 
 interface StudioInvite {
     id: string;
@@ -53,6 +53,7 @@ export function InviteUserModal({ isOpen, onClose, scriptId = null, scriptTitle 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [invitingUserId, setInvitingUserId] = useState<string | null>(null);
     const [revokingId, setRevokingId] = useState<string | null>(null);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
     // sync active script selection when props change
@@ -160,9 +161,14 @@ export function InviteUserModal({ isOpen, onClose, scriptId = null, scriptTitle 
                 });
             } else {
                 const displayName = body?.data?.username || fallbackName || cleanId;
+                const dmSent = body?.dmSent;
+                const dmError = body?.dmError;
+                const msg = dmSent
+                    ? `Invite granted to ${displayName}. Notification sent via Discord DM.`
+                    : `Invite granted to ${displayName}. (Discord DM skipped: ${dmError || "user not in server"}).`;
                 setFeedback({
                     type: "success",
-                    message: `Invite sent to ${displayName}.`
+                    message: msg
                 });
                 setTargetId("");
                 fetchInvites();
@@ -174,6 +180,18 @@ export function InviteUserModal({ isOpen, onClose, scriptId = null, scriptTitle 
                 message: "Network error sending invite."
             });
         }
+    };
+
+    const handleCopyLink = async (invite: StudioInvite) => {
+        const origin = window.location.origin;
+        const url = invite.scriptId
+            ? `${origin}/studio/script/editor?id=${encodeURIComponent(invite.scriptId)}`
+            : `${origin}/studio/script`;
+        try {
+            await navigator.clipboard.writeText(url);
+            setCopiedId(invite.id);
+            setTimeout(() => setCopiedId(null), 2000);
+        } catch {}
     };
 
     const handleCustomSubmit = async (e: React.FormEvent) => {
@@ -501,18 +519,31 @@ export function InviteUserModal({ isOpen, onClose, scriptId = null, scriptTitle 
                                                 <div className="text-[10px] text-zinc-400 truncate mt-0.5">{invite.scriptTitle}</div>
                                             )}
                                         </div>
-                                        <button
-                                            onClick={() => handleRevoke(invite.id)}
-                                            disabled={revokingId === invite.id}
-                                            className="p-1 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors shrink-0"
-                                            title="Revoke access"
-                                        >
-                                            {revokingId === invite.id ? (
-                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                            ) : (
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            )}
-                                        </button>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            <button
+                                                onClick={() => handleCopyLink(invite)}
+                                                className="p-1 text-zinc-400 hover:text-zinc-200 hover:bg-[#33353a] rounded transition-colors"
+                                                title="Copy script URL"
+                                            >
+                                                {copiedId === invite.id ? (
+                                                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                                ) : (
+                                                    <Copy className="w-3.5 h-3.5" />
+                                                )}
+                                            </button>
+                                            <button
+                                                onClick={() => handleRevoke(invite.id)}
+                                                disabled={revokingId === invite.id}
+                                                className="p-1 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors"
+                                                title="Revoke access"
+                                            >
+                                                {revokingId === invite.id ? (
+                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                ) : (
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                )}
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
