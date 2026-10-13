@@ -35,13 +35,7 @@ interface InviteUserModalProps {
     availableScripts?: { id: string; title: string }[];
 }
 
-export function InviteUserModal({
-    isOpen,
-    onClose,
-    scriptId = null,
-    scriptTitle = null,
-    availableScripts = []
-}: InviteUserModalProps) {
+export function InviteUserModal({ isOpen, onClose, scriptId = null, scriptTitle = null, availableScripts = [] }: InviteUserModalProps) {
     const [activeTab, setActiveTab] = useState<"users" | "custom" | "list">("users");
     const [targetId, setTargetId] = useState("");
     const [customRole, setCustomRole] = useState<"editor" | "viewer">("editor");
@@ -91,7 +85,7 @@ export function InviteUserModal({
         setIsLoadingList(true);
         try {
             const url = getBaseApiUrl();
-            const res = await fetch(url);
+            const res = await fetch(url, { credentials: "same-origin" });
             if (res.ok) {
                 const body = await res.json();
                 setInvites(body?.data || []);
@@ -105,7 +99,7 @@ export function InviteUserModal({
         try {
             const query = scopeScriptId ? `?scriptId=${encodeURIComponent(scopeScriptId)}` : "";
             const usersEndpoint = `${getBaseApiUrl()}/users${query}`;
-            const res = await fetch(usersEndpoint);
+            const res = await fetch(usersEndpoint, { credentials: "same-origin" });
             if (res.ok) {
                 const body = await res.json();
                 setRegisteredUsers(body?.data || []);
@@ -145,6 +139,7 @@ export function InviteUserModal({
             const res = await fetch(getBaseApiUrl(), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
                 body: JSON.stringify({
                     targetId: cleanId,
                     role: roleToAssign,
@@ -156,9 +151,14 @@ export function InviteUserModal({
             const body = await res.json().catch(() => null);
 
             if (!res.ok) {
+                const errorMsg =
+                    body?.error ||
+                    (res.status === 403
+                        ? "Administrator privileges required to invite collaborators."
+                        : `Invite request failed (HTTP ${res.status}).`);
                 setFeedback({
                     type: "error",
-                    message: body?.error || "Failed to invite user."
+                    message: errorMsg
                 });
             } else {
                 const dmSent = body?.dmSent;
@@ -166,10 +166,10 @@ export function InviteUserModal({
                 const targetScriptText = selectedScriptTitle ? ` for "${selectedScriptTitle}"` : "";
                 const msg = dmSent
                     ? `Invite created for ${displayName}${targetScriptText}. Bot notification delivered via Discord DM.`
-                    : `Invite created for ${displayName}${targetScriptText}. (Discord DM could not be delivered: ${body?.dmError || "user DMs closed"}).`;
+                    : `Invite granted for ${displayName}${targetScriptText}. (Discord DM not delivered: ${body?.dmError || "user DMs closed"}).`;
 
                 setFeedback({
-                    type: dmSent ? "success" : "error",
+                    type: "success",
                     message: msg
                 });
                 setTargetId("");
@@ -218,10 +218,7 @@ export function InviteUserModal({
         if (!userSearch.trim()) return registeredUsers;
         const q = userSearch.toLowerCase();
         return registeredUsers.filter(
-            (u) =>
-                u.username.toLowerCase().includes(q) ||
-                u.discordId.includes(q) ||
-                u.role.toLowerCase().includes(q)
+            (u) => u.username.toLowerCase().includes(q) || u.discordId.includes(q) || u.role.toLowerCase().includes(q)
         );
     }, [registeredUsers, userSearch]);
 
@@ -254,9 +251,7 @@ export function InviteUserModal({
                         <FileText className="w-3.5 h-3.5 text-[#4c8aec] shrink-0" />
                         <span className="shrink-0 font-medium text-zinc-300">Screenplay:</span>
                         {scriptId ? (
-                            <span className="font-semibold text-zinc-100 truncate">
-                                {selectedScriptTitle || "Current Screenplay"}
-                            </span>
+                            <span className="font-semibold text-zinc-100 truncate">{selectedScriptTitle || "Current Screenplay"}</span>
                         ) : availableScripts.length > 0 ? (
                             <select
                                 value={selectedScriptId}
@@ -273,9 +268,7 @@ export function InviteUserModal({
                             <span className="text-zinc-500 italic">No screenplays available</span>
                         )}
                     </div>
-                    <span className="text-[11px] font-mono text-zinc-500 shrink-0">
-                        Access scoped strictly to this script
-                    </span>
+                    <span className="text-[11px] font-mono text-zinc-500 shrink-0">Access scoped strictly to this script</span>
                 </div>
 
                 {/* tab switcher */}

@@ -944,7 +944,8 @@ function ScreenplayEditorContent() {
                 </div>
                 <h1 className="text-sm font-semibold tracking-wider text-zinc-200 uppercase mb-2">Access Restricted</h1>
                 <p className="text-xs text-zinc-400 max-w-md mb-6 leading-relaxed">
-                    You do not have access to this screenplay. Access to individual scripts requires an administrator role or an explicit invite from the author.
+                    You do not have access to this screenplay. Access to individual scripts requires an administrator role or an explicit
+                    invite from the author.
                 </p>
                 <div className="flex items-center gap-3">
                     <a
@@ -960,152 +961,70 @@ function ScreenplayEditorContent() {
 
     return (
         <div className="flex flex-col h-screen overflow-hidden bg-[#1a1c1f] script-editor-page">
-                {/* Arc Studio Pure Minimalist Header */}
-                <ScreenplayToolbar
-                    editor={editor}
-                    scriptTitle={scriptTitle}
-                    setScriptTitle={handleTitleChange}
-                    isSaving={isSaving}
-                    layoutMode={layoutMode}
-                    setLayoutMode={setLayoutMode}
-                    isFocusMode={isFocusMode}
-                    setIsFocusMode={setIsFocusMode}
-                    isNavOpen={isNavOpen}
-                    setIsNavOpen={setIsNavOpen}
-                    isStashOpen={isStashOpen}
-                    setIsStashOpen={setIsStashOpen}
-                    isHistoryOpen={isHistoryOpen}
-                    setIsHistoryOpen={setIsHistoryOpen}
-                    user={user}
-                    onOpenInviteModal={() => setIsInviteOpen(true)}
-                    pageTheme={pageTheme}
-                    onTogglePageTheme={handleTogglePageTheme}
-                    onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-                    onOpenFindReplace={() => setFindReplaceOpen(true)}
-                    onInsertImageModal={() => setInsertImageOpen(true)}
-                    onExportFdx={handleExportFdx}
-                    onExportFountain={handleExportFountain}
-                    onImportFile={handleImportFile}
-                />
+            {/* Arc Studio Pure Minimalist Header */}
+            <ScreenplayToolbar
+                editor={editor}
+                scriptTitle={scriptTitle}
+                setScriptTitle={handleTitleChange}
+                isSaving={isSaving}
+                layoutMode={layoutMode}
+                setLayoutMode={setLayoutMode}
+                isFocusMode={isFocusMode}
+                setIsFocusMode={setIsFocusMode}
+                isNavOpen={isNavOpen}
+                setIsNavOpen={setIsNavOpen}
+                isStashOpen={isStashOpen}
+                setIsStashOpen={setIsStashOpen}
+                isHistoryOpen={isHistoryOpen}
+                setIsHistoryOpen={setIsHistoryOpen}
+                user={user}
+                onOpenInviteModal={() => setIsInviteOpen(true)}
+                pageTheme={pageTheme}
+                onTogglePageTheme={handleTogglePageTheme}
+                onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+                onOpenFindReplace={() => setFindReplaceOpen(true)}
+                onInsertImageModal={() => setInsertImageOpen(true)}
+                onExportFdx={handleExportFdx}
+                onExportFountain={handleExportFountain}
+                onImportFile={handleImportFile}
+            />
 
-                <div className="flex flex-1 overflow-hidden relative">
-                    {/* Left Scenes Outline Navigator */}
-                    {!isFocusMode && layoutMode !== "beatboard" && (
-                        <SceneNavigator
-                            scenes={scenes}
-                            characters={characters}
-                            isOpen={isNavOpen}
-                            setIsOpen={setIsNavOpen}
-                            onSelectScene={handleSelectScene}
-                            onAddScene={handleAddScene}
-                            onDeleteScene={handleDeleteScene}
-                            totalPages={totalPages}
-                            scenePages={scenePages}
+            <div className="flex flex-1 overflow-hidden relative">
+                {/* Left Scenes Outline Navigator */}
+                {!isFocusMode && layoutMode !== "beatboard" && (
+                    <SceneNavigator
+                        scenes={scenes}
+                        characters={characters}
+                        isOpen={isNavOpen}
+                        setIsOpen={setIsNavOpen}
+                        onSelectScene={handleSelectScene}
+                        onAddScene={handleAddScene}
+                        onDeleteScene={handleDeleteScene}
+                        totalPages={totalPages}
+                        scenePages={scenePages}
+                    />
+                )}
+
+                {/* Center Main Stage */}
+                {layoutMode === "beatboard" && !isFocusMode ? (
+                    <main className="flex-1 overflow-hidden">
+                        <BeatBoard
+                            scriptId={scriptId || undefined}
+                            onInsertBeatToScript={handleInsertBeat}
+                            sceneHeadings={scenes.map((s) => s.slugline)}
                         />
-                    )}
-
-                    {/* Center Main Stage */}
-                    {layoutMode === "beatboard" && !isFocusMode ? (
-                        <main className="flex-1 overflow-hidden">
-                            <BeatBoard
-                                scriptId={scriptId || undefined}
-                                onInsertBeatToScript={handleInsertBeat}
-                                sceneHeadings={scenes.map((s) => s.slugline)}
-                            />
-                        </main>
-                    ) : layoutMode === "split" && !isFocusMode ? (
-                        <div className="flex flex-1 overflow-hidden">
-                            {/* Left half: Screenplay Canvas */}
-                            <main
-                                onContextMenu={(e) => {
-                                    e.preventDefault();
-                                    setContextMenuPos({ x: e.clientX, y: e.clientY });
-                                    setIsContextMenuOpen(true);
-                                }}
-                                className="flex-1 overflow-y-auto relative bg-[#1a1c1f] border-r border-[#33353a]"
-                            >
-                                {isPageView ? (
-                                    <div className="flex flex-col items-center pt-8 pb-[65vh] px-4 space-y-8 select-text">
-                                        <div className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}>
-                                            <TitlePage
-                                                data={titlePageData}
-                                                onChange={handleUpdateTitlePage}
-                                                isContinuous={false}
-                                                theme={pageTheme}
-                                            />
-                                        </div>
-                                        <div
-                                            className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}
-                                            style={{
-                                                minHeight: `calc(${Math.max(1, totalPages)} * 11in + ${Math.max(0, totalPages - 1)} * 5rem)`
-                                            }}
-                                            onClick={(e) => {
-                                                // focus editor at end if clicking empty bottom paper space
-                                                if (e.target === e.currentTarget && editor) {
-                                                    editor.commands.focus("end");
-                                                }
-                                            }}
-                                        >
-                                            <EditorContent editor={editor} />
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className={`screenplay-continuous-mode ${pageTheme === "light" ? "screenplay-page-light" : ""}`}>
-                                        <TitlePage
-                                            data={titlePageData}
-                                            onChange={handleUpdateTitlePage}
-                                            isContinuous={true}
-                                            theme={pageTheme}
-                                        />
-                                        <div
-                                            className={`relative my-8 border-t flex items-center justify-center ${
-                                                pageTheme === "light" ? "border-zinc-300" : "border-[#33353a]"
-                                            }`}
-                                        >
-                                            <span
-                                                className={`px-3 text-[10px] font-mono uppercase tracking-widest ${
-                                                    pageTheme === "light" ? "bg-white text-zinc-500" : "bg-[#1a1c1f] text-zinc-500"
-                                                }`}
-                                            >
-                                                Screenplay Start - Page 1
-                                            </span>
-                                        </div>
-                                        <EditorContent editor={editor} />
-                                    </div>
-                                )}
-                            </main>
-
-                            {/* Right half: Arc Studio Plot Board */}
-                            <aside className="w-1/2 overflow-hidden bg-[#16171a]">
-                                <BeatBoard
-                                    scriptId={scriptId || undefined}
-                                    onInsertBeatToScript={handleInsertBeat}
-                                    sceneHeadings={scenes.map((s) => s.slugline)}
-                                />
-                            </aside>
-                        </div>
-                    ) : (
-                        /* Script Full Mode */
+                    </main>
+                ) : layoutMode === "split" && !isFocusMode ? (
+                    <div className="flex flex-1 overflow-hidden">
+                        {/* Left half: Screenplay Canvas */}
                         <main
                             onContextMenu={(e) => {
                                 e.preventDefault();
                                 setContextMenuPos({ x: e.clientX, y: e.clientY });
                                 setIsContextMenuOpen(true);
                             }}
-                            className="flex-1 overflow-y-auto relative bg-[#1a1c1f]"
+                            className="flex-1 overflow-y-auto relative bg-[#1a1c1f] border-r border-[#33353a]"
                         >
-                            {activePreviewId && (
-                                <div className="no-print sticky top-0 z-20 flex items-center justify-between px-4 py-2 bg-[#16171a] border-b border-[#33353a] text-zinc-300 text-xs backdrop-blur-md font-mono">
-                                    <span>Viewing historical snapshot preview (Read-only)</span>
-                                    <button
-                                        onClick={() => handlePreviewVersion(null)}
-                                        className="px-2.5 py-0.5 bg-[#27292c] hover:bg-[#25262a] border border-[#33353a] text-zinc-200 rounded text-[11px]"
-                                    >
-                                        Exit Preview
-                                    </button>
-                                </div>
-                            )}
-
                             {isPageView ? (
                                 <div className="flex flex-col items-center pt-8 pb-[65vh] px-4 space-y-8 select-text">
                                     <div className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}>
@@ -1155,125 +1074,202 @@ function ScreenplayEditorContent() {
                                     <EditorContent editor={editor} />
                                 </div>
                             )}
-
-                            {/* Floating Arc Studio Format Dock (Always visible in Script Mode) */}
-                            <ArcShortcutDock
-                                editor={editor}
-                                isPageView={isPageView}
-                                onTogglePageView={() => setIsPageView((v) => !v)}
-                                pageTheme={pageTheme}
-                                onTogglePageTheme={handleTogglePageTheme}
-                                onOpenImageModal={() => setInsertImageOpen(true)}
-                                onStashSelection={handleStashCut}
-                                onTogglePlotBoard={() => setLayoutMode((m) => (m === "beatboard" ? "script" : "beatboard"))}
-                                onToggleStash={() => setIsStashOpen((v) => !v)}
-                            />
-
-                            {/* Right-click Context Menu */}
-                            <ArcFormattingMenu
-                                editor={editor}
-                                isOpen={isContextMenuOpen}
-                                onClose={() => setIsContextMenuOpen(false)}
-                                onOpenBeatBoard={() => setLayoutMode("beatboard")}
-                                onOpenComments={() => setIsStashOpen(true)}
-                                position={contextMenuPos}
-                                align="context"
-                            />
                         </main>
-                    )}
 
-                    {/* Autocomplete Popup */}
-                    <AutocompleteMenu
-                        suggestions={suggestions}
-                        title={suggestionTitle}
-                        isOpen={showSuggestions}
-                        selectedIndex={suggestionIndex}
-                        position={suggestionCoords}
-                        onHover={(idx) => {
-                            setSuggestionIndex(idx);
-                            suggestionsStateRef.current.index = idx;
-                            suggestionsStateRef.current.userInteracted = true;
+                        {/* Right half: Arc Studio Plot Board */}
+                        <aside className="w-1/2 overflow-hidden bg-[#16171a]">
+                            <BeatBoard
+                                scriptId={scriptId || undefined}
+                                onInsertBeatToScript={handleInsertBeat}
+                                sceneHeadings={scenes.map((s) => s.slugline)}
+                            />
+                        </aside>
+                    </div>
+                ) : (
+                    /* Script Full Mode */
+                    <main
+                        onContextMenu={(e) => {
+                            e.preventDefault();
+                            setContextMenuPos({ x: e.clientX, y: e.clientY });
+                            setIsContextMenuOpen(true);
                         }}
-                        onSelect={handleSelectSuggestion}
-                    />
+                        className="flex-1 overflow-y-auto relative bg-[#1a1c1f]"
+                    >
+                        {activePreviewId && (
+                            <div className="no-print sticky top-0 z-20 flex items-center justify-between px-4 py-2 bg-[#16171a] border-b border-[#33353a] text-zinc-300 text-xs backdrop-blur-md font-mono">
+                                <span>Viewing historical snapshot preview (Read-only)</span>
+                                <button
+                                    onClick={() => handlePreviewVersion(null)}
+                                    className="px-2.5 py-0.5 bg-[#27292c] hover:bg-[#25262a] border border-[#33353a] text-zinc-200 rounded text-[11px]"
+                                >
+                                    Exit Preview
+                                </button>
+                            </div>
+                        )}
 
-                    {/* Right Drawers */}
-                    {!isFocusMode && (
-                        <VersionHistoryDrawer
-                            versions={versions}
-                            isOpen={isHistoryOpen}
-                            onClose={() => setIsHistoryOpen(false)}
-                            activePreviewId={activePreviewId}
-                            onPreviewVersion={handlePreviewVersion}
-                            onRestoreVersion={handleRestoreVersion}
-                            onCreateNamedVersion={handleCreateNamedVersion}
-                        />
-                    )}
+                        {isPageView ? (
+                            <div className="flex flex-col items-center pt-8 pb-[65vh] px-4 space-y-8 select-text">
+                                <div className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}>
+                                    <TitlePage
+                                        data={titlePageData}
+                                        onChange={handleUpdateTitlePage}
+                                        isContinuous={false}
+                                        theme={pageTheme}
+                                    />
+                                </div>
+                                <div
+                                    className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}
+                                    style={{
+                                        minHeight: `calc(${Math.max(1, totalPages)} * 11in + ${Math.max(0, totalPages - 1)} * 5rem)`
+                                    }}
+                                    onClick={(e) => {
+                                        // focus editor at end if clicking empty bottom paper space
+                                        if (e.target === e.currentTarget && editor) {
+                                            editor.commands.focus("end");
+                                        }
+                                    }}
+                                >
+                                    <EditorContent editor={editor} />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className={`screenplay-continuous-mode ${pageTheme === "light" ? "screenplay-page-light" : ""}`}>
+                                <TitlePage data={titlePageData} onChange={handleUpdateTitlePage} isContinuous={true} theme={pageTheme} />
+                                <div
+                                    className={`relative my-8 border-t flex items-center justify-center ${
+                                        pageTheme === "light" ? "border-zinc-300" : "border-[#33353a]"
+                                    }`}
+                                >
+                                    <span
+                                        className={`px-3 text-[10px] font-mono uppercase tracking-widest ${
+                                            pageTheme === "light" ? "bg-white text-zinc-500" : "bg-[#1a1c1f] text-zinc-500"
+                                        }`}
+                                    >
+                                        Screenplay Start - Page 1
+                                    </span>
+                                </div>
+                                <EditorContent editor={editor} />
+                            </div>
+                        )}
 
-                    {!isFocusMode && (
-                        <ScriptStash
-                            items={stashItems}
-                            isOpen={isStashOpen}
-                            onClose={() => setIsStashOpen(false)}
-                            isPinned={false}
-                            onTogglePin={() => {}}
-                            onRestore={handleRestoreStashItem}
-                            onDelete={handleDeleteStashItem}
-                            onAddManualNote={handleAddManualStashNote}
-                        />
-                    )}
-
-                    {/* In-script Storyboard Image Dialog */}
-                    <InsertImageDialog isOpen={insertImageOpen} onClose={() => setInsertImageOpen(false)} onInsert={handleInsertImage} />
-
-                    {/* Invite Collaborator Modal */}
-                    <InviteUserModal
-                        isOpen={isInviteOpen}
-                        onClose={() => setIsInviteOpen(false)}
-                        scriptId={scriptId || undefined}
-                        scriptTitle={titlePageData.title || scriptTitle || "Untitled Screenplay"}
-                    />
-
-                    {/* Find & Replace Drawer */}
-                    {layoutMode !== "beatboard" && (
-                        <FindReplaceBar
+                        {/* Floating Arc Studio Format Dock (Always visible in Script Mode) */}
+                        <ArcShortcutDock
                             editor={editor}
-                            isOpen={findReplaceOpen}
-                            onClose={() => setFindReplaceOpen(false)}
-                            drawerOffset={isHistoryOpen || isStashOpen}
+                            isPageView={isPageView}
+                            onTogglePageView={() => setIsPageView((v) => !v)}
+                            pageTheme={pageTheme}
+                            onTogglePageTheme={handleTogglePageTheme}
+                            onOpenImageModal={() => setInsertImageOpen(true)}
+                            onStashSelection={handleStashCut}
+                            onTogglePlotBoard={() => setLayoutMode((m) => (m === "beatboard" ? "script" : "beatboard"))}
+                            onToggleStash={() => setIsStashOpen((v) => !v)}
                         />
-                    )}
 
-                    {/* Command Palette Modal (Cmd+K) */}
-                    <CommandPalette
-                        isOpen={commandPaletteOpen}
-                        onClose={() => setCommandPaletteOpen(false)}
-                        onSetElement={(t) => editor?.chain().focus().setNode(t).run()}
-                        onInsertPageBreak={() => editor?.chain().focus().setPageBreak().run()}
-                        onJumpToScene={handleSelectScene}
-                        scenes={scenes}
-                        onExportFdx={handleExportFdx}
-                        onExportFountain={handleExportFountain}
-                        onPrintPdf={() => typeof window !== "undefined" && window.print()}
-                        onTogglePageView={() => setIsPageView((v) => !v)}
-                        onToggleSplitView={() => setLayoutMode((m) => (m === "split" ? "script" : "split"))}
-                        onToggleFocusMode={() => setIsFocusMode((f) => !f)}
-                        pageTheme={pageTheme}
-                        onTogglePageTheme={handleTogglePageTheme}
+                        {/* Right-click Context Menu */}
+                        <ArcFormattingMenu
+                            editor={editor}
+                            isOpen={isContextMenuOpen}
+                            onClose={() => setIsContextMenuOpen(false)}
+                            onOpenBeatBoard={() => setLayoutMode("beatboard")}
+                            onOpenComments={() => setIsStashOpen(true)}
+                            position={contextMenuPos}
+                            align="context"
+                        />
+                    </main>
+                )}
+
+                {/* Autocomplete Popup */}
+                <AutocompleteMenu
+                    suggestions={suggestions}
+                    title={suggestionTitle}
+                    isOpen={showSuggestions}
+                    selectedIndex={suggestionIndex}
+                    position={suggestionCoords}
+                    onHover={(idx) => {
+                        setSuggestionIndex(idx);
+                        suggestionsStateRef.current.index = idx;
+                        suggestionsStateRef.current.userInteracted = true;
+                    }}
+                    onSelect={handleSelectSuggestion}
+                />
+
+                {/* Right Drawers */}
+                {!isFocusMode && (
+                    <VersionHistoryDrawer
+                        versions={versions}
+                        isOpen={isHistoryOpen}
+                        onClose={() => setIsHistoryOpen(false)}
+                        activePreviewId={activePreviewId}
+                        onPreviewVersion={handlePreviewVersion}
+                        onRestoreVersion={handleRestoreVersion}
+                        onCreateNamedVersion={handleCreateNamedVersion}
                     />
+                )}
 
-                    {/* Arc Studio Bottom-Right Status Telemetry Capsule */}
-                    {!isFocusMode && layoutMode !== "beatboard" && (
-                        <div className="no-print fixed bottom-6 right-6 z-30 flex items-center gap-2 px-3 py-1.5 bg-[#16171a]/95 hover:bg-[#212326] border border-[#33353a] rounded-full text-xs font-mono text-zinc-400 shadow-xl backdrop-blur-md select-none transition-colors">
-                            <span>{wordCount} words</span>
-                            <span className="text-zinc-600">|</span>
-                            <span className="text-zinc-200 font-semibold">
-                                Page {currentPage} / {totalPages}
-                            </span>
-                        </div>
-                    )}
-                </div>
+                {!isFocusMode && (
+                    <ScriptStash
+                        items={stashItems}
+                        isOpen={isStashOpen}
+                        onClose={() => setIsStashOpen(false)}
+                        isPinned={false}
+                        onTogglePin={() => {}}
+                        onRestore={handleRestoreStashItem}
+                        onDelete={handleDeleteStashItem}
+                        onAddManualNote={handleAddManualStashNote}
+                    />
+                )}
+
+                {/* In-script Storyboard Image Dialog */}
+                <InsertImageDialog isOpen={insertImageOpen} onClose={() => setInsertImageOpen(false)} onInsert={handleInsertImage} />
+
+                {/* Invite Collaborator Modal */}
+                <InviteUserModal
+                    isOpen={isInviteOpen}
+                    onClose={() => setIsInviteOpen(false)}
+                    scriptId={scriptId || undefined}
+                    scriptTitle={titlePageData.title || scriptTitle || "Untitled Screenplay"}
+                />
+
+                {/* Find & Replace Drawer */}
+                {layoutMode !== "beatboard" && (
+                    <FindReplaceBar
+                        editor={editor}
+                        isOpen={findReplaceOpen}
+                        onClose={() => setFindReplaceOpen(false)}
+                        drawerOffset={isHistoryOpen || isStashOpen}
+                    />
+                )}
+
+                {/* Command Palette Modal (Cmd+K) */}
+                <CommandPalette
+                    isOpen={commandPaletteOpen}
+                    onClose={() => setCommandPaletteOpen(false)}
+                    onSetElement={(t) => editor?.chain().focus().setNode(t).run()}
+                    onInsertPageBreak={() => editor?.chain().focus().setPageBreak().run()}
+                    onJumpToScene={handleSelectScene}
+                    scenes={scenes}
+                    onExportFdx={handleExportFdx}
+                    onExportFountain={handleExportFountain}
+                    onPrintPdf={() => typeof window !== "undefined" && window.print()}
+                    onTogglePageView={() => setIsPageView((v) => !v)}
+                    onToggleSplitView={() => setLayoutMode((m) => (m === "split" ? "script" : "split"))}
+                    onToggleFocusMode={() => setIsFocusMode((f) => !f)}
+                    pageTheme={pageTheme}
+                    onTogglePageTheme={handleTogglePageTheme}
+                />
+
+                {/* Arc Studio Bottom-Right Status Telemetry Capsule */}
+                {!isFocusMode && layoutMode !== "beatboard" && (
+                    <div className="no-print fixed bottom-6 right-6 z-30 flex items-center gap-2 px-3 py-1.5 bg-[#16171a]/95 hover:bg-[#212326] border border-[#33353a] rounded-full text-xs font-mono text-zinc-400 shadow-xl backdrop-blur-md select-none transition-colors">
+                        <span>{wordCount} words</span>
+                        <span className="text-zinc-600">|</span>
+                        <span className="text-zinc-200 font-semibold">
+                            Page {currentPage} / {totalPages}
+                        </span>
+                    </div>
+                )}
             </div>
+        </div>
     );
 }
 

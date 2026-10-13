@@ -88,8 +88,8 @@ export function ArcShortcutDock({
     };
 
     return (
-        <div className="no-print fixed bottom-6 left-1/2 -translate-x-1/2 z-40 select-none">
-            <div className="relative">
+        <div className="no-print fixed bottom-6 inset-x-0 flex justify-center pointer-events-none z-40 select-none">
+            <div className="relative pointer-events-auto">
                 {/* Arc Studio Screenplay Element Menu (Exact replica) */}
                 <ArcElementMenu editor={editor} isOpen={showElementMenu} onClose={() => setShowElementMenu(false)} align="dock" />
 

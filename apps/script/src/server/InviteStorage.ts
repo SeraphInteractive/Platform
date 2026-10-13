@@ -15,36 +15,42 @@ export interface StudioInvite {
     scriptTitle?: string | null;
 }
 
-const STORAGE_DIR = path.resolve(process.cwd(), "data");
+const STORAGE_DIR = process.env.DATA_DIRECTORY || path.resolve(process.cwd(), "data");
 const STORAGE_FILE = path.join(STORAGE_DIR, "studio_invites.json");
 
+// in-memory fallback cache so storage operations never throw or crash
+let memoryInvites: StudioInvite[] = [];
+
 function ensureStorage(): void {
-    // ensure local data directory exists for persistent storage
-    if (!fs.existsSync(STORAGE_DIR)) {
-        fs.mkdirSync(STORAGE_DIR, { recursive: true });
-    }
-    if (!fs.existsSync(STORAGE_FILE)) {
-        fs.writeFileSync(STORAGE_FILE, JSON.stringify([], null, 2), "utf-8");
-    }
+    try {
+        if (!fs.existsSync(STORAGE_DIR)) {
+            fs.mkdirSync(STORAGE_DIR, { recursive: true });
+        }
+        if (!fs.existsSync(STORAGE_FILE)) {
+            fs.writeFileSync(STORAGE_FILE, JSON.stringify([], null, 2), "utf-8");
+        }
+    } catch {}
 }
 
 export function getInvites(scriptId?: string | null): StudioInvite[] {
     try {
         ensureStorage();
-        const raw = fs.readFileSync(STORAGE_FILE, "utf-8");
-        const parsed = JSON.parse(raw);
-        const list: StudioInvite[] = Array.isArray(parsed) ? parsed : [];
-        if (scriptId) {
-            return list.filter((item) => !item.scriptId || item.scriptId === scriptId);
+        if (fs.existsSync(STORAGE_FILE)) {
+            const raw = fs.readFileSync(STORAGE_FILE, "utf-8");
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                memoryInvites = parsed;
+            }
         }
-        return list;
-    } catch {
-        return [];
+    } catch {}
+
+    if (scriptId) {
+        return memoryInvites.filter((item) => !item.scriptId || item.scriptId === scriptId);
     }
+    return memoryInvites;
 }
 
 export function saveInvite(invite: StudioInvite): void {
-    ensureStorage();
     const existing = getInvites();
     // upsert by user matching on the specific script
     const filtered = existing.filter((item) => {
@@ -53,11 +59,15 @@ export function saveInvite(invite: StudioInvite): void {
         return !(matchesUser && matchesScript);
     });
     const updated = [invite, ...filtered];
-    fs.writeFileSync(STORAGE_FILE, JSON.stringify(updated, null, 2), "utf-8");
+    memoryInvites = updated;
+
+    try {
+        ensureStorage();
+        fs.writeFileSync(STORAGE_FILE, JSON.stringify(updated, null, 2), "utf-8");
+    } catch {}
 }
 
 export function removeInvite(idOrTargetId: string, scriptId?: string | null): boolean {
-    ensureStorage();
     const existing = getInvites();
     const filtered = existing.filter((item) => {
         const isTarget = item.id === idOrTargetId || item.targetId === idOrTargetId || item.discordId === idOrTargetId;
@@ -69,7 +79,11 @@ export function removeInvite(idOrTargetId: string, scriptId?: string | null): bo
     });
     const changed = filtered.length !== existing.length;
     if (changed) {
-        fs.writeFileSync(STORAGE_FILE, JSON.stringify(filtered, null, 2), "utf-8");
+        memoryInvites = filtered;
+        try {
+            ensureStorage();
+            fs.writeFileSync(STORAGE_FILE, JSON.stringify(filtered, null, 2), "utf-8");
+        } catch {}
     }
     return changed;
 }
