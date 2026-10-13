@@ -143,7 +143,7 @@ function ScreenplayEditorContent() {
             setTitlePageData((prev) => ({
                 ...prev,
                 title: doc.title,
-                author: doc.author || prev.author
+                author: doc.author || ""
             }));
         }
     }, [scriptId]);
@@ -965,7 +965,7 @@ function ScreenplayEditorContent() {
                                     e.preventDefault();
                                     setContextMenuPos({ x: e.clientX, y: e.clientY });
                                     setIsContextMenuOpen(true);
-                                    }}
+                                }}
                                 className="flex-1 overflow-y-auto relative bg-[#1a1c1f] border-r border-[#33353a]"
                             >
                                 {isPageView ? (

@@ -26,7 +26,8 @@ import {
     Download,
     UserPlus,
     LogOut,
-    LayoutDashboard
+    LayoutDashboard,
+    ArrowLeft
 } from "lucide-react";
 import { useStudioAuth } from "@/components/AccessGuard";
 import { InviteUserModal } from "@/components/InviteUserModal";
@@ -366,9 +367,7 @@ export function ScriptDashboard() {
     }, [searchFilteredScripts]);
 
     const recentlyEditedScripts = useMemo(() => {
-        return [...searchFilteredScripts]
-            .sort((a, b) => b.lastModified - a.lastModified)
-            .slice(0, 4);
+        return [...searchFilteredScripts].sort((a, b) => b.lastModified - a.lastModified).slice(0, 4);
     }, [searchFilteredScripts]);
 
     const formatTimestamp = (timestamp: number) => {
@@ -407,6 +406,17 @@ export function ScriptDashboard() {
                         <span className="w-2 h-2 rounded-full bg-[#4c8aec]" />
                         <span className="font-semibold text-zinc-100 tracking-wide text-sm">Studio</span>
                     </div>
+
+                    <div className="h-4 w-px bg-[#33353a]" />
+
+                    <a
+                        href="/studio"
+                        className="flex items-center gap-1.5 px-2 py-1 text-xs text-zinc-400 hover:text-white hover:bg-[#27292c] rounded-lg transition-colors"
+                        title="Back to Platform Studio"
+                    >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Platform</span>
+                    </a>
                 </div>
 
                 <div className="flex items-center gap-2.5">
@@ -436,7 +446,17 @@ export function ScriptDashboard() {
                 {/* Minimalist Left Navigation */}
                 {isSidebarOpen && (
                     <aside className="w-60 bg-[#16171a] border-r border-[#33353a] flex flex-col justify-between shrink-0 p-3">
-                        <div className="space-y-4">
+                        <div className="space-y-3">
+                            {/* Back to Platform */}
+                            <a
+                                href="/studio"
+                                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-[#27292c] transition-colors group"
+                                title="Back to Platform Studio"
+                            >
+                                <ArrowLeft className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 transition-colors shrink-0" />
+                                <span>Back to Platform</span>
+                            </a>
+
                             {/* User Profile - seamless, unboxed */}
                             <div className="relative">
                                 <button
@@ -521,6 +541,13 @@ export function ScriptDashboard() {
                                         </div>
 
                                         <div className="pt-1 border-t border-[#33353a]">
+                                            <a
+                                                href="/studio"
+                                                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-zinc-300 hover:text-white hover:bg-[#27292c] transition-colors text-left"
+                                            >
+                                                <ArrowLeft className="w-3.5 h-3.5 text-zinc-400" />
+                                                <span>Back to Platform</span>
+                                            </a>
                                             <button
                                                 type="button"
                                                 onClick={() => logout()}
@@ -610,7 +637,7 @@ export function ScriptDashboard() {
                                                     }
                                                 }}
                                                 onDrop={(e) => handleDropOnShelfContainer(e, shelf.id)}
-                                                className={`group flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium cursor-pointer transition-all ${
+                                                className={`w-full group flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium cursor-pointer transition-all ${
                                                     activeFilterId === shelf.id
                                                         ? "bg-[#27292c] text-white"
                                                         : isDropHover
@@ -618,13 +645,15 @@ export function ScriptDashboard() {
                                                           : "text-zinc-400 hover:text-zinc-200 hover:bg-[#27292c]"
                                                 }`}
                                             >
-                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-2">
                                                     <Bookmark className="w-4 h-4 text-[#60a5fa] shrink-0" />
                                                     <span className="truncate">{shelf.name}</span>
                                                 </div>
 
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    <span className="text-xs font-mono text-zinc-500">{shelfCountMap[shelf.id] || 0}</span>
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    <span className="text-[11px] font-mono text-zinc-400 bg-[#212326] px-1.5 py-0.5 rounded border border-[#33353a]/60 group-hover:bg-[#1a1c1f] transition-colors">
+                                                        {shelfCountMap[shelf.id] || 0}
+                                                    </span>
 
                                                     <div
                                                         onClick={(e) => e.stopPropagation()}
@@ -797,9 +826,7 @@ export function ScriptDashboard() {
                                 {/* Shelves Stacked One Under The Other with Drag & Drop */}
                                 <div className="space-y-6 pt-1">
                                     {displayShelves.map((shelf) => {
-                                        const shelfScripts = searchFilteredScripts.filter(
-                                            (s) => s.shelfId === shelf.id
-                                        );
+                                        const shelfScripts = searchFilteredScripts.filter((s) => s.shelfId === shelf.id);
                                         const isShelfOver = dragOverShelfId === shelf.id;
 
                                         return (
@@ -885,42 +912,42 @@ export function ScriptDashboard() {
 
                                                 {/* Shelf Content */}
                                                 {shelfScripts.length === 0 ? (
-                                                     <div
-                                                         onDragOver={(e) => handleShelfDragOver(e, shelf.id)}
-                                                         onDrop={(e) => handleDropOnShelfContainer(e, shelf.id)}
-                                                         className={`h-11 rounded-lg border border-dashed flex items-center justify-center transition-colors ${
-                                                             isShelfOver
-                                                                 ? "border-[#4c8aec] bg-[#4c8aec]/10 text-[#60a5fa]"
-                                                                 : "border-[#33353a] text-zinc-500"
-                                                         }`}
-                                                     >
-                                                         <span className="text-xs">
-                                                             {isShelfOver ? "Drop to add to shelf" : "Drop screenplays here"}
-                                                         </span>
-                                                     </div>
-                                                 ) : isGridView ? (
-                                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-                                                         {shelfScripts.map((script) => {
-                                                             const isDragging = draggedScriptId === script.id;
-                                                             const isHovered = dragOverScriptId === script.id;
+                                                    <div
+                                                        onDragOver={(e) => handleShelfDragOver(e, shelf.id)}
+                                                        onDrop={(e) => handleDropOnShelfContainer(e, shelf.id)}
+                                                        className={`h-11 rounded-lg border border-dashed flex items-center justify-center transition-colors ${
+                                                            isShelfOver
+                                                                ? "border-[#4c8aec] bg-[#4c8aec]/10 text-[#60a5fa]"
+                                                                : "border-[#33353a] text-zinc-500"
+                                                        }`}
+                                                    >
+                                                        <span className="text-xs">
+                                                            {isShelfOver ? "Drop to add to shelf" : "Drop screenplays here"}
+                                                        </span>
+                                                    </div>
+                                                ) : isGridView ? (
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                                                        {shelfScripts.map((script) => {
+                                                            const isDragging = draggedScriptId === script.id;
+                                                            const isHovered = dragOverScriptId === script.id;
 
-                                                             return (
-                                                                 <div
-                                                                     key={script.id}
-                                                                     draggable
-                                                                     onDragStart={(e) => handleDragStart(e, script.id)}
-                                                                     onDragEnd={handleDragEnd}
-                                                                     onDragOver={(e) => handleScriptDragOver(e, script.id)}
-                                                                     onDrop={(e) => handleDropOnScript(e, script.id, shelf.id)}
-                                                                     onClick={() => handleOpenScript(script.id)}
-                                                                     className={`group p-4 bg-[#212326] hover:bg-[#27292c] border rounded-lg transition-all cursor-grab active:cursor-grabbing flex flex-col justify-between h-36 relative ${
-                                                                         isDragging
-                                                                             ? "opacity-30 border-dashed border-[#4c8aec] scale-[0.98]"
-                                                                             : isHovered
-                                                                               ? "border-[#4c8aec] ring-1 ring-[#4c8aec]"
-                                                                               : "border-[#33353a] hover:border-[#4c8aec]/50"
-                                                                     }`}
-                                                                 >
+                                                            return (
+                                                                <div
+                                                                    key={script.id}
+                                                                    draggable
+                                                                    onDragStart={(e) => handleDragStart(e, script.id)}
+                                                                    onDragEnd={handleDragEnd}
+                                                                    onDragOver={(e) => handleScriptDragOver(e, script.id)}
+                                                                    onDrop={(e) => handleDropOnScript(e, script.id, shelf.id)}
+                                                                    onClick={() => handleOpenScript(script.id)}
+                                                                    className={`group p-4 bg-[#212326] hover:bg-[#27292c] border rounded-lg transition-all cursor-grab active:cursor-grabbing flex flex-col justify-between h-36 relative ${
+                                                                        isDragging
+                                                                            ? "opacity-30 border-dashed border-[#4c8aec] scale-[0.98]"
+                                                                            : isHovered
+                                                                              ? "border-[#4c8aec] ring-1 ring-[#4c8aec]"
+                                                                              : "border-[#33353a] hover:border-[#4c8aec]/50"
+                                                                    }`}
+                                                                >
                                                                     <div>
                                                                         <div className="flex items-center justify-between mb-2">
                                                                             <div className="flex items-center gap-2">

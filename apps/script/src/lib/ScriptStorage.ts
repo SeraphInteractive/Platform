@@ -145,16 +145,25 @@ export function getStoredScripts(): ScriptDocument[] {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
             // purge legacy mock/simulated scripts and prune their doc keys
-            const filtered = parsed.filter((s) => {
-                if (s && DUMMY_SCRIPT_IDS.has(s.id)) {
-                    try {
-                        localStorage.removeItem(`stairway_script_doc_${s.id}`);
-                    } catch {}
-                    return false;
-                }
-                return true;
-            });
-            if (filtered.length !== parsed.length) {
+            let changed = false;
+            const filtered = parsed
+                .filter((s) => {
+                    if (s && DUMMY_SCRIPT_IDS.has(s.id)) {
+                        try {
+                            localStorage.removeItem(`stairway_script_doc_${s.id}`);
+                        } catch {}
+                        return false;
+                    }
+                    return true;
+                })
+                .map((s) => {
+                    if (s && s.author === "Creative Division") {
+                        changed = true;
+                        return { ...s, author: "" };
+                    }
+                    return s;
+                });
+            if (changed || filtered.length !== parsed.length) {
                 saveStoredScripts(filtered);
             }
             return filtered;
@@ -185,7 +194,7 @@ export function createNewScript(title = "Untitled Screenplay", shelfId?: string 
     const newScript: ScriptDocument = {
         id: `script-${Date.now()}`,
         title,
-        author: "Creative Division",
+        author: "",
         lastModified: Date.now(),
         shelfId: shelfId || null,
         category: "mine"

@@ -38,20 +38,20 @@ export function TitlePage({ data, onChange, isContinuous, theme = "dark" }: Titl
                     onChange={(e) => onChange({ title: e.target.value.toUpperCase() })}
                     placeholder="UNTITLED SCREENPLAY"
                     className={`w-full bg-transparent text-center font-bold text-2xl tracking-widest uppercase focus:outline-none border-none py-1 ${
-                        isLight ? "text-neutral-900 placeholder:text-neutral-300" : "text-[#e2e8f0] placeholder-slate-600"
+                        isLight ? "text-neutral-900 placeholder:text-neutral-300" : "text-[#e2e8f0] placeholder-zinc-600"
                     }`}
                     style={{ fontFamily: "var(--courier-font)" }}
                 />
 
-                <div className={`text-xs italic ${isLight ? "text-neutral-500" : "text-slate-400"}`}>written by</div>
+                {data.author && <div className={`text-xs italic ${isLight ? "text-neutral-500" : "text-zinc-400"}`}>written by</div>}
 
                 <input
                     type="text"
                     value={data.author}
                     onChange={(e) => onChange({ author: e.target.value })}
-                    placeholder="Writer Name"
+                    placeholder="Writer"
                     className={`w-full bg-transparent text-center text-sm font-semibold tracking-wider focus:outline-none border-none py-1 ${
-                        isLight ? "text-neutral-900 placeholder:text-neutral-300" : "text-[#e2e8f0] placeholder-slate-600"
+                        isLight ? "text-neutral-900 placeholder:text-neutral-300" : "text-[#e2e8f0] placeholder-zinc-600"
                     }`}
                     style={{ fontFamily: "var(--courier-font)" }}
                 />
@@ -60,9 +60,9 @@ export function TitlePage({ data, onChange, isContinuous, theme = "dark" }: Titl
                     type="text"
                     value={data.basedOn || ""}
                     onChange={(e) => onChange({ basedOn: e.target.value })}
-                    placeholder="Based on an original story for Project Stairway"
+                    placeholder="Based on..."
                     className={`w-full bg-transparent text-center text-xs focus:outline-none border-none py-1 ${
-                        isLight ? "text-neutral-600 placeholder:text-neutral-300" : "text-slate-400 placeholder-slate-600"
+                        isLight ? "text-neutral-600 placeholder:text-neutral-300" : "text-zinc-400 placeholder-zinc-600"
                     }`}
                     style={{ fontFamily: "var(--courier-font)" }}
                 />
@@ -71,7 +71,7 @@ export function TitlePage({ data, onChange, isContinuous, theme = "dark" }: Titl
             {/* Bottom Contact & Draft Metadata Stack */}
             <div
                 className={`flex items-end justify-between pt-16 text-[11px] leading-relaxed ${
-                    isLight ? "text-neutral-600" : "text-slate-400"
+                    isLight ? "text-neutral-600" : "text-zinc-400"
                 }`}
             >
                 <div className="w-1/2 pr-4">
@@ -79,9 +79,9 @@ export function TitlePage({ data, onChange, isContinuous, theme = "dark" }: Titl
                         rows={3}
                         value={data.contact || ""}
                         onChange={(e) => onChange({ contact: e.target.value })}
-                        placeholder="Contact information&#10;studio@projectstairway.net&#10;Discord: /project-stairway"
+                        placeholder="Contact"
                         className={`w-full bg-transparent resize-none focus:outline-none border-none p-0 text-[11px] ${
-                            isLight ? "text-neutral-700 placeholder:text-neutral-300" : "text-slate-300 placeholder-slate-600"
+                            isLight ? "text-neutral-700 placeholder:text-neutral-300" : "text-zinc-300 placeholder-zinc-600"
                         }`}
                         style={{ fontFamily: "var(--courier-font)" }}
                     />
@@ -92,15 +92,12 @@ export function TitlePage({ data, onChange, isContinuous, theme = "dark" }: Titl
                         type="text"
                         value={data.draftInfo || ""}
                         onChange={(e) => onChange({ draftInfo: e.target.value })}
-                        placeholder="First Draft"
+                        placeholder="Draft / Date"
                         className={`w-full bg-transparent text-right focus:outline-none border-none py-1 text-[11px] ${
-                            isLight ? "text-neutral-700 placeholder:text-neutral-300" : "text-slate-300 placeholder-slate-600"
+                            isLight ? "text-neutral-700 placeholder:text-neutral-300" : "text-zinc-300 placeholder-zinc-600"
                         }`}
                         style={{ fontFamily: "var(--courier-font)" }}
                     />
-                    <div className={`text-[10px] mt-1 uppercase tracking-wider ${isLight ? "text-neutral-400" : "text-slate-500"}`}>
-                        Project Stairway Production Vault
-                    </div>
                 </div>
             </div>
         </div>
