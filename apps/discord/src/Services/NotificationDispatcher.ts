@@ -79,7 +79,7 @@ export class NotificationDispatcher {
                 try {
                     await webhook.send({
                         flags: rendered.message.flags,
-                        components: rendered.message.components as never,
+                        components: rendered.message.components,
                         allowedMentions: rendered.message.allowedMentions
                     });
                     continue;

@@ -434,7 +434,7 @@ export class ServerProvisioner {
                     try {
                         await webhook.editMessage(existingId, {
                             flags: rulesPayload.flags,
-                            components: rulesPayload.components as never,
+                            components: rulesPayload.components,
                             allowedMentions: rulesPayload.allowedMentions
                         });
                         edited = true;
@@ -445,7 +445,7 @@ export class ServerProvisioner {
                 if (!edited) {
                     const posted = await webhook.send({
                         flags: rulesPayload.flags,
-                        components: rulesPayload.components as never,
+                        components: rulesPayload.components,
                         allowedMentions: rulesPayload.allowedMentions
                     });
                     await this.settings.update((settings) => {
