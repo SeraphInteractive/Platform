@@ -2,6 +2,7 @@ import { Role } from "@platform/contracts";
 import {
     Activity,
     BookOpen,
+    Clapperboard,
     ClipboardCheck,
     FileText,
     Gauge,
@@ -59,6 +60,13 @@ export const navigationGroups: readonly NavigationGroup[] = [
                 exact: true
             },
             {
+                href: "/studio/script" as Route,
+                label: "Studio",
+                description: "Screenplay studio and writer room",
+                icon: Clapperboard,
+                minimumRole: Role.Admin
+            },
+            {
                 href: "/studio/rounds",
                 label: "Rounds",
                 description: "Run voting rounds and moderate entries",
@@ -112,6 +120,7 @@ export const segmentLabels: Readonly<Record<string, string>> = {
     profile: "Profile",
     guidelines: "Guidelines",
     studio: "Studio",
+    script: "Studio",
     rounds: "Rounds",
     telemetry: "Telemetry",
     reviews: "Reviews",

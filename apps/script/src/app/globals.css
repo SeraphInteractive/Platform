@@ -1,0 +1,340 @@
+@import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@layer base {
+  :root {
+    --bg-app: #131315;
+    --bg-surface: #18181b;
+    --bg-panel: #1e1e22;
+    --border-subtle: #28282e;
+    --border-focus: #6366f1;
+    --text-primary: #f4f4f5;
+    --text-secondary: #a1a1aa;
+    --text-muted: #71717a;
+    --accent: #6366f1;
+    --accent-hover: #4f46e5;
+    --page-bg: #18181b;
+    --page-text: #f4f4f5;
+    --courier-font: var(--font-courier-prime), "Courier Prime", "Courier New", Courier, monospace;
+    --nunito-font: var(--font-nunito), "Nunito", system-ui, -apple-system, sans-serif;
+  }
+
+  body {
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+}
+
+/* Script Page UI Typography: Nunito for UI chrome */
+.script-editor-page,
+.script-dashboard {
+  font-family: var(--nunito-font) !important;
+}
+
+/* Screenplay Document Content: strictly Courier Prime */
+.screenplay-container,
+.screenplay-title-page,
+.screenplay-page-sheet,
+.screenplay-page-mode,
+.screenplay-continuous-mode,
+.ProseMirror,
+.screenplay-element {
+  font-family: var(--courier-font), "Courier Prime", "Courier New", Courier, monospace !important;
+}
+
+.screenplay-container {
+  font-size: 12pt;
+  line-height: 1.15;
+  color: var(--page-text);
+  tab-size: 4;
+}
+
+/* Page View Sheet: Standard US Letter (8.5in x 11in) */
+.screenplay-page-sheet,
+.screenplay-page-mode {
+  width: 8.5in;
+  min-height: 11in;
+  padding: 1.0in 1.0in 1.0in 1.5in;
+  margin: 0 auto;
+  background-color: var(--page-bg);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border-subtle);
+  border-radius: 2px;
+  box-sizing: border-box;
+  position: relative;
+}
+
+/* continuous view: generous eye-level typing scroll padding */
+.screenplay-continuous-mode {
+  width: 100%;
+  max-width: 850px;
+  padding: 2.5rem 3rem 60vh 3rem;
+  margin: 0 auto;
+}
+
+/* Screenplay Element Formatting */
+.screenplay-element {
+  position: relative;
+  outline: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-top: 0;
+  margin-bottom: 0;
+  font-family: var(--courier-font), "Courier Prime", Courier, monospace !important;
+}
+
+/* Scene Heading (Cyan slugline) */
+.screenplay-element.scene-heading {
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  color: #38bdf8;
+  letter-spacing: 0.05em;
+}
+
+/* Action */
+.screenplay-element.action {
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
+  color: #cbd5e1;
+}
+
+/* Character (Warm Amber) */
+.screenplay-element.character {
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-top: 1.1em;
+  margin-bottom: 0;
+  margin-left: 2.2in;
+  max-width: 3.5in;
+  color: #fbbf24;
+}
+
+/* Parenthetical */
+.screenplay-element.parenthetical {
+  margin-top: 0;
+  margin-bottom: 0;
+  margin-left: 1.6in;
+  max-width: 2.8in;
+  color: #94a3b8;
+}
+
+/* Dialogue */
+.screenplay-element.dialogue {
+  margin-top: 0;
+  margin-bottom: 0.75em;
+  margin-left: 1.0in;
+  max-width: 3.6in;
+  color: #f1f5f9;
+}
+
+/* Transition (Violet) */
+.screenplay-element.transition {
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-top: 1.5em;
+  margin-bottom: 1.0em;
+  margin-left: 4.0in;
+  text-align: right;
+  color: #c084fc;
+}
+
+/* Light Paper Theme (Classic Hollywood white page) */
+.screenplay-page-light {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(0, 0, 0, 0.08) !important;
+}
+
+.screenplay-page-light.screenplay-continuous-mode {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border-radius: 2px;
+  margin-top: 1.5rem;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Light paper editor caret & selection */
+.screenplay-page-light .ProseMirror {
+  color: #111827 !important;
+  caret-color: #000000 !important;
+}
+
+.screenplay-page-light ::selection,
+.screenplay-page-light .ProseMirror ::selection {
+  background-color: #bae6fd !important;
+  color: #000000 !important;
+}
+
+.screenplay-page-light .ProseMirror p.is-editor-empty:first-child::before {
+  color: #94a3b8 !important;
+}
+
+/* Screenplay element ink colors on white paper */
+.screenplay-page-light .screenplay-element.scene-heading {
+  color: #000000 !important;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.screenplay-page-light .screenplay-element.action {
+  color: #111827 !important;
+}
+
+.screenplay-page-light .screenplay-element.character {
+  color: #000000 !important;
+  font-weight: 600;
+}
+
+.screenplay-page-light .screenplay-element.parenthetical {
+  color: #1f2937 !important;
+}
+
+.screenplay-page-light .screenplay-element.dialogue {
+  color: #111827 !important;
+}
+
+.screenplay-page-light .screenplay-element.transition {
+  color: #000000 !important;
+  font-weight: 600;
+}
+
+/* Light paper page break dividers */
+.screenplay-page-light .screenplay-page-break .border-dashed {
+  border-color: #cbd5e1 !important;
+}
+
+.screenplay-page-light .screenplay-page-break span.bg-\[\#0e1015\] {
+  background-color: #ffffff !important;
+  color: #64748b !important;
+}
+
+.screenplay-page-light .screenplay-page-break .border-b {
+  border-bottom-color: #e2e8f0 !important;
+}
+
+/* TipTap Editor Focus & Selection */
+.ProseMirror {
+  outline: none;
+  min-height: 500px;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--text-muted);
+  pointer-events: none;
+  height: 0;
+}
+
+/* Page Break & Pagination Break Styling */
+.screenplay-page-break,
+.screenplay-auto-page-break {
+  display: block;
+  outline: none;
+}
+
+/* Print Styling */
+@media print {
+  @page {
+    size: letter portrait;
+    margin: 1in 1in 1in 1.5in;
+  }
+
+  html,
+  body,
+  .script-editor-page,
+  main,
+  .screenplay-container {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    position: static !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .screenplay-title-page {
+    page-break-after: always !important;
+    break-after: page !important;
+    min-height: 9in !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+  }
+
+  .screenplay-page-sheet,
+  .screenplay-page-mode,
+  .screenplay-continuous-mode {
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: #fff !important;
+    color: #000 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .screenplay-page-break,
+  .screenplay-auto-page-break {
+    break-after: page !important;
+    page-break-after: always !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    height: 0 !important;
+  }
+
+  .screenplay-element {
+    color: #000 !important;
+    font-family: var(--courier-font), "Courier Prime", monospace !important;
+  }
+
+  .screenplay-element.scene-heading,
+  .screenplay-element.character,
+  .screenplay-element.parenthetical {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  .screenplay-element.action,
+  .screenplay-element.dialogue,
+  .screenplay-element.transition {
+    color: #000 !important;
+  }
+}
+
+/* Dark Minimalist Scrollbars (No jarring white scrollbars) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #272a38 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #272a38;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #373b4d;
+}
