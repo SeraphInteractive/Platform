@@ -11,6 +11,7 @@ import { SceneHeading, Action, Character, Dialogue, Parenthetical, Transition, S
 import { UnderlineMark, HighlightMark } from "@/editor/marks";
 import { ScreenplayKeymap } from "@/editor/extensions/ScreenplayKeymap";
 import { ScreenplayPagination } from "@/editor/extensions/ScreenplayPagination";
+import { HardBreakLeafText } from "@/editor/extensions/HardBreakLeafText";
 import { extractScriptContext, COMMON_PREFIXES, COMMON_TIMES, COMMON_TRANSITIONS } from "@/editor/extensions/suggestions";
 import { exportToFdx, parseFdx } from "@/editor/format/fdx";
 import { exportToFountain, parseFountain } from "@/editor/format/fountain";
@@ -70,6 +71,11 @@ function ScreenplayEditorContent() {
     useEffect(() => {
         isReadOnlyRef.current = isReadOnly;
     }, [isReadOnly]);
+
+    const userRef = useRef(user);
+    useEffect(() => {
+        userRef.current = user;
+    }, [user]);
 
     const [mounted, setMounted] = useState(false);
     const [layoutMode, setLayoutMode] = useState<ViewLayoutMode>("script");
@@ -228,6 +234,7 @@ function ScreenplayEditorContent() {
             Transition,
             ScriptImage,
             PageBreak,
+            HardBreakLeafText,
             ScreenplayPagination,
             ScreenplayKeymap,
             Placeholder.configure({
@@ -330,11 +337,15 @@ function ScreenplayEditorContent() {
                     ed.state.doc.descendants((node) => {
                         if (node.type.name === "sceneHeading") detectedSceneCount++;
                     });
+                    const currentUser = userRef.current;
+                    const authorName = currentUser?.globalName || currentUser?.username || "Admin";
+                    const avatarUrl = currentUser?.avatarUrl || null;
                     const autoSnapshot: VersionSnapshot = {
                         id: `snap-${now}`,
                         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
                         isoDate: new Date().toISOString(),
-                        author: "Admin",
+                        author: authorName,
+                        avatarUrl,
                         wordCount: words,
                         sceneCount: detectedSceneCount,
                         content: json
@@ -698,12 +709,15 @@ function ScreenplayEditorContent() {
     const handleCreateNamedVersion = useCallback(
         (name: string) => {
             if (isReadOnly || !editor) return;
+            const authorName = user?.globalName || user?.username || "Admin";
+            const avatarUrl = user?.avatarUrl || null;
             const snapshot: VersionSnapshot = {
                 id: `milestone-${Date.now()}`,
                 name,
                 timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
                 isoDate: new Date().toISOString(),
-                author: "Admin",
+                author: authorName,
+                avatarUrl,
                 wordCount: wordCount,
                 sceneCount: scenes.length,
                 content: editor.getJSON()
@@ -717,7 +731,7 @@ function ScreenplayEditorContent() {
                 return updated;
             });
         },
-        [editor, wordCount, scenes.length]
+        [editor, wordCount, scenes.length, isReadOnly, user]
     );
 
     // Version History: Restore previous snapshot
@@ -725,12 +739,15 @@ function ScreenplayEditorContent() {
         (snapshot: VersionSnapshot) => {
             if (isReadOnly || !editor) return;
             const currentJson = editor.getJSON();
+            const authorName = user?.globalName || user?.username || "Admin";
+            const avatarUrl = user?.avatarUrl || null;
             const backup: VersionSnapshot = {
                 id: `auto-backup-${Date.now()}`,
                 name: `Pre-restore Backup (${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`,
                 timestamp: "Just now",
                 isoDate: new Date().toISOString(),
-                author: "Admin",
+                author: authorName,
+                avatarUrl,
                 wordCount: wordCount,
                 sceneCount: scenes.length,
                 content: currentJson

@@ -21,10 +21,38 @@ export interface PaginationStorage {
 
 export const ScreenplayPaginationPluginKey = new PluginKey("screenplayPagination");
 
+// extracts plain text preserving hardBreak nodes as newlines
+export function getBlockText(node: PMNode): string {
+    let text = "";
+    node.forEach((child) => {
+        if (child.isText) {
+            text += child.text || "";
+        } else if (child.type.name === "hardBreak") {
+            text += "\n";
+        }
+    });
+    return text;
+}
+
+// counts rendered lines accounting for hard breaks and text wrapping per line
+export function countBlockLines(text: string, charsPerLine: number): number {
+    if (!text) return 1;
+    const segments = text.split("\n");
+    let lines = 0;
+    for (const seg of segments) {
+        if (seg.length === 0) {
+            lines += 1;
+        } else {
+            lines += Math.max(1, Math.ceil(seg.length / charsPerLine));
+        }
+    }
+    return Math.max(1, lines);
+}
+
 // estimates physical line consumption of a screenplay block
-function estimateBlockLines(node: PMNode): number {
+export function estimateBlockLines(node: PMNode): number {
     const type = node.type.name;
-    const text = node.textContent.trim();
+    const text = getBlockText(node);
 
     if (type === "pageBreak") {
         return SCREENPLAY_PAGE_BUDGET_LINES; // forces immediate page break
@@ -36,35 +64,33 @@ function estimateBlockLines(node: PMNode): number {
 
     if (type === "sceneHeading") {
         // 1 line text + top margin (1.5em) + bottom margin (0.5em)
-        return 3;
+        return Math.max(3, countBlockLines(text, 60) + 2);
     }
 
     if (type === "action") {
         // standard 60 char width per action line + margin
-        const lines = Math.max(1, Math.ceil(text.length / 60));
-        return lines + 1;
+        return countBlockLines(text, 60) + 1;
     }
 
     if (type === "character") {
         // character cue + top margin
-        return 2;
+        return Math.max(2, countBlockLines(text, 35) + 1);
     }
 
     if (type === "parenthetical") {
-        return 1;
+        return countBlockLines(text, 30);
     }
 
     if (type === "dialogue") {
         // dialogue column is ~35 characters wide
-        const lines = Math.max(1, Math.ceil(text.length / 35));
-        return lines + 1;
+        return countBlockLines(text, 35) + 1;
     }
 
     if (type === "transition") {
-        return 3;
+        return Math.max(2, countBlockLines(text, 30) + 1);
     }
 
-    return 2;
+    return countBlockLines(text, 60) + 1;
 }
 
 export const ScreenplayPagination = Extension.create<Record<string, never>, PaginationStorage>({
@@ -123,7 +149,7 @@ export const ScreenplayPagination = Extension.create<Record<string, never>, Pagi
 });
 
 // computes page boundaries, telemetry, and automatic page break widget decorations
-function computePagination(doc: PMNode, storage?: PaginationStorage) {
+export function computePagination(doc: PMNode, storage?: PaginationStorage) {
     const decorations: Decoration[] = [];
     const boundaries: PageBoundary[] = [];
     const scenePages: Record<number, number> = {};
@@ -134,16 +160,84 @@ function computePagination(doc: PMNode, storage?: PaginationStorage) {
     // page 1 starts at document beginning
     boundaries.push({ pos: 0, pageNumber: 1, isManual: false });
 
+    interface NodeEntry {
+        node: PMNode;
+        offset: number;
+        lines: number;
+        type: string;
+    }
+
+    const nodes: NodeEntry[] = [];
     doc.forEach((childNode, offset) => {
-        const nodeLines = estimateBlockLines(childNode);
-        const nodeType = childNode.type.name;
+        nodes.push({
+            node: childNode,
+            offset,
+            lines: estimateBlockLines(childNode),
+            type: childNode.type.name
+        });
+    });
+
+    // calculate contiguous speech lines so character, parenthetical, and dialogue stick together
+    function getSpeechRequiredLines(startIndex: number): number {
+        const first = nodes[startIndex];
+        if (!first) return 0;
+
+        let total = first.lines;
+        let j = startIndex + 1;
+
+        if (first.type === "character") {
+            while (j < nodes.length) {
+                const next = nodes[j];
+                if (!next) break;
+                if (next.type === "parenthetical") {
+                    total += next.lines;
+                    j++;
+                } else if (next.type === "dialogue") {
+                    // stick together until sentence break (end of initial dialogue block)
+                    total += next.lines;
+                    break;
+                } else {
+                    break;
+                }
+            }
+        } else if (first.type === "parenthetical") {
+            while (j < nodes.length) {
+                const next = nodes[j];
+                if (!next) break;
+                if (next.type === "dialogue") {
+                    total += next.lines;
+                    break;
+                } else if (next.type === "parenthetical") {
+                    total += next.lines;
+                    j++;
+                } else {
+                    break;
+                }
+            }
+        } else if (first.type === "sceneHeading") {
+            if (j < nodes.length) {
+                const next = nodes[j];
+                if (next && (next.type === "action" || next.type === "character")) {
+                    total += Math.min(next.lines, 3);
+                }
+            }
+        }
+
+        return total;
+    }
+
+    for (let i = 0; i < nodes.length; i++) {
+        const entry = nodes[i]!;
+        const nodeLines = entry.lines;
+        const nodeType = entry.type;
+        const offset = entry.offset;
 
         // manual page break node explicitly advances page
         if (nodeType === "pageBreak") {
             currentPage += 1;
             currentLinesOnPage = 0;
             boundaries.push({ pos: offset, pageNumber: currentPage, isManual: true });
-            return;
+            continue;
         }
 
         // record scene page number for outline sync
@@ -151,13 +245,25 @@ function computePagination(doc: PMNode, storage?: PaginationStorage) {
             scenePages[offset] = currentPage;
         }
 
-        // screenplay orphan prevention:
-        // push scene heading or character to next page if too close to bottom margin
-        const isOrphanRisk =
-            (nodeType === "sceneHeading" && currentLinesOnPage > SCREENPLAY_PAGE_BUDGET_LINES - 4) ||
-            (nodeType === "character" && currentLinesOnPage > SCREENPLAY_PAGE_BUDGET_LINES - 3);
+        // prevent character/parenthetical from being orphaned without dialogue
+        let isOrphanRisk = false;
+        if (currentLinesOnPage > 0) {
+            if (nodeType === "character" || nodeType === "parenthetical" || nodeType === "sceneHeading") {
+                const requiredLines = getSpeechRequiredLines(i);
+                if (currentLinesOnPage + requiredLines > SCREENPLAY_PAGE_BUDGET_LINES) {
+                    isOrphanRisk = true;
+                }
+            }
+        }
 
-        if (currentLinesOnPage + nodeLines > SCREENPLAY_PAGE_BUDGET_LINES || isOrphanRisk) {
+        // prevent separation: dialogue and parenthetical must stick to character cue
+        const prevType = i > 0 ? nodes[i - 1]?.type : undefined;
+        const isTiedToPrev =
+            currentLinesOnPage > 0 &&
+            ((nodeType === "parenthetical" && prevType === "character") ||
+                (nodeType === "dialogue" && (prevType === "character" || prevType === "parenthetical")));
+
+        if (!isTiedToPrev && (currentLinesOnPage + nodeLines > SCREENPLAY_PAGE_BUDGET_LINES || isOrphanRisk)) {
             // create automatic page break at this block boundary
             currentPage += 1;
             currentLinesOnPage = nodeLines;
@@ -221,11 +327,23 @@ function computePagination(doc: PMNode, storage?: PaginationStorage) {
                 { side: -1 }
             );
 
+            // allocate additional pages if a single block exceeds the full page line budget
+            if (currentLinesOnPage > SCREENPLAY_PAGE_BUDGET_LINES) {
+                const extraPages = Math.floor((currentLinesOnPage - 1) / SCREENPLAY_PAGE_BUDGET_LINES);
+                currentPage += extraPages;
+                currentLinesOnPage -= extraPages * SCREENPLAY_PAGE_BUDGET_LINES;
+            }
+
             decorations.push(widget);
         } else {
             currentLinesOnPage += nodeLines;
+            if (currentLinesOnPage > SCREENPLAY_PAGE_BUDGET_LINES) {
+                const extraPages = Math.floor((currentLinesOnPage - 1) / SCREENPLAY_PAGE_BUDGET_LINES);
+                currentPage += extraPages;
+                currentLinesOnPage -= extraPages * SCREENPLAY_PAGE_BUDGET_LINES;
+            }
         }
-    });
+    }
 
     // sync storage telemetry
     if (storage) {

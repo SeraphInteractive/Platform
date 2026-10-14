@@ -16,7 +16,7 @@ export function exportToFountain(doc: JSONContent, title = "Untitled Script", au
             }
             let text = "";
             if (node.content && Array.isArray(node.content)) {
-                text = node.content.map((c) => c.text || "").join("");
+                text = node.content.map((c) => (c.type === "hardBreak" ? "\n" : c.text || "")).join("");
             }
 
             switch (type) {

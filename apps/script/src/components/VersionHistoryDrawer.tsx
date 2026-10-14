@@ -9,10 +9,48 @@ export interface VersionSnapshot {
     timestamp: string;
     isoDate: string;
     author: string;
+    avatarUrl?: string | null;
     wordCount: number;
     sceneCount: number;
     content: unknown;
     color?: string;
+}
+
+// formats edit timestamp into clean relative day-grouped label
+export function formatRelativeTime(isoDateString?: string, fallbackTimestamp?: string): string {
+    if (!isoDateString) return fallbackTimestamp || "Just now";
+    const date = new Date(isoDateString);
+    if (isNaN(date.getTime())) return fallbackTimestamp || "Just now";
+
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+
+    if (diffSec < 45) return "Just now";
+    if (diffMin < 60) return `${diffMin}m ago`;
+
+    const isToday = now.getDate() === date.getDate() && now.getMonth() === date.getMonth() && now.getFullYear() === date.getFullYear();
+
+    const timeStr = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+    if (isToday) return `Today, ${timeStr}`;
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday =
+        yesterday.getDate() === date.getDate() &&
+        yesterday.getMonth() === date.getMonth() &&
+        yesterday.getFullYear() === date.getFullYear();
+
+    if (isYesterday) return `Yesterday, ${timeStr}`;
+
+    const isThisYear = now.getFullYear() === date.getFullYear();
+    const monthName = date.toLocaleDateString([], { month: "short" });
+    const day = date.getDate();
+
+    if (isThisYear) return `${monthName} ${day}, ${timeStr}`;
+    return `${monthName} ${day}, ${date.getFullYear()}`;
 }
 
 interface VersionHistoryDrawerProps {
@@ -128,6 +166,8 @@ export function VersionHistoryDrawer({
                 ) : (
                     displayVersions.map((v) => {
                         const isPreviewing = activePreviewId === v.id;
+                        const relativeTime = formatRelativeTime(v.isoDate, v.timestamp);
+                        const initialLetter = (v.author || "A")[0]?.toUpperCase() || "A";
 
                         return (
                             <div
@@ -138,24 +178,45 @@ export function VersionHistoryDrawer({
                                         : "bg-[#161820] hover:bg-[#1a1d26] border-[#262933]"
                                 }`}
                             >
-                                <div className="flex items-center justify-between gap-1 mb-1">
-                                    <span className="text-xs font-medium text-slate-200 truncate font-mono">{v.name || v.timestamp}</span>
-                                    {v.name && (
-                                        <span className="px-1.5 py-0.2 rounded bg-[#202432] border border-[#2c3244] text-[9px] font-mono text-slate-300">
-                                            Milestone
-                                        </span>
+                                <div className="flex items-start gap-2.5">
+                                    {/* Author Profile Picture / Fallback Badge */}
+                                    {v.avatarUrl ? (
+                                        <img
+                                            src={v.avatarUrl}
+                                            alt={v.author}
+                                            className="w-6 h-6 rounded-full object-cover border border-[#2e3344] shrink-0 mt-0.5"
+                                        />
+                                    ) : (
+                                        <div className="w-6 h-6 rounded-full bg-[#202432] border border-[#2e3344] text-slate-300 font-semibold text-[10px] flex items-center justify-center shrink-0 uppercase font-mono mt-0.5">
+                                            {initialLetter}
+                                        </div>
                                     )}
-                                </div>
 
-                                <div className="text-[10px] text-slate-400 font-mono flex items-center justify-between">
-                                    <span>{v.timestamp}</span>
-                                    <span>{v.author}</span>
-                                </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                                            <span className="text-xs font-medium text-slate-200 truncate font-mono">
+                                                {v.name || v.author}
+                                            </span>
+                                            {v.name && (
+                                                <span className="px-1.5 py-0.2 rounded bg-[#202432] border border-[#2c3244] text-[9px] font-mono text-slate-300 shrink-0">
+                                                    Milestone
+                                                </span>
+                                            )}
+                                        </div>
 
-                                <div className="text-[10px] text-slate-500 font-mono mt-1 flex items-center gap-2">
-                                    <span>{v.wordCount} words</span>
-                                    <span>•</span>
-                                    <span>{v.sceneCount} scenes</span>
+                                        <div className="text-[10px] text-slate-400 font-mono flex items-center justify-between gap-1">
+                                            <span title={v.isoDate ? new Date(v.isoDate).toLocaleString() : v.timestamp}>
+                                                {relativeTime}
+                                            </span>
+                                            {v.name && <span className="text-slate-500 truncate">{v.author}</span>}
+                                        </div>
+
+                                        <div className="text-[10px] text-slate-500 font-mono mt-1 flex items-center gap-2">
+                                            <span>{v.wordCount} words</span>
+                                            <span>-</span>
+                                            <span>{v.sceneCount} scenes</span>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Restore / Preview Actions */}

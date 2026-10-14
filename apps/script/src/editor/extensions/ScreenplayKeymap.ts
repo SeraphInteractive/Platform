@@ -97,6 +97,32 @@ export const ScreenplayKeymap = Extension.create({
                 return false;
             },
 
+            "Shift-Enter": ({ editor }) => {
+                const { state } = editor;
+                const { selection } = state;
+                const { $from } = selection;
+                const parentNode = $from.parent;
+                const currentType = parentNode.type.name;
+
+                // screenplay continuity on shift+enter without switching element type
+                if (currentType === "dialogue") {
+                    return splitToType(editor, "dialogue");
+                }
+                if (currentType === "action") {
+                    return splitToType(editor, "action");
+                }
+                if (currentType === "character") {
+                    return splitToType(editor, "dialogue");
+                }
+                if (currentType === "parenthetical") {
+                    return splitToType(editor, "dialogue");
+                }
+                if (currentType === "sceneHeading" || currentType === "transition") {
+                    return splitToType(editor, "action");
+                }
+                return splitToType(editor, currentType);
+            },
+
             Tab: ({ editor }) => {
                 const { state } = editor;
                 const { selection } = state;

@@ -38,9 +38,12 @@ export function exportToFdx(doc: JSONContent, title = "Untitled Script", author?
             if (node.type === "scriptImage") {
                 text = `[STORYBOARD: ${node.attrs?.caption || "Image"}]`;
             } else if (node.content && Array.isArray(node.content)) {
-                text = node.content.map((c) => c.text || "").join("");
+                text = node.content.map((c) => (c.type === "hardBreak" ? "\n" : c.text || "")).join("");
             }
-            paragraphs.push(`    <Paragraph Type="${fdxType}">\n      <Text>${escapeXml(text)}</Text>\n    </Paragraph>`);
+            const lines = text.split(/\r?\n/);
+            for (const line of lines) {
+                paragraphs.push(`    <Paragraph Type="${fdxType}">\n      <Text>${escapeXml(line)}</Text>\n    </Paragraph>`);
+            }
         }
     }
 
