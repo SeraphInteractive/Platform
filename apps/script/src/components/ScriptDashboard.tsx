@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -81,6 +81,8 @@ export function ScriptDashboard() {
     const [dragOverShelfId, setDragOverShelfId] = useState<string | null>(null);
     const [dragOverScriptId, setDragOverScriptId] = useState<string | null>(null);
     const [dragPosition, setDragPosition] = useState<"before" | "after" | null>(null);
+    const draggedScriptIdRef = useRef<string | null>(null);
+    const isDraggingRef = useRef<boolean>(false);
 
     // dialog & menu states
     const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -201,6 +203,7 @@ export function ScriptDashboard() {
     }, [menuOpenId, shelfMenuOpenId, isProfileMenuOpen]);
 
     const handleOpenScript = (id: string) => {
+        if (isDraggingRef.current) return;
         router.push(`/editor?id=${encodeURIComponent(id)}`);
     };
 
@@ -343,22 +346,40 @@ export function ScriptDashboard() {
         setMenuOpenId(null);
     };
 
-    const handleMoveToShelf = (targetShelfId: string | null) => {
+    const handleMoveToShelf = async (targetShelfId: string | null) => {
         if (!isAdmin || !movingScript) return;
-        moveScriptToShelf(movingScript.id, targetShelfId);
-        refreshData();
+        const scriptId = movingScript.id;
+        const normalizedShelfId = targetShelfId === "unfiled" || targetShelfId === "all" ? null : targetShelfId;
         setMovingScript(null);
+
+        // optimistic update for immediate feedback
+        setScripts((prev) =>
+            prev.map((s) => (s.id === scriptId ? { ...s, shelfId: normalizedShelfId, lastModified: Date.now() } : s))
+        );
+        moveScriptToShelf(scriptId, normalizedShelfId);
+
+        try {
+            await ScriptApiClient.updateScript(scriptId, { shelfId: normalizedShelfId });
+        } catch {}
+        await refreshData();
     };
 
     // drag and drop handlers for visual reordering
     const handleDragStart = (e: React.DragEvent, scriptId: string) => {
         if (!isAdmin) return;
+        draggedScriptIdRef.current = scriptId;
+        isDraggingRef.current = true;
         e.dataTransfer.setData("text/plain", scriptId);
         e.dataTransfer.effectAllowed = "move";
         setDraggedScriptId(scriptId);
     };
 
     const handleDragEnd = () => {
+        draggedScriptIdRef.current = null;
+        // prevent trailing click events from opening editor
+        setTimeout(() => {
+            isDraggingRef.current = false;
+        }, 150);
         setDraggedScriptId(null);
         setDragOverShelfId(null);
         setDragOverScriptId(null);
@@ -368,6 +389,7 @@ export function ScriptDashboard() {
     const handleShelfDragOver = (e: React.DragEvent, shelfId: string | null) => {
         if (!isAdmin) return;
         e.preventDefault();
+        e.stopPropagation();
         e.dataTransfer.dropEffect = "move";
         const key = shelfId || "unfiled";
         if (dragOverShelfId !== key) {
@@ -381,7 +403,8 @@ export function ScriptDashboard() {
         e.stopPropagation();
         e.dataTransfer.dropEffect = "move";
 
-        if (draggedScriptId === scriptId) return;
+        const currentDragged = draggedScriptIdRef.current || draggedScriptId;
+        if (currentDragged === scriptId) return;
 
         const rect = e.currentTarget.getBoundingClientRect();
         const offsetY = e.clientY - rect.top;
@@ -394,32 +417,70 @@ export function ScriptDashboard() {
         }
     };
 
-    const handleDropOnShelfContainer = (e: React.DragEvent, targetShelfId: string | null) => {
-        e.preventDefault();
-        if (!isAdmin || !draggedScriptId) return;
-
-        moveScriptToShelf(draggedScriptId, targetShelfId);
-        refreshData();
-        handleDragEnd();
-    };
-
-    const handleDropOnScript = (e: React.DragEvent, targetScriptId: string, targetShelfId: string | null) => {
+    const handleDropOnShelfContainer = async (e: React.DragEvent, targetShelfId: string | null) => {
         e.preventDefault();
         e.stopPropagation();
-
-        if (!isAdmin || !draggedScriptId || draggedScriptId === targetScriptId) {
+        const scriptId = draggedScriptIdRef.current || draggedScriptId || e.dataTransfer.getData("text/plain");
+        if (!isAdmin || !scriptId) {
             handleDragEnd();
             return;
         }
 
-        if (dragPosition === "before") {
-            moveScriptBefore(draggedScriptId, targetScriptId, targetShelfId);
-        } else {
-            moveScriptAfter(draggedScriptId, targetScriptId, targetShelfId);
+        const normalizedShelfId = targetShelfId === "unfiled" || targetShelfId === "all" ? null : targetShelfId;
+
+        // optimistic update for immediate feedback
+        setScripts((prev) =>
+            prev.map((s) => (s.id === scriptId ? { ...s, shelfId: normalizedShelfId, lastModified: Date.now() } : s))
+        );
+        moveScriptToShelf(scriptId, normalizedShelfId);
+        handleDragEnd();
+
+        try {
+            await ScriptApiClient.updateScript(scriptId, { shelfId: normalizedShelfId });
+        } catch {}
+        await refreshData();
+    };
+
+    const handleDropOnScript = async (e: React.DragEvent, targetScriptId: string, targetShelfId: string | null) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const scriptId = draggedScriptIdRef.current || draggedScriptId || e.dataTransfer.getData("text/plain");
+        if (!isAdmin || !scriptId || scriptId === targetScriptId) {
+            handleDragEnd();
+            return;
         }
 
-        refreshData();
+        const normalizedShelfId = targetShelfId === "unfiled" || targetShelfId === "all" ? null : targetShelfId;
+
+        if (dragPosition === "before") {
+            moveScriptBefore(scriptId, targetScriptId, normalizedShelfId);
+        } else {
+            moveScriptAfter(scriptId, targetScriptId, normalizedShelfId);
+        }
+
+        // optimistic reorder and shelf update
+        setScripts((prev) => {
+            const dragged = prev.find((s) => s.id === scriptId);
+            if (!dragged) return prev;
+            const updated = { ...dragged, shelfId: normalizedShelfId, lastModified: Date.now() };
+            const withoutDragged = prev.filter((s) => s.id !== scriptId);
+            const targetIdx = withoutDragged.findIndex((s) => s.id === targetScriptId);
+            if (targetIdx !== -1) {
+                const insertIdx = dragPosition === "before" ? targetIdx : targetIdx + 1;
+                withoutDragged.splice(insertIdx, 0, updated);
+            } else {
+                withoutDragged.push(updated);
+            }
+            return withoutDragged;
+        });
+
         handleDragEnd();
+
+        try {
+            await ScriptApiClient.updateScript(scriptId, { shelfId: normalizedShelfId });
+        } catch {}
+        await refreshData();
     };
 
     // shelf map for quick lookups
@@ -676,19 +737,26 @@ export function ScriptDashboard() {
                                 </button>
 
                                 <div
-                                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors group ${
+                                    onDragOver={(e) => handleShelfDragOver(e, null)}
+                                    onDragLeave={(e) => {
+                                        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                                            setDragOverShelfId(null);
+                                        }
+                                    }}
+                                    onDrop={(e) => handleDropOnShelfContainer(e, null)}
+                                    onClick={() => setActiveFilterId("unfiled")}
+                                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors group cursor-pointer ${
                                         activeFilterId === "unfiled"
                                             ? "bg-[#27292c] text-white"
-                                            : "text-zinc-400 hover:text-zinc-200 hover:bg-[#27292c]"
+                                            : dragOverShelfId === "unfiled"
+                                              ? "bg-[#4c8aec]/20 text-white ring-1 ring-[#4c8aec]"
+                                              : "text-zinc-400 hover:text-zinc-200 hover:bg-[#27292c]"
                                     }`}
                                 >
-                                    <button
-                                        onClick={() => setActiveFilterId("unfiled")}
-                                        className="flex items-center gap-2.5 flex-1 text-left"
-                                    >
+                                    <div className="flex items-center gap-2.5 flex-1 text-left pointer-events-none">
                                         <FileText className="w-4 h-4 text-zinc-400" />
                                         <span>Scripts</span>
-                                    </button>
+                                    </div>
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -755,19 +823,19 @@ export function ScriptDashboard() {
                                                           : "text-zinc-400 hover:text-zinc-200 hover:bg-[#27292c]"
                                                 }`}
                                             >
-                                                <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-2">
+                                                <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-2 pointer-events-none">
                                                     <Bookmark className="w-4 h-4 text-[#60a5fa] shrink-0" />
                                                     <span className="truncate">{shelf.name}</span>
                                                 </div>
 
                                                 <div className="flex items-center gap-1.5 shrink-0">
-                                                    <span className="text-[11px] font-mono text-zinc-400 bg-[#212326] px-1.5 py-0.5 rounded border border-[#33353a]/60 group-hover:bg-[#1a1c1f] transition-colors">
+                                                    <span className="text-[11px] font-mono text-zinc-400 bg-[#212326] px-1.5 py-0.5 rounded border border-[#33353a]/60 group-hover:bg-[#1a1c1f] transition-colors pointer-events-none">
                                                         {shelfCountMap[shelf.id] || 0}
                                                     </span>
 
                                                     <div
                                                         onClick={(e) => e.stopPropagation()}
-                                                        className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity"
+                                                        className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity pointer-events-auto"
                                                     >
                                                         <button
                                                             onClick={(e) => {
@@ -911,30 +979,43 @@ export function ScriptDashboard() {
                                     <section className="space-y-3">
                                         <h2 className="text-sm font-semibold text-zinc-200">Recently edited</h2>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
-                                            {recentlyEditedScripts.map((script) => (
-                                                <div
-                                                    key={`recent-${script.id}`}
-                                                    onClick={() => handleOpenScript(script.id)}
-                                                    className="group p-4 bg-[#212326] hover:bg-[#27292c] border border-[#33353a] hover:border-[#4c8aec]/50 rounded-xl transition-all cursor-pointer flex flex-col justify-between h-36 relative shadow-xs"
-                                                >
-                                                    <div>
-                                                        <div className="flex items-center justify-between mb-2">
-                                                            <FileText className="w-4 h-4 text-[#60a5fa]" />
-                                                            {script.shelfId && shelfMap.has(script.shelfId) && (
-                                                                <span className="text-[10px] text-zinc-400 bg-[#27292c] px-2 py-0.5 rounded-full border border-[#33353a] truncate max-w-[100px]">
-                                                                    {shelfMap.get(script.shelfId)}
-                                                                </span>
-                                                            )}
+                                            {recentlyEditedScripts.map((script) => {
+                                                const isDragging = draggedScriptId === script.id;
+
+                                                return (
+                                                    <div
+                                                        key={`recent-${script.id}`}
+                                                        draggable={isAdmin}
+                                                        onDragStart={(e) => handleDragStart(e, script.id)}
+                                                        onDragEnd={handleDragEnd}
+                                                        onClick={() => handleOpenScript(script.id)}
+                                                        className={`group p-4 bg-[#212326] hover:bg-[#27292c] border rounded-xl transition-all select-none cursor-pointer flex flex-col justify-between h-36 relative shadow-xs ${
+                                                            isAdmin ? "cursor-grab active:cursor-grabbing" : ""
+                                                        } ${
+                                                            isDragging
+                                                                ? "opacity-30 border-dashed border-[#4c8aec] scale-[0.98]"
+                                                                : "border-[#33353a] hover:border-[#4c8aec]/50"
+                                                        }`}
+                                                    >
+                                                        <div>
+                                                            <div className="flex items-center justify-between mb-2 pointer-events-none">
+                                                                <FileText className="w-4 h-4 text-[#60a5fa]" />
+                                                                {script.shelfId && shelfMap.has(script.shelfId) && (
+                                                                    <span className="text-[10px] text-zinc-400 bg-[#27292c] px-2 py-0.5 rounded-full border border-[#33353a] truncate max-w-[100px]">
+                                                                        {shelfMap.get(script.shelfId)}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <h3 className="text-sm font-medium text-zinc-100 group-hover:text-white line-clamp-2 pointer-events-none">
+                                                                {script.title}
+                                                            </h3>
                                                         </div>
-                                                        <h3 className="text-sm font-medium text-zinc-100 group-hover:text-white line-clamp-2">
-                                                            {script.title}
-                                                        </h3>
+                                                        <div className="text-xs text-zinc-500 pt-2 border-t border-[#33353a] flex items-center justify-between pointer-events-none">
+                                                            <span>{formatTimestamp(script.lastModified)}</span>
+                                                        </div>
                                                     </div>
-                                                    <div className="text-xs text-zinc-500 pt-2 border-t border-[#33353a] flex items-center justify-between">
-                                                        <span>{formatTimestamp(script.lastModified)}</span>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     </section>
                                 )}
@@ -1037,7 +1118,7 @@ export function ScriptDashboard() {
                                                                 : "border-[#33353a] text-zinc-500"
                                                         }`}
                                                     >
-                                                        <span className="text-xs">
+                                                        <span className="text-xs pointer-events-none">
                                                             {isShelfOver ? "Drop to add to shelf" : "Drop screenplays here"}
                                                         </span>
                                                     </div>
@@ -1050,13 +1131,15 @@ export function ScriptDashboard() {
                                                             return (
                                                                 <div
                                                                     key={script.id}
-                                                                    draggable
+                                                                    draggable={isAdmin}
                                                                     onDragStart={(e) => handleDragStart(e, script.id)}
                                                                     onDragEnd={handleDragEnd}
                                                                     onDragOver={(e) => handleScriptDragOver(e, script.id)}
                                                                     onDrop={(e) => handleDropOnScript(e, script.id, shelf.id)}
                                                                     onClick={() => handleOpenScript(script.id)}
-                                                                    className={`group p-4 bg-[#212326] hover:bg-[#27292c] border rounded-lg transition-all cursor-grab active:cursor-grabbing flex flex-col justify-between h-36 relative ${
+                                                                    className={`group p-4 bg-[#212326] hover:bg-[#27292c] border rounded-lg transition-all select-none cursor-pointer flex flex-col justify-between h-36 relative ${
+                                                                        isAdmin ? "cursor-grab active:cursor-grabbing" : ""
+                                                                    } ${
                                                                         isDragging
                                                                             ? "opacity-30 border-dashed border-[#4c8aec] scale-[0.98]"
                                                                             : isHovered
@@ -1066,7 +1149,7 @@ export function ScriptDashboard() {
                                                                 >
                                                                     <div>
                                                                         <div className="flex items-center justify-between mb-2">
-                                                                            <div className="flex items-center gap-2">
+                                                                            <div className="flex items-center gap-2 pointer-events-none">
                                                                                 <GripVertical className="w-3.5 h-3.5 text-zinc-600 group-hover:text-zinc-400 shrink-0" />
                                                                                 <FileText className="w-4 h-4 text-zinc-400 group-hover:text-[#60a5fa]" />
                                                                             </div>
@@ -1083,12 +1166,12 @@ export function ScriptDashboard() {
                                                                                 </button>
                                                                             </div>
                                                                         </div>
-                                                                        <h3 className="text-sm font-medium text-zinc-200 group-hover:text-white line-clamp-2">
+                                                                        <h3 className="text-sm font-medium text-zinc-200 group-hover:text-white line-clamp-2 pointer-events-none">
                                                                             {script.title}
                                                                         </h3>
                                                                     </div>
 
-                                                                    <div className="text-xs text-zinc-500 pt-2 border-t border-[#33353a] flex items-center justify-between">
+                                                                    <div className="text-xs text-zinc-500 pt-2 border-t border-[#33353a] flex items-center justify-between pointer-events-none">
                                                                         <span>{formatTimestamp(script.lastModified)}</span>
                                                                     </div>
 
@@ -1182,13 +1265,15 @@ export function ScriptDashboard() {
                                                             return (
                                                                 <div
                                                                     key={script.id}
-                                                                    draggable
+                                                                    draggable={isAdmin}
                                                                     onDragStart={(e) => handleDragStart(e, script.id)}
                                                                     onDragEnd={handleDragEnd}
                                                                     onDragOver={(e) => handleScriptDragOver(e, script.id)}
                                                                     onDrop={(e) => handleDropOnScript(e, script.id, shelf.id)}
                                                                     onClick={() => handleOpenScript(script.id)}
-                                                                    className={`group flex items-center justify-between px-3.5 py-2 rounded-lg cursor-grab active:cursor-grabbing transition-all relative ${
+                                                                    className={`group flex items-center justify-between px-3.5 py-2 rounded-lg select-none cursor-pointer transition-all relative ${
+                                                                        isAdmin ? "cursor-grab active:cursor-grabbing" : ""
+                                                                    } ${
                                                                         isDragging
                                                                             ? "opacity-30 border border-dashed border-[#4c8aec] bg-[#4c8aec]/10 scale-[0.99]"
                                                                             : "hover:bg-[#27292c]"
@@ -1202,7 +1287,7 @@ export function ScriptDashboard() {
                                                                             : ""
                                                                     }`}
                                                                 >
-                                                                    <div className="flex items-center gap-3 min-w-0">
+                                                                    <div className="flex items-center gap-3 min-w-0 pointer-events-none">
                                                                         <GripVertical className="w-3.5 h-3.5 text-zinc-600 group-hover:text-zinc-400 shrink-0 transition-colors" />
                                                                         <FileText className="w-4 h-4 text-zinc-400 group-hover:text-zinc-200 shrink-0" />
                                                                         <span className="text-sm font-medium text-zinc-200 group-hover:text-white truncate">
@@ -1211,7 +1296,7 @@ export function ScriptDashboard() {
                                                                     </div>
 
                                                                     <div className="flex items-center gap-4 shrink-0">
-                                                                        <span className="text-xs font-mono text-zinc-500 flex items-center gap-1.5">
+                                                                        <span className="text-xs font-mono text-zinc-500 flex items-center gap-1.5 pointer-events-none">
                                                                             <Clock className="w-3.5 h-3.5 text-zinc-600" />
                                                                             <span>{formatTimestamp(script.lastModified)}</span>
                                                                         </span>
@@ -1317,7 +1402,7 @@ export function ScriptDashboard() {
                                     })}
 
                                     {/* Unfiled Shelf */}
-                                    {(activeFilterId === "all" || activeFilterId === "unfiled") && unfiledScripts.length > 0 && (
+                                    {(activeFilterId === "all" || activeFilterId === "unfiled") && (unfiledScripts.length > 0 || draggedScriptId !== null) && (
                                         <section
                                             onDragOver={(e) => handleShelfDragOver(e, null)}
                                             onDragLeave={(e) => {
@@ -1336,149 +1421,303 @@ export function ScriptDashboard() {
                                                 <div className="flex items-center gap-3">
                                                     <FileText className="w-4 h-4 text-zinc-400" />
                                                     <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-200">Unfiled</h2>
-                                                    <span className="text-xs font-mono text-zinc-400 px-2.5 py-0.5 rounded-full bg-[#27292c] border border-[#33353a]">
-                                                        {unfiledScripts.length}
-                                                    </span>
+                                                    {unfiledScripts.length > 0 && (
+                                                        <span className="text-xs font-mono text-zinc-400 px-2.5 py-0.5 rounded-full bg-[#27292c] border border-[#33353a]">
+                                                            {unfiledScripts.length}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
 
-                                            <div className="space-y-1">
-                                                {unfiledScripts.map((script) => {
-                                                    const isDragging = draggedScriptId === script.id;
-                                                    const isHovered = dragOverScriptId === script.id;
-                                                    const isTargetBefore = isHovered && dragPosition === "before";
-                                                    const isTargetAfter = isHovered && dragPosition === "after";
+                                            {/* Unfiled Content: Empty Drop Zone, Grid View, or List View */}
+                                            {unfiledScripts.length === 0 ? (
+                                                <div
+                                                    onDragOver={(e) => handleShelfDragOver(e, null)}
+                                                    onDrop={(e) => handleDropOnShelfContainer(e, null)}
+                                                    className={`h-11 rounded-lg border border-dashed flex items-center justify-center transition-colors ${
+                                                        dragOverShelfId === "unfiled"
+                                                            ? "border-[#4c8aec] bg-[#4c8aec]/10 text-[#60a5fa]"
+                                                            : "border-[#33353a] text-zinc-500"
+                                                    }`}
+                                                >
+                                                    <span className="text-xs pointer-events-none">
+                                                        {dragOverShelfId === "unfiled" ? "Drop to unfile screenplay" : "Drop screenplays here to unfile"}
+                                                    </span>
+                                                </div>
+                                            ) : isGridView ? (
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                                                    {unfiledScripts.map((script) => {
+                                                        const isDragging = draggedScriptId === script.id;
+                                                        const isHovered = dragOverScriptId === script.id;
 
-                                                    return (
-                                                        <div
-                                                            key={script.id}
-                                                            draggable
-                                                            onDragStart={(e) => handleDragStart(e, script.id)}
-                                                            onDragEnd={handleDragEnd}
-                                                            onDragOver={(e) => handleScriptDragOver(e, script.id)}
-                                                            onDrop={(e) => handleDropOnScript(e, script.id, null)}
-                                                            onClick={() => handleOpenScript(script.id)}
-                                                            className={`group flex items-center justify-between px-3.5 py-2 rounded-lg cursor-grab active:cursor-grabbing transition-all relative ${
-                                                                isDragging
-                                                                    ? "opacity-30 border border-dashed border-[#4c8aec] bg-[#4c8aec]/10 scale-[0.99]"
-                                                                    : "hover:bg-[#27292c]"
-                                                            } ${
-                                                                isTargetBefore
-                                                                    ? "before:absolute before:top-0 before:left-2 before:right-2 before:h-0.5 before:bg-[#4c8aec] before:rounded-full before:shadow-[0_0_8px_#4c8aec]"
-                                                                    : ""
-                                                            } ${
-                                                                isTargetAfter
-                                                                    ? "after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-[#4c8aec] after:rounded-full after:shadow-[0_0_8px_#4c8aec]"
-                                                                    : ""
-                                                            }`}
-                                                        >
-                                                            <div className="flex items-center gap-3 min-w-0">
-                                                                <GripVertical className="w-3.5 h-3.5 text-zinc-600 group-hover:text-zinc-400 shrink-0 transition-colors" />
-                                                                <FileText className="w-4 h-4 text-zinc-400 group-hover:text-zinc-200 shrink-0" />
-                                                                <span className="text-sm font-medium text-zinc-200 group-hover:text-white truncate">
-                                                                    {script.title}
-                                                                </span>
-                                                            </div>
-
-                                                            <div className="flex items-center gap-4 shrink-0">
-                                                                <span className="text-xs font-mono text-zinc-500">
-                                                                    {formatTimestamp(script.lastModified)}
-                                                                </span>
-
-                                                                <div onClick={(e) => e.stopPropagation()} className="relative">
-                                                                    <button
-                                                                        onClick={() =>
-                                                                            setMenuOpenId(menuOpenId === script.id ? null : script.id)
-                                                                        }
-                                                                        className="p-1 text-zinc-500 hover:text-zinc-200 rounded-lg transition-colors"
-                                                                    >
-                                                                        <MoreHorizontal className="w-4 h-4" />
-                                                                    </button>
-
-                                                                    {menuOpenId === script.id && (
-                                                                        <div
-                                                                            onClick={(e) => e.stopPropagation()}
-                                                                            className="absolute right-0 top-full mt-1 w-44 bg-[#212326] border border-[#33353a] rounded-xl shadow-2xl py-1 z-50 text-xs"
-                                                                        >
-                                                                            <Link
-                                                                                href={`/editor?id=${encodeURIComponent(script.id)}`}
-                                                                                className="w-full flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
-                                                                            >
-                                                                                <ArrowUpRight className="w-3.5 h-3.5 text-zinc-400" />
-                                                                                <span>Open</span>
-                                                                            </Link>
-                                                                            {isAdmin && (
-                                                                                <>
-                                                                                    <button
-                                                                                        onClick={() => {
-                                                                                            setMovingScript(script);
-                                                                                            setMenuOpenId(null);
-                                                                                        }}
-                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
-                                                                                    >
-                                                                                        <MoveRight className="w-3.5 h-3.5 text-zinc-400" />
-                                                                                        <span>Move to Shelf...</span>
-                                                                                    </button>
-                                                                                    <button
-                                                                                        onClick={() => {
-                                                                                            setRenamingScript(script);
-                                                                                            setRenameValue(script.title);
-                                                                                            setMenuOpenId(null);
-                                                                                        }}
-                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
-                                                                                    >
-                                                                                        <Edit2 className="w-3.5 h-3.5 text-zinc-400" />
-                                                                                        <span>Rename</span>
-                                                                                    </button>
-                                                                                    <button
-                                                                                        onClick={() => handleDuplicateScript(script.id)}
-                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
-                                                                                    >
-                                                                                        <Copy className="w-3.5 h-3.5 text-zinc-400" />
-                                                                                        <span>Duplicate</span>
-                                                                                    </button>
-                                                                                </>
-                                                                            )}
-                                                                            <div className="border-t border-[#33353a] my-1" />
-                                                                            <button
-                                                                                onClick={() => handleExportScriptFdx(script)}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
-                                                                            >
-                                                                                <Download className="w-3.5 h-3.5 text-zinc-400" />
-                                                                                <span>Export (.fdx)</span>
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={() => handleExportScriptFountain(script)}
-                                                                                className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
-                                                                            >
-                                                                                <Download className="w-3.5 h-3.5 text-zinc-400" />
-                                                                                <span>Export (.fountain)</span>
-                                                                            </button>
-                                                                            {isAdmin && (
-                                                                                <>
-                                                                                    <div className="border-t border-[#33353a] my-1" />
-                                                                                    <button
-                                                                                        onClick={() => handleDeleteScript(script.id)}
-                                                                                        className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-rose-400"
-                                                                                    >
-                                                                                        <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                                                                                        <span>Delete</span>
-                                                                                    </button>
-                                                                                </>
-                                                                            )}
+                                                        return (
+                                                            <div
+                                                                key={script.id}
+                                                                draggable={isAdmin}
+                                                                onDragStart={(e) => handleDragStart(e, script.id)}
+                                                                onDragEnd={handleDragEnd}
+                                                                onDragOver={(e) => handleScriptDragOver(e, script.id)}
+                                                                onDrop={(e) => handleDropOnScript(e, script.id, null)}
+                                                                onClick={() => handleOpenScript(script.id)}
+                                                                className={`group p-4 bg-[#212326] hover:bg-[#27292c] border rounded-lg transition-all select-none cursor-pointer flex flex-col justify-between h-36 relative ${
+                                                                    isAdmin ? "cursor-grab active:cursor-grabbing" : ""
+                                                                } ${
+                                                                    isDragging
+                                                                        ? "opacity-30 border-dashed border-[#4c8aec] scale-[0.98]"
+                                                                        : isHovered
+                                                                          ? "border-[#4c8aec] ring-1 ring-[#4c8aec]"
+                                                                          : "border-[#33353a] hover:border-[#4c8aec]/50"
+                                                                }`}
+                                                            >
+                                                                <div>
+                                                                    <div className="flex items-center justify-between mb-2">
+                                                                        <div className="flex items-center gap-2 pointer-events-none">
+                                                                            <GripVertical className="w-3.5 h-3.5 text-zinc-600 group-hover:text-zinc-400 shrink-0" />
+                                                                            <FileText className="w-4 h-4 text-zinc-400 group-hover:text-[#60a5fa]" />
                                                                         </div>
-                                                                    )}
+                                                                        <div onClick={(e) => e.stopPropagation()}>
+                                                                            <button
+                                                                                onClick={() =>
+                                                                                    setMenuOpenId(
+                                                                                        menuOpenId === script.id ? null : script.id
+                                                                                    )
+                                                                                }
+                                                                                className="p-1 text-zinc-500 hover:text-zinc-200 rounded-lg"
+                                                                            >
+                                                                                <MoreHorizontal className="w-4 h-4" />
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                    <h3 className="text-sm font-medium text-zinc-200 group-hover:text-white line-clamp-2 pointer-events-none">
+                                                                        {script.title}
+                                                                    </h3>
+                                                                </div>
+
+                                                                <div className="text-xs text-zinc-500 pt-2 border-t border-[#33353a] flex items-center justify-between pointer-events-none">
+                                                                    <span>{formatTimestamp(script.lastModified)}</span>
+                                                                </div>
+
+                                                                {/* Menu */}
+                                                                {menuOpenId === script.id && (
+                                                                    <div
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                        className="absolute right-3 top-9 w-44 bg-[#212326] border border-[#33353a] rounded-xl shadow-2xl py-1 z-50 text-xs text-left"
+                                                                    >
+                                                                        <Link
+                                                                            href={`/editor?id=${encodeURIComponent(script.id)}`}
+                                                                            className="w-full flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                        >
+                                                                            <ArrowUpRight className="w-3.5 h-3.5 text-zinc-400" />
+                                                                            <span>Open</span>
+                                                                        </Link>
+                                                                        {isAdmin && (
+                                                                            <>
+                                                                                <button
+                                                                                    onClick={() => {
+                                                                                        setMovingScript(script);
+                                                                                        setMenuOpenId(null);
+                                                                                    }}
+                                                                                    className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                                >
+                                                                                    <MoveRight className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                    <span>Move to Shelf...</span>
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={() => {
+                                                                                        setRenamingScript(script);
+                                                                                        setRenameValue(script.title);
+                                                                                        setMenuOpenId(null);
+                                                                                    }}
+                                                                                    className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                                >
+                                                                                    <Edit2 className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                    <span>Rename</span>
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={() => handleDuplicateScript(script.id)}
+                                                                                    className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                                >
+                                                                                    <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                    <span>Duplicate</span>
+                                                                                </button>
+                                                                            </>
+                                                                        )}
+                                                                        <div className="border-t border-[#33353a] my-1" />
+                                                                        <button
+                                                                            onClick={() => handleExportScriptFdx(script)}
+                                                                            className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                        >
+                                                                            <Download className="w-3.5 h-3.5 text-zinc-400" />
+                                                                            <span>Export (.fdx)</span>
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleExportScriptFountain(script)}
+                                                                            className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                        >
+                                                                            <Download className="w-3.5 h-3.5 text-zinc-400" />
+                                                                            <span>Export (.fountain)</span>
+                                                                        </button>
+                                                                        {isAdmin && (
+                                                                            <>
+                                                                                <div className="border-t border-[#33353a] my-1" />
+                                                                                <button
+                                                                                    onClick={() => handleDeleteScript(script.id)}
+                                                                                    className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-rose-400"
+                                                                                >
+                                                                                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                                                                                    <span>Delete</span>
+                                                                                </button>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                /* Sleek Single-Line Rows */
+                                                <div className="space-y-1">
+                                                    {unfiledScripts.map((script) => {
+                                                        const isDragging = draggedScriptId === script.id;
+                                                        const isHovered = dragOverScriptId === script.id;
+                                                        const isTargetBefore = isHovered && dragPosition === "before";
+                                                        const isTargetAfter = isHovered && dragPosition === "after";
+
+                                                        return (
+                                                            <div
+                                                                key={script.id}
+                                                                draggable={isAdmin}
+                                                                onDragStart={(e) => handleDragStart(e, script.id)}
+                                                                onDragEnd={handleDragEnd}
+                                                                onDragOver={(e) => handleScriptDragOver(e, script.id)}
+                                                                onDrop={(e) => handleDropOnScript(e, script.id, null)}
+                                                                onClick={() => handleOpenScript(script.id)}
+                                                                className={`group flex items-center justify-between px-3.5 py-2 rounded-lg select-none cursor-pointer transition-all relative ${
+                                                                    isAdmin ? "cursor-grab active:cursor-grabbing" : ""
+                                                                } ${
+                                                                    isDragging
+                                                                        ? "opacity-30 border border-dashed border-[#4c8aec] bg-[#4c8aec]/10 scale-[0.99]"
+                                                                        : "hover:bg-[#27292c]"
+                                                                } ${
+                                                                    isTargetBefore
+                                                                        ? "before:absolute before:top-0 before:left-2 before:right-2 before:h-0.5 before:bg-[#4c8aec] before:rounded-full before:shadow-[0_0_8px_#4c8aec]"
+                                                                        : ""
+                                                                } ${
+                                                                    isTargetAfter
+                                                                        ? "after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:bg-[#4c8aec] after:rounded-full after:shadow-[0_0_8px_#4c8aec]"
+                                                                        : ""
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center gap-3 min-w-0 pointer-events-none">
+                                                                    <GripVertical className="w-3.5 h-3.5 text-zinc-600 group-hover:text-zinc-400 shrink-0 transition-colors" />
+                                                                    <FileText className="w-4 h-4 text-zinc-400 group-hover:text-zinc-200 shrink-0" />
+                                                                    <span className="text-sm font-medium text-zinc-200 group-hover:text-white truncate">
+                                                                        {script.title}
+                                                                    </span>
+                                                                </div>
+
+                                                                <div className="flex items-center gap-4 shrink-0">
+                                                                    <span className="text-xs font-mono text-zinc-500 flex items-center gap-1.5 pointer-events-none">
+                                                                        <Clock className="w-3.5 h-3.5 text-zinc-600" />
+                                                                        <span>{formatTimestamp(script.lastModified)}</span>
+                                                                    </span>
+
+                                                                    <div onClick={(e) => e.stopPropagation()} className="relative">
+                                                                        <button
+                                                                            onClick={() =>
+                                                                                setMenuOpenId(menuOpenId === script.id ? null : script.id)
+                                                                            }
+                                                                            className="p-1 text-zinc-500 hover:text-zinc-200 rounded-lg transition-colors"
+                                                                        >
+                                                                            <MoreHorizontal className="w-4 h-4" />
+                                                                        </button>
+
+                                                                        {menuOpenId === script.id && (
+                                                                            <div
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                                className="absolute right-0 top-full mt-1 w-44 bg-[#212326] border border-[#33353a] rounded-xl shadow-2xl py-1 z-50 text-xs"
+                                                                            >
+                                                                                <Link
+                                                                                    href={`/editor?id=${encodeURIComponent(script.id)}`}
+                                                                                    className="w-full flex items-center gap-2.5 px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                                >
+                                                                                    <ArrowUpRight className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                    <span>Open</span>
+                                                                                </Link>
+                                                                                {isAdmin && (
+                                                                                    <>
+                                                                                        <button
+                                                                                            onClick={() => {
+                                                                                                setMovingScript(script);
+                                                                                                setMenuOpenId(null);
+                                                                                            }}
+                                                                                            className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                                        >
+                                                                                            <MoveRight className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                            <span>Move to Shelf...</span>
+                                                                                        </button>
+                                                                                        <button
+                                                                                            onClick={() => {
+                                                                                                setRenamingScript(script);
+                                                                                                setRenameValue(script.title);
+                                                                                                setMenuOpenId(null);
+                                                                                            }}
+                                                                                            className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                                        >
+                                                                                            <Edit2 className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                            <span>Rename</span>
+                                                                                        </button>
+                                                                                        <button
+                                                                                            onClick={() => handleDuplicateScript(script.id)}
+                                                                                            className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                                        >
+                                                                                            <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                            <span>Duplicate</span>
+                                                                                        </button>
+                                                                                    </>
+                                                                                )}
+                                                                                <div className="border-t border-[#33353a] my-1" />
+                                                                                <button
+                                                                                    onClick={() => handleExportScriptFdx(script)}
+                                                                                    className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                                >
+                                                                                    <Download className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                    <span>Export (.fdx)</span>
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={() => handleExportScriptFountain(script)}
+                                                                                    className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-zinc-200"
+                                                                                >
+                                                                                    <Download className="w-3.5 h-3.5 text-zinc-400" />
+                                                                                    <span>Export (.fountain)</span>
+                                                                                </button>
+                                                                                {isAdmin && (
+                                                                                    <>
+                                                                                        <div className="border-t border-[#33353a] my-1" />
+                                                                                        <button
+                                                                                            onClick={() => handleDeleteScript(script.id)}
+                                                                                            className="w-full flex items-center gap-2.5 text-left px-3.5 py-2 hover:bg-[#27292c] text-rose-400"
+                                                                                        >
+                                                                                            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                                                                                            <span>Delete</span>
+                                                                                        </button>
+                                                                                    </>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
                                         </section>
                                     )}
 
                                     {/* Empty unfiled state when filtering */}
-                                    {activeFilterId === "unfiled" && unfiledScripts.length === 0 && (
+                                    {activeFilterId === "unfiled" && unfiledScripts.length === 0 && !draggedScriptId && (
                                         <div className="py-16 text-center text-xs text-zinc-500 border border-dashed border-[#33353a] rounded-xl bg-[#212326]/40">
                                             No unfiled screenplays found.
                                         </div>
