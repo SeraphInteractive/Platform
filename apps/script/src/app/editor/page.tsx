@@ -26,6 +26,9 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { FindReplaceBar } from "@/components/FindReplaceBar";
 import { ArcShortcutDock } from "@/components/ArcShortcutDock";
 import { ArcFormattingMenu } from "@/components/ArcFormattingMenu";
+import { ArcGutterHandle } from "@/components/ArcGutterHandle";
+import { ArcMarginRuler, type MarginSettings } from "@/components/ArcMarginRuler";
+import { ArcPasteHandler } from "@/editor/extensions/ArcPasteHandler";
 import { ScriptStash, type StashItem } from "@/components/ScriptStash";
 import { VersionHistoryDrawer, type VersionSnapshot } from "@/components/VersionHistoryDrawer";
 import { TitlePage, type TitlePageData } from "@/components/TitlePage";
@@ -131,6 +134,44 @@ function ScreenplayEditorContent() {
     const [findReplaceOpen, setFindReplaceOpen] = useState(false);
     const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
     const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
+
+    const [isMarginModeOpen, setIsMarginModeOpen] = useState(false);
+    const [elementFormatting, setElementFormatting] = useState<Record<string, MarginSettings>>({
+        sceneHeading: { left: 0, width: 6.0, right: 0, alignment: "left", spacingBefore: 1.5 },
+        action: { left: 0, width: 6.0, right: 0, alignment: "left", spacingBefore: 0.75 },
+        character: { left: 2.2, width: 3.5, right: 0.3, alignment: "left", spacingBefore: 1.1 },
+        parenthetical: { left: 1.6, width: 2.8, right: 1.6, alignment: "left", spacingBefore: 0 },
+        dialogue: { left: 1.0, width: 3.6, right: 1.4, alignment: "left", spacingBefore: 0 },
+        transition: { left: 4.0, width: 2.0, right: 0, alignment: "right", spacingBefore: 1.5 }
+    });
+
+    const defaultMargin: MarginSettings = {
+        left: 0,
+        width: 6.0,
+        right: 0,
+        alignment: "left",
+        spacingBefore: 1
+    };
+
+    const getElementMargins = (nodeType: string): MarginSettings => {
+        return elementFormatting[nodeType] || elementFormatting.dialogue || defaultMargin;
+    };
+
+    const [gutterPos, setGutterPos] = useState<{
+        visible: boolean;
+        nodeType: string;
+        nodePos: number;
+        top: number;
+        left: number;
+    }>({ visible: false, nodeType: "dialogue", nodePos: 0, top: 0, left: 0 });
+
+    const [activeNodeInfo, setActiveNodeInfo] = useState<{
+        pos: number;
+        nodeType: string;
+    } | null>(null);
+
+    const [dropIndicator, setDropIndicator] = useState<{ top: number; left: number; width: number } | null>(null);
+    const updateActiveBlockRef = useRef<(ed: any) => void>(() => {});
 
     const [suggestions, setSuggestions] = useState<string[]>([]);
     const [suggestionTitle, setSuggestionTitle] = useState("");
@@ -254,6 +295,7 @@ function ScreenplayEditorContent() {
             HardBreakLeafText,
             ScreenplayPagination,
             ScreenplayKeymap,
+            ArcPasteHandler,
             Placeholder.configure({
                 placeholder: ({ node }) => {
                     if (node.type.name === "sceneHeading") return "INT. LOCATION - TIME";
@@ -416,6 +458,7 @@ function ScreenplayEditorContent() {
             if (pStorage) {
                 setCurrentPage(pStorage.currentPage || 1);
             }
+            updateActiveBlockRef.current(ed);
         }
     });
 
@@ -895,6 +938,12 @@ function ScreenplayEditorContent() {
                 return;
             }
 
+            if (e.altKey && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+                e.preventDefault();
+                setIsMarginModeOpen((prev) => !prev);
+                return;
+            }
+
             if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
                 e.preventDefault();
                 setFindReplaceOpen(true);
@@ -908,6 +957,7 @@ function ScreenplayEditorContent() {
                 e.preventDefault();
                 setIsFocusMode((prev) => !prev);
             } else if (e.key === "Escape") {
+                if (isMarginModeOpen) setIsMarginModeOpen(false);
                 if (findReplaceOpen) setFindReplaceOpen(false);
                 if (commandPaletteOpen) setCommandPaletteOpen(false);
                 if (insertImageOpen) setInsertImageOpen(false);
@@ -918,6 +968,155 @@ function ScreenplayEditorContent() {
         window.addEventListener("keydown", handleGlobalKey);
         return () => window.removeEventListener("keydown", handleGlobalKey);
     }, [findReplaceOpen, commandPaletteOpen, insertImageOpen, isFocusMode, handleStashCut, handleTogglePageTheme]);
+
+    // sync element formatting to css variables
+    useEffect(() => {
+        if (typeof document === "undefined") return;
+        const root = document.documentElement;
+        Object.entries(elementFormatting).forEach(([key, val]) => {
+            const prefix = `--margin-${key.toLowerCase()}`;
+            root.style.setProperty(`${prefix}-left`, `${val.left}in`);
+            root.style.setProperty(`${prefix}-width`, `${val.width}in`);
+            root.style.setProperty(`${prefix}-align`, val.alignment);
+            root.style.setProperty(`${prefix}-spacing-before`, String(val.spacingBefore));
+        });
+    }, [elementFormatting]);
+
+    const updateActiveBlock = useCallback((ed: any) => {
+        if (!ed || ed.isDestroyed) return;
+        const { selection } = ed.state;
+        const { $from } = selection;
+        if ($from.depth < 1) return;
+
+        const node = $from.node(1);
+        const pos = $from.before(1);
+        const nodeType = node.type.name;
+
+        setActiveNodeInfo({ pos, nodeType });
+
+        try {
+            const dom = ed.view.nodeDOM(pos) as HTMLElement | null;
+            if (dom && dom.getBoundingClientRect) {
+                document.querySelectorAll(".is-active-block").forEach((el) => {
+                    if (el !== dom) el.classList.remove("is-active-block");
+                });
+                dom.classList.add("is-active-block");
+
+                const pageSheet = dom.closest(".screenplay-page-sheet, .screenplay-continuous-mode, .ProseMirror");
+                if (pageSheet) {
+                    const sheetRect = pageSheet.getBoundingClientRect();
+                    const domRect = dom.getBoundingClientRect();
+                    setGutterPos({
+                        visible: true,
+                        nodeType,
+                        nodePos: pos,
+                        top: domRect.top - sheetRect.top + 4,
+                        left: domRect.left - sheetRect.left
+                    });
+                }
+            }
+        } catch {}
+    }, []);
+
+    useEffect(() => {
+        updateActiveBlockRef.current = updateActiveBlock;
+    }, [updateActiveBlock]);
+
+    const handleEditorMouseMove = useCallback(
+        (e: React.MouseEvent) => {
+            const target = (e.target as HTMLElement).closest(".screenplay-element") as HTMLElement | null;
+            if (!target || !editor) return;
+
+            try {
+                const pos = editor.view.posAtDOM(target, 0);
+                if (typeof pos !== "number" || pos < 0) return;
+
+                const $pos = editor.state.doc.resolve(pos);
+                const node = $pos.node(1) || $pos.parent;
+                const startPos = $pos.before(1);
+
+                const pageSheet = target.closest(".screenplay-page-sheet, .screenplay-continuous-mode, .ProseMirror");
+                if (pageSheet) {
+                    const sheetRect = pageSheet.getBoundingClientRect();
+                    const domRect = target.getBoundingClientRect();
+
+                    setGutterPos({
+                        visible: true,
+                        nodeType: node.type.name,
+                        nodePos: startPos,
+                        top: domRect.top - sheetRect.top + 4,
+                        left: domRect.left - sheetRect.left
+                    });
+                }
+            } catch {}
+        },
+        [editor]
+    );
+
+    const handleMoveBlock = useCallback(
+        (sourcePos: number, targetPos: number) => {
+            if (!editor) return;
+            const { doc } = editor.state;
+            const sourceNode = doc.nodeAt(sourcePos);
+            if (!sourceNode) return;
+
+            const tr = editor.state.tr;
+            tr.delete(sourcePos, sourcePos + sourceNode.nodeSize);
+            const adjustedTarget = targetPos > sourcePos ? targetPos - sourceNode.nodeSize : targetPos;
+            tr.insert(adjustedTarget, sourceNode);
+            editor.view.dispatch(tr);
+            setDropIndicator(null);
+        },
+        [editor]
+    );
+
+    const handleDragOver = useCallback(
+        (e: React.DragEvent) => {
+            if (!e.dataTransfer.types.includes("text/plain")) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+
+            const target = (e.target as HTMLElement).closest(".screenplay-element") as HTMLElement | null;
+            if (target && editor) {
+                const targetRect = target.getBoundingClientRect();
+                const pageSheet = target.closest(".screenplay-page-sheet, .screenplay-continuous-mode, .ProseMirror");
+                if (pageSheet) {
+                    const sheetRect = pageSheet.getBoundingClientRect();
+                    const isBottomHalf = e.clientY > targetRect.top + targetRect.height / 2;
+                    const top = isBottomHalf ? targetRect.bottom - sheetRect.top : targetRect.top - sheetRect.top;
+
+                    setDropIndicator({
+                        top,
+                        left: targetRect.left - sheetRect.left,
+                        width: targetRect.width
+                    });
+                }
+            }
+        },
+        [editor]
+    );
+
+    const handleDrop = useCallback(
+        (e: React.DragEvent) => {
+            const data = e.dataTransfer.getData("text/plain");
+            if (!data.startsWith("screenplay-node:") || !editor) return;
+            e.preventDefault();
+
+            const sourcePos = parseInt(data.replace("screenplay-node:", ""), 10);
+            const target = (e.target as HTMLElement).closest(".screenplay-element") as HTMLElement | null;
+            if (target) {
+                const targetPos = editor.view.posAtDOM(target, 0);
+                const $targetPos = editor.state.doc.resolve(targetPos);
+                const targetRect = target.getBoundingClientRect();
+                const isBottomHalf = e.clientY > targetRect.top + targetRect.height / 2;
+                const insertPos = isBottomHalf ? $targetPos.after(1) : $targetPos.before(1);
+
+                handleMoveBlock(sourcePos, insertPos);
+            }
+            setDropIndicator(null);
+        },
+        [editor, handleMoveBlock]
+    );
 
     // load initial script content from server or local draft on mount
     useEffect(() => {
@@ -1337,10 +1536,13 @@ function ScreenplayEditorContent() {
                                             />
                                         </div>
                                         <div
-                                            className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}
+                                            className={`screenplay-page-sheet relative ${pageTheme === "light" ? "screenplay-page-light" : ""}`}
                                             style={{
                                                 minHeight: `calc(${Math.max(1, totalPages)} * 297mm + ${Math.max(0, totalPages - 1)} * 2.5in)`
                                             }}
+                                            onMouseMove={handleEditorMouseMove}
+                                            onDragOver={handleDragOver}
+                                            onDrop={handleDrop}
                                             onClick={(e) => {
                                                 // focus editor at end if clicking empty bottom paper space
                                                 if (e.target === e.currentTarget && editor) {
@@ -1348,11 +1550,59 @@ function ScreenplayEditorContent() {
                                                 }
                                             }}
                                         >
+                                            {/* Left Gutter Handle */}
+                                            <ArcGutterHandle
+                                                editor={editor}
+                                                nodeType={gutterPos.nodeType}
+                                                nodePos={gutterPos.nodePos}
+                                                top={gutterPos.top}
+                                                left={gutterPos.left}
+                                                visible={gutterPos.visible && !isReadOnly}
+                                                onOpenMenu={({ x, y }) => {
+                                                    setContextMenuPos({ x, y });
+                                                    setIsContextMenuOpen(true);
+                                                }}
+                                                onMoveBlock={handleMoveBlock}
+                                            />
+
+                                            {/* Drag Drop Insertion Indicator */}
+                                            {dropIndicator && (
+                                                <div
+                                                    className="screenplay-drop-indicator absolute"
+                                                    style={{
+                                                        top: `${dropIndicator.top}px`,
+                                                        left: `${dropIndicator.left}px`,
+                                                        width: `${dropIndicator.width}px`
+                                                    }}
+                                                />
+                                            )}
+
+                                            {/* Interactive Visual Margin Ruler */}
+                                            {isMarginModeOpen && activeNodeInfo && (
+                                                <ArcMarginRuler
+                                                    isOpen={isMarginModeOpen}
+                                                    onClose={() => setIsMarginModeOpen(false)}
+                                                    elementType={activeNodeInfo.nodeType}
+                                                    margins={getElementMargins(activeNodeInfo.nodeType)}
+                                                    onUpdateMargins={(newMargins) => {
+                                                        setElementFormatting((prev) => ({
+                                                            ...prev,
+                                                            [activeNodeInfo.nodeType]: newMargins
+                                                        }));
+                                                    }}
+                                                />
+                                            )}
+
                                             <EditorContent editor={editor} />
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className={`screenplay-continuous-mode ${pageTheme === "light" ? "screenplay-page-light" : ""}`}>
+                                    <div
+                                        className={`screenplay-continuous-mode relative ${pageTheme === "light" ? "screenplay-page-light" : ""}`}
+                                        onMouseMove={handleEditorMouseMove}
+                                        onDragOver={handleDragOver}
+                                        onDrop={handleDrop}
+                                    >
                                         <TitlePage
                                             data={titlePageData}
                                             onChange={handleUpdateTitlePage}
@@ -1373,6 +1623,50 @@ function ScreenplayEditorContent() {
                                                 Screenplay Start - Page 1
                                             </span>
                                         </div>
+
+                                        {/* Left Gutter Handle in continuous view */}
+                                        <ArcGutterHandle
+                                            editor={editor}
+                                            nodeType={gutterPos.nodeType}
+                                            nodePos={gutterPos.nodePos}
+                                            top={gutterPos.top}
+                                            left={gutterPos.left}
+                                            visible={gutterPos.visible && !isReadOnly}
+                                            onOpenMenu={({ x, y }) => {
+                                                setContextMenuPos({ x, y });
+                                                setIsContextMenuOpen(true);
+                                            }}
+                                            onMoveBlock={handleMoveBlock}
+                                        />
+
+                                        {/* Drag Drop Insertion Indicator */}
+                                        {dropIndicator && (
+                                            <div
+                                                className="screenplay-drop-indicator absolute"
+                                                style={{
+                                                    top: `${dropIndicator.top}px`,
+                                                    left: `${dropIndicator.left}px`,
+                                                    width: `${dropIndicator.width}px`
+                                                }}
+                                            />
+                                        )}
+
+                                        {/* Interactive Visual Margin Ruler */}
+                                        {isMarginModeOpen && activeNodeInfo && (
+                                            <ArcMarginRuler
+                                                isOpen={isMarginModeOpen}
+                                                onClose={() => setIsMarginModeOpen(false)}
+                                                elementType={activeNodeInfo.nodeType}
+                                                margins={getElementMargins(activeNodeInfo.nodeType)}
+                                                onUpdateMargins={(newMargins) => {
+                                                    setElementFormatting((prev) => ({
+                                                        ...prev,
+                                                        [activeNodeInfo.nodeType]: newMargins
+                                                    }));
+                                                }}
+                                            />
+                                        )}
+
                                         <EditorContent editor={editor} />
                                     </div>
                                 )}
@@ -1393,7 +1687,7 @@ function ScreenplayEditorContent() {
                                 />
                             )}
 
-                            {/* Right-click Context Menu */}
+                            {/* Right-click & Gutter Context Menu */}
                             {!isReadOnly && (
                                 <ArcFormattingMenu
                                     editor={editor}
@@ -1401,8 +1695,32 @@ function ScreenplayEditorContent() {
                                     onClose={() => setIsContextMenuOpen(false)}
                                     onOpenBeatBoard={() => setLayoutMode("beatboard")}
                                     onOpenComments={() => setIsStashOpen(true)}
+                                    onOpenMargins={() => setIsMarginModeOpen(true)}
                                     position={contextMenuPos}
                                     align="context"
+                                    currentFormatting={
+                                        activeNodeInfo
+                                            ? {
+                                                  alignment: elementFormatting[activeNodeInfo.nodeType]?.alignment,
+                                                  spacingBefore: elementFormatting[activeNodeInfo.nodeType]?.spacingBefore
+                                              }
+                                            : undefined
+                                    }
+                                    onUpdateFormatting={(fmt) => {
+                                        if (!activeNodeInfo) return;
+                                        setElementFormatting((prev) => {
+                                            const curr = prev[activeNodeInfo.nodeType] || prev.dialogue || defaultMargin;
+                                            const updated: MarginSettings = {
+                                                ...curr,
+                                                ...(fmt.alignment ? { alignment: fmt.alignment } : {}),
+                                                ...(fmt.spacingBefore !== undefined ? { spacingBefore: fmt.spacingBefore } : {})
+                                            };
+                                            return {
+                                                ...prev,
+                                                [activeNodeInfo.nodeType]: updated
+                                            };
+                                        });
+                                    }}
                                 />
                             )}
                         </div>
@@ -1451,10 +1769,13 @@ function ScreenplayEditorContent() {
                                         />
                                     </div>
                                     <div
-                                        className={`screenplay-page-sheet ${pageTheme === "light" ? "screenplay-page-light" : ""}`}
+                                        className={`screenplay-page-sheet relative ${pageTheme === "light" ? "screenplay-page-light" : ""}`}
                                         style={{
                                             minHeight: `calc(${Math.max(1, totalPages)} * 297mm + ${Math.max(0, totalPages - 1)} * 2.5in)`
                                         }}
+                                        onMouseMove={handleEditorMouseMove}
+                                        onDragOver={handleDragOver}
+                                        onDrop={handleDrop}
                                         onClick={(e) => {
                                             // focus editor at end if clicking empty bottom paper space
                                             if (e.target === e.currentTarget && editor) {
@@ -1462,11 +1783,59 @@ function ScreenplayEditorContent() {
                                             }
                                         }}
                                     >
+                                        {/* Left Gutter Handle */}
+                                        <ArcGutterHandle
+                                            editor={editor}
+                                            nodeType={gutterPos.nodeType}
+                                            nodePos={gutterPos.nodePos}
+                                            top={gutterPos.top}
+                                            left={gutterPos.left}
+                                            visible={gutterPos.visible && !isReadOnly}
+                                            onOpenMenu={({ x, y }) => {
+                                                setContextMenuPos({ x, y });
+                                                setIsContextMenuOpen(true);
+                                            }}
+                                            onMoveBlock={handleMoveBlock}
+                                        />
+
+                                        {/* Drag Drop Insertion Indicator */}
+                                        {dropIndicator && (
+                                            <div
+                                                className="screenplay-drop-indicator absolute"
+                                                style={{
+                                                    top: `${dropIndicator.top}px`,
+                                                    left: `${dropIndicator.left}px`,
+                                                    width: `${dropIndicator.width}px`
+                                                }}
+                                            />
+                                        )}
+
+                                        {/* Interactive Visual Margin Ruler */}
+                                        {isMarginModeOpen && activeNodeInfo && (
+                                            <ArcMarginRuler
+                                                isOpen={isMarginModeOpen}
+                                                onClose={() => setIsMarginModeOpen(false)}
+                                                elementType={activeNodeInfo.nodeType}
+                                                margins={getElementMargins(activeNodeInfo.nodeType)}
+                                                onUpdateMargins={(newMargins) => {
+                                                    setElementFormatting((prev) => ({
+                                                        ...prev,
+                                                        [activeNodeInfo.nodeType]: newMargins
+                                                    }));
+                                                }}
+                                            />
+                                        )}
+
                                         <EditorContent editor={editor} />
                                     </div>
                                 </div>
                             ) : (
-                                <div className={`screenplay-continuous-mode ${pageTheme === "light" ? "screenplay-page-light" : ""}`}>
+                                <div
+                                    className={`screenplay-continuous-mode relative ${pageTheme === "light" ? "screenplay-page-light" : ""}`}
+                                    onMouseMove={handleEditorMouseMove}
+                                    onDragOver={handleDragOver}
+                                    onDrop={handleDrop}
+                                >
                                     <TitlePage
                                         data={titlePageData}
                                         onChange={handleUpdateTitlePage}
@@ -1487,6 +1856,50 @@ function ScreenplayEditorContent() {
                                             Screenplay Start - Page 1
                                         </span>
                                     </div>
+
+                                    {/* Left Gutter Handle in continuous view */}
+                                    <ArcGutterHandle
+                                        editor={editor}
+                                        nodeType={gutterPos.nodeType}
+                                        nodePos={gutterPos.nodePos}
+                                        top={gutterPos.top}
+                                        left={gutterPos.left}
+                                        visible={gutterPos.visible && !isReadOnly}
+                                        onOpenMenu={({ x, y }) => {
+                                            setContextMenuPos({ x, y });
+                                            setIsContextMenuOpen(true);
+                                        }}
+                                        onMoveBlock={handleMoveBlock}
+                                    />
+
+                                    {/* Drag Drop Insertion Indicator */}
+                                    {dropIndicator && (
+                                        <div
+                                            className="screenplay-drop-indicator absolute"
+                                            style={{
+                                                top: `${dropIndicator.top}px`,
+                                                left: `${dropIndicator.left}px`,
+                                                width: `${dropIndicator.width}px`
+                                            }}
+                                        />
+                                    )}
+
+                                    {/* Interactive Visual Margin Ruler */}
+                                    {isMarginModeOpen && activeNodeInfo && (
+                                        <ArcMarginRuler
+                                            isOpen={isMarginModeOpen}
+                                            onClose={() => setIsMarginModeOpen(false)}
+                                            elementType={activeNodeInfo.nodeType}
+                                            margins={getElementMargins(activeNodeInfo.nodeType)}
+                                            onUpdateMargins={(newMargins) => {
+                                                setElementFormatting((prev) => ({
+                                                    ...prev,
+                                                    [activeNodeInfo.nodeType]: newMargins
+                                                }));
+                                            }}
+                                        />
+                                    )}
+
                                     <EditorContent editor={editor} />
                                 </div>
                             )}
@@ -1507,7 +1920,7 @@ function ScreenplayEditorContent() {
                             />
                         )}
 
-                        {/* Right-click Context Menu */}
+                        {/* Right-click & Gutter Context Menu */}
                         {!isReadOnly && (
                             <ArcFormattingMenu
                                 editor={editor}
@@ -1515,8 +1928,32 @@ function ScreenplayEditorContent() {
                                 onClose={() => setIsContextMenuOpen(false)}
                                 onOpenBeatBoard={() => setLayoutMode("beatboard")}
                                 onOpenComments={() => setIsStashOpen(true)}
+                                onOpenMargins={() => setIsMarginModeOpen(true)}
                                 position={contextMenuPos}
                                 align="context"
+                                currentFormatting={
+                                    activeNodeInfo
+                                        ? {
+                                              alignment: elementFormatting[activeNodeInfo.nodeType]?.alignment,
+                                              spacingBefore: elementFormatting[activeNodeInfo.nodeType]?.spacingBefore
+                                          }
+                                        : undefined
+                                }
+                                onUpdateFormatting={(fmt) => {
+                                    if (!activeNodeInfo) return;
+                                    setElementFormatting((prev) => {
+                                        const curr = prev[activeNodeInfo.nodeType] || prev.dialogue || defaultMargin;
+                                        const updated: MarginSettings = {
+                                            ...curr,
+                                            ...(fmt.alignment ? { alignment: fmt.alignment } : {}),
+                                            ...(fmt.spacingBefore !== undefined ? { spacingBefore: fmt.spacingBefore } : {})
+                                        };
+                                        return {
+                                            ...prev,
+                                            [activeNodeInfo.nodeType]: updated
+                                        };
+                                    });
+                                }}
                             />
                         )}
                     </div>

@@ -1,4 +1,4 @@
-import { DifficultyTier, EntryStatus, PollType, RoundStatus, ShotStatus, SubmissionStatus, type Specialty } from "@platform/contracts";
+import { DifficultyTier, EntryStatus, PollType, RoundStatus, ShotStatus, SubmissionStatus, Specialty } from "@platform/contracts";
 
 const timeFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
 const dayFormat = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short" });
@@ -129,6 +129,12 @@ export const difficultyLabels: Readonly<Record<DifficultyTier, string>> = {
 };
 
 export function specialtyLabel(specialty: Specialty): string {
+    if (specialty === Specialty.LightingAndVfxLead) {
+        return "Lighting and VFX Lead";
+    }
+    if (specialty === Specialty.ModelingAndSurfacingLead) {
+        return "Modeling and Surfacing Lead";
+    }
     const words = specialty.split("_").map((word) => (word === "3d" ? "3D" : `${word.charAt(0).toUpperCase()}${word.slice(1)}`));
     return words.join(" ");
 }

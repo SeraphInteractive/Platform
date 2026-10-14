@@ -49,7 +49,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
         items: [{ href: "/guidelines", label: "Guidelines", description: "How voting, contributing and fair play work", icon: BookOpen }]
     },
     {
-        label: "Studio",
+        label: "Management",
         items: [
             {
                 href: "/studio",

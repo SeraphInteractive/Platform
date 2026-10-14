@@ -204,18 +204,40 @@
     margin-top: 0;
     margin-bottom: 0;
     font-family: var(--courier-font), "Courier Prime", Courier, monospace !important;
+    transition:
+        background-color 120ms ease,
+        box-shadow 120ms ease;
+}
+
+/* Active paragraph highlight tint matching Arc Studio */
+.screenplay-element.is-active-block {
+    background-color: rgba(255, 255, 255, 0.035);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.035);
+    border-radius: 4px;
+}
+
+/* Drag-and-drop insertion indicator */
+.screenplay-drop-indicator {
+    height: 2px;
+    background-color: #3b82f6;
+    box-shadow: 0 0 6px rgba(59, 130, 246, 0.8);
+    border-radius: 2px;
+    margin: 2px 0;
+    pointer-events: none;
+    transition: all 100ms ease;
 }
 
 /* Scene Heading - monochrome Courier with gutter scene numbering */
 .screenplay-element.scene-heading {
     text-transform: uppercase;
     font-weight: 700;
-    margin-top: 1.5em;
+    margin-top: calc(var(--margin-scene-spacing-before, 1.5) * 1em);
     margin-bottom: 0.5em;
     color: #f4f4f5;
     letter-spacing: 0.02em;
     counter-increment: scene-counter;
     position: relative;
+    text-align: var(--margin-scene-align, left);
 }
 
 .screenplay-element.scene-heading::before {
@@ -231,48 +253,52 @@
 
 /* Action */
 .screenplay-element.action {
-    margin-top: 0.75em;
+    margin-top: calc(var(--margin-action-spacing-before, 0.75) * 1em);
     margin-bottom: 0.75em;
     color: #e4e4e7;
+    text-align: var(--margin-action-align, left);
 }
 
 /* Character */
 .screenplay-element.character {
     text-transform: uppercase;
     font-weight: 600;
-    margin-top: 1.1em;
+    margin-top: calc(var(--margin-character-spacing-before, 1.1) * 1em);
     margin-bottom: 0;
-    margin-left: 2.2in;
-    max-width: 3.5in;
+    margin-left: var(--margin-character-left, 2.2in);
+    max-width: var(--margin-character-width, 3.5in);
     color: #f4f4f5;
+    text-align: var(--margin-character-align, left);
 }
 
 /* Parenthetical */
 .screenplay-element.parenthetical {
-    margin-top: 0;
+    margin-top: calc(var(--margin-parenthetical-spacing-before, 0) * 1em);
     margin-bottom: 0;
-    margin-left: 1.6in;
-    max-width: 2.8in;
+    margin-left: var(--margin-parenthetical-left, 1.6in);
+    max-width: var(--margin-parenthetical-width, 2.8in);
     color: #a1a1aa;
+    text-align: var(--margin-parenthetical-align, left);
 }
 
 /* Dialogue */
 .screenplay-element.dialogue {
-    margin-top: 0;
+    margin-top: calc(var(--margin-dialogue-spacing-before, 0) * 1em);
     margin-bottom: 0.75em;
-    margin-left: 1in;
-    max-width: 3.6in;
+    margin-left: var(--margin-dialogue-left, 1in);
+    max-width: var(--margin-dialogue-width, 3.6in);
     color: #f4f4f5;
+    text-align: var(--margin-dialogue-align, left);
 }
 
 /* Transition */
 .screenplay-element.transition {
     text-transform: uppercase;
     font-weight: 600;
-    margin-top: 1.5em;
+    margin-top: calc(var(--margin-transition-spacing-before, 1.5) * 1em);
     margin-bottom: 1em;
-    margin-left: 4in;
-    text-align: right;
+    margin-left: var(--margin-transition-left, 4in);
+    text-align: var(--margin-transition-align, right);
     color: #f4f4f5;
 }
 

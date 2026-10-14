@@ -112,6 +112,8 @@ describe("formatting", () => {
     it("labels specialties", () => {
         expect(specialtyLabel(Specialty.Modeler3d)).toBe("3D Modeler");
         expect(specialtyLabel(Specialty.CfxVfxSupervisor)).toBe("Cfx Vfx Supervisor");
+        expect(specialtyLabel(Specialty.ModelingAndSurfacingLead)).toBe("Modeling and Surfacing Lead");
+        expect(specialtyLabel(Specialty.LightingAndVfxLead)).toBe("Lighting and VFX Lead");
     });
 });
 
