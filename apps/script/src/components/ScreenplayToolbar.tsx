@@ -52,6 +52,7 @@ interface ScreenplayToolbarProps {
     onOpenCommandPalette: () => void;
     onOpenFindReplace: () => void;
     onInsertImageModal: () => void;
+    onExportPdf?: () => void;
     onExportFdx: () => void;
     onExportFountain: () => void;
     onImportFile: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -81,6 +82,7 @@ export function ScreenplayToolbar({
     onOpenCommandPalette,
     onOpenFindReplace,
     onInsertImageModal,
+    onExportPdf,
     onExportFdx,
     onExportFountain,
     onImportFile
@@ -322,6 +324,15 @@ export function ScreenplayToolbar({
                         <div className="absolute right-0 top-8 z-40 w-44 bg-[#212326] border border-[#33353a] rounded-xl shadow-2xl p-1 text-xs space-y-0.5 animate-in fade-in">
                             <button
                                 onClick={() => {
+                                    if (onExportPdf) onExportPdf();
+                                    setShowExportMenu(false);
+                                }}
+                                className="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-[#25262a] text-zinc-200"
+                            >
+                                Export PDF (.pdf)
+                            </button>
+                            <button
+                                onClick={() => {
                                     onExportFdx();
                                     setShowExportMenu(false);
                                 }}
@@ -345,7 +356,7 @@ export function ScreenplayToolbar({
                                 }}
                                 className="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-[#25262a] text-zinc-200"
                             >
-                                Print / PDF (.pdf)
+                                Print Screenplay
                             </button>
                             {isAdmin && (
                                 <>

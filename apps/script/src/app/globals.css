@@ -426,14 +426,27 @@
         max-width: 100% !important;
     }
 
-    .screenplay-page-break,
-    .screenplay-auto-page-break {
+    .screenplay-page-break {
         break-after: page !important;
         page-break-after: always !important;
         margin: 0 !important;
         padding: 0 !important;
         border: none !important;
         height: 0 !important;
+        display: block !important;
+    }
+
+    /* hide editor desk page break widgets and separators */
+    .screenplay-auto-page-break,
+    .screenplay-auto-page-break * {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        max-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        overflow: hidden !important;
     }
 
     .screenplay-element {
@@ -446,6 +459,7 @@
     .screenplay-element.parenthetical {
         break-after: avoid !important;
         page-break-after: avoid !important;
+        break-inside: avoid !important;
     }
 
     .screenplay-element.action,

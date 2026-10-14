@@ -14,6 +14,7 @@ import { ScreenplayPagination } from "@/editor/extensions/ScreenplayPagination";
 import { extractScriptContext, COMMON_PREFIXES, COMMON_TIMES, COMMON_TRANSITIONS } from "@/editor/extensions/suggestions";
 import { exportToFdx, parseFdx } from "@/editor/format/fdx";
 import { exportToFountain, parseFountain } from "@/editor/format/fountain";
+import { downloadPdf } from "@/editor/format/pdf";
 
 import { ScreenplayToolbar, type ViewLayoutMode } from "@/components/ScreenplayToolbar";
 import { SceneNavigator, type SceneItem } from "@/components/SceneNavigator";
@@ -146,9 +147,22 @@ function ScreenplayEditorContent() {
         }, 600);
     }, []);
 
+    const scriptIdRef = useRef(scriptId);
+    useEffect(() => {
+        scriptIdRef.current = scriptId;
+    }, [scriptId]);
+
     const currentStorageKey = useMemo(() => {
         return scriptId ? `stairway_script_doc_${scriptId}` : "stairway_screenplay_draft_v1";
     }, [scriptId]);
+
+    const currentStorageKeyRef = useRef(currentStorageKey);
+    useEffect(() => {
+        currentStorageKeyRef.current = currentStorageKey;
+    }, [currentStorageKey]);
+
+    const isHydratedRef = useRef(false);
+    const loadedScriptIdRef = useRef<string | null>(null);
 
     // Load script metadata when scriptId changes
     useEffect(() => {
@@ -156,12 +170,38 @@ function ScreenplayEditorContent() {
         const doc = getScriptById(scriptId);
         if (doc) {
             setScriptTitle(doc.title);
-            setTitlePageData((prev) => ({
-                ...prev,
-                title: doc.title,
-                author: doc.author || ""
-            }));
+            if (doc.titlePage) {
+                setTitlePageData((prev) => ({
+                    ...prev,
+                    title: doc.titlePage?.title || doc.title || prev.title,
+                    author: doc.titlePage?.author || doc.author || prev.author,
+                    basedOn: doc.titlePage?.basedOn ?? prev.basedOn,
+                    contact: doc.titlePage?.contact ?? prev.contact,
+                    draftInfo: doc.titlePage?.draftInfo ?? prev.draftInfo
+                }));
+            } else {
+                setTitlePageData((prev) => ({
+                    ...prev,
+                    title: doc.title,
+                    author: doc.author || ""
+                }));
+            }
         }
+    }, [scriptId]);
+
+    const initialContent = useMemo(() => {
+        if (typeof window === "undefined") return DEFAULT_SCRIPT_CONTENT;
+        try {
+            const key = scriptId ? `stairway_script_doc_${scriptId}` : "stairway_screenplay_draft_v1";
+            const saved = localStorage.getItem(key);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed && typeof parsed === "object" && parsed.type === "doc" && Array.isArray(parsed.content)) {
+                    return parsed;
+                }
+            }
+        } catch {}
+        return DEFAULT_SCRIPT_CONTENT;
     }, [scriptId]);
 
     // Editor instantiation
@@ -202,7 +242,7 @@ function ScreenplayEditorContent() {
             }),
             CharacterCount
         ],
-        content: DEFAULT_SCRIPT_CONTENT,
+        content: initialContent,
         editorProps: {
             attributes: {
                 class: "screenplay-container focus:outline-none"
@@ -260,33 +300,43 @@ function ScreenplayEditorContent() {
             }
         },
         onUpdate: ({ editor: ed }) => {
-            if (isReadOnlyRef.current) return;
+            if (isReadOnlyRef.current || !isHydratedRef.current) return;
             triggerSaveIndicator();
             try {
                 const json = ed.getJSON();
-                localStorage.setItem(currentStorageKey, JSON.stringify(json));
+                const storageKey = currentStorageKeyRef.current;
+                localStorage.setItem(storageKey, JSON.stringify(json));
 
-                // Sync metadata back to ScriptStorage
-                if (scriptId) {
+                // sync metadata back to ScriptStorage
+                const activeId = scriptIdRef.current;
+                if (activeId) {
                     const words = ed.storage.characterCount?.words?.() || 0;
-                    updateScript(scriptId, {
+                    let detectedSceneCount = 0;
+                    ed.state.doc.descendants((node) => {
+                        if (node.type.name === "sceneHeading") detectedSceneCount++;
+                    });
+                    updateScript(activeId, {
                         wordCount: words,
-                        sceneCount: scenes.length
+                        sceneCount: detectedSceneCount
                     });
                 }
 
-                // Auto-checkpoint version history every 5 minutes
+                // auto-checkpoint version history every 5 minutes
                 const now = Date.now();
                 if (now - lastSnapshotTime.current > 5 * 60 * 1000) {
                     lastSnapshotTime.current = now;
                     const words = ed.storage.characterCount?.words?.() || 0;
+                    let detectedSceneCount = 0;
+                    ed.state.doc.descendants((node) => {
+                        if (node.type.name === "sceneHeading") detectedSceneCount++;
+                    });
                     const autoSnapshot: VersionSnapshot = {
                         id: `snap-${now}`,
                         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
                         isoDate: new Date().toISOString(),
                         author: "Admin",
                         wordCount: words,
-                        sceneCount: scenes.length,
+                        sceneCount: detectedSceneCount,
                         content: json
                     };
                     setVersions((prev) => {
@@ -706,18 +756,19 @@ function ScreenplayEditorContent() {
             if (!editor) return;
             if (snapshot) {
                 setActivePreviewId(snapshot.id);
-                editor.commands.setContent(snapshot.content as object);
+                editor.commands.setContent(snapshot.content as object, { emitUpdate: false });
             } else {
                 setActivePreviewId(null);
                 try {
-                    const saved = localStorage.getItem(currentStorageKey);
+                    const storageKey = currentStorageKeyRef.current;
+                    const saved = localStorage.getItem(storageKey);
                     if (saved) {
-                        editor.commands.setContent(JSON.parse(saved));
+                        editor.commands.setContent(JSON.parse(saved), { emitUpdate: false });
                     }
                 } catch {}
             }
         },
-        [editor, currentStorageKey]
+        [editor]
     );
 
     // Image embed handler
@@ -796,11 +847,22 @@ function ScreenplayEditorContent() {
         setPageTheme(getStoredPageTheme());
         if (!editor) return;
 
+        // load saved content if script id changed
+        if (loadedScriptIdRef.current !== scriptId) {
+            loadedScriptIdRef.current = scriptId;
+            try {
+                const storageKey = scriptId ? `stairway_script_doc_${scriptId}` : "stairway_screenplay_draft_v1";
+                const saved = localStorage.getItem(storageKey);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (parsed && typeof parsed === "object" && parsed.type === "doc" && Array.isArray(parsed.content)) {
+                        editor.commands.setContent(parsed, { emitUpdate: false });
+                    }
+                }
+            } catch {}
+        }
+
         try {
-            const saved = localStorage.getItem(currentStorageKey);
-            if (saved) {
-                editor.commands.setContent(JSON.parse(saved));
-            }
             const savedStash = localStorage.getItem(STASH_STORAGE_KEY);
             if (savedStash) {
                 setStashItems(JSON.parse(savedStash));
@@ -811,12 +873,23 @@ function ScreenplayEditorContent() {
             }
         } catch {}
 
+        isHydratedRef.current = true;
         analyzeScript(editor);
-    }, [editor, analyzeScript, currentStorageKey]);
+    }, [editor, analyzeScript, scriptId]);
 
     const handleUpdateTitlePage = (updates: Partial<TitlePageData>) => {
         if (isReadOnly) return;
-        setTitlePageData((prev) => ({ ...prev, ...updates }));
+        setTitlePageData((prev) => {
+            const updated = { ...prev, ...updates };
+            if (scriptId) {
+                updateScript(scriptId, {
+                    title: updated.title,
+                    author: updated.author,
+                    titlePage: updated
+                });
+            }
+            return updated;
+        });
     };
 
     const handleSelectScene = (pos: number) => {
@@ -894,6 +967,11 @@ function ScreenplayEditorContent() {
                 }
             ])
             .run();
+    };
+
+    const handleExportPdf = () => {
+        if (!editor) return;
+        downloadPdf(editor.getJSON(), scriptTitle, titlePageData, { includeTitlePage: true });
     };
 
     const handleExportFdx = () => {
@@ -1012,6 +1090,7 @@ function ScreenplayEditorContent() {
                 onOpenCommandPalette={() => setCommandPaletteOpen(true)}
                 onOpenFindReplace={() => setFindReplaceOpen(true)}
                 onInsertImageModal={() => setInsertImageOpen(true)}
+                onExportPdf={handleExportPdf}
                 onExportFdx={handleExportFdx}
                 onExportFountain={handleExportFountain}
                 onImportFile={handleImportFile}
@@ -1338,6 +1417,7 @@ function ScreenplayEditorContent() {
                     }}
                     onJumpToScene={handleSelectScene}
                     scenes={scenes}
+                    onExportPdf={handleExportPdf}
                     onExportFdx={handleExportFdx}
                     onExportFountain={handleExportFountain}
                     onPrintPdf={() => typeof window !== "undefined" && window.print()}

@@ -138,37 +138,73 @@ export function getStoredScripts(): ScriptDocument[] {
 
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_SCRIPTS));
-            return INITIAL_SCRIPTS;
+        let parsed: ScriptDocument[] = [];
+        if (raw) {
+            try {
+                const json = JSON.parse(raw);
+                if (Array.isArray(json)) parsed = json;
+            } catch {}
         }
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-            // purge legacy mock/simulated scripts and prune their doc keys
-            let changed = false;
-            const filtered = parsed
-                .filter((s) => {
-                    if (s && DUMMY_SCRIPT_IDS.has(s.id)) {
-                        try {
-                            localStorage.removeItem(`stairway_script_doc_${s.id}`);
-                        } catch {}
-                        return false;
-                    }
-                    return true;
-                })
-                .map((s) => {
-                    if (s && s.author === "Creative Division") {
-                        changed = true;
-                        return { ...s, author: "" };
-                    }
-                    return s;
-                });
-            if (changed || filtered.length !== parsed.length) {
-                saveStoredScripts(filtered);
+
+        // purge legacy mock scripts
+        let changed = false;
+        const filtered = parsed
+            .filter((s) => {
+                if (s && DUMMY_SCRIPT_IDS.has(s.id)) {
+                    try {
+                        localStorage.removeItem(`stairway_script_doc_${s.id}`);
+                    } catch {}
+                    return false;
+                }
+                return Boolean(s && s.id);
+            })
+            .map((s) => {
+                if (s && s.author === "Creative Division") {
+                    changed = true;
+                    return { ...s, author: "" };
+                }
+                return s;
+            });
+
+        // recover orphaned script documents stored locally
+        const seenIds = new Set(filtered.map((s) => s.id));
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith("stairway_script_doc_")) {
+                const recoveredId = key.replace("stairway_script_doc_", "");
+                if (recoveredId && !seenIds.has(recoveredId) && !DUMMY_SCRIPT_IDS.has(recoveredId)) {
+                    seenIds.add(recoveredId);
+                    changed = true;
+                    let recoveredTitle = "Untitled Screenplay";
+                    try {
+                        const rawDoc = localStorage.getItem(key);
+                        if (rawDoc) {
+                            const parsedDoc = JSON.parse(rawDoc);
+                            const firstHeading = parsedDoc?.content?.find?.((n: any) => n.type === "sceneHeading");
+                            if (firstHeading?.content?.[0]?.text) {
+                                recoveredTitle = firstHeading.content[0].text;
+                            }
+                        }
+                    } catch {}
+
+                    filtered.push({
+                        id: recoveredId,
+                        title: recoveredTitle,
+                        author: "",
+                        lastModified: Date.now(),
+                        shelfId: null,
+                        category: "mine",
+                        wordCount: 0,
+                        sceneCount: 1
+                    });
+                }
             }
-            return filtered;
         }
-        return INITIAL_SCRIPTS;
+
+        if (changed || filtered.length !== parsed.length || !raw) {
+            saveStoredScripts(filtered);
+        }
+        return filtered;
     } catch {
         return INITIAL_SCRIPTS;
     }
@@ -191,14 +227,30 @@ export function getScriptById(id: string): ScriptDocument | undefined {
 
 export function createNewScript(title = "Untitled Screenplay", shelfId?: string | null): ScriptDocument {
     const scripts = getStoredScripts();
+    const newId = `script-${Date.now()}`;
     const newScript: ScriptDocument = {
-        id: `script-${Date.now()}`,
+        id: newId,
         title,
         author: "",
         lastModified: Date.now(),
         shelfId: shelfId || null,
         category: "mine"
     };
+
+    if (typeof window !== "undefined") {
+        try {
+            const initialDoc = {
+                type: "doc",
+                content: [
+                    {
+                        type: "sceneHeading",
+                        content: [{ type: "text", text: "INT. SCENE - DAY" }]
+                    }
+                ]
+            };
+            localStorage.setItem(`stairway_script_doc_${newId}`, JSON.stringify(initialDoc));
+        } catch {}
+    }
 
     const updated = [newScript, ...scripts];
     saveStoredScripts(updated);
@@ -207,7 +259,24 @@ export function createNewScript(title = "Untitled Screenplay", shelfId?: string 
 
 export function updateScript(id: string, updates: Partial<ScriptDocument>): void {
     const scripts = getStoredScripts();
-    const updated = scripts.map((s) => (s.id === id ? { ...s, ...updates, lastModified: Date.now() } : s));
+    const exists = scripts.some((s) => s.id === id);
+    let updated: ScriptDocument[];
+    if (exists) {
+        updated = scripts.map((s) => (s.id === id ? { ...s, ...updates, lastModified: Date.now() } : s));
+    } else {
+        const newScript: ScriptDocument = {
+            id,
+            title: updates.title || "Untitled Screenplay",
+            author: updates.author || "",
+            lastModified: Date.now(),
+            shelfId: updates.shelfId || null,
+            category: "mine",
+            wordCount: updates.wordCount || 0,
+            sceneCount: updates.sceneCount || 0,
+            ...updates
+        };
+        updated = [newScript, ...scripts];
+    }
     saveStoredScripts(updated);
 }
 

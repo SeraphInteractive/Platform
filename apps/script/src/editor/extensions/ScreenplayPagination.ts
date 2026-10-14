@@ -175,7 +175,7 @@ function computePagination(doc: PMNode, storage?: PaginationStorage) {
                     const isContinuous = typeof document !== "undefined" && !!document.querySelector(".screenplay-continuous-mode");
 
                     const container = document.createElement("div");
-                    container.className = "screenplay-auto-page-break select-none";
+                    container.className = "screenplay-auto-page-break select-none no-print";
                     container.setAttribute("data-auto-page-break", "true");
                     container.setAttribute("data-page-number", String(targetPageNum));
 

@@ -19,6 +19,7 @@ interface CommandPaletteProps {
     onInsertPageBreak?: () => void;
     onJumpToScene: (pos: number) => void;
     scenes: Array<{ slugline: string; pos: number; number: number }>;
+    onExportPdf?: () => void;
     onExportFdx: () => void;
     onExportFountain: () => void;
     onPrintPdf: () => void;
@@ -36,6 +37,7 @@ export function CommandPalette({
     onInsertPageBreak,
     onJumpToScene,
     scenes,
+    onExportPdf,
     onExportFdx,
     onExportFountain,
     onPrintPdf,
@@ -215,8 +217,19 @@ export function CommandPalette({
             }
         },
         {
+            id: "export-pdf-direct",
+            title: "Export PDF (.pdf)",
+            shortcut: "⇧⌘E",
+            category: "Export & Files",
+            icon: <Download className="w-4 h-4 text-zinc-400" />,
+            action: () => {
+                onExportPdf?.();
+                onClose();
+            }
+        },
+        {
             id: "export-pdf",
-            title: "Print / Export to PDF",
+            title: "Print Screenplay",
             shortcut: "⌘P",
             category: "Export & Files",
             icon: <Printer className="w-4 h-4 text-zinc-400" />,

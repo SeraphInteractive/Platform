@@ -4,19 +4,22 @@ export interface Shelf {
     createdAt: number;
 }
 
+export interface TitlePageData {
+    title: string;
+    author: string;
+    writtenBy?: string;
+    basedOn?: string;
+    contact?: string;
+    draftInfo?: string;
+}
+
 export interface ScriptDocument {
     id: string;
     title: string;
     author: string;
     logline?: string;
     content?: any;
-    titlePage?: {
-        title: string;
-        writtenBy: string;
-        basedOn: string;
-        contact: string;
-        draftInfo: string;
-    };
+    titlePage?: TitlePageData;
     lastModified: number;
     wordCount?: number;
     sceneCount?: number;
