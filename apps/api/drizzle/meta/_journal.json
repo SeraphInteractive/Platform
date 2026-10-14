@@ -106,6 +106,13 @@
       "when": 1792004092149,
       "tag": "0014_condemned_deathstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1792004092150,
+      "tag": "0015_remap_legacy_supervisor_specialties",
+      "breakpoints": true
     }
   ]
 }
