@@ -1,2 +1,2 @@
-ALTER TYPE "public"."user_specialty" ADD VALUE 'modeling_and_surfacing_lead';--> statement-breakpoint
-ALTER TYPE "public"."user_specialty" ADD VALUE 'lighting_and_vfx_lead';
+ALTER TYPE "public"."user_specialty" ADD VALUE IF NOT EXISTS 'modeling_and_surfacing_lead';--> statement-breakpoint
+ALTER TYPE "public"."user_specialty" ADD VALUE IF NOT EXISTS 'lighting_and_vfx_lead';
