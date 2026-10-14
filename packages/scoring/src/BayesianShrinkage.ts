@@ -51,10 +51,5 @@ export function calculateRegularizedLeaderboard(
 ): readonly BayesianShrinkageResult[] {
     return breakdowns
         .map((breakdown) => calculateBayesianShrinkage(breakdown, totalEntries, totalBallots, scheme, priorK))
-        .sort(
-            (a, b) =>
-                b.rawScore - a.rawScore ||
-                b.regularizedTotalScore - a.regularizedTotalScore ||
-                a.entryId.localeCompare(b.entryId)
-        );
+        .sort((a, b) => b.rawScore - a.rawScore || b.regularizedTotalScore - a.regularizedTotalScore || a.entryId.localeCompare(b.entryId));
 }
