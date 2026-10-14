@@ -175,6 +175,11 @@ export const deliverableContentTypes: Readonly<Record<DeliverableKind, readonly 
     [DeliverableKind.Blend]: ["application/x-blender", "application/octet-stream"]
 };
 
+export enum ScreenplayRole {
+    Editor = "editor",
+    Viewer = "viewer"
+}
+
 export function enumValues<T extends Record<string, string>>(enumeration: T): [T[keyof T], ...T[keyof T][]] {
     return Object.values(enumeration) as [T[keyof T], ...T[keyof T][]];
 }

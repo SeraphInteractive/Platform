@@ -164,10 +164,15 @@ export function VersionHistoryDrawer({
                         <p>No snapshots recorded yet.</p>
                     </div>
                 ) : (
-                    displayVersions.map((v) => {
+                    displayVersions.map((v, idx) => {
                         const isPreviewing = activePreviewId === v.id;
                         const relativeTime = formatRelativeTime(v.isoDate, v.timestamp);
                         const initialLetter = (v.author || "A")[0]?.toUpperCase() || "A";
+
+                        // compute diff against older adjacent version in chronological history
+                        const olderVersion = displayVersions[idx + 1];
+                        const wordDelta = olderVersion !== undefined ? v.wordCount - olderVersion.wordCount : null;
+                        const sceneDelta = olderVersion !== undefined ? v.sceneCount - olderVersion.sceneCount : null;
 
                         return (
                             <div
@@ -194,8 +199,8 @@ export function VersionHistoryDrawer({
 
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center justify-between gap-1 mb-0.5">
-                                            <span className="text-xs font-medium text-slate-200 truncate font-mono">
-                                                {v.name || v.author}
+                                            <span className="text-xs font-semibold text-slate-200 truncate font-mono">
+                                                {v.name || "Auto-save"}
                                             </span>
                                             {v.name && (
                                                 <span className="px-1.5 py-0.2 rounded bg-[#202432] border border-[#2c3244] text-[9px] font-mono text-slate-300 shrink-0">
@@ -205,16 +210,26 @@ export function VersionHistoryDrawer({
                                         </div>
 
                                         <div className="text-[10px] text-slate-400 font-mono flex items-center justify-between gap-1">
+                                            <span className="text-slate-300 font-medium truncate">{v.author}</span>
                                             <span title={v.isoDate ? new Date(v.isoDate).toLocaleString() : v.timestamp}>
                                                 {relativeTime}
                                             </span>
-                                            {v.name && <span className="text-slate-500 truncate">{v.author}</span>}
                                         </div>
 
-                                        <div className="text-[10px] text-slate-500 font-mono mt-1 flex items-center gap-2">
+                                        <div className="text-[10px] text-slate-500 font-mono mt-1.5 flex items-center flex-wrap gap-x-2 gap-y-0.5">
                                             <span>{v.wordCount} words</span>
+                                            {wordDelta !== null && wordDelta !== 0 && (
+                                                <span className={wordDelta > 0 ? "text-emerald-400" : "text-rose-400"}>
+                                                    {wordDelta > 0 ? `+${wordDelta}` : wordDelta}
+                                                </span>
+                                            )}
                                             <span>-</span>
                                             <span>{v.sceneCount} scenes</span>
+                                            {sceneDelta !== null && sceneDelta !== 0 && (
+                                                <span className={sceneDelta > 0 ? "text-emerald-400" : "text-rose-400"}>
+                                                    ({sceneDelta > 0 ? `+${sceneDelta}` : sceneDelta})
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

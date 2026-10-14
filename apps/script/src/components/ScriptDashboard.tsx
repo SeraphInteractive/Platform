@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { useStudioAuth } from "@/components/AccessGuard";
 import { InviteUserModal } from "@/components/InviteUserModal";
+import { ScriptApiClient } from "@/lib/ScriptApiClient";
 import {
     getStoredScripts,
     getStoredShelves,
@@ -101,7 +102,38 @@ export function ScriptDashboard() {
     const [renamingScript, setRenamingScript] = useState<ScriptDocument | null>(null);
     const [renameValue, setRenameValue] = useState("");
 
-    const refreshData = () => {
+    const refreshData = async () => {
+        try {
+            const [serverScripts, serverShelves] = await Promise.all([
+                ScriptApiClient.listScripts().catch(() => []),
+                ScriptApiClient.listShelves().catch(() => [])
+            ]);
+
+            if (serverScripts.length > 0 || serverShelves.length > 0) {
+                const mappedScripts: ScriptDocument[] = serverScripts.map((s) => ({
+                    id: s.id,
+                    title: s.title,
+                    author: s.owner?.username || "",
+                    lastModified: new Date(s.updatedAt).getTime(),
+                    shelfId: s.shelfId,
+                    category: (s.userRole === "owner" ? "mine" : "shared") as "mine" | "shared",
+                    wordCount: s.wordCount,
+                    sceneCount: s.sceneCount
+                }));
+
+                const mappedShelves: Shelf[] = serverShelves.map((sh) => ({
+                    id: sh.id,
+                    name: sh.name,
+                    createdAt: new Date(sh.createdAt).getTime()
+                }));
+
+                setScripts(mappedScripts);
+                setShelves(mappedShelves);
+                return;
+            }
+        } catch {}
+
+        // fallback to local storage
         const loadedScripts = getStoredScripts();
         const loadedShelves = getStoredShelves();
 
@@ -121,12 +153,10 @@ export function ScriptDashboard() {
             saveStoredShelves(uniqueShelves);
         }
 
-        // if user is not admin, only show permitted scripts they have been invited to
         if (!isAdmin && user?.isInvited) {
             const permitted = user.invitedScriptIds || [];
             let filtered = loadedScripts.filter((s) => permitted.includes("*") || permitted.includes(s.id));
 
-            // ensure accepted invites without local storage copy are populated
             if (Array.isArray(user.acceptedInvites)) {
                 for (const inv of user.acceptedInvites) {
                     if (inv.scriptId && !filtered.some((s) => s.id === inv.scriptId)) {
@@ -155,7 +185,7 @@ export function ScriptDashboard() {
     };
 
     useEffect(() => {
-        refreshData();
+        void refreshData();
     }, [user, isAdmin]);
 
     // auto close context menus on outside click
@@ -174,16 +204,27 @@ export function ScriptDashboard() {
         router.push(`/editor?id=${encodeURIComponent(id)}`);
     };
 
-    const handleCreateScript = (e?: React.FormEvent) => {
+    const handleCreateScript = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
         if (!isAdmin) return;
         const title = newTitle.trim() || "Untitled Screenplay";
         const targetShelf = targetShelfIdForCreate || null;
-        const created = createNewScript(title, targetShelf);
-        setIsCreateOpen(false);
-        setNewTitle("");
-        setTargetShelfIdForCreate("");
-        handleOpenScript(created.id);
+        try {
+            const created = await ScriptApiClient.createScript({
+                title,
+                shelfId: targetShelf
+            });
+            setIsCreateOpen(false);
+            setNewTitle("");
+            setTargetShelfIdForCreate("");
+            handleOpenScript(created.id);
+        } catch {
+            const created = createNewScript(title, targetShelf);
+            setIsCreateOpen(false);
+            setNewTitle("");
+            setTargetShelfIdForCreate("");
+            handleOpenScript(created.id);
+        }
     };
 
     const openCreateForShelf = (shelfId: string) => {
@@ -193,39 +234,55 @@ export function ScriptDashboard() {
         setIsCreateOpen(true);
     };
 
-    const handleDuplicateScript = (id: string) => {
+    const handleDuplicateScript = async (id: string) => {
         if (!isAdmin) return;
-        duplicateScript(id);
-        refreshData();
+        try {
+            await ScriptApiClient.duplicateScript(id);
+        } catch {
+            duplicateScript(id);
+        }
+        await refreshData();
         setMenuOpenId(null);
     };
 
-    const handleDeleteScript = (id: string) => {
+    const handleDeleteScript = async (id: string) => {
         if (!isAdmin) return;
-        deleteScript(id);
-        refreshData();
+        try {
+            await ScriptApiClient.deleteScript(id);
+        } catch {
+            deleteScript(id);
+        }
+        await refreshData();
         setMenuOpenId(null);
     };
 
-    const handleSaveRenameScript = (e: React.FormEvent) => {
+    const handleSaveRenameScript = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!isAdmin || !renamingScript) return;
         const trimmed = renameValue.trim();
         if (trimmed) {
-            updateScript(renamingScript.id, { title: trimmed });
-            refreshData();
+            try {
+                await ScriptApiClient.updateScript(renamingScript.id, { title: trimmed });
+            } catch {
+                updateScript(renamingScript.id, { title: trimmed });
+            }
+            await refreshData();
         }
         setRenamingScript(null);
     };
 
     // shelf actions
-    const handleCreateShelf = (e: React.FormEvent) => {
+    const handleCreateShelf = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!isAdmin) return;
         const trimmed = newShelfName.trim();
         if (trimmed) {
-            createShelf(trimmed);
-            refreshData();
+            try {
+                await ScriptApiClient.createShelf({ name: trimmed });
+            } catch {
+                createShelf(trimmed);
+            }
+            await refreshData();
             setNewShelfName("");
             setIsCreateShelfOpen(false);
         }
@@ -237,22 +294,26 @@ export function ScriptDashboard() {
         const trimmed = renameShelfValue.trim();
         if (trimmed) {
             renameShelf(renamingShelf.id, trimmed);
-            refreshData();
+            void refreshData();
         }
         setRenamingShelf(null);
     };
 
-    const handleDeleteShelf = (shelfId: string, e?: React.MouseEvent) => {
+    const handleDeleteShelf = async (shelfId: string, e?: React.MouseEvent) => {
         if (e) {
             e.stopPropagation();
             e.preventDefault();
         }
         if (!isAdmin) return;
-        deleteShelf(shelfId);
+        try {
+            await ScriptApiClient.deleteShelf(shelfId);
+        } catch {
+            deleteShelf(shelfId);
+        }
         if (activeFilterId === shelfId) {
             setActiveFilterId("all");
         }
-        refreshData();
+        await refreshData();
         setShelfMenuOpenId(null);
     };
 

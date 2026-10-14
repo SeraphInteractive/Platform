@@ -56,7 +56,9 @@ async function forward(request: NextRequest, context: RouteContext): Promise<Nex
             contentType = request.headers.get("content-type") ?? "application/octet-stream";
         } else {
             const text = await request.text();
-            if (new TextEncoder().encode(text).byteLength > maximumBodyBytes) {
+            // allow up to 10 mb for screenplay documents and version history snapshots
+            const maxBytes = path[0] === "scripts" ? 10 * 1024 * 1024 : maximumBodyBytes;
+            if (new TextEncoder().encode(text).byteLength > maxBytes) {
                 return problem(413, "PAYLOAD_TOO_LARGE", "The request body is too large.");
             }
             if (text.length > 0) {

@@ -16,7 +16,16 @@ import {
     varchar
 } from "drizzle-orm/pg-core";
 import { RaidSeverity, type PairwiseSeparation, type RaidFlag } from "@platform/scoring";
-import { DifficultyTier, EntryStatus, enumValues, PollType, RoundStatus, ShotStatus, SubmissionStatus } from "../../Domain/Enums.js";
+import {
+    DifficultyTier,
+    EntryStatus,
+    enumValues,
+    PollType,
+    RoundStatus,
+    ScreenplayRole,
+    ShotStatus,
+    SubmissionStatus
+} from "../../Domain/Enums.js";
 import { Role, Specialty } from "../../Domain/Roles.js";
 import type { LeaderboardItem } from "../../Modules/Leaderboards/LeaderboardTypes.js";
 
@@ -37,6 +46,7 @@ export const difficultyTierEnum = pgEnum("difficulty_tier", enumValues(Difficult
 export const shotStatusEnum = pgEnum("shot_status", enumValues(ShotStatus));
 export const submissionStatusEnum = pgEnum("submission_status", enumValues(SubmissionStatus));
 export const raidSeverityEnum = pgEnum("raid_severity", enumValues(RaidSeverity));
+export const screenplayRoleEnum = pgEnum("screenplay_role", enumValues(ScreenplayRole));
 
 export const users = pgTable(
     "users",
@@ -347,6 +357,88 @@ export const automodRules = pgTable(
     (table) => [index("automod_rules_created_at_idx").on(table.createdAt)]
 );
 
+export const screenplayShelves = pgTable(
+    "screenplay_shelves",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        userId: uuid("user_id")
+            .notNull()
+            .references(() => users.id, { onDelete: "cascade" }),
+        name: varchar("name", { length: 100 }).notNull(),
+        createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+    },
+    (table) => [index("screenplay_shelves_user_id_idx").on(table.userId)]
+);
+
+export const screenplays = pgTable(
+    "screenplays",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        ownerId: uuid("owner_id")
+            .notNull()
+            .references(() => users.id, { onDelete: "cascade" }),
+        title: varchar("title", { length: 200 }).notNull().default("Untitled Screenplay"),
+        content: jsonb("content")
+            .notNull()
+            .default(sql`'{}'::jsonb`),
+        titlePage: jsonb("title_page"),
+        shelfId: uuid("shelf_id").references(() => screenplayShelves.id, { onDelete: "set null" }),
+        category: varchar("category", { length: 100 }),
+        wordCount: integer("word_count").notNull().default(0),
+        sceneCount: integer("scene_count").notNull().default(0),
+        ...timestamps
+    },
+    (table) => [
+        index("screenplays_owner_id_idx").on(table.ownerId),
+        index("screenplays_shelf_id_idx").on(table.shelfId),
+        index("screenplays_updated_at_idx").on(table.updatedAt)
+    ]
+);
+
+export const screenplayCollaborators = pgTable(
+    "screenplay_collaborators",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        screenplayId: uuid("screenplay_id")
+            .notNull()
+            .references(() => screenplays.id, { onDelete: "cascade" }),
+        userId: uuid("user_id")
+            .notNull()
+            .references(() => users.id, { onDelete: "cascade" }),
+        role: screenplayRoleEnum("role").notNull().default(ScreenplayRole.Editor),
+        invitedBy: uuid("invited_by")
+            .notNull()
+            .references(() => users.id, { onDelete: "cascade" }),
+        createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+    },
+    (table) => [
+        uniqueIndex("screenplay_collaborators_script_user_idx").on(table.screenplayId, table.userId),
+        index("screenplay_collaborators_user_id_idx").on(table.userId)
+    ]
+);
+
+export const screenplayVersions = pgTable(
+    "screenplay_versions",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        screenplayId: uuid("screenplay_id")
+            .notNull()
+            .references(() => screenplays.id, { onDelete: "cascade" }),
+        userId: uuid("user_id")
+            .notNull()
+            .references(() => users.id, { onDelete: "cascade" }),
+        name: varchar("name", { length: 150 }).notNull(),
+        content: jsonb("content").notNull(),
+        wordCount: integer("word_count").notNull().default(0),
+        sceneCount: integer("scene_count").notNull().default(0),
+        createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+    },
+    (table) => [
+        index("screenplay_versions_script_id_created_at_idx").on(table.screenplayId, table.createdAt),
+        index("screenplay_versions_user_id_idx").on(table.userId)
+    ]
+);
+
 export type UserRecord = typeof users.$inferSelect;
 export type DocumentRecord = typeof documents.$inferSelect;
 export type DocumentRevisionRecord = typeof documentRevisions.$inferSelect;
@@ -361,3 +453,7 @@ export type ShotThreadMapRecord = typeof shotThreadMaps.$inferSelect;
 export type PipelineProgressRecord = typeof pipelineProgress.$inferSelect;
 export type DeletedStorageObjectRecord = typeof deletedStorageObjects.$inferSelect;
 export type AutomodRuleRecord = typeof automodRules.$inferSelect;
+export type ScreenplayShelfRecord = typeof screenplayShelves.$inferSelect;
+export type ScreenplayRecord = typeof screenplays.$inferSelect;
+export type ScreenplayCollaboratorRecord = typeof screenplayCollaborators.$inferSelect;
+export type ScreenplayVersionRecord = typeof screenplayVersions.$inferSelect;

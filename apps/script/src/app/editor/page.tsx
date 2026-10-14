@@ -33,6 +33,22 @@ import { InsertImageDialog } from "@/components/InsertImageDialog";
 import { InviteUserModal } from "@/components/InviteUserModal";
 import { AccessGuard, useStudioAuth, canAccessScript } from "@/components/AccessGuard";
 import { getScriptById, updateScript, getStoredPageTheme, setStoredPageTheme, type PageTheme } from "@/lib/ScriptStorage";
+import { ScriptApiClient } from "@/lib/ScriptApiClient";
+import type { ScreenplayVersionDto } from "@platform/contracts";
+
+function toClientVersionSnapshot(dto: ScreenplayVersionDto): VersionSnapshot {
+    return {
+        id: dto.id,
+        name: dto.name,
+        timestamp: new Date(dto.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        isoDate: dto.createdAt,
+        author: dto.user?.username || "Writer",
+        avatarUrl: dto.user?.avatarUrl || null,
+        wordCount: dto.wordCount,
+        sceneCount: dto.sceneCount,
+        content: dto.content
+    };
+}
 
 const DEFAULT_SCRIPT_CONTENT = {
     type: "doc",
@@ -60,11 +76,14 @@ function ScreenplayEditorContent() {
     const scriptId = searchParams.get("id");
     const { user, isAdmin } = useStudioAuth();
 
+    const [serverRole, setServerRole] = useState<"owner" | "editor" | "viewer" | null>(null);
+
     const userRole = useMemo(() => {
         if (isAdmin) return "admin";
+        if (serverRole) return serverRole;
         const invite = user?.acceptedInvites?.find((i: any) => !i.scriptId || i.scriptId === scriptId);
         return invite?.role || (user?.isInvited ? "editor" : "viewer");
-    }, [isAdmin, user, scriptId]);
+    }, [isAdmin, serverRole, user, scriptId]);
 
     const isReadOnly = !isAdmin && userRole === "viewer";
     const isReadOnlyRef = useRef(isReadOnly);
@@ -108,13 +127,11 @@ function ScreenplayEditorContent() {
     const [versions, setVersions] = useState<VersionSnapshot[]>([]);
     const [activePreviewId, setActivePreviewId] = useState<string | null>(null);
 
-    // Modal / drawer states
     const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
     const [findReplaceOpen, setFindReplaceOpen] = useState(false);
     const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
     const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
 
-    // Autocomplete state
     const [suggestions, setSuggestions] = useState<string[]>([]);
     const [suggestionTitle, setSuggestionTitle] = useState("");
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -144,6 +161,7 @@ function ScreenplayEditorContent() {
     const lastSnapshotTime = useRef<number>(Date.now());
     const [isSaving, setIsSaving] = useState(false);
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const debouncedSaveRef = useRef<NodeJS.Timeout | null>(null);
 
     const triggerSaveIndicator = useCallback(() => {
         setIsSaving(true);
@@ -170,7 +188,7 @@ function ScreenplayEditorContent() {
     const isHydratedRef = useRef(false);
     const loadedScriptIdRef = useRef<string | null>(null);
 
-    // Load script metadata when scriptId changes
+    // sync script metadata when script id changes
     useEffect(() => {
         if (!scriptId) return;
         const doc = getScriptById(scriptId);
@@ -210,7 +228,6 @@ function ScreenplayEditorContent() {
         return DEFAULT_SCRIPT_CONTENT;
     }, [scriptId]);
 
-    // Editor instantiation
     const editor = useEditor({
         immediatelyRender: false,
         extensions: [
@@ -314,49 +331,50 @@ function ScreenplayEditorContent() {
                 const storageKey = currentStorageKeyRef.current;
                 localStorage.setItem(storageKey, JSON.stringify(json));
 
+                const words = ed.storage.characterCount?.words?.() || 0;
+                let detectedSceneCount = 0;
+                ed.state.doc.descendants((node) => {
+                    if (node.type.name === "sceneHeading") detectedSceneCount++;
+                });
+
                 // sync metadata back to ScriptStorage
                 const activeId = scriptIdRef.current;
                 if (activeId) {
-                    const words = ed.storage.characterCount?.words?.() || 0;
-                    let detectedSceneCount = 0;
-                    ed.state.doc.descendants((node) => {
-                        if (node.type.name === "sceneHeading") detectedSceneCount++;
-                    });
                     updateScript(activeId, {
                         wordCount: words,
                         sceneCount: detectedSceneCount
                     });
+
+                    // debounced live auto-save to backend
+                    if (debouncedSaveRef.current) clearTimeout(debouncedSaveRef.current);
+                    debouncedSaveRef.current = setTimeout(async () => {
+                        try {
+                            await ScriptApiClient.updateScript(activeId, {
+                                content: json,
+                                wordCount: words,
+                                sceneCount: detectedSceneCount
+                            });
+                        } catch (err) {
+                            console.error("Auto-save to server failed", err);
+                        }
+                    }, 800);
                 }
 
                 // auto-checkpoint version history every 5 minutes
                 const now = Date.now();
                 if (now - lastSnapshotTime.current > 5 * 60 * 1000) {
                     lastSnapshotTime.current = now;
-                    const words = ed.storage.characterCount?.words?.() || 0;
-                    let detectedSceneCount = 0;
-                    ed.state.doc.descendants((node) => {
-                        if (node.type.name === "sceneHeading") detectedSceneCount++;
-                    });
-                    const currentUser = userRef.current;
-                    const authorName = currentUser?.globalName || currentUser?.username || "Admin";
-                    const avatarUrl = currentUser?.avatarUrl || null;
-                    const autoSnapshot: VersionSnapshot = {
-                        id: `snap-${now}`,
-                        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                        isoDate: new Date().toISOString(),
-                        author: authorName,
-                        avatarUrl,
-                        wordCount: words,
-                        sceneCount: detectedSceneCount,
-                        content: json
-                    };
-                    setVersions((prev) => {
-                        const updated = [autoSnapshot, ...prev].slice(0, 30);
-                        try {
-                            localStorage.setItem(VERSIONS_STORAGE_KEY, JSON.stringify(updated));
-                        } catch {}
-                        return updated;
-                    });
+                    if (activeId) {
+                        ScriptApiClient.createVersion(activeId, {
+                            name: `Auto-save (${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`,
+                            content: json,
+                            wordCount: words,
+                            sceneCount: detectedSceneCount
+                        })
+                            .then(() => ScriptApiClient.listVersions(activeId))
+                            .then((dtos) => setVersions(dtos.map(toClientVersionSnapshot)))
+                            .catch((err) => console.error("Auto checkpoint failed", err));
+                    }
                 }
             } catch {}
 
@@ -608,7 +626,7 @@ function ScreenplayEditorContent() {
         editor.setEditable(!isReadOnly);
     }, [editor, isReadOnly]);
 
-    // Stash cut handler
+    // move selected text or current paragraph into the stash buffer
     const handleStashCut = useCallback(() => {
         if (isReadOnly || !editor) return;
         const { state } = editor;
@@ -658,7 +676,7 @@ function ScreenplayEditorContent() {
         setIsStashOpen(true);
     }, [editor, isReadOnly]);
 
-    // Restore item from Stash into editor at cursor
+    // paste stashed item into editor at cursor
     const handleRestoreStashItem = useCallback(
         (item: StashItem) => {
             if (isReadOnly || !editor) return;
@@ -705,12 +723,32 @@ function ScreenplayEditorContent() {
         [isReadOnly]
     );
 
-    // Version History: Create named milestone snapshot
+    // snapshot current canvas state to version history
     const handleCreateNamedVersion = useCallback(
-        (name: string) => {
+        async (name: string) => {
             if (isReadOnly || !editor) return;
-            const authorName = user?.globalName || user?.username || "Admin";
-            const avatarUrl = user?.avatarUrl || null;
+            const activeId = scriptIdRef.current;
+            const currentJson = editor.getJSON();
+
+            if (activeId) {
+                try {
+                    await ScriptApiClient.createVersion(activeId, {
+                        name,
+                        content: currentJson,
+                        wordCount,
+                        sceneCount: scenes.length
+                    });
+                    const dtos = await ScriptApiClient.listVersions(activeId);
+                    setVersions(dtos.map(toClientVersionSnapshot));
+                    return;
+                } catch (e) {
+                    console.error("Failed to create named version on server", e);
+                }
+            }
+
+            const currentUser = userRef.current;
+            const authorName = currentUser?.globalName || currentUser?.username || "Admin";
+            const avatarUrl = currentUser?.avatarUrl || null;
             const snapshot: VersionSnapshot = {
                 id: `milestone-${Date.now()}`,
                 name,
@@ -720,7 +758,7 @@ function ScreenplayEditorContent() {
                 avatarUrl,
                 wordCount: wordCount,
                 sceneCount: scenes.length,
-                content: editor.getJSON()
+                content: currentJson
             };
 
             setVersions((prev) => {
@@ -731,16 +769,39 @@ function ScreenplayEditorContent() {
                 return updated;
             });
         },
-        [editor, wordCount, scenes.length, isReadOnly, user]
+        [editor, wordCount, scenes.length, isReadOnly]
     );
 
-    // Version History: Restore previous snapshot
+    // restore canvas to selected historical version
     const handleRestoreVersion = useCallback(
-        (snapshot: VersionSnapshot) => {
+        async (snapshot: VersionSnapshot) => {
             if (isReadOnly || !editor) return;
+            const activeId = scriptIdRef.current;
+
+            if (
+                activeId &&
+                !snapshot.id.startsWith("snap-") &&
+                !snapshot.id.startsWith("auto-backup-") &&
+                !snapshot.id.startsWith("milestone-")
+            ) {
+                try {
+                    const restored = await ScriptApiClient.restoreVersion(activeId, snapshot.id);
+                    editor.commands.setContent(restored.content as object, { emitUpdate: false });
+                    setActivePreviewId(null);
+                    setIsHistoryOpen(false);
+                    analyzeScript(editor);
+                    const dtos = await ScriptApiClient.listVersions(activeId);
+                    setVersions(dtos.map(toClientVersionSnapshot));
+                    return;
+                } catch (e) {
+                    console.error("Failed to restore version from server", e);
+                }
+            }
+
             const currentJson = editor.getJSON();
-            const authorName = user?.globalName || user?.username || "Admin";
-            const avatarUrl = user?.avatarUrl || null;
+            const currentUser = userRef.current;
+            const authorName = currentUser?.globalName || currentUser?.username || "Admin";
+            const avatarUrl = currentUser?.avatarUrl || null;
             const backup: VersionSnapshot = {
                 id: `auto-backup-${Date.now()}`,
                 name: `Pre-restore Backup (${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`,
@@ -756,6 +817,7 @@ function ScreenplayEditorContent() {
             editor.commands.setContent(snapshot.content as object);
             setActivePreviewId(null);
             setIsHistoryOpen(false);
+            analyzeScript(editor);
 
             setVersions((prev) => {
                 const updated = [backup, ...prev];
@@ -765,7 +827,7 @@ function ScreenplayEditorContent() {
                 return updated;
             });
         },
-        [editor, wordCount, scenes.length, isReadOnly]
+        [editor, wordCount, scenes.length, isReadOnly, analyzeScript]
     );
 
     const handlePreviewVersion = useCallback(
@@ -788,7 +850,7 @@ function ScreenplayEditorContent() {
         [editor]
     );
 
-    // Image embed handler
+    // embed storyboard still at cursor
     const handleInsertImage = useCallback(
         (src: string, caption?: string) => {
             if (isReadOnly || !editor) return;
@@ -819,7 +881,6 @@ function ScreenplayEditorContent() {
         [editor]
     );
 
-    // Global key bindings
     useEffect(() => {
         const handleGlobalKey = (e: KeyboardEvent) => {
             if (e.altKey && e.key === "Backspace") {
@@ -858,52 +919,153 @@ function ScreenplayEditorContent() {
         return () => window.removeEventListener("keydown", handleGlobalKey);
     }, [findReplaceOpen, commandPaletteOpen, insertImageOpen, isFocusMode, handleStashCut, handleTogglePageTheme]);
 
-    // Initial mount & hydration
+    // load initial script content from server or local draft on mount
     useEffect(() => {
         setMounted(true);
         setPageTheme(getStoredPageTheme());
         if (!editor) return;
 
-        // load saved content if script id changed
-        if (loadedScriptIdRef.current !== scriptId) {
-            loadedScriptIdRef.current = scriptId;
+        let isCancelled = false;
+
+        async function initScript() {
             try {
-                const storageKey = scriptId ? `stairway_script_doc_${scriptId}` : "stairway_screenplay_draft_v1";
-                const saved = localStorage.getItem(storageKey);
-                if (saved) {
-                    const parsed = JSON.parse(saved);
-                    if (parsed && typeof parsed === "object" && parsed.type === "doc" && Array.isArray(parsed.content)) {
-                        editor.commands.setContent(parsed, { emitUpdate: false });
+                let targetScriptId = scriptId;
+
+                // fallback to server screenplays or migrate local draft
+                if (!targetScriptId) {
+                    const serverScripts = await ScriptApiClient.listScripts().catch(() => []);
+                    if (!isCancelled && serverScripts.length > 0 && serverScripts[0]) {
+                        targetScriptId = serverScripts[0].id;
+                        window.history.replaceState(null, "", `?id=${encodeURIComponent(targetScriptId)}`);
+                    } else if (!isCancelled) {
+                        // check if user has existing local draft to migrate
+                        let localDraftJson: any = null;
+                        try {
+                            const saved = localStorage.getItem("stairway_screenplay_draft_v1");
+                            if (saved) {
+                                const parsed = JSON.parse(saved);
+                                if (parsed?.type === "doc" && Array.isArray(parsed?.content) && parsed.content.length > 0) {
+                                    localDraftJson = parsed;
+                                }
+                            }
+                        } catch {}
+
+                        try {
+                            const created = await ScriptApiClient.createScript({
+                                title: localDraftJson ? "Recovered Screenplay" : "Untitled Screenplay",
+                                content: localDraftJson ?? undefined
+                            });
+                            if (!isCancelled && created) {
+                                targetScriptId = created.id;
+                                window.history.replaceState(null, "", `?id=${encodeURIComponent(targetScriptId)}`);
+                            }
+                        } catch (e) {
+                            console.error("Auto script creation failed", e);
+                        }
                     }
                 }
-            } catch {}
+
+                if (isCancelled) return;
+
+                // fetch script and revision log from server
+                if (targetScriptId) {
+                    loadedScriptIdRef.current = targetScriptId;
+                    try {
+                        const script = await ScriptApiClient.getScript(targetScriptId);
+                        if (!isCancelled && script) {
+                            setScriptTitle(script.title);
+                            if (script.titlePage) {
+                                setTitlePageData((prev) => ({
+                                    ...prev,
+                                    title: (script.titlePage as any)?.title || script.title || prev.title,
+                                    author: (script.titlePage as any)?.author || prev.author,
+                                    basedOn: (script.titlePage as any)?.basedOn ?? prev.basedOn,
+                                    contact: (script.titlePage as any)?.contact ?? prev.contact,
+                                    draftInfo: (script.titlePage as any)?.draftInfo ?? prev.draftInfo
+                                }));
+                            } else {
+                                setTitlePageData((prev) => ({
+                                    ...prev,
+                                    title: script.title,
+                                    author: ""
+                                }));
+                            }
+
+                            if (script.content && typeof script.content === "object" && (script.content as any).type === "doc") {
+                                editor?.commands.setContent(script.content as any, { emitUpdate: false });
+                            }
+
+                            if (script.userRole) {
+                                setServerRole(script.userRole);
+                            }
+
+                            const serverVersions = await ScriptApiClient.listVersions(targetScriptId).catch(() => []);
+                            if (!isCancelled && serverVersions.length > 0) {
+                                setVersions(serverVersions.map(toClientVersionSnapshot));
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Failed to load script from server, checking local fallback", e);
+                        const storageKey = `stairway_script_doc_${targetScriptId}`;
+                        const saved = localStorage.getItem(storageKey) || localStorage.getItem("stairway_screenplay_draft_v1");
+                        if (saved) {
+                            try {
+                                const parsed = JSON.parse(saved);
+                                if (parsed?.type === "doc") {
+                                    editor?.commands.setContent(parsed, { emitUpdate: false });
+                                }
+                            } catch {}
+                        }
+                    }
+                } else {
+                    const saved = localStorage.getItem("stairway_screenplay_draft_v1");
+                    if (saved) {
+                        try {
+                            const parsed = JSON.parse(saved);
+                            if (parsed?.type === "doc") {
+                                editor?.commands.setContent(parsed, { emitUpdate: false });
+                            }
+                        } catch {}
+                    }
+                }
+
+                if (!isCancelled) {
+                    try {
+                        const savedStash = localStorage.getItem(STASH_STORAGE_KEY);
+                        if (savedStash) setStashItems(JSON.parse(savedStash));
+                    } catch {}
+
+                    isHydratedRef.current = true;
+                    analyzeScript(editor);
+                }
+            } catch (err) {
+                console.error("Initialization error", err);
+                isHydratedRef.current = true;
+            }
         }
 
-        try {
-            const savedStash = localStorage.getItem(STASH_STORAGE_KEY);
-            if (savedStash) {
-                setStashItems(JSON.parse(savedStash));
-            }
-            const savedVersions = localStorage.getItem(VERSIONS_STORAGE_KEY);
-            if (savedVersions) {
-                setVersions(JSON.parse(savedVersions));
-            }
-        } catch {}
+        void initScript();
 
-        isHydratedRef.current = true;
-        analyzeScript(editor);
-    }, [editor, analyzeScript, scriptId]);
+        return () => {
+            isCancelled = true;
+        };
+    }, [editor, scriptId, analyzeScript]);
 
     const handleUpdateTitlePage = (updates: Partial<TitlePageData>) => {
         if (isReadOnly) return;
         setTitlePageData((prev) => {
             const updated = { ...prev, ...updates };
-            if (scriptId) {
-                updateScript(scriptId, {
+            const activeId = scriptIdRef.current;
+            if (activeId) {
+                updateScript(activeId, {
                     title: updated.title,
                     author: updated.author,
                     titlePage: updated
                 });
+                ScriptApiClient.updateScript(activeId, {
+                    title: updated.title,
+                    titlePage: updated
+                }).catch(() => {});
             }
             return updated;
         });

@@ -9,6 +9,7 @@ import {
     RaidSeverity,
     Role,
     RoundStatus,
+    ScreenplayRole,
     SeparationAction,
     SeparationStatus,
     ShotStatus,
@@ -398,3 +399,130 @@ export type DocumentDto = z.infer<typeof documentSchema>;
 export type DocumentUpdateDto = z.input<typeof documentUpdateSchema>;
 export type DocumentRevisionSummaryDto = z.infer<typeof documentRevisionSummarySchema>;
 export type DocumentRevisionDto = z.infer<typeof documentRevisionSchema>;
+
+export const screenplayShelfSchema = z
+    .object({
+        id: uuidSchema,
+        userId: uuidSchema,
+        name: z.string().min(1).max(100),
+        createdAt: timestampSchema
+    })
+    .meta({ id: "ScreenplayShelf" });
+
+export const createScreenplayShelfSchema = z
+    .object({
+        name: z.string().trim().min(1).max(100)
+    })
+    .meta({ id: "CreateScreenplayShelf" });
+
+export const screenplayCollaboratorSchema = z
+    .object({
+        id: uuidSchema,
+        screenplayId: uuidSchema,
+        userId: uuidSchema,
+        user: userSummarySchema.optional(),
+        role: z.enum(ScreenplayRole),
+        invitedBy: uuidSchema,
+        createdAt: timestampSchema
+    })
+    .meta({ id: "ScreenplayCollaborator" });
+
+export const addScreenplayCollaboratorSchema = z
+    .object({
+        userId: uuidSchema,
+        role: z.enum(ScreenplayRole).default(ScreenplayRole.Editor)
+    })
+    .meta({ id: "AddScreenplayCollaborator" });
+
+export const screenplayVersionSchema = z
+    .object({
+        id: uuidSchema,
+        screenplayId: uuidSchema,
+        userId: uuidSchema,
+        user: userSummarySchema.nullable().optional(),
+        name: z.string().min(1).max(150),
+        content: z.record(z.string(), z.any()).or(z.array(z.any())),
+        wordCount: z.number().int().nonnegative().default(0),
+        sceneCount: z.number().int().nonnegative().default(0),
+        createdAt: timestampSchema
+    })
+    .meta({ id: "ScreenplayVersion" });
+
+export const createScreenplayVersionSchema = z
+    .object({
+        name: z.string().trim().min(1).max(150),
+        content: z.record(z.string(), z.any()).or(z.array(z.any())),
+        wordCount: z.number().int().nonnegative().default(0).optional(),
+        sceneCount: z.number().int().nonnegative().default(0).optional()
+    })
+    .meta({ id: "CreateScreenplayVersion" });
+
+export const screenplaySummarySchema = z
+    .object({
+        id: uuidSchema,
+        ownerId: uuidSchema,
+        owner: userSummarySchema.optional(),
+        title: z.string().min(1).max(200),
+        shelfId: uuidSchema.nullable(),
+        category: z.string().nullable(),
+        wordCount: z.number().int().nonnegative(),
+        sceneCount: z.number().int().nonnegative(),
+        userRole: z.enum(["owner", "editor", "viewer"]).optional(),
+        createdAt: timestampSchema,
+        updatedAt: timestampSchema
+    })
+    .meta({ id: "ScreenplaySummary" });
+
+export const screenplaySchema = z
+    .object({
+        id: uuidSchema,
+        ownerId: uuidSchema,
+        owner: userSummarySchema.optional(),
+        title: z.string().min(1).max(200),
+        content: z.record(z.string(), z.any()).or(z.array(z.any())),
+        titlePage: z.record(z.string(), z.any()).nullable(),
+        shelfId: uuidSchema.nullable(),
+        category: z.string().nullable(),
+        wordCount: z.number().int().nonnegative(),
+        sceneCount: z.number().int().nonnegative(),
+        userRole: z.enum(["owner", "editor", "viewer"]).optional(),
+        collaborators: z.array(screenplayCollaboratorSchema).optional(),
+        createdAt: timestampSchema,
+        updatedAt: timestampSchema
+    })
+    .meta({ id: "Screenplay" });
+
+export const createScreenplaySchema = z
+    .object({
+        title: z.string().trim().min(1).max(200).default("Untitled Screenplay"),
+        content: z.record(z.string(), z.any()).or(z.array(z.any())).optional(),
+        titlePage: z.record(z.string(), z.any()).nullable().optional(),
+        shelfId: uuidSchema.nullable().optional(),
+        category: z.string().max(100).nullable().optional(),
+        wordCount: z.number().int().nonnegative().default(0).optional(),
+        sceneCount: z.number().int().nonnegative().default(0).optional()
+    })
+    .meta({ id: "CreateScreenplay" });
+
+export const updateScreenplaySchema = z
+    .object({
+        title: z.string().trim().min(1).max(200).optional(),
+        content: z.record(z.string(), z.any()).or(z.array(z.any())).optional(),
+        titlePage: z.record(z.string(), z.any()).nullable().optional(),
+        shelfId: uuidSchema.nullable().optional(),
+        category: z.string().max(100).nullable().optional(),
+        wordCount: z.number().int().nonnegative().optional(),
+        sceneCount: z.number().int().nonnegative().optional()
+    })
+    .meta({ id: "UpdateScreenplay" });
+
+export type ScreenplayShelfDto = z.infer<typeof screenplayShelfSchema>;
+export type CreateScreenplayShelfDto = z.input<typeof createScreenplayShelfSchema>;
+export type ScreenplayCollaboratorDto = z.infer<typeof screenplayCollaboratorSchema>;
+export type AddScreenplayCollaboratorDto = z.input<typeof addScreenplayCollaboratorSchema>;
+export type ScreenplayVersionDto = z.infer<typeof screenplayVersionSchema>;
+export type CreateScreenplayVersionDto = z.input<typeof createScreenplayVersionSchema>;
+export type ScreenplaySummaryDto = z.infer<typeof screenplaySummarySchema>;
+export type ScreenplayDto = z.infer<typeof screenplaySchema>;
+export type CreateScreenplayDto = z.input<typeof createScreenplaySchema>;
+export type UpdateScreenplayDto = z.input<typeof updateScreenplaySchema>;
