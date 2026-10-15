@@ -185,6 +185,16 @@
     border-radius: 2px;
     box-sizing: border-box;
     position: relative;
+    transform-origin: top center;
+}
+
+/* scale down fixed A4 sheet on mobile to fit screen width while preserving exact page layout */
+@media (max-width: 820px) {
+    .screenplay-page-sheet,
+    .screenplay-page-mode {
+        /* scale 210mm (~794px) to fit viewport width with gentle padding */
+        zoom: calc((100vw - 16px) / 820);
+    }
 }
 
 /* continuous view: generous eye-level typing scroll padding */

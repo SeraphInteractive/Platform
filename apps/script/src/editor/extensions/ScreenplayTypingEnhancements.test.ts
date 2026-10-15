@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { EditorView } from "@tiptap/pm/view";
-import { handleReplacementBeforeInput } from "./ScreenplayTypingEnhancements";
+import { handleReplacementBeforeInput, findClosestSubstringIndex, getDomTextOffset } from "./ScreenplayTypingEnhancements";
 
 describe("ScreenplayTypingEnhancements", () => {
     it("ignores non-replacement input types", () => {
@@ -206,5 +206,69 @@ describe("ScreenplayTypingEnhancements", () => {
 
         const handled = handleReplacementBeforeInput(dummyView, event);
         expect(handled).toBe(false);
+    });
+
+    it("correctly finds closest substring index", () => {
+        const text = "He had a bad speling and another bad speling here.";
+        // first 'speling' at index 13, second at 37
+        expect(findClosestSubstringIndex(text, "speling", 10)).toBe(13);
+        expect(findClosestSubstringIndex(text, "speling", 35)).toBe(37);
+        expect(findClosestSubstringIndex(text, "missing", 10)).toBe(-1);
+    });
+
+    it("replaces word under collapsed cursor on insertReplacementText fallback", () => {
+        let dispatchedTr: any = null;
+        let prevented = false;
+
+        const blockText = "He wanted to recieve the prize.";
+        // 'recieve' is from index 13 to 20
+        const fakeState = {
+            selection: {
+                from: 16,
+                to: 16,
+                empty: true,
+                $from: {
+                    parent: { textContent: blockText },
+                    parentOffset: 16,
+                    start: () => 1
+                }
+            },
+            tr: {
+                insertText: (text: string, from: number, to: number) => ({
+                    type: "insertText",
+                    text,
+                    from,
+                    to
+                })
+            }
+        };
+
+        const dummyView = {
+            dom: { contains: () => false },
+            state: fakeState,
+            dispatch: (tr: any) => {
+                dispatchedTr = tr;
+            }
+        } as unknown as EditorView;
+
+        const event = {
+            inputType: "insertReplacementText",
+            data: "receive",
+            preventDefault: () => {
+                prevented = true;
+            },
+            getTargetRanges: () => []
+        } as unknown as InputEvent;
+
+        const handled = handleReplacementBeforeInput(dummyView, event);
+        expect(handled).toBe(true);
+        expect(prevented).toBe(true);
+        // startOfBlock (1) + wordStart (13) = 14, wordEnd (20) + 1 = 21
+        expect(dispatchedTr).toEqual({
+            type: "insertText",
+            text: "receive",
+            from: 14,
+            to: 21
+        });
     });
 });

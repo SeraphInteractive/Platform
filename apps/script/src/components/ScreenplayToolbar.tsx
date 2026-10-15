@@ -119,12 +119,12 @@ export function ScreenplayToolbar({
     }
 
     return (
-        <header className="no-print h-[42px] flex items-center justify-between px-3 bg-[#16171a] border-b border-[#33353a] text-xs text-zinc-300 select-none shrink-0 z-30">
+        <header className="no-print h-[42px] flex items-center justify-between px-2 sm:px-3 bg-[#16171a] border-b border-[#33353a] text-xs text-zinc-300 select-none shrink-0 z-30">
             {/* Left: Back to Dashboard, Outline Toggle & Title */}
-            <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="flex items-center gap-1 sm:gap-2 min-w-0">
                 <Link
                     href="/"
-                    className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-[#25262a] rounded-lg transition-colors"
+                    className="p-1 sm:p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-[#25262a] rounded-lg transition-colors shrink-0"
                     title="Back to Dashboard"
                 >
                     <ArrowLeft className="w-3.5 h-3.5" />
@@ -132,7 +132,7 @@ export function ScreenplayToolbar({
 
                 <button
                     onClick={() => setIsNavOpen(!isNavOpen)}
-                    className={`p-1.5 rounded-lg transition-colors ${
+                    className={`p-1 sm:p-1.5 rounded-lg transition-colors shrink-0 ${
                         isNavOpen
                             ? "bg-[#25262a] text-zinc-100 border border-[#33353a]"
                             : "text-zinc-400 hover:text-zinc-100 hover:bg-[#25262a]"
@@ -142,8 +142,8 @@ export function ScreenplayToolbar({
                     <Menu className="w-3.5 h-3.5" />
                 </button>
 
-                <div className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#4c8aec]" />
+                <div className="flex items-center gap-1.5 min-w-0 truncate">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#4c8aec] shrink-0" />
                     {isEditingTitle ? (
                         <input
                             type="text"
@@ -154,12 +154,12 @@ export function ScreenplayToolbar({
                                 if (e.key === "Enter" || e.key === "Escape") setIsEditingTitle(false);
                             }}
                             onChange={(e) => setScriptTitle(e.target.value)}
-                            className="bg-[#27292c] border border-[#3e4044] rounded-lg px-2 py-0.5 text-xs text-zinc-100 font-medium focus:outline-none focus:border-[#4c8aec]"
+                            className="bg-[#27292c] border border-[#3e4044] rounded-lg px-2 py-0.5 text-xs text-zinc-100 font-medium focus:outline-none focus:border-[#4c8aec] max-w-[120px] sm:max-w-[200px]"
                         />
                     ) : (
                         <span
                             onClick={() => !isReadOnly && setIsEditingTitle(true)}
-                            className={`font-medium text-zinc-200 truncate max-w-[240px] tracking-wide ${
+                            className={`font-medium text-zinc-200 truncate max-w-[110px] sm:max-w-[200px] md:max-w-[240px] tracking-wide ${
                                 isReadOnly ? "cursor-default" : "hover:text-white cursor-pointer"
                             }`}
                             title={isReadOnly ? scriptTitle : "Click to rename"}
@@ -171,7 +171,7 @@ export function ScreenplayToolbar({
                     {/* Small colourless save indicator (hidden when read-only) */}
                     {!isReadOnly && (
                         <div
-                            className="flex items-center gap-1.5 px-1.5 py-0.5 text-zinc-500 font-mono text-[11px] select-none"
+                            className="hidden sm:flex items-center gap-1.5 px-1.5 py-0.5 text-zinc-500 font-mono text-[11px] select-none shrink-0"
                             title={isSaving ? "Saving changes..." : "Saved to local storage"}
                         >
                             {isSaving ? (
@@ -179,17 +179,17 @@ export function ScreenplayToolbar({
                             ) : (
                                 <Check className="w-3 h-3 text-zinc-500 shrink-0" />
                             )}
-                            <span className="hidden sm:inline">{isSaving ? "Saving..." : "Saved"}</span>
+                            <span className="hidden md:inline">{isSaving ? "Saving..." : "Saved"}</span>
                         </div>
                     )}
                 </div>
             </div>
 
             {/* Center: Arc Studio Tabs (Script | Beats | Outline) */}
-            <div className="flex items-center gap-1 sm:gap-2 text-xs font-medium">
+            <div className="flex items-center gap-0.5 sm:gap-1 text-xs font-medium shrink-0">
                 <button
                     onClick={() => setLayoutMode("script")}
-                    className={`px-2.5 py-1 rounded transition-colors ${
+                    className={`px-2 sm:px-2.5 py-1 rounded transition-colors ${
                         layoutMode === "script"
                             ? "text-zinc-100 font-semibold border-b-2 border-[#4c8aec]"
                             : "text-zinc-400 hover:text-zinc-200"
@@ -200,7 +200,7 @@ export function ScreenplayToolbar({
 
                 <button
                     onClick={() => setLayoutMode("beatboard")}
-                    className={`px-2.5 py-1 rounded transition-colors ${
+                    className={`hidden sm:inline-block px-2 sm:px-2.5 py-1 rounded transition-colors ${
                         layoutMode === "beatboard"
                             ? "text-zinc-100 font-semibold border-b-2 border-[#4c8aec]"
                             : "text-zinc-400 hover:text-zinc-200"
@@ -211,7 +211,7 @@ export function ScreenplayToolbar({
 
                 <button
                     onClick={() => setLayoutMode("outline")}
-                    className={`px-2.5 py-1 rounded transition-colors ${
+                    className={`px-2 sm:px-2.5 py-1 rounded transition-colors ${
                         layoutMode === "outline"
                             ? "text-zinc-100 font-semibold border-b-2 border-[#4c8aec]"
                             : "text-zinc-400 hover:text-zinc-200"
@@ -222,11 +222,11 @@ export function ScreenplayToolbar({
             </div>
 
             {/* Right: Micro Tools (Zero Text Bloat) */}
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
                 {/* Command Palette */}
                 <button
                     onClick={onOpenCommandPalette}
-                    className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-[#25262a] rounded-lg transition-colors"
+                    className="hidden sm:flex p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-[#25262a] rounded-lg transition-colors"
                     title="Command Palette (Cmd+K)"
                 >
                     <Command className="w-3.5 h-3.5" />
@@ -235,7 +235,7 @@ export function ScreenplayToolbar({
                 {/* Find & Replace */}
                 <button
                     onClick={onOpenFindReplace}
-                    className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-[#25262a] rounded-lg transition-colors"
+                    className="p-1 sm:p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-[#25262a] rounded-lg transition-colors"
                     title="Find and Replace (Cmd+F)"
                 >
                     <Search className="w-3.5 h-3.5" />
@@ -244,7 +244,7 @@ export function ScreenplayToolbar({
                 {/* In-script Storyboard Image Embed */}
                 <button
                     onClick={onInsertImageModal}
-                    className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-[#25262a] rounded-lg transition-colors"
+                    className="hidden sm:flex p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-[#25262a] rounded-lg transition-colors"
                     title="Embed Storyboard Still / Concept Art"
                 >
                     <ImagePlus className="w-3.5 h-3.5" />
@@ -272,7 +272,7 @@ export function ScreenplayToolbar({
                         setIsStashOpen(!isStashOpen);
                         if (isHistoryOpen) setIsHistoryOpen(false);
                     }}
-                    className={`p-1.5 rounded-lg transition-colors ${
+                    className={`hidden md:flex p-1.5 rounded-lg transition-colors ${
                         isStashOpen
                             ? "bg-[#25262a] text-zinc-100 border border-[#33353a]"
                             : "text-zinc-400 hover:text-zinc-100 hover:bg-[#25262a]"
@@ -285,7 +285,7 @@ export function ScreenplayToolbar({
                 {/* Focus Mode */}
                 <button
                     onClick={() => setIsFocusMode(true)}
-                    className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-[#25262a] rounded-lg transition-colors"
+                    className="hidden md:flex p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-[#25262a] rounded-lg transition-colors"
                     title="Focus Mode (F11)"
                 >
                     <Maximize2 className="w-3.5 h-3.5" />

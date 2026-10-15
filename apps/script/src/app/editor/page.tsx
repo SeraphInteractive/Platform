@@ -35,6 +35,7 @@ import { ScriptStash, type StashItem } from "@/components/ScriptStash";
 import { VersionHistoryDrawer, type VersionSnapshot } from "@/components/VersionHistoryDrawer";
 import { TitlePage, type TitlePageData } from "@/components/TitlePage";
 import { InsertImageDialog } from "@/components/InsertImageDialog";
+import { MobileKeyboardToolbar } from "@/components/MobileKeyboardToolbar";
 import { InviteUserModal } from "@/components/InviteUserModal";
 import { AccessGuard, useStudioAuth, canAccessScript } from "@/components/AccessGuard";
 import { getScriptById, updateScript, getStoredPageTheme, setStoredPageTheme, type PageTheme } from "@/lib/ScriptStorage";
@@ -322,6 +323,8 @@ function ScreenplayEditorContent() {
             attributes: {
                 class: "screenplay-container focus:outline-none",
                 spellcheck: "true",
+                "data-gramm": "true",
+                "data-gramm_editor": "true",
                 "data-grammarly-editor": "true",
                 "data-enable-grammarly": "true"
             },
@@ -1803,10 +1806,9 @@ function ScreenplayEditorContent() {
                         <div className="flex-1 flex flex-col relative overflow-hidden bg-[#1a1c1f] border-r border-[#33353a]">
                             <main
                                 onContextMenu={(e) => {
-                                    // allow native context menu inside editor when no text is selected so spellcheck and extensions can show suggestions
+                                    // allow native context menu inside editor so spellcheck, extensions, and Grammarly show suggestions
                                     const isInsideEditor = (e.target as HTMLElement)?.closest(".ProseMirror");
-                                    const hasSelection = editor && !editor.state.selection.empty;
-                                    if (isInsideEditor && !hasSelection) {
+                                    if (isInsideEditor) {
                                         return;
                                     }
                                     e.preventDefault();
@@ -1814,8 +1816,9 @@ function ScreenplayEditorContent() {
                                     setIsContextMenuOpen(true);
                                 }}
                                 onScroll={() => {
-                                    // notify window of scroll so extensions (Grammarly, QuillBot, LanguageTool) update their overlay and card positions
+                                    // notify window and document of scroll so extensions (Grammarly, QuillBot, LanguageTool) update their overlay and card positions
                                     window.dispatchEvent(new Event("scroll"));
+                                    document.dispatchEvent(new Event("scroll"));
                                 }}
                                 className="flex-1 overflow-y-auto relative"
                             >
@@ -2034,10 +2037,9 @@ function ScreenplayEditorContent() {
                     <div className="flex-1 flex flex-col relative overflow-hidden bg-[#1a1c1f]">
                         <main
                             onContextMenu={(e) => {
-                                // allow native context menu inside editor when no text is selected so spellcheck and extensions can show suggestions
+                                // allow native context menu inside editor so spellcheck, extensions, and Grammarly show suggestions
                                 const isInsideEditor = (e.target as HTMLElement)?.closest(".ProseMirror");
-                                const hasSelection = editor && !editor.state.selection.empty;
-                                if (isInsideEditor && !hasSelection) {
+                                if (isInsideEditor) {
                                     return;
                                 }
                                 e.preventDefault();
@@ -2045,8 +2047,9 @@ function ScreenplayEditorContent() {
                                 setIsContextMenuOpen(true);
                             }}
                             onScroll={() => {
-                                // notify window of scroll so extensions (Grammarly, QuillBot, LanguageTool) update their overlay and card positions
+                                // notify window and document of scroll so extensions (Grammarly, QuillBot, LanguageTool) update their overlay and card positions
                                 window.dispatchEvent(new Event("scroll"));
+                                document.dispatchEvent(new Event("scroll"));
                             }}
                             className="flex-1 overflow-y-auto relative"
                         >
@@ -2351,13 +2354,25 @@ function ScreenplayEditorContent() {
 
                 {/* Arc Studio Bottom-Right Status Telemetry Capsule */}
                 {!isFocusMode && layoutMode !== "beatboard" && layoutMode !== "outline" && (
-                    <div className="no-print fixed bottom-6 right-6 z-30 flex items-center gap-2 px-3 py-1.5 bg-[#16171a]/95 hover:bg-[#212326] border border-[#33353a] rounded-full text-xs font-mono text-zinc-400 shadow-xl backdrop-blur-md select-none transition-colors">
-                        <span>{wordCount} words</span>
-                        <span className="text-zinc-600">|</span>
+                    <div className="no-print fixed bottom-12 md:bottom-6 right-4 md:right-6 z-30 flex items-center gap-2 px-2.5 md:px-3 py-1 md:py-1.5 bg-[#16171a]/95 hover:bg-[#212326] border border-[#33353a] rounded-full text-[11px] md:text-xs font-mono text-zinc-400 shadow-xl backdrop-blur-md select-none transition-colors">
+                        <span className="hidden sm:inline">{wordCount} words</span>
+                        <span className="hidden sm:inline text-zinc-600">|</span>
                         <span className="text-zinc-200 font-semibold">
                             Page {currentPage} / {totalPages}
                         </span>
                     </div>
+                )}
+
+                {/* Mobile Keyboard Accessory Toolbar */}
+                {!isFocusMode && layoutMode !== "beatboard" && layoutMode !== "outline" && (
+                    <MobileKeyboardToolbar
+                        editor={editor}
+                        isReadOnly={isReadOnly}
+                        onOpenContextMenu={(coords) => {
+                            setContextMenuPos(coords);
+                            setIsContextMenuOpen(true);
+                        }}
+                    />
                 )}
             </div>
         </div>
