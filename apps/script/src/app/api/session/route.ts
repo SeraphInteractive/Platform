@@ -31,16 +31,35 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         const payload = await upstream.json().catch(() => null);
         const user = payload?.data ?? payload;
         if (user) {
-            const invited = isUserInvited(user.id, user.discordId, null, true);
-            const scriptIds = getUserInvitedScriptIds(user.id, user.discordId, true);
+            // fetch collaborated scripts from backend api for database-persisted access
+            let backendCollabScriptIds: string[] = [];
+            try {
+                const scriptsRes = await fetch(`${apiUrl}/api/v1/scripts`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (scriptsRes.ok) {
+                    const scriptsBody = await scriptsRes.json().catch(() => null);
+                    const serverScripts = scriptsBody?.data ?? [];
+                    if (Array.isArray(serverScripts)) {
+                        backendCollabScriptIds = serverScripts.map((s: any) => s.id);
+                    }
+                }
+            } catch {}
+
+            const localInvited = isUserInvited(user.id, user.discordId, null, true);
+            const localScriptIds = getUserInvitedScriptIds(user.id, user.discordId, true);
             const pendingInvites = getPendingInvitesForUser(user.id, user.discordId);
             const acceptedInvites = getAcceptedInvitesForUser(user.id, user.discordId);
+
+            const mergedScriptIds = Array.from(new Set([...localScriptIds, ...backendCollabScriptIds]));
+            const isInvited = localInvited || backendCollabScriptIds.length > 0;
+
             return NextResponse.json(
                 {
                     data: {
                         ...user,
-                        isInvited: invited,
-                        invitedScriptIds: scriptIds,
+                        isInvited,
+                        invitedScriptIds: mergedScriptIds,
                         pendingInvites,
                         acceptedInvites
                     }

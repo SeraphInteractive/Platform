@@ -246,6 +246,8 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
+      DATA_DIRECTORY: /app/data
+      SERVICE_TOKEN: ${SERVICE_TOKEN:?SERVICE_TOKEN is required}
     volumes:
       - script_data:/app/data
     networks:

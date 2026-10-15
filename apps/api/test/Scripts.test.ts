@@ -2,7 +2,7 @@ import type { ScreenplayDto, ScreenplayShelfDto, ScreenplayVersionDto } from "@p
 import type { LightMyRequestResponse } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Role } from "../src/Domain/Roles.js";
-import { createTestContext, json, type TestContext, type TestUser } from "./Support/TestApplication.js";
+import { createTestContext, json, serviceToken, type TestContext, type TestUser } from "./Support/TestApplication.js";
 
 describe("scripts", () => {
     let context: TestContext;
@@ -205,7 +205,6 @@ describe("scripts", () => {
         expect(collabVersion.statusCode).toBe(201);
         expect(json<{ data: ScreenplayVersionDto }>(collabVersion).data.user?.username).toBe(contributor.record.discordUsername);
 
-        // remove contributor
         const removeRes = await context.application.inject({
             method: "DELETE",
             url: `/api/v1/scripts/${scriptId}/collaborators/${contributor.record.id}`,
@@ -215,6 +214,30 @@ describe("scripts", () => {
 
         const revokedGet = await getScript(contributor, scriptId);
         expect(revokedGet.statusCode).toBe(403);
+
+        // add collaborator using platform service token
+        const serviceAddRes = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/scripts/${scriptId}/collaborators`,
+            headers: { authorization: `Bearer ${serviceToken}` },
+            payload: { userId: contributor.record.id, role: "viewer" }
+        });
+        expect(serviceAddRes.statusCode).toBe(200);
+
+        const viewerGet = await getScript(contributor, scriptId);
+        expect(viewerGet.statusCode).toBe(200);
+        expect(json<{ data: ScreenplayDto }>(viewerGet).data.userRole).toBe("viewer");
+
+        // remove collaborator using platform service token
+        const serviceRemoveRes = await context.application.inject({
+            method: "DELETE",
+            url: `/api/v1/scripts/${scriptId}/collaborators/${contributor.record.id}`,
+            headers: { authorization: `Bearer ${serviceToken}` }
+        });
+        expect(serviceRemoveRes.statusCode).toBe(204);
+
+        const secondRevokedGet = await getScript(contributor, scriptId);
+        expect(secondRevokedGet.statusCode).toBe(403);
     });
 
     it("handles shelf creation, listing, and deletion", async () => {

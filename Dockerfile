@@ -103,7 +103,9 @@ COPY --from=script-build /app/apps/script/.next/standalone ./
 COPY --from=script-build /app/apps/script/public apps/script/public
 COPY --from=script-build /app/apps/script/.next/static apps/script/.next/static
 RUN mkdir -p /app/data && chown node:node /app/data && chmod 700 /app/data
+ENV DATA_DIRECTORY=/app/data
 USER node
+VOLUME ["/app/data"]
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --start-interval=2s --retries=3 \
     CMD ["node", "-e", "fetch(`http://127.0.0.1:${process.env.PORT}/studio/script`).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]

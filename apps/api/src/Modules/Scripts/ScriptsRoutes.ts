@@ -14,8 +14,9 @@ import {
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { dataEnvelope, errorResponses } from "../../Common/Http/Schemas.js";
-import { requireUser, userPrincipalOf } from "../../Common/Security/Authorization.js";
+import { requireRoleOrService, requireUser, userPrincipalOf } from "../../Common/Security/Authorization.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
+import { Role } from "../../Domain/Roles.js";
 
 const idParams = z.object({ id: uuidSchema });
 const versionParams = z.object({ id: uuidSchema, versionId: uuidSchema });
@@ -25,6 +26,8 @@ export const scriptsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
     const { scriptsService } = services;
     const security = [{ bearer: [] }];
     const userOnly = requireUser();
+    const adminOrService = requireRoleOrService(Role.Admin);
+    const userOrService = requireRoleOrService(Role.Member);
 
     // 10 mb body limit to support feature script json without payload rejection
     const screenplayBodyLimit = 10 * 1024 * 1024;
@@ -263,7 +266,7 @@ export const scriptsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
     application.post(
         "/:id/collaborators",
         {
-            preHandler: userOnly,
+            preHandler: adminOrService,
             schema: {
                 tags: ["Scripts"],
                 summary: "Add or update a collaborator on a screenplay.",
@@ -274,7 +277,8 @@ export const scriptsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
             }
         },
         async (request) => {
-            const { user } = userPrincipalOf(request);
+            const isService = request.principal?.kind === "service";
+            const user = isService ? "service" : userPrincipalOf(request).user;
             return { data: await scriptsService.addCollaborator(request.params.id, user, request.body) };
         }
     );
@@ -282,7 +286,7 @@ export const scriptsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
     application.delete(
         "/:id/collaborators/:userId",
         {
-            preHandler: userOnly,
+            preHandler: userOrService,
             schema: {
                 tags: ["Scripts"],
                 summary: "Remove a collaborator from a screenplay.",
@@ -292,7 +296,8 @@ export const scriptsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
             }
         },
         async (request, reply) => {
-            const { user } = userPrincipalOf(request);
+            const isService = request.principal?.kind === "service";
+            const user = isService ? "service" : userPrincipalOf(request).user;
             await scriptsService.removeCollaborator(request.params.id, user, request.params.userId);
             void reply.status(204);
             return null;

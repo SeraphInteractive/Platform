@@ -17,7 +17,8 @@ export interface StudioInvite {
     scriptTitle?: string | null;
 }
 
-const STORAGE_DIR = process.env.DATA_DIRECTORY || path.resolve(process.cwd(), "data");
+const defaultDir = fs.existsSync("/app/data") ? "/app/data" : path.resolve(process.cwd(), "data");
+const STORAGE_DIR = process.env.DATA_DIRECTORY || defaultDir;
 const STORAGE_FILE = path.join(STORAGE_DIR, "studio_invites.json");
 
 // in-memory fallback cache so storage operations never throw or crash
@@ -90,6 +91,7 @@ export function acceptInvite(inviteId: string, userId?: string | null, discordId
         if (matchesUser) {
             updatedInvite = {
                 ...item,
+                targetId: userId || item.targetId,
                 status: "accepted",
                 acceptedAt: new Date().toISOString()
             };

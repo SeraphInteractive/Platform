@@ -58,6 +58,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         const apiUrl = process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || "https://dev-api.projectstairway.net";
         const token = readSessionToken(request);
+        const serviceToken = process.env.SERVICE_TOKEN;
 
         let resolvedDiscordId = "";
         let resolvedUsername = cleanTarget;
@@ -83,14 +84,40 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             } catch {}
 
             // fallback to direct discord bot api if not registered on platform
-            if (resolvedUsername === cleanTarget) {
+            let discordAvatarHash: string | null = null;
+            if (resolvedUsername === cleanTarget || !resolvedPlatformId) {
                 const discordUser = await fetchDiscordUser(cleanTarget);
                 if (discordUser) {
                     resolvedUsername = discordUser.globalName || discordUser.username;
                     if (discordUser.avatar) {
                         resolvedAvatarUrl = `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`;
+                        if (/^(?:a_)?[a-f0-9]{32}$/u.test(discordUser.avatar)) {
+                            discordAvatarHash = discordUser.avatar;
+                        }
                     }
                 }
+            }
+
+            // provision minimal platform user if not yet registered
+            if (!resolvedPlatformId && serviceToken) {
+                try {
+                    const provRes = await fetch(`${apiUrl}/api/v1/users/by-discord/${cleanTarget}/profile`, {
+                        method: "PUT",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${serviceToken}`
+                        },
+                        body: JSON.stringify({
+                            username: resolvedUsername.trim().slice(0, 64) || `user_${cleanTarget.slice(-4)}`,
+                            avatar: discordAvatarHash
+                        })
+                    });
+                    if (provRes.ok) {
+                        const provData = await provRes.json().catch(() => null);
+                        const u = provData?.data ?? provData;
+                        if (u?.id) resolvedPlatformId = u.id;
+                    }
+                } catch {}
             }
         }
 
@@ -115,6 +142,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                         resolvedUsername = matched.username || matched.discordUsername || resolvedUsername;
                         resolvedAvatarUrl = matched.avatarUrl || resolvedAvatarUrl;
                     }
+                }
+            } catch {}
+        }
+
+        // sync collaborator to postgresql if script and user uuid are resolved
+        if (scriptId && resolvedPlatformId) {
+            try {
+                const authHeader = token ? `Bearer ${token}` : serviceToken ? `Bearer ${serviceToken}` : undefined;
+                if (authHeader) {
+                    await fetch(`${apiUrl}/api/v1/scripts/${encodeURIComponent(scriptId)}/collaborators`, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Authorization: authHeader
+                        },
+                        body: JSON.stringify({
+                            userId: resolvedPlatformId,
+                            role
+                        })
+                    });
                 }
             } catch {}
         }
@@ -187,7 +234,30 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
         return NextResponse.json({ error: "Missing invite ID." }, { status: 400 });
     }
 
+    const allInvites = getInvites();
+    const targetInvite = allInvites.find((i) => i.id === id || i.targetId === id);
+
     const removed = removeInvite(id);
+
+    // remove collaborator from backend database if script and target are known
+    if (targetInvite?.scriptId && targetInvite.targetId) {
+        const apiUrl = process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || "https://dev-api.projectstairway.net";
+        const token = readSessionToken(request);
+        const serviceToken = process.env.SERVICE_TOKEN;
+        const authHeader = token ? `Bearer ${token}` : serviceToken ? `Bearer ${serviceToken}` : undefined;
+        if (authHeader && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetInvite.targetId)) {
+            try {
+                await fetch(
+                    `${apiUrl}/api/v1/scripts/${encodeURIComponent(targetInvite.scriptId)}/collaborators/${encodeURIComponent(targetInvite.targetId)}`,
+                    {
+                        method: "DELETE",
+                        headers: { Authorization: authHeader }
+                    }
+                );
+            } catch {}
+        }
+    }
+
     return NextResponse.json({ success: removed });
 }
 
@@ -205,14 +275,51 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
         return NextResponse.json({ error: "Missing invite ID." }, { status: 400 });
     }
 
+    const allInvites = getInvites();
+    const targetInvite = allInvites.find((i) => i.id === inviteId);
+    const apiUrl = process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || "https://dev-api.projectstairway.net";
+    const token = readSessionToken(request);
+    const serviceToken = process.env.SERVICE_TOKEN;
+
     if (action === "decline") {
         const removed = removeInvite(inviteId);
+        if (targetInvite?.scriptId && caller.id) {
+            try {
+                await fetch(
+                    `${apiUrl}/api/v1/scripts/${encodeURIComponent(targetInvite.scriptId)}/collaborators/${encodeURIComponent(caller.id)}`,
+                    {
+                        method: "DELETE",
+                        headers: { Authorization: `Bearer ${token}` }
+                    }
+                );
+            } catch {}
+        }
         return NextResponse.json({ success: removed, action: "decline" });
     }
 
     const accepted = acceptInvite(inviteId, caller.id, caller.discordId);
     if (!accepted) {
         return NextResponse.json({ error: "Invite not found or not addressed to caller." }, { status: 404 });
+    }
+
+    // ensure collaborator row exists in postgresql when accepted
+    if (accepted.scriptId && caller.id) {
+        try {
+            const authHeader = serviceToken ? `Bearer ${serviceToken}` : token ? `Bearer ${token}` : undefined;
+            if (authHeader) {
+                await fetch(`${apiUrl}/api/v1/scripts/${encodeURIComponent(accepted.scriptId)}/collaborators`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: authHeader
+                    },
+                    body: JSON.stringify({
+                        userId: caller.id,
+                        role: accepted.role
+                    })
+                });
+            }
+        } catch {}
     }
 
     return NextResponse.json({ data: accepted, action: "accept" });

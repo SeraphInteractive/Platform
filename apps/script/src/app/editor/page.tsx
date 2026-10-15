@@ -1137,6 +1137,11 @@ function ScreenplayEditorContent() {
                         targetScriptId = serverScripts[0].id;
                         window.history.replaceState(null, "", `?id=${encodeURIComponent(targetScriptId)}`);
                     } else if (!isCancelled) {
+                        if (!isAdmin) {
+                            window.location.href = "/studio/script";
+                            return;
+                        }
+
                         // check if user has existing local draft to migrate
                         let localDraftJson: any = null;
                         try {
@@ -1204,7 +1209,11 @@ function ScreenplayEditorContent() {
                             }
                         }
                     } catch (e) {
-                        console.error("Failed to load script from server, checking local fallback", e);
+                        console.error("Failed to load script from server", e);
+                        if (!isAdmin) {
+                            window.location.href = "/studio/script";
+                            return;
+                        }
                         const storageKey = `stairway_script_doc_${targetScriptId}`;
                         const saved = localStorage.getItem(storageKey) || localStorage.getItem("stairway_screenplay_draft_v1");
                         if (saved) {
@@ -1217,6 +1226,10 @@ function ScreenplayEditorContent() {
                         }
                     }
                 } else {
+                    if (!isAdmin) {
+                        window.location.href = "/studio/script";
+                        return;
+                    }
                     const saved = localStorage.getItem("stairway_screenplay_draft_v1");
                     if (saved) {
                         try {

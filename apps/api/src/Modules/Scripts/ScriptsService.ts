@@ -403,10 +403,23 @@ export class ScriptsService {
 
     public async addCollaborator(
         scriptId: string,
-        user: AuthenticatedUser,
+        user: AuthenticatedUser | "service",
         input: AddScreenplayCollaboratorDto
     ): Promise<ScreenplayCollaboratorDto> {
-        const script = await this.requireScriptWithOwnerAccess(scriptId, user);
+        let script: ScreenplayRecord;
+        let invitedById: string;
+
+        if (user === "service") {
+            const [found] = await this.database.select().from(screenplays).where(eq(screenplays.id, scriptId)).limit(1);
+            if (!found) {
+                throw new NotFoundError("Screenplay not found.");
+            }
+            script = found;
+            invitedById = script.ownerId;
+        } else {
+            script = await this.requireScriptWithOwnerAccess(scriptId, user);
+            invitedById = user.id;
+        }
 
         const [targetUser] = await this.database.select(userColumns).from(users).where(eq(users.id, input.userId)).limit(1);
 
@@ -439,7 +452,7 @@ export class ScriptsService {
                     screenplayId: scriptId,
                     userId: input.userId,
                     role,
-                    invitedBy: user.id
+                    invitedBy: invitedById
                 })
                 .returning();
 
@@ -457,23 +470,25 @@ export class ScriptsService {
             userId: input.userId,
             user: toUserSummary(targetUser),
             role,
-            invitedBy: user.id,
+            invitedBy: invitedById,
             createdAt: toIso(createdAt)
         };
     }
 
-    public async removeCollaborator(scriptId: string, user: AuthenticatedUser, targetUserId: string): Promise<void> {
+    public async removeCollaborator(scriptId: string, user: AuthenticatedUser | "service", targetUserId: string): Promise<void> {
         const [script] = await this.database.select().from(screenplays).where(eq(screenplays.id, scriptId)).limit(1);
 
         if (!script) {
             throw new NotFoundError("Screenplay not found.");
         }
 
-        const isOwnerOrAdmin = script.ownerId === user.id || hasAtLeast(user.role, Role.Admin);
-        const isSelf = user.id === targetUserId;
+        if (user !== "service") {
+            const isOwnerOrAdmin = script.ownerId === user.id || hasAtLeast(user.role, Role.Admin);
+            const isSelf = user.id === targetUserId;
 
-        if (!isOwnerOrAdmin && !isSelf) {
-            throw new ForbiddenError("You cannot remove collaborators from this screenplay.");
+            if (!isOwnerOrAdmin && !isSelf) {
+                throw new ForbiddenError("You cannot remove collaborators from this screenplay.");
+            }
         }
 
         await this.database
