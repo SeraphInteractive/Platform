@@ -36,8 +36,8 @@ import { InsertImageDialog } from "@/components/InsertImageDialog";
 import { InviteUserModal } from "@/components/InviteUserModal";
 import { AccessGuard, useStudioAuth, canAccessScript } from "@/components/AccessGuard";
 import { getScriptById, updateScript, getStoredPageTheme, setStoredPageTheme, type PageTheme } from "@/lib/ScriptStorage";
-import { ScriptApiClient } from "@/lib/ScriptApiClient";
-import type { ScreenplayVersionDto } from "@platform/contracts";
+import { ScriptApiClient, subscribeToScriptEvents } from "@/lib/ScriptApiClient";
+import type { ScreenplayEventDto, ScreenplayVersionDto } from "@platform/contracts";
 
 function toClientVersionSnapshot(dto: ScreenplayVersionDto): VersionSnapshot {
     return {
@@ -309,6 +309,7 @@ function ScreenplayEditorContent() {
             CharacterCount
         ],
         content: initialContent,
+        editable: !isReadOnlyRef.current,
         editorProps: {
             attributes: {
                 class: "screenplay-container focus:outline-none"
@@ -461,6 +462,12 @@ function ScreenplayEditorContent() {
             updateActiveBlockRef.current(ed);
         }
     });
+
+    useEffect(() => {
+        if (editor) {
+            editor.setEditable(!isReadOnly);
+        }
+    }, [editor, isReadOnly]);
 
     const analyzeScript = useCallback((ed: typeof editor) => {
         if (!ed) return;
@@ -1263,6 +1270,163 @@ function ScreenplayEditorContent() {
         };
     }, [editor, scriptId, analyzeScript]);
 
+    const applyRemoteContent = useCallback((ed: typeof editor, remoteDoc: any) => {
+        if (!ed || !remoteDoc || typeof remoteDoc !== "object" || remoteDoc.type !== "doc") return;
+
+        const currentDocJson = ed.getJSON();
+        if (JSON.stringify(currentDocJson) === JSON.stringify(remoteDoc)) {
+            return;
+        }
+
+        const isDirty = debouncedSaveRef.current !== null;
+        const isFocused = ed.isFocused;
+
+        // if idle or not actively typing, replace full content smoothly
+        if (!isDirty || !isFocused) {
+            const { selection } = ed.state;
+            const from = selection.from;
+            const to = selection.to;
+            const scrollContainer = document.querySelector(".screenplay-scroll-container");
+            const prevScroll = scrollContainer ? scrollContainer.scrollTop : window.scrollY;
+
+            ed.commands.setContent(remoteDoc, { emitUpdate: false });
+
+            const docSize = ed.state.doc.content.size;
+            const safeFrom = Math.min(Math.max(1, from), docSize);
+            const safeTo = Math.min(Math.max(1, to), docSize);
+            try {
+                ed.commands.setTextSelection({ from: safeFrom, to: safeTo });
+            } catch {}
+
+            if (scrollContainer) {
+                scrollContainer.scrollTop = prevScroll;
+            }
+
+            const storageKey = currentStorageKeyRef.current;
+            localStorage.setItem(storageKey, JSON.stringify(remoteDoc));
+            analyzeScriptRef.current(ed);
+            return;
+        }
+
+        // if local user has in-flight edits in an active block, reconcile non-destructively:
+        try {
+            const activeBlockIdx = ed.state.selection.$from.index(0);
+            const localBlocks = Array.isArray(currentDocJson.content) ? currentDocJson.content : [];
+            const remoteBlocks = Array.isArray(remoteDoc.content) ? remoteDoc.content : [];
+
+            const mergedBlocks = [...remoteBlocks];
+            if (localBlocks[activeBlockIdx]) {
+                if (activeBlockIdx < mergedBlocks.length) {
+                    mergedBlocks[activeBlockIdx] = localBlocks[activeBlockIdx];
+                } else {
+                    mergedBlocks.push(localBlocks[activeBlockIdx]);
+                }
+            }
+
+            const mergedDoc = {
+                ...remoteDoc,
+                content: mergedBlocks
+            };
+
+            const { selection } = ed.state;
+            const from = selection.from;
+            const to = selection.to;
+            const scrollContainer = document.querySelector(".screenplay-scroll-container");
+            const prevScroll = scrollContainer ? scrollContainer.scrollTop : window.scrollY;
+
+            ed.commands.setContent(mergedDoc, { emitUpdate: false });
+
+            const docSize = ed.state.doc.content.size;
+            const safeFrom = Math.min(Math.max(1, from), docSize);
+            const safeTo = Math.min(Math.max(1, to), docSize);
+            try {
+                ed.commands.setTextSelection({ from: safeFrom, to: safeTo });
+            } catch {}
+
+            if (scrollContainer) {
+                scrollContainer.scrollTop = prevScroll;
+            }
+
+            analyzeScriptRef.current(ed);
+        } catch {
+            ed.commands.setContent(remoteDoc, { emitUpdate: false });
+            analyzeScriptRef.current(ed);
+        }
+    }, []);
+
+    // live real-time collaborative autosync stream
+    useEffect(() => {
+        const activeId = scriptId;
+        if (!activeId || !editor) return;
+
+        const unsubscribe = subscribeToScriptEvents(activeId, (event: ScreenplayEventDto) => {
+            if (event.scriptId !== activeId) return;
+            // ignore echo from own keystrokes
+            if (userRef.current?.id && event.userId === userRef.current.id) return;
+
+            if (event.type === "script.updated") {
+                if (event.title && event.title !== scriptTitle) {
+                    setScriptTitle(event.title);
+                }
+                if (event.titlePage) {
+                    setTitlePageData((prev) => ({
+                        ...prev,
+                        title: event.titlePage?.title || prev.title,
+                        author: event.titlePage?.author ?? prev.author,
+                        basedOn: event.titlePage?.basedOn ?? prev.basedOn,
+                        contact: event.titlePage?.contact ?? prev.contact,
+                        draftInfo: event.titlePage?.draftInfo ?? prev.draftInfo
+                    }));
+                }
+                if (event.content && typeof event.content === "object" && (event.content as any).type === "doc") {
+                    applyRemoteContent(editor, event.content);
+                }
+            } else if (event.type === "script.version_created") {
+                ScriptApiClient.listVersions(activeId)
+                    .then((dtos) => setVersions(dtos.map(toClientVersionSnapshot)))
+                    .catch(() => {});
+            }
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [scriptId, editor, scriptTitle, applyRemoteContent]);
+
+    // fallback background synchronization
+    useEffect(() => {
+        const activeId = scriptId;
+        if (!activeId || !editor) return;
+
+        const interval = setInterval(async () => {
+            if (debouncedSaveRef.current !== null || isSaving) return;
+
+            try {
+                const script = await ScriptApiClient.getScript(activeId);
+                if (!script) return;
+
+                if (script.title && script.title !== scriptTitle) {
+                    setScriptTitle(script.title);
+                }
+                if (script.titlePage) {
+                    setTitlePageData((prev) => ({
+                        ...prev,
+                        title: (script.titlePage as any)?.title || script.title || prev.title,
+                        author: (script.titlePage as any)?.author || prev.author,
+                        basedOn: (script.titlePage as any)?.basedOn ?? prev.basedOn,
+                        contact: (script.titlePage as any)?.contact ?? prev.contact,
+                        draftInfo: (script.titlePage as any)?.draftInfo ?? prev.draftInfo
+                    }));
+                }
+                if (script.content && typeof script.content === "object" && (script.content as any).type === "doc") {
+                    applyRemoteContent(editor, script.content);
+                }
+            } catch {}
+        }, 5000);
+
+        return () => clearInterval(interval);
+    }, [scriptId, editor, scriptTitle, isSaving, applyRemoteContent]);
+
     const handleUpdateTitlePage = (updates: Partial<TitlePageData>) => {
         if (isReadOnly) return;
         setTitlePageData((prev) => {
@@ -1418,6 +1582,7 @@ function ScreenplayEditorContent() {
         triggerSaveIndicator();
         if (scriptId) {
             updateScript(scriptId, { title: newTitle });
+            ScriptApiClient.updateScript(scriptId, { title: newTitle }).catch(() => {});
         }
     };
 

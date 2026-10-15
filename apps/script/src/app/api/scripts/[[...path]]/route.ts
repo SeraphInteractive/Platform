@@ -23,6 +23,10 @@ async function forward(request: NextRequest, context: RouteContext): Promise<Nex
     const headers: Record<string, string> = {
         Authorization: `Bearer ${token}`
     };
+    const accept = request.headers.get("accept");
+    if (accept) {
+        headers["Accept"] = accept;
+    }
 
     let body: string | undefined;
     if (method !== "GET" && method !== "HEAD") {
@@ -43,6 +47,15 @@ async function forward(request: NextRequest, context: RouteContext): Promise<Nex
         const contentType = upstream.headers.get("content-type") ?? "";
         if (upstream.status === 204) {
             return new NextResponse(null, { status: 204 });
+        }
+
+        if (contentType.includes("text/event-stream")) {
+            const streamHeaders = new Headers();
+            streamHeaders.set("Content-Type", "text/event-stream; charset=utf-8");
+            streamHeaders.set("Cache-Control", "no-cache, no-transform");
+            streamHeaders.set("Connection", "keep-alive");
+            streamHeaders.set("X-Accel-Buffering", "no");
+            return new NextResponse(upstream.body, { status: upstream.status, headers: streamHeaders });
         }
 
         if (contentType.includes("application/json")) {

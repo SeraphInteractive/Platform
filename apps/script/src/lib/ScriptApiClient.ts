@@ -5,6 +5,7 @@ import type {
     CreateScreenplayVersionDto,
     ScreenplayCollaboratorDto,
     ScreenplayDto,
+    ScreenplayEventDto,
     ScreenplayShelfDto,
     ScreenplaySummaryDto,
     ScreenplayVersionDto,
@@ -51,6 +52,76 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
     }
 
     throw lastError ?? new Error("Request failed.");
+}
+
+export function subscribeToScriptEvents(scriptId: string, onEvent: (event: ScreenplayEventDto) => void): () => void {
+    if (typeof window === "undefined") {
+        return () => {};
+    }
+
+    const candidateUrls = [
+        `/studio/script/api/scripts/${encodeURIComponent(scriptId)}/events`,
+        `/api/scripts/${encodeURIComponent(scriptId)}/events`,
+        `/api/v1/scripts/${encodeURIComponent(scriptId)}/events`
+    ];
+
+    let source: EventSource | null = null;
+    let urlIdx = 0;
+    let isClosed = false;
+
+    const connect = () => {
+        if (isClosed || urlIdx >= candidateUrls.length) return;
+        const targetUrl = candidateUrls[urlIdx];
+        if (!targetUrl) return;
+
+        try {
+            source = new EventSource(targetUrl, { withCredentials: true });
+
+            source.addEventListener("script.updated", (e: MessageEvent) => {
+                try {
+                    const parsed = JSON.parse(e.data);
+                    if (parsed && typeof parsed === "object") {
+                        onEvent(parsed as ScreenplayEventDto);
+                    }
+                } catch {}
+            });
+
+            source.addEventListener("script.version_created", (e: MessageEvent) => {
+                try {
+                    const parsed = JSON.parse(e.data);
+                    if (parsed && typeof parsed === "object") {
+                        onEvent(parsed as ScreenplayEventDto);
+                    }
+                } catch {}
+            });
+
+            source.onerror = () => {
+                if (source?.readyState === EventSource.CLOSED && !isClosed) {
+                    source.close();
+                    // try fallback candidate url if initial route was 404
+                    if (urlIdx < candidateUrls.length - 1) {
+                        urlIdx++;
+                        setTimeout(connect, 1000);
+                    }
+                }
+            };
+        } catch {
+            if (urlIdx < candidateUrls.length - 1 && !isClosed) {
+                urlIdx++;
+                setTimeout(connect, 1000);
+            }
+        }
+    };
+
+    connect();
+
+    return () => {
+        isClosed = true;
+        if (source) {
+            source.close();
+            source = null;
+        }
+    };
 }
 
 export const ScriptApiClient = {

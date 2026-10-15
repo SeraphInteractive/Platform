@@ -25,6 +25,7 @@ import {
     users,
     type ScreenplayRecord
 } from "../../Infrastructure/Database/Schema.js";
+import { ScriptEventType, type EventBus } from "../../Infrastructure/Events/EventBus.js";
 import { toUserSummary } from "../Users/UserPresenter.js";
 
 const userColumns = {
@@ -35,7 +36,10 @@ const userColumns = {
 };
 
 export class ScriptsService {
-    public constructor(private readonly database: Database) {}
+    public constructor(
+        private readonly database: Database,
+        private readonly eventBus?: EventBus
+    ) {}
 
     public async listScripts(user: AuthenticatedUser): Promise<ScreenplaySummaryDto[]> {
         const isAdmin = hasAtLeast(user.role, Role.Admin);
@@ -244,7 +248,23 @@ export class ScriptsService {
 
         await this.database.update(screenplays).set(updates).where(eq(screenplays.id, id));
 
-        return this.getScript(id, user);
+        const updated = await this.getScript(id, user);
+
+        if (this.eventBus) {
+            await this.eventBus.publishScript({
+                type: ScriptEventType.ScriptUpdated,
+                scriptId: id,
+                userId: user.id,
+                updatedAt: updated.updatedAt,
+                title: input.title,
+                content: input.content,
+                titlePage: input.titlePage,
+                wordCount: updated.wordCount,
+                sceneCount: updated.sceneCount
+            });
+        }
+
+        return updated;
     }
 
     public async deleteScript(id: string, user: AuthenticatedUser): Promise<void> {
@@ -352,6 +372,17 @@ export class ScriptsService {
 
         const [author] = await this.database.select(userColumns).from(users).where(eq(users.id, user.id)).limit(1);
 
+        if (this.eventBus) {
+            await this.eventBus.publishScript({
+                type: ScriptEventType.VersionCreated,
+                scriptId: created.screenplayId,
+                versionId: created.id,
+                name: created.name,
+                userId: user.id,
+                occurredAt: toIso(created.createdAt)
+            });
+        }
+
         return {
             id: created.id,
             screenplayId: created.screenplayId,
@@ -398,7 +429,21 @@ export class ScriptsService {
             })
             .where(eq(screenplays.id, scriptId));
 
-        return this.getScript(scriptId, user);
+        const restored = await this.getScript(scriptId, user);
+
+        if (this.eventBus) {
+            await this.eventBus.publishScript({
+                type: ScriptEventType.ScriptUpdated,
+                scriptId,
+                userId: user.id,
+                updatedAt: restored.updatedAt,
+                content: restored.content,
+                wordCount: restored.wordCount,
+                sceneCount: restored.sceneCount
+            });
+        }
+
+        return restored;
     }
 
     public async addCollaborator(

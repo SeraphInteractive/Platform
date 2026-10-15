@@ -516,6 +516,30 @@ export const updateScreenplaySchema = z
     })
     .meta({ id: "UpdateScreenplay" });
 
+export const screenplayEventSchema = z
+    .discriminatedUnion("type", [
+        z.object({
+            type: z.literal("script.updated"),
+            scriptId: uuidSchema,
+            userId: uuidSchema,
+            updatedAt: timestampSchema,
+            title: z.string().optional(),
+            content: z.record(z.string(), z.any()).or(z.array(z.any())).optional(),
+            titlePage: z.record(z.string(), z.any()).nullable().optional(),
+            wordCount: z.number().int().nonnegative().optional(),
+            sceneCount: z.number().int().nonnegative().optional()
+        }),
+        z.object({
+            type: z.literal("script.version_created"),
+            scriptId: uuidSchema,
+            versionId: uuidSchema,
+            name: z.string(),
+            userId: uuidSchema,
+            occurredAt: timestampSchema
+        })
+    ])
+    .meta({ id: "ScreenplayEvent" });
+
 export type ScreenplayShelfDto = z.infer<typeof screenplayShelfSchema>;
 export type CreateScreenplayShelfDto = z.input<typeof createScreenplayShelfSchema>;
 export type ScreenplayCollaboratorDto = z.infer<typeof screenplayCollaboratorSchema>;
@@ -526,3 +550,4 @@ export type ScreenplaySummaryDto = z.infer<typeof screenplaySummarySchema>;
 export type ScreenplayDto = z.infer<typeof screenplaySchema>;
 export type CreateScreenplayDto = z.input<typeof createScreenplaySchema>;
 export type UpdateScreenplayDto = z.input<typeof updateScreenplaySchema>;
+export type ScreenplayEventDto = z.infer<typeof screenplayEventSchema>;

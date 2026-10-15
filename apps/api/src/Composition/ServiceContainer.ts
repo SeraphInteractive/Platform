@@ -106,7 +106,7 @@ export function createServiceContainer(
         reviewsService: new ReviewsService(database, notifier, objectStorage),
         documentsService,
         autoModService: new AutoModService(database),
-        scriptsService: new ScriptsService(database),
+        scriptsService: new ScriptsService(database, eventBus),
         verificationService: new VerificationService(
             database,
             keyValueStore,
