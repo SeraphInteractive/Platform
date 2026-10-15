@@ -449,6 +449,7 @@ function ScreenplayEditorContent() {
 
             analyzeScriptRef.current(ed);
             updateActiveSuggestionsRef.current(ed);
+            updateActiveBlockRef.current(ed);
         },
         onSelectionUpdate: ({ editor: ed }) => {
             if (suggestionsStateRef.current.isOpen && !suggestionsStateRef.current.userInteracted) {
@@ -989,41 +990,68 @@ function ScreenplayEditorContent() {
         });
     }, [elementFormatting]);
 
-    const updateActiveBlock = useCallback((ed: any) => {
-        if (!ed || ed.isDestroyed) return;
-        const { selection } = ed.state;
-        const { $from } = selection;
-        if ($from.depth < 1) return;
+    const calculateGutterCoords = useCallback((element: HTMLElement) => {
+        // exclude ProseMirror from closest search to anchor coordinates to the relative page container
+        const pageSheet = element.closest(".screenplay-page-sheet, .screenplay-continuous-mode") as HTMLElement | null;
+        if (!pageSheet) return null;
 
-        const node = $from.node(1);
-        const pos = $from.before(1);
-        const nodeType = node.type.name;
+        const sheetRect = pageSheet.getBoundingClientRect();
+        const domRect = element.getBoundingClientRect();
+        const isContinuous = pageSheet.classList.contains("screenplay-continuous-mode");
+        const proseMirror = pageSheet.querySelector(".ProseMirror") as HTMLElement | null;
+        const textStartX = proseMirror ? proseMirror.getBoundingClientRect().left - sheetRect.left : isContinuous ? 80 : 144;
+        const left = isContinuous ? Math.max(8, Math.round(textStartX - 72)) : Math.max(48, Math.round(textStartX - 88));
 
-        setActiveNodeInfo({ pos, nodeType });
+        // align with first line center for both single-line and multi-line blocks
+        const lineOffset = domRect.height > 28 ? -1 : Math.round((domRect.height - 24) / 2);
+        const top = domRect.top - sheetRect.top + lineOffset;
 
-        try {
-            const dom = ed.view.nodeDOM(pos) as HTMLElement | null;
-            if (dom && dom.getBoundingClientRect) {
-                document.querySelectorAll(".is-active-block").forEach((el) => {
-                    if (el !== dom) el.classList.remove("is-active-block");
-                });
-                dom.classList.add("is-active-block");
-
-                const pageSheet = dom.closest(".screenplay-page-sheet, .screenplay-continuous-mode, .ProseMirror");
-                if (pageSheet) {
-                    const sheetRect = pageSheet.getBoundingClientRect();
-                    const domRect = dom.getBoundingClientRect();
-                    setGutterPos({
-                        visible: true,
-                        nodeType,
-                        nodePos: pos,
-                        top: domRect.top - sheetRect.top + 4,
-                        left: domRect.left - sheetRect.left
-                    });
-                }
-            }
-        } catch {}
+        return { top, left };
     }, []);
+
+    const updateActiveBlock = useCallback(
+        (ed: any) => {
+            if (!ed || ed.isDestroyed) return;
+            const { selection } = ed.state;
+            const { $from } = selection;
+            if ($from.depth < 1) return;
+
+            const node = $from.node(1);
+            const pos = $from.before(1);
+            const nodeType = node.type.name;
+
+            setActiveNodeInfo({ pos, nodeType });
+
+            try {
+                // resolve dom element via domAtPos since standard block nodes lack NodeView instances
+                const nodeDom = ed.view.nodeDOM(pos);
+                const domAt = ed.view.domAtPos(selection.from);
+                const targetEl = (domAt.node.nodeType === 1 ? domAt.node : domAt.node.parentElement) as HTMLElement | null;
+                const blockDom = (
+                    nodeDom instanceof HTMLElement ? nodeDom : targetEl?.closest(".screenplay-element")
+                ) as HTMLElement | null;
+
+                if (blockDom) {
+                    document.querySelectorAll(".is-active-block").forEach((el) => {
+                        if (el !== blockDom) el.classList.remove("is-active-block");
+                    });
+                    blockDom.classList.add("is-active-block");
+
+                    const coords = calculateGutterCoords(blockDom);
+                    if (coords) {
+                        setGutterPos({
+                            visible: true,
+                            nodeType,
+                            nodePos: pos,
+                            top: coords.top,
+                            left: coords.left
+                        });
+                    }
+                }
+            } catch {}
+        },
+        [calculateGutterCoords]
+    );
 
     useEffect(() => {
         updateActiveBlockRef.current = updateActiveBlock;
@@ -1042,22 +1070,19 @@ function ScreenplayEditorContent() {
                 const node = $pos.node(1) || $pos.parent;
                 const startPos = $pos.before(1);
 
-                const pageSheet = target.closest(".screenplay-page-sheet, .screenplay-continuous-mode, .ProseMirror");
-                if (pageSheet) {
-                    const sheetRect = pageSheet.getBoundingClientRect();
-                    const domRect = target.getBoundingClientRect();
-
+                const coords = calculateGutterCoords(target);
+                if (coords) {
                     setGutterPos({
                         visible: true,
                         nodeType: node.type.name,
                         nodePos: startPos,
-                        top: domRect.top - sheetRect.top + 4,
-                        left: domRect.left - sheetRect.left
+                        top: coords.top,
+                        left: coords.left
                     });
                 }
             } catch {}
         },
-        [editor]
+        [editor, calculateGutterCoords]
     );
 
     const handleMoveBlock = useCallback(
@@ -1086,7 +1111,7 @@ function ScreenplayEditorContent() {
             const target = (e.target as HTMLElement).closest(".screenplay-element") as HTMLElement | null;
             if (target && editor) {
                 const targetRect = target.getBoundingClientRect();
-                const pageSheet = target.closest(".screenplay-page-sheet, .screenplay-continuous-mode, .ProseMirror");
+                const pageSheet = target.closest(".screenplay-page-sheet, .screenplay-continuous-mode") as HTMLElement | null;
                 if (pageSheet) {
                     const sheetRect = pageSheet.getBoundingClientRect();
                     const isBottomHalf = e.clientY > targetRect.top + targetRect.height / 2;

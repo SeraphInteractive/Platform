@@ -51,10 +51,9 @@ export function ArcGutterHandle({ editor, nodeType, nodePos, top, left, visible,
                 position: "absolute",
                 top: `${top}px`,
                 left: `${left}px`,
-                transform: "translate(-100%, 0)",
                 zIndex: 35
             }}
-            className="no-print flex items-center pr-2"
+            className="no-print flex items-center"
         >
             <button
                 type="button"
