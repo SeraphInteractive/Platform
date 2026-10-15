@@ -38,6 +38,9 @@ export function exportToFountain(doc: JSONContent, title = "Untitled Script", au
                 case "transition":
                     lines.push(`\n> ${text.toUpperCase()}\n`);
                     break;
+                case "shot":
+                    lines.push(`\n${text.toUpperCase()}\n`);
+                    break;
                 case "action":
                 default:
                     lines.push(`\n${text}`);
@@ -96,6 +99,20 @@ export function parseFountain(fountainText: string): JSONContent {
                 content: [{ type: "text", text: trimmed }]
             });
             isPreviousCharacterOrParen = true;
+            continue;
+        }
+
+        // shot detection
+        const isShotDescriptor =
+            /^(ANGLE ON|CLOSE UP|WIDE SHOT|POV|INSERT|EXTREME CLOSE UP|ESTABLISHING SHOT|TRACKING SHOT|PAN TO|REVERSE ANGLE|OVER THE SHOULDER|AERIAL SHOT)\b/i.test(
+                trimmed
+            );
+        if (isShotDescriptor && trimmed === trimmed.toUpperCase()) {
+            content.push({
+                type: "shot",
+                content: [{ type: "text", text: trimmed }]
+            });
+            isPreviousCharacterOrParen = false;
             continue;
         }
 

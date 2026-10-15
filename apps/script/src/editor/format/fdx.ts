@@ -10,7 +10,8 @@ const TYPE_TO_FDX: Record<string, string> = {
     character: "Character",
     dialogue: "Dialogue",
     parenthetical: "Parenthetical",
-    transition: "Transition"
+    transition: "Transition",
+    shot: "Shot"
 };
 
 const FDX_TO_TYPE: Record<string, string> = {
@@ -21,7 +22,7 @@ const FDX_TO_TYPE: Record<string, string> = {
     Parenthetical: "parenthetical",
     Transition: "transition",
     General: "action",
-    Shot: "action"
+    Shot: "shot"
 };
 
 export function exportToFdx(doc: JSONContent, title = "Untitled Script", author?: string): string {

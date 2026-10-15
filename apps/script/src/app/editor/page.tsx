@@ -7,12 +7,13 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import CharacterCount from "@tiptap/extension-character-count";
 
-import { SceneHeading, Action, Character, Dialogue, Parenthetical, Transition, ScriptImage, PageBreak } from "@/editor/nodes";
+import { SceneHeading, Action, Character, Dialogue, Parenthetical, Transition, Shot, ScriptImage, PageBreak } from "@/editor/nodes";
 import { UnderlineMark, HighlightMark } from "@/editor/marks";
 import { ScreenplayKeymap } from "@/editor/extensions/ScreenplayKeymap";
 import { ScreenplayPagination } from "@/editor/extensions/ScreenplayPagination";
 import { HardBreakLeafText } from "@/editor/extensions/HardBreakLeafText";
-import { extractScriptContext, COMMON_PREFIXES, COMMON_TIMES, COMMON_TRANSITIONS } from "@/editor/extensions/suggestions";
+import { ScreenplayTypingEnhancements, ScreenplayItalic } from "@/editor/extensions/ScreenplayTypingEnhancements";
+import { extractScriptContext, COMMON_PREFIXES, COMMON_TIMES, COMMON_TRANSITIONS, COMMON_SHOTS } from "@/editor/extensions/suggestions";
 import { exportToFdx, parseFdx } from "@/editor/format/fdx";
 import { exportToFountain, parseFountain } from "@/editor/format/fountain";
 import { downloadPdf } from "@/editor/format/pdf";
@@ -28,7 +29,7 @@ import { ArcShortcutDock } from "@/components/ArcShortcutDock";
 import { ArcFormattingMenu } from "@/components/ArcFormattingMenu";
 import { ArcGutterHandle } from "@/components/ArcGutterHandle";
 import { ArcMarginRuler, type MarginSettings } from "@/components/ArcMarginRuler";
-import { ArcPasteHandler } from "@/editor/extensions/ArcPasteHandler";
+import { ArcPasteHandler, parseScreenplayPlainText } from "@/editor/extensions/ArcPasteHandler";
 import { ScriptStash, type StashItem } from "@/components/ScriptStash";
 import { VersionHistoryDrawer, type VersionSnapshot } from "@/components/VersionHistoryDrawer";
 import { TitlePage, type TitlePageData } from "@/components/TitlePage";
@@ -142,6 +143,7 @@ function ScreenplayEditorContent() {
         character: { left: 2.2, width: 3.5, right: 0.3, alignment: "left", spacingBefore: 1.1 },
         parenthetical: { left: 1.6, width: 2.8, right: 1.6, alignment: "left", spacingBefore: 0 },
         dialogue: { left: 1.0, width: 3.6, right: 1.4, alignment: "left", spacingBefore: 0 },
+        shot: { left: 0, width: 6.0, right: 0, alignment: "left", spacingBefore: 1.0 },
         transition: { left: 4.0, width: 2.0, right: 0, alignment: "right", spacingBefore: 1.5 }
     });
 
@@ -280,8 +282,10 @@ function ScreenplayEditorContent() {
                 orderedList: false,
                 listItem: false,
                 blockquote: false,
-                horizontalRule: false
+                horizontalRule: false,
+                italic: false
             }),
+            ScreenplayItalic,
             UnderlineMark,
             HighlightMark,
             SceneHeading,
@@ -290,15 +294,18 @@ function ScreenplayEditorContent() {
             Dialogue,
             Parenthetical,
             Transition,
+            Shot,
             ScriptImage,
             PageBreak,
             HardBreakLeafText,
+            ScreenplayTypingEnhancements,
             ScreenplayPagination,
             ScreenplayKeymap,
             ArcPasteHandler,
             Placeholder.configure({
                 placeholder: ({ node }) => {
                     if (node.type.name === "sceneHeading") return "INT. LOCATION - TIME";
+                    if (node.type.name === "shot") return "ANGLE ON / SHOT DESCRIPTION";
                     if (node.type.name === "character") return "CHARACTER NAME";
                     if (node.type.name === "parenthetical") return "(direction)";
                     if (node.type.name === "dialogue") return "Dialogue...";
@@ -312,7 +319,10 @@ function ScreenplayEditorContent() {
         editable: !isReadOnlyRef.current,
         editorProps: {
             attributes: {
-                class: "screenplay-container focus:outline-none"
+                class: "screenplay-container focus:outline-none",
+                spellcheck: "true",
+                "data-grammarly-editor": "true",
+                "data-enable-grammarly": "true"
             },
             handleKeyDown: (_view, event) => {
                 if (suggestionsStateRef.current.isOpen && suggestionsStateRef.current.items.length > 0) {
@@ -334,27 +344,13 @@ function ScreenplayEditorContent() {
                         setSuggestionIndex(prevIdx);
                         return true;
                     }
-                    if (event.key === "Tab") {
+                    if (event.key === "Tab" || event.key === "Enter") {
                         event.preventDefault();
                         const selectedItem = suggestionsStateRef.current.items[suggestionsStateRef.current.index];
                         if (selectedItem) {
                             handleSelectSuggestionRef.current(selectedItem);
                         }
                         return true;
-                    }
-                    if (event.key === "Enter") {
-                        if (suggestionsStateRef.current.userInteracted) {
-                            event.preventDefault();
-                            const selectedItem = suggestionsStateRef.current.items[suggestionsStateRef.current.index];
-                            if (selectedItem) {
-                                handleSelectSuggestionRef.current(selectedItem);
-                            }
-                            return true;
-                        }
-                        // avoid hijacking standard enter if writer did not navigate suggestions
-                        suggestionsStateRef.current.isOpen = false;
-                        setShowSuggestions(false);
-                        return false;
                     }
                     if (event.key === "Escape") {
                         event.preventDefault();
@@ -452,9 +448,11 @@ function ScreenplayEditorContent() {
             updateActiveBlockRef.current(ed);
         },
         onSelectionUpdate: ({ editor: ed }) => {
-            if (suggestionsStateRef.current.isOpen && !suggestionsStateRef.current.userInteracted) {
+            if (!ed.state.selection.empty && suggestionsStateRef.current.isOpen) {
                 suggestionsStateRef.current.isOpen = false;
                 setShowSuggestions(false);
+            } else if (ed.state.selection.empty) {
+                updateActiveSuggestionsRef.current(ed);
             }
             const pStorage = (ed.storage as any).screenplayPagination;
             if (pStorage) {
@@ -512,10 +510,21 @@ function ScreenplayEditorContent() {
         try {
             const { selection } = ed.state;
             const coords = ed.view.coordsAtPos(selection.from);
-            return {
-                top: coords.bottom + 6,
-                left: Math.max(20, coords.left)
-            };
+            if (coords && coords.bottom > 0) {
+                return {
+                    top: coords.bottom + 6,
+                    left: Math.max(20, coords.left)
+                };
+            }
+            const dom = ed.view.nodeDOM(selection.$from.before(1)) as HTMLElement | null;
+            if (dom && typeof dom.getBoundingClientRect === "function") {
+                const rect = dom.getBoundingClientRect();
+                return {
+                    top: rect.bottom + 6,
+                    left: Math.max(20, rect.left)
+                };
+            }
+            return null;
         } catch {
             return null;
         }
@@ -533,46 +542,81 @@ function ScreenplayEditorContent() {
         let newTitle = "";
 
         if (currentType === "sceneHeading") {
-            // only show suggestions when actively typing a location or time of day
+            // Part 3: Time of Day (after dash)
             if (rawText.includes("-")) {
                 newTitle = "Time of Day";
                 const parts = rawText.split(/-+/);
                 const afterDash = (parts[parts.length - 1] ?? "").trim();
                 newItems = COMMON_TIMES.filter((t) => (!afterDash || t.startsWith(afterDash)) && t !== afterDash);
-            } else if (text.length >= 3) {
-                const ctx = extractScriptContext(ed);
-                newItems = ctx.sluglines.filter((s) => s.includes(text) && s !== text).slice(0, 5);
-                if (newItems.length > 0) newTitle = "Location";
+            } else {
+                const matchedPrefix = COMMON_PREFIXES.find((p) => rawText.startsWith(p + " "));
+
+                if (!matchedPrefix) {
+                    // Part 1: Scene prefix suggestions
+                    newTitle = "Scene Type";
+                    newItems = COMMON_PREFIXES.filter((p) => !text || p.startsWith(text));
+                } else {
+                    // Part 2: Locations strictly from scenes already in the script
+                    const query = rawText.slice(matchedPrefix.length).trim();
+                    const ctx = extractScriptContext(ed);
+                    if (ctx.locations.length > 0) {
+                        const filtered = ctx.locations.filter(
+                            (loc) => (!query || loc.startsWith(query) || loc.includes(query)) && loc !== query
+                        );
+                        if (filtered.length > 0) {
+                            newTitle = "Location";
+                            newItems = filtered.slice(0, 8);
+                        }
+                    }
+                }
+            }
+        } else if (currentType === "shot") {
+            newTitle = "Shot";
+            const ctx = extractScriptContext(ed);
+            const allShots = Array.from(new Set([...COMMON_SHOTS, ...ctx.shots]));
+            if (!text) {
+                newItems = allShots.slice(0, 8);
+            } else {
+                newItems = allShots.filter((s) => s.startsWith(text) && s !== text).slice(0, 8);
             }
         } else if (currentType === "character") {
-            if (text.length >= 2) {
-                const ctx = extractScriptContext(ed);
+            const ctx = extractScriptContext(ed);
+            if (!text) {
+                if (ctx.characters.length > 0) {
+                    newTitle = "Character";
+                    newItems = ctx.characters.slice(0, 8);
+                }
+            } else {
                 newItems = ctx.characters.filter((c) => c.startsWith(text) && c !== text);
                 if (newItems.length > 0) {
                     newTitle = "Character";
-                } else if (ctx.characters.includes(text) || text.length >= 3) {
+                } else if (ctx.characters.includes(text) || text.length >= 2) {
                     newItems = ["(V.O.)", "(O.S.)", "(CONT'D)"];
                     newTitle = "Extension";
                 }
             }
         } else if (currentType === "transition") {
-            if (text.length >= 2) {
-                newTitle = "Transition";
+            newTitle = "Transition";
+            if (!text) {
+                newItems = COMMON_TRANSITIONS.slice(0, 8);
+            } else {
                 newItems = COMMON_TRANSITIONS.filter((t) => t.startsWith(text) && t !== text);
             }
         } else if (currentType === "parenthetical") {
-            if (text.length >= 2) {
-                newTitle = "Direction";
-                const commonDirs = [
-                    "(beat)",
-                    "(pause)",
-                    "(whispering)",
-                    "(laughing)",
-                    "(to himself)",
-                    "(shouting)",
-                    "(quietly)",
-                    "(sarcastic)"
-                ];
+            newTitle = "Direction";
+            const commonDirs = [
+                "(beat)",
+                "(pause)",
+                "(whispering)",
+                "(laughing)",
+                "(to himself)",
+                "(shouting)",
+                "(quietly)",
+                "(sarcastic)"
+            ];
+            if (!text) {
+                newItems = commonDirs.slice(0, 8);
+            } else {
                 newItems = commonDirs.filter((d) => d.toLowerCase().includes(text.toLowerCase()) && d.toLowerCase() !== text.toLowerCase());
             }
         }
@@ -635,8 +679,15 @@ function ScreenplayEditorContent() {
                     const loc = (parts[0] ?? "").trim();
                     replaceTextAndAdvance(`${loc} - ${item}`, "action");
                 } else {
-                    replaceTextAndAdvance(item, "action");
+                    const prefix = COMMON_PREFIXES.find((p) => currentText.trim().startsWith(p)) || "";
+                    if (prefix) {
+                        replaceTextAndAdvance(`${prefix} ${item} - `);
+                    } else {
+                        replaceTextAndAdvance(`${item} - `);
+                    }
                 }
+            } else if (currentType === "shot") {
+                replaceTextAndAdvance(item);
             } else if (currentType === "character") {
                 if (item.startsWith("(")) {
                     replaceTextAndAdvance(`${currentText.trim()} ${item}`, "dialogue");
@@ -731,14 +782,20 @@ function ScreenplayEditorContent() {
     const handleRestoreStashItem = useCallback(
         (item: StashItem) => {
             if (isReadOnly || !editor) return;
-            editor
-                .chain()
-                .focus()
-                .insertContent({
-                    type: item.type === "note" ? "action" : item.type,
-                    content: [{ type: "text", text: item.text }]
-                })
-                .run();
+            // parse plain text into individual screenplay blocks to prevent formatting overrides
+            const parsedNodes = parseScreenplayPlainText(item.text);
+            if (parsedNodes && parsedNodes.length > 0) {
+                editor.chain().focus().insertContent(parsedNodes).run();
+            } else {
+                editor
+                    .chain()
+                    .focus()
+                    .insertContent({
+                        type: item.type === "note" ? "action" : item.type,
+                        content: [{ type: "text", text: item.text }]
+                    })
+                    .run();
+            }
         },
         [editor, isReadOnly]
     );

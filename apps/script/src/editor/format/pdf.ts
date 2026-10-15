@@ -63,6 +63,13 @@ const ELEMENT_SPECS: Record<string, ElementSpec> = {
         uppercase: true,
         spaceBeforeLines: 1
     },
+    shot: {
+        leftPt: 1.5 * PTS_PER_INCH, // 108pt
+        maxWidthPt: 6.0 * PTS_PER_INCH, // 432pt
+        uppercase: true,
+        bold: true,
+        spaceBeforeLines: 1
+    },
     general: DEFAULT_SPEC
 };
 

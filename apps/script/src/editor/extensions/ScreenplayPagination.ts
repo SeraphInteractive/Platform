@@ -67,6 +67,11 @@ export function estimateBlockLines(node: PMNode): number {
         return Math.max(3, countBlockLines(text, 60) + 2);
     }
 
+    if (type === "shot") {
+        // 1 line text + top margin (1.0em) + bottom margin (0.5em)
+        return Math.max(2, countBlockLines(text, 60) + 1);
+    }
+
     if (type === "action") {
         // standard 60 char width per action line + margin
         return countBlockLines(text, 60) + 1;

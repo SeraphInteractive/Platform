@@ -1,4 +1,4 @@
-import { Mark, mergeAttributes } from "@tiptap/core";
+import { Mark, mergeAttributes, markInputRule, markPasteRule } from "@tiptap/core";
 
 declare module "@tiptap/core" {
     interface Commands<ReturnType> {
@@ -9,6 +9,9 @@ declare module "@tiptap/core" {
         };
     }
 }
+
+const underscoreInputRegex = /(?:^|\s)(_(?!\s+_)((?:[^_]+))_(?!\s+_))$/;
+const underscorePasteRegex = /(?:^|\s)(_(?!\s+_)((?:[^_]+))_(?!\s+_))/g;
 
 export const UnderlineMark = Mark.create({
     name: "underline",
@@ -43,6 +46,24 @@ export const UnderlineMark = Mark.create({
                 ({ commands }) =>
                     commands.unsetMark(this.name)
         };
+    },
+
+    addInputRules() {
+        return [
+            markInputRule({
+                find: underscoreInputRegex,
+                type: this.type
+            })
+        ];
+    },
+
+    addPasteRules() {
+        return [
+            markPasteRule({
+                find: underscorePasteRegex,
+                type: this.type
+            })
+        ];
     },
 
     addKeyboardShortcuts() {

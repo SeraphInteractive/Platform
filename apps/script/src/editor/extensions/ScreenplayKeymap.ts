@@ -63,7 +63,7 @@ export const ScreenplayKeymap = Extension.create({
 
                 // empty lines convert to logical next element or action
                 if (isEmpty) {
-                    if (currentType === "sceneHeading") {
+                    if (currentType === "sceneHeading" || currentType === "shot") {
                         return setBlockToType(editor, "action");
                     }
                     if (currentType === "character" || currentType === "dialogue" || currentType === "transition") {
@@ -72,9 +72,16 @@ export const ScreenplayKeymap = Extension.create({
                     if (currentType === "parenthetical") {
                         return setBlockToType(editor, "dialogue");
                     }
+                    if (currentType === "action") {
+                        return splitToType(editor, "action");
+                    }
                 }
 
-                if (currentType === "sceneHeading") {
+                if (currentType === "sceneHeading" || currentType === "shot") {
+                    return splitToType(editor, "action");
+                }
+
+                if (currentType === "action") {
                     return splitToType(editor, "action");
                 }
 
@@ -87,7 +94,7 @@ export const ScreenplayKeymap = Extension.create({
                 }
 
                 if (currentType === "dialogue") {
-                    return splitToType(editor, "action");
+                    return splitToType(editor, "character");
                 }
 
                 if (currentType === "transition") {
@@ -104,12 +111,9 @@ export const ScreenplayKeymap = Extension.create({
                 const parentNode = $from.parent;
                 const currentType = parentNode.type.name;
 
-                // screenplay continuity on shift+enter without switching element type
-                if (currentType === "dialogue") {
-                    return splitToType(editor, "dialogue");
-                }
-                if (currentType === "action") {
-                    return splitToType(editor, "action");
+                // shift+enter on action or dialogue creates a single-spaced soft line break
+                if (currentType === "action" || currentType === "dialogue") {
+                    return editor.commands.setHardBreak();
                 }
                 if (currentType === "character") {
                     return splitToType(editor, "dialogue");
@@ -117,7 +121,7 @@ export const ScreenplayKeymap = Extension.create({
                 if (currentType === "parenthetical") {
                     return splitToType(editor, "dialogue");
                 }
-                if (currentType === "sceneHeading" || currentType === "transition") {
+                if (currentType === "sceneHeading" || currentType === "transition" || currentType === "shot") {
                     return splitToType(editor, "action");
                 }
                 return splitToType(editor, currentType);
@@ -243,7 +247,12 @@ export const ScreenplayKeymap = Extension.create({
                     if (currentType === "parenthetical") {
                         return setBlockToType(editor, "dialogue");
                     }
-                    if (currentType === "character" || currentType === "transition" || currentType === "sceneHeading") {
+                    if (
+                        currentType === "character" ||
+                        currentType === "transition" ||
+                        currentType === "sceneHeading" ||
+                        currentType === "shot"
+                    ) {
                         return setBlockToType(editor, "action");
                     }
                 }
@@ -274,7 +283,7 @@ export const ScreenplayKeymap = Extension.create({
             "Mod-3": ({ editor }) => setBlockToType(editor, "character"),
             "Mod-4": ({ editor }) => setBlockToType(editor, "parenthetical"),
             "Mod-5": ({ editor }) => setBlockToType(editor, "dialogue"),
-            "Mod-6": ({ editor }) => setBlockToType(editor, "sceneHeading"),
+            "Mod-6": ({ editor }) => setBlockToType(editor, "shot"),
             "Mod-7": ({ editor }) => setBlockToType(editor, "transition")
         };
     }

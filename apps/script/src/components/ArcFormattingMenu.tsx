@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import type { Editor } from "@tiptap/react";
-import { MessageSquare, GitBranch, SlidersHorizontal, Volume2, Box, Hash, Link2, ChevronRight, Check } from "lucide-react";
+import { MessageSquare, GitBranch, SlidersHorizontal, Volume2, Box, Hash, Link2, ChevronRight, Check, Copy } from "lucide-react";
 import { SCREENPLAY_ELEMENT_ITEMS } from "./ArcElementMenu";
 
 export interface ArcFormattingMenuProps {
@@ -39,6 +39,7 @@ export function ArcFormattingMenu({
 }: ArcFormattingMenuProps) {
     const [activeSubmenu, setActiveSubmenu] = useState<ActiveSubmenu>("none");
     const [nestedSubmenu, setNestedSubmenu] = useState<NestedSubmenu>("none");
+    const [copiedText, setCopiedText] = useState(false);
     const [copiedLink, setCopiedLink] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -47,6 +48,7 @@ export function ArcFormattingMenu({
         if (!isOpen) {
             setActiveSubmenu("none");
             setNestedSubmenu("none");
+            setCopiedText(false);
             setCopiedLink(false);
             return;
         }
@@ -135,6 +137,28 @@ export function ArcFormattingMenu({
             editor.chain().focus().setNode("sceneHeading", { sceneNumber: "1" }).run();
         }
         onClose();
+    };
+
+    const handleCopyText = async () => {
+        if (typeof window === "undefined" || !editor) return;
+        try {
+            const { from, to, empty } = editor.state.selection;
+            let textToCopy = "";
+            if (!empty) {
+                textToCopy = editor.state.doc.textBetween(from, to, "\n");
+            } else {
+                textToCopy = editor.state.selection.$from.parent.textContent;
+            }
+            if (!textToCopy) return;
+            await navigator.clipboard.writeText(textToCopy);
+            setCopiedText(true);
+            setTimeout(() => {
+                setCopiedText(false);
+                onClose();
+            }, 700);
+        } catch {
+            onClose();
+        }
     };
 
     const handleCopyLink = () => {
@@ -583,7 +607,33 @@ export function ArcFormattingMenu({
                     </div>
                 </button>
 
-                {/* 8. Copy link */}
+                {/* 8. Copy text */}
+                <button
+                    type="button"
+                    onClick={handleCopyText}
+                    onMouseEnter={() => {
+                        setActiveSubmenu("none");
+                        setNestedSubmenu("none");
+                    }}
+                    className="flex items-center justify-between w-full h-[33px] px-2 rounded text-left hover:bg-[#25252b] text-zinc-300 transition-colors"
+                >
+                    <div className="flex items-center gap-2 min-w-0">
+                        {copiedText ? (
+                            <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                        ) : (
+                            <Copy className="w-4 h-4 text-zinc-400 shrink-0" />
+                        )}
+                        <span className="text-[12px] truncate">{copiedText ? "Copied!" : "Copy"}</span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono text-zinc-300 bg-[#282a30] leading-none">
+                            {cmdKey}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono text-zinc-300 bg-[#282a30] leading-none">C</span>
+                    </div>
+                </button>
+
+                {/* 9. Copy link */}
                 <button
                     type="button"
                     onClick={handleCopyLink}

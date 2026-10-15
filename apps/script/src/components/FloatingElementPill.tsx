@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import type { Editor } from "@tiptap/react";
-import { ChevronUp } from "lucide-react";
+import { ChevronUp, Copy } from "lucide-react";
 import { ArcElementMenu } from "./ArcElementMenu";
 
 interface FloatingElementPillProps {
@@ -42,10 +42,17 @@ const ELEMENT_INFO: Record<string, { label: string; nextEnter: string; nextTab: 
     },
     dialogue: {
         label: "Dialogue",
-        nextEnter: "Action",
+        nextEnter: "Character",
         nextTab: "Parenthetical",
         color: "text-emerald-400",
         dotColor: "bg-emerald-400"
+    },
+    shot: {
+        label: "Shot",
+        nextEnter: "Action",
+        nextTab: "Action",
+        color: "text-amber-300",
+        dotColor: "bg-amber-300"
     },
     transition: {
         label: "Transition",
@@ -58,6 +65,7 @@ const ELEMENT_INFO: Record<string, { label: string; nextEnter: string; nextTab: 
 
 export function FloatingElementPill({ editor, onStashSelection, hasSelection }: FloatingElementPillProps) {
     const [menuOpen, setMenuOpen] = useState(false);
+    const [copied, setCopied] = useState(false);
     if (!editor) return null;
 
     const currentType = editor.state.selection.$from.parent.type.name;
@@ -95,6 +103,27 @@ export function FloatingElementPill({ editor, onStashSelection, hasSelection }: 
                     Tab: <strong className="text-slate-200">{info.nextTab}</strong>
                 </span>
             </div>
+
+            {/* Quick Copy Selection button */}
+            {hasSelection && (
+                <button
+                    onClick={() => {
+                        if (typeof window === "undefined" || !editor) return;
+                        const { from, to, empty } = editor.state.selection;
+                        const text = empty ? editor.state.selection.$from.parent.textContent : editor.state.doc.textBetween(from, to, "\n");
+                        if (text) {
+                            navigator.clipboard.writeText(text);
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 1000);
+                        }
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-[#1d1f21] hover:bg-[#282a30] border border-white/15 rounded-full text-[10px] font-mono text-zinc-200 shadow-lg backdrop-blur-md transition-colors"
+                    title="Copy selection (Ctrl+C)"
+                >
+                    <Copy className="w-3 h-3 text-zinc-400" />
+                    <span>{copied ? "Copied!" : "Copy"}</span>
+                </button>
+            )}
 
             {/* Quick Stash Selection button */}
             {hasSelection && onStashSelection && (

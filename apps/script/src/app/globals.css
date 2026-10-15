@@ -302,6 +302,18 @@
     color: #f4f4f5;
 }
 
+/* shot: tighter top margin (1.0em) and semibold weight (600), no scene counter */
+.screenplay-element.shot {
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-top: calc(var(--margin-shot-spacing-before, 1) * 1em);
+    margin-bottom: 0.5em;
+    color: #f4f4f5;
+    letter-spacing: 0.02em;
+    position: relative;
+    text-align: var(--margin-shot-align, left);
+}
+
 /* Light Paper Theme (Classic Hollywood white page) */
 .screenplay-page-light {
     background-color: #ffffff !important;

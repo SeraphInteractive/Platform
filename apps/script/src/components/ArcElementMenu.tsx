@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from "react";
 import type { Editor } from "@tiptap/react";
-import { Image, User, Parentheses, MessageCircleMore, Video } from "lucide-react";
+import { Clapperboard, User, Parentheses, MessageCircleMore, Video } from "lucide-react";
 
 // custom running figure icon matching Arc Studio
 function RunningPersonIcon({ className = "w-4 h-4" }: { className?: string }) {
@@ -44,12 +44,12 @@ function TransitionSplitIcon({ className = "w-4 h-4" }: { className?: string }) 
 }
 
 export const SCREENPLAY_ELEMENT_ITEMS = [
-    { id: "sceneHeading", label: "Scene Heading", num: 1, icon: Image, targetNode: "sceneHeading" },
+    { id: "sceneHeading", label: "Scene Heading", num: 1, icon: Clapperboard, targetNode: "sceneHeading" },
     { id: "action", label: "Action", num: 2, icon: RunningPersonIcon, targetNode: "action" },
     { id: "character", label: "Character", num: 3, icon: User, targetNode: "character" },
     { id: "parenthetical", label: "Parenthetical", num: 4, icon: Parentheses, targetNode: "parenthetical" },
     { id: "dialogue", label: "Dialogue", num: 5, icon: MessageCircleMore, targetNode: "dialogue" },
-    { id: "shot", label: "Shot", num: 6, icon: Video, targetNode: "sceneHeading" },
+    { id: "shot", label: "Shot", num: 6, icon: Video, targetNode: "shot" },
     { id: "transition", label: "Transition", num: 7, icon: TransitionSplitIcon, targetNode: "transition" }
 ] as const;
 

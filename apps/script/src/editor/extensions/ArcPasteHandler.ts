@@ -241,6 +241,20 @@ export function parseScreenplayPlainText(text: string): JSONContent[] | null {
             continue;
         }
 
+        // shot detection
+        const isShotDescriptor =
+            /^(ANGLE ON|CLOSE UP|WIDE SHOT|POV|INSERT|EXTREME CLOSE UP|ESTABLISHING SHOT|TRACKING SHOT|PAN TO|REVERSE ANGLE|OVER THE SHOULDER|AERIAL SHOT)\b/i.test(
+                trimmed
+            );
+        if (isShotDescriptor && trimmed === trimmed.toUpperCase()) {
+            nodes.push({
+                type: "shot",
+                content: [{ type: "text", text: trimmed }]
+            });
+            isPrevCharOrParen = false;
+            continue;
+        }
+
         // character detection
         // uppercase line with length < 40, not starting with scene keywords
         const isUppercase = trimmed === trimmed.toUpperCase() && /[A-Z]/.test(trimmed);

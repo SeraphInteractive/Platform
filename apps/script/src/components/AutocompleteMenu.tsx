@@ -53,6 +53,10 @@ export function AutocompleteMenu({ suggestions, isOpen, selectedIndex, position,
                             data-suggestion-item
                             type="button"
                             onMouseEnter={() => onHover(index)}
+                            onMouseDown={(e) => {
+                                // prevent blur so editor maintains focus and selection
+                                e.preventDefault();
+                            }}
                             onClick={() => onSelect(item)}
                             className={`w-full text-left px-2.5 py-1.5 rounded-lg transition-colors flex items-center justify-between text-xs font-mono uppercase cursor-pointer ${
                                 isSelected ? "bg-[#2f3136] text-white font-medium" : "text-zinc-300 hover:bg-[#26282c] hover:text-white"
