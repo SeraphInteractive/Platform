@@ -121,4 +121,90 @@ describe("ScreenplayTypingEnhancements", () => {
             to: 18
         });
     });
+
+    it("handles insertText with a non-collapsed target range replacing text", () => {
+        let dispatchedTr: any = null;
+        let prevented = false;
+
+        const textNode = { nodeType: 3, textContent: "speling", parentNode: null };
+        const container = {
+            contains: (node: any) => node === textNode
+        };
+
+        const fakeState = {
+            selection: { from: 0, to: 0 },
+            tr: {
+                insertText: (text: string, from: number, to: number) => ({
+                    type: "insertText",
+                    text,
+                    from,
+                    to
+                })
+            }
+        };
+
+        const dummyView = {
+            dom: container,
+            state: fakeState,
+            posAtDOM: (node: any, offset: number) => 100 + offset,
+            dispatch: (tr: any) => {
+                dispatchedTr = tr;
+            }
+        } as unknown as EditorView;
+
+        const event = {
+            inputType: "insertText",
+            data: "spelling",
+            preventDefault: () => {
+                prevented = true;
+            },
+            getTargetRanges: () => [
+                {
+                    startContainer: textNode,
+                    startOffset: 0,
+                    endContainer: textNode,
+                    endOffset: 7
+                }
+            ]
+        } as unknown as InputEvent;
+
+        const handled = handleReplacementBeforeInput(dummyView, event);
+        expect(handled).toBe(true);
+        expect(prevented).toBe(true);
+        expect(dispatchedTr).toEqual({
+            type: "insertText",
+            text: "spelling",
+            from: 100,
+            to: 107
+        });
+    });
+
+    it("ignores insertText when target range is collapsed", () => {
+        const textNode = { nodeType: 3, textContent: "normal typing", parentNode: null };
+        const container = { contains: (node: any) => node === textNode };
+
+        const dummyView = {
+            dom: container,
+            state: { selection: { from: 105, to: 105 } },
+            posAtDOM: (_node: any, offset: number) => 100 + offset,
+            dispatch: () => {}
+        } as unknown as EditorView;
+
+        const event = {
+            inputType: "insertText",
+            data: "a",
+            preventDefault: () => {},
+            getTargetRanges: () => [
+                {
+                    startContainer: textNode,
+                    startOffset: 5,
+                    endContainer: textNode,
+                    endOffset: 5
+                }
+            ]
+        } as unknown as InputEvent;
+
+        const handled = handleReplacementBeforeInput(dummyView, event);
+        expect(handled).toBe(false);
+    });
 });

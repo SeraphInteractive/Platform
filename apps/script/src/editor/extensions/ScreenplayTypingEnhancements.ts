@@ -31,21 +31,27 @@ export const ScreenplayTypingPluginKey = new PluginKey("screenplayTypingEnhancem
 // grammarly and spellcheck replacement handling via beforeinput
 export function handleReplacementBeforeInput(view: EditorView, event: Event): boolean {
     const inputEvent = event as InputEvent;
-    if (inputEvent.inputType !== "insertReplacementText") {
+    const isReplacementType = inputEvent.inputType === "insertReplacementText";
+
+    // check if this is an explicit replacement or an insert replacing a non-collapsed target range
+    const getRanges = typeof inputEvent.getTargetRanges === "function" ? inputEvent.getTargetRanges() : [];
+    const hasTargetRange = Boolean(getRanges && getRanges.length > 0);
+
+    // if not insertReplacementText and no target ranges, let prosemirror handle normal typing
+    if (!isReplacementType && !hasTargetRange) {
         return false;
     }
 
     const replacementText = inputEvent.data ?? inputEvent.dataTransfer?.getData("text/plain") ?? "";
-    const getRanges = typeof inputEvent.getTargetRanges === "function" ? inputEvent.getTargetRanges() : [];
 
-    if (getRanges && getRanges.length > 0) {
+    if (hasTargetRange) {
         const range = getRanges[0];
         if (range) {
             try {
                 let startContainer: Node = range.startContainer;
-                const startOffset = range.startOffset;
+                let startOffset = range.startOffset;
                 let endContainer: Node = range.endContainer;
-                const endOffset = range.endOffset;
+                let endOffset = range.endOffset;
 
                 // climb out of extension shadow wrappers to reach prose mirror dom
                 while (startContainer && !view.dom.contains(startContainer) && startContainer.parentNode) {
@@ -55,9 +61,21 @@ export function handleReplacementBeforeInput(view: EditorView, event: Event): bo
                     endContainer = endContainer.parentNode;
                 }
 
+                // clamp offset if container is a text node
+                if (startContainer.nodeType === 3 && typeof startContainer.textContent === "string") {
+                    startOffset = Math.min(startOffset, startContainer.textContent.length);
+                }
+                if (endContainer.nodeType === 3 && typeof endContainer.textContent === "string") {
+                    endOffset = Math.min(endOffset, endContainer.textContent.length);
+                }
+
                 const from = view.posAtDOM(startContainer, startOffset);
                 const to = view.posAtDOM(endContainer, endOffset);
                 if (typeof from === "number" && typeof to === "number" && from <= to) {
+                    // if it is not insertReplacementText and range is collapsed, let prosemirror handle it
+                    if (!isReplacementType && from === to) {
+                        return false;
+                    }
                     event.preventDefault();
                     const tr = view.state.tr.insertText(replacementText, from, to);
                     view.dispatch(tr);
@@ -69,12 +87,36 @@ export function handleReplacementBeforeInput(view: EditorView, event: Event): bo
         }
     }
 
-    // fallback to active selection when ranges are unavailable
-    const { from, to } = view.state.selection;
-    event.preventDefault();
-    const tr = view.state.tr.insertText(replacementText, from, to);
-    view.dispatch(tr);
-    return true;
+    // fallback to active selection when ranges are unavailable or only for replacement events
+    if (isReplacementType) {
+        // inspect active dom selection if present inside editor dom
+        const domSel = typeof window !== "undefined" ? window.getSelection() : null;
+        if (domSel && domSel.rangeCount > 0) {
+            const domRange = domSel.getRangeAt(0);
+            if (view.dom.contains(domRange.startContainer) && view.dom.contains(domRange.endContainer)) {
+                try {
+                    const from = view.posAtDOM(domRange.startContainer, domRange.startOffset);
+                    const to = view.posAtDOM(domRange.endContainer, domRange.endOffset);
+                    if (typeof from === "number" && typeof to === "number" && from <= to) {
+                        event.preventDefault();
+                        const tr = view.state.tr.insertText(replacementText, from, to);
+                        view.dispatch(tr);
+                        return true;
+                    }
+                } catch {
+                    // fallback to view.state.selection
+                }
+            }
+        }
+
+        const { from, to } = view.state.selection;
+        event.preventDefault();
+        const tr = view.state.tr.insertText(replacementText, from, to);
+        view.dispatch(tr);
+        return true;
+    }
+
+    return false;
 }
 
 export const ScreenplayTypingEnhancements = Extension.create({

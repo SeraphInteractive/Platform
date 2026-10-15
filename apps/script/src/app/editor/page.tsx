@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useEditor, EditorContent } from "@tiptap/react";
+import { TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import CharacterCount from "@tiptap/extension-character-count";
@@ -344,13 +345,28 @@ function ScreenplayEditorContent() {
                         setSuggestionIndex(prevIdx);
                         return true;
                     }
-                    if (event.key === "Tab" || event.key === "Enter") {
+                    if (event.key === "Tab") {
                         event.preventDefault();
                         const selectedItem = suggestionsStateRef.current.items[suggestionsStateRef.current.index];
                         if (selectedItem) {
                             handleSelectSuggestionRef.current(selectedItem);
                         }
                         return true;
+                    }
+                    if (event.key === "Enter") {
+                        const hasTypedText = _view.state.selection.$from.parent.textContent.trim().length > 0;
+                        if (suggestionsStateRef.current.userInteracted || hasTypedText) {
+                            event.preventDefault();
+                            const selectedItem = suggestionsStateRef.current.items[suggestionsStateRef.current.index];
+                            if (selectedItem) {
+                                handleSelectSuggestionRef.current(selectedItem);
+                            }
+                            return true;
+                        }
+                        // dismiss suggestions on un-navigated empty lines so Enter formats normally
+                        suggestionsStateRef.current.isOpen = false;
+                        setShowSuggestions(false);
+                        return false;
                     }
                     if (event.key === "Escape") {
                         event.preventDefault();
@@ -657,14 +673,23 @@ function ScreenplayEditorContent() {
             const currentText = parentNode.textContent;
 
             const replaceTextAndAdvance = (newText: string, advanceToType?: string) => {
-                const tr = editor.state.tr;
-                tr.replaceWith(start, end, editor.state.schema.text(newText));
+                let tr = editor.state.tr;
+                if (newText) {
+                    tr = tr.replaceWith(start, end, editor.state.schema.text(newText));
+                } else if (start < end) {
+                    tr = tr.delete(start, end);
+                }
+                const endPos = start + newText.length;
                 if (advanceToType) {
                     const targetType = editor.state.schema.nodes[advanceToType];
                     if (targetType) {
-                        const newPos = start + newText.length;
-                        tr.split(newPos, 1, [{ type: targetType, attrs: {} }]);
+                        tr = tr.split(endPos, 1, [{ type: targetType, attrs: {} }]);
+                        tr = tr.setSelection(TextSelection.create(tr.doc, Math.min(tr.doc.content.size - 1, endPos + 1)));
+                    } else {
+                        tr = tr.setSelection(TextSelection.create(tr.doc, endPos));
                     }
+                } else {
+                    tr = tr.setSelection(TextSelection.create(tr.doc, endPos));
                 }
                 editor.view.dispatch(tr.scrollIntoView());
                 setShowSuggestions(false);
@@ -1778,9 +1803,19 @@ function ScreenplayEditorContent() {
                         <div className="flex-1 flex flex-col relative overflow-hidden bg-[#1a1c1f] border-r border-[#33353a]">
                             <main
                                 onContextMenu={(e) => {
+                                    // allow native context menu inside editor when no text is selected so spellcheck and extensions can show suggestions
+                                    const isInsideEditor = (e.target as HTMLElement)?.closest(".ProseMirror");
+                                    const hasSelection = editor && !editor.state.selection.empty;
+                                    if (isInsideEditor && !hasSelection) {
+                                        return;
+                                    }
                                     e.preventDefault();
                                     setContextMenuPos({ x: e.clientX, y: e.clientY });
                                     setIsContextMenuOpen(true);
+                                }}
+                                onScroll={() => {
+                                    // notify window of scroll so extensions (Grammarly, QuillBot, LanguageTool) update their overlay and card positions
+                                    window.dispatchEvent(new Event("scroll"));
                                 }}
                                 className="flex-1 overflow-y-auto relative"
                             >
@@ -1999,9 +2034,19 @@ function ScreenplayEditorContent() {
                     <div className="flex-1 flex flex-col relative overflow-hidden bg-[#1a1c1f]">
                         <main
                             onContextMenu={(e) => {
+                                // allow native context menu inside editor when no text is selected so spellcheck and extensions can show suggestions
+                                const isInsideEditor = (e.target as HTMLElement)?.closest(".ProseMirror");
+                                const hasSelection = editor && !editor.state.selection.empty;
+                                if (isInsideEditor && !hasSelection) {
+                                    return;
+                                }
                                 e.preventDefault();
                                 setContextMenuPos({ x: e.clientX, y: e.clientY });
                                 setIsContextMenuOpen(true);
+                            }}
+                            onScroll={() => {
+                                // notify window of scroll so extensions (Grammarly, QuillBot, LanguageTool) update their overlay and card positions
+                                window.dispatchEvent(new Event("scroll"));
                             }}
                             className="flex-1 overflow-y-auto relative"
                         >
