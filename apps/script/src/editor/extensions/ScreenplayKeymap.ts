@@ -1,4 +1,5 @@
 import { Extension } from "@tiptap/core";
+import { TextSelection } from "@tiptap/pm/state";
 import { canSplit } from "@tiptap/pm/transform";
 import { removePageBreak } from "../nodes/PageBreak";
 
@@ -17,6 +18,20 @@ function splitToType(editor: any, targetTypeName: string): boolean {
     }
 
     const pos = tr.mapping.map($from.pos);
+    const isAtStart = $from.parentOffset === 0 && $from.parent.content.size > 0;
+
+    if (isAtStart) {
+        // insert blank target block above when cursor is at start of existing block
+        const newBlock = targetType.createAndFill();
+        if (newBlock) {
+            const insertPos = $from.before();
+            tr.insert(insertPos, newBlock);
+            tr.setSelection(TextSelection.create(tr.doc, insertPos + 1));
+            view.dispatch(tr.scrollIntoView());
+            return true;
+        }
+    }
+
     const typesAfter = [{ type: targetType, attrs: {} }];
 
     if (canSplit(tr.doc, pos, 1, typesAfter)) {
@@ -243,7 +258,7 @@ export const ScreenplayKeymap = Extension.create({
                 }
 
                 // convert empty specialized blocks back to standard block on backspace
-                if (isEmpty || isAtStart) {
+                if (isEmpty) {
                     if (currentType === "parenthetical") {
                         return setBlockToType(editor, "dialogue");
                     }

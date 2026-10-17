@@ -328,6 +328,17 @@ function ScreenplayEditorContent() {
                 "data-grammarly-editor": "true",
                 "data-enable-grammarly": "true"
             },
+            handleDOMEvents: {
+                blur: () => {
+                    if (suggestionsStateRef.current.isOpen) {
+                        suggestionsStateRef.current.isOpen = false;
+                        suggestionsStateRef.current.items = [];
+                        suggestionsStateRef.current.userInteracted = false;
+                        setShowSuggestions(false);
+                    }
+                    return false;
+                }
+            },
             handleKeyDown: (_view, event) => {
                 if (suggestionsStateRef.current.isOpen && suggestionsStateRef.current.items.length > 0) {
                     if (event.key === "ArrowDown") {
@@ -357,8 +368,8 @@ function ScreenplayEditorContent() {
                         return true;
                     }
                     if (event.key === "Enter") {
-                        const hasTypedText = _view.state.selection.$from.parent.textContent.trim().length > 0;
-                        if (suggestionsStateRef.current.userInteracted || hasTypedText) {
+                        // only accept suggestions on Enter if user explicitly navigated into the list
+                        if (suggestionsStateRef.current.userInteracted) {
                             event.preventDefault();
                             const selectedItem = suggestionsStateRef.current.items[suggestionsStateRef.current.index];
                             if (selectedItem) {
@@ -366,7 +377,7 @@ function ScreenplayEditorContent() {
                             }
                             return true;
                         }
-                        // dismiss suggestions on un-navigated empty lines so Enter formats normally
+                        // dismiss suggestions on natural enter so Enter formats normally
                         suggestionsStateRef.current.isOpen = false;
                         setShowSuggestions(false);
                         return false;
@@ -557,6 +568,15 @@ function ScreenplayEditorContent() {
         const rawText = currentParent.textContent.toUpperCase();
         const text = rawText.trim();
 
+        // keep cursor independent when line is empty
+        if (!text) {
+            suggestionsStateRef.current.isOpen = false;
+            suggestionsStateRef.current.items = [];
+            suggestionsStateRef.current.userInteracted = false;
+            setShowSuggestions(false);
+            return;
+        }
+
         let newItems: string[] = [];
         let newTitle = "";
 
@@ -571,20 +591,20 @@ function ScreenplayEditorContent() {
                 const matchedPrefix = COMMON_PREFIXES.find((p) => rawText.startsWith(p + " "));
 
                 if (!matchedPrefix) {
-                    // Part 1: Scene prefix suggestions
+                    // Part 1: Scene prefix suggestions (only if user started typing)
                     newTitle = "Scene Type";
-                    newItems = COMMON_PREFIXES.filter((p) => !text || p.startsWith(text));
+                    newItems = COMMON_PREFIXES.filter((p) => p.startsWith(text) && p !== text);
                 } else {
                     // Part 2: Locations strictly from scenes already in the script
                     const query = rawText.slice(matchedPrefix.length).trim();
-                    const ctx = extractScriptContext(ed);
-                    if (ctx.locations.length > 0) {
-                        const filtered = ctx.locations.filter(
-                            (loc) => (!query || loc.startsWith(query) || loc.includes(query)) && loc !== query
-                        );
-                        if (filtered.length > 0) {
-                            newTitle = "Location";
-                            newItems = filtered.slice(0, 8);
+                    if (query.length > 0) {
+                        const ctx = extractScriptContext(ed);
+                        if (ctx.locations.length > 0) {
+                            const filtered = ctx.locations.filter((loc) => (loc.startsWith(query) || loc.includes(query)) && loc !== query);
+                            if (filtered.length > 0) {
+                                newTitle = "Location";
+                                newItems = filtered.slice(0, 8);
+                            }
                         }
                     }
                 }
@@ -593,34 +613,19 @@ function ScreenplayEditorContent() {
             newTitle = "Shot";
             const ctx = extractScriptContext(ed);
             const allShots = Array.from(new Set([...COMMON_SHOTS, ...ctx.shots]));
-            if (!text) {
-                newItems = allShots.slice(0, 8);
-            } else {
-                newItems = allShots.filter((s) => s.startsWith(text) && s !== text).slice(0, 8);
-            }
+            newItems = allShots.filter((s) => s.startsWith(text) && s !== text).slice(0, 8);
         } else if (currentType === "character") {
             const ctx = extractScriptContext(ed);
-            if (!text) {
-                if (ctx.characters.length > 0) {
-                    newTitle = "Character";
-                    newItems = ctx.characters.slice(0, 8);
-                }
-            } else {
-                newItems = ctx.characters.filter((c) => c.startsWith(text) && c !== text);
-                if (newItems.length > 0) {
-                    newTitle = "Character";
-                } else if (ctx.characters.includes(text) || text.length >= 2) {
-                    newItems = ["(V.O.)", "(O.S.)", "(CONT'D)"];
-                    newTitle = "Extension";
-                }
+            newItems = ctx.characters.filter((c) => c.startsWith(text) && c !== text);
+            if (newItems.length > 0) {
+                newTitle = "Character";
+            } else if (ctx.characters.includes(text) || text.length >= 2) {
+                newItems = ["(V.O.)", "(O.S.)", "(CONT'D)"];
+                newTitle = "Extension";
             }
         } else if (currentType === "transition") {
             newTitle = "Transition";
-            if (!text) {
-                newItems = COMMON_TRANSITIONS.slice(0, 8);
-            } else {
-                newItems = COMMON_TRANSITIONS.filter((t) => t.startsWith(text) && t !== text);
-            }
+            newItems = COMMON_TRANSITIONS.filter((t) => t.startsWith(text) && t !== text);
         } else if (currentType === "parenthetical") {
             newTitle = "Direction";
             const commonDirs = [
@@ -633,11 +638,7 @@ function ScreenplayEditorContent() {
                 "(quietly)",
                 "(sarcastic)"
             ];
-            if (!text) {
-                newItems = commonDirs.slice(0, 8);
-            } else {
-                newItems = commonDirs.filter((d) => d.toLowerCase().includes(text.toLowerCase()) && d.toLowerCase() !== text.toLowerCase());
-            }
+            newItems = commonDirs.filter((d) => d.toLowerCase().includes(text.toLowerCase()) && d.toLowerCase() !== text.toLowerCase());
         }
 
         if (newItems.length > 0) {
@@ -661,6 +662,13 @@ function ScreenplayEditorContent() {
         }
 
         suggestionsStateRef.current.isOpen = false;
+        setShowSuggestions(false);
+    }, []);
+
+    const handleCloseSuggestions = useCallback(() => {
+        suggestionsStateRef.current.isOpen = false;
+        suggestionsStateRef.current.items = [];
+        suggestionsStateRef.current.userInteracted = false;
         setShowSuggestions(false);
     }, []);
 
@@ -1842,9 +1850,25 @@ function ScreenplayEditorContent() {
                                             onDragOver={handleDragOver}
                                             onDrop={handleDrop}
                                             onClick={(e) => {
-                                                // focus editor at end if clicking empty bottom paper space
+                                                // focus editor at end or insert fresh action line if clicking empty bottom paper space
                                                 if (e.target === e.currentTarget && editor) {
-                                                    editor.commands.focus("end");
+                                                    const editorDom = editor.view.dom;
+                                                    const rect = editorDom.getBoundingClientRect();
+                                                    if (e.clientY > rect.bottom) {
+                                                        const { doc } = editor.state;
+                                                        const lastChild = doc.lastChild;
+                                                        if (lastChild && lastChild.textContent.trim().length > 0) {
+                                                            editor
+                                                                .chain()
+                                                                .insertContentAt(doc.content.size, { type: "action", content: [] })
+                                                                .focus("end")
+                                                                .run();
+                                                        } else {
+                                                            editor.commands.focus("end");
+                                                        }
+                                                    } else {
+                                                        editor.commands.focus();
+                                                    }
                                                 }
                                             }}
                                         >
@@ -2085,9 +2109,25 @@ function ScreenplayEditorContent() {
                                         onDragOver={handleDragOver}
                                         onDrop={handleDrop}
                                         onClick={(e) => {
-                                            // focus editor at end if clicking empty bottom paper space
+                                            // focus editor at end or insert fresh action line if clicking empty bottom paper space
                                             if (e.target === e.currentTarget && editor) {
-                                                editor.commands.focus("end");
+                                                const editorDom = editor.view.dom;
+                                                const rect = editorDom.getBoundingClientRect();
+                                                if (e.clientY > rect.bottom) {
+                                                    const { doc } = editor.state;
+                                                    const lastChild = doc.lastChild;
+                                                    if (lastChild && lastChild.textContent.trim().length > 0) {
+                                                        editor
+                                                            .chain()
+                                                            .insertContentAt(doc.content.size, { type: "action", content: [] })
+                                                            .focus("end")
+                                                            .run();
+                                                    } else {
+                                                        editor.commands.focus("end");
+                                                    }
+                                                } else {
+                                                    editor.commands.focus();
+                                                }
                                             }
                                         }}
                                     >
@@ -2280,6 +2320,7 @@ function ScreenplayEditorContent() {
                         suggestionsStateRef.current.userInteracted = true;
                     }}
                     onSelect={handleSelectSuggestion}
+                    onClose={handleCloseSuggestions}
                 />
 
                 {/* Right Drawers */}

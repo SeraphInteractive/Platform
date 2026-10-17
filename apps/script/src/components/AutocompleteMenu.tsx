@@ -9,11 +9,54 @@ interface AutocompleteMenuProps {
     position: { top: number; left: number } | null;
     onSelect: (item: string) => void;
     onHover: (index: number) => void;
+    onClose?: () => void;
     title: string;
 }
 
-export function AutocompleteMenu({ suggestions, isOpen, selectedIndex, position, onSelect, onHover, title }: AutocompleteMenuProps) {
+export function AutocompleteMenu({
+    suggestions,
+    isOpen,
+    selectedIndex,
+    position,
+    onSelect,
+    onHover,
+    onClose,
+    title
+}: AutocompleteMenuProps) {
     const menuRef = useRef<HTMLDivElement>(null);
+
+    // auto-dismiss menu when viewport moves or user clicks outside
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const handleMouseDown = (e: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+                onClose?.();
+            }
+        };
+
+        const handleDismiss = () => {
+            onClose?.();
+        };
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                onClose?.();
+            }
+        };
+
+        document.addEventListener("mousedown", handleMouseDown, true);
+        window.addEventListener("scroll", handleDismiss, true);
+        window.addEventListener("resize", handleDismiss);
+        window.addEventListener("keydown", handleKeyDown);
+
+        return () => {
+            document.removeEventListener("mousedown", handleMouseDown, true);
+            window.removeEventListener("scroll", handleDismiss, true);
+            window.removeEventListener("resize", handleDismiss);
+            window.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [isOpen, onClose]);
 
     // keep selected item scrolled into view
     useEffect(() => {
