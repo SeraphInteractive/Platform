@@ -16,19 +16,20 @@ export function calculateBayesianShrinkage(
     const globalMean = scheme.pointsPerBallot / entries;
     const { rawScore, appearanceCount: appearances } = breakdown;
 
-    if (prior === 0) {
+    if (prior === 0 || ballots === 0) {
         return {
             entryId: breakdown.entryId,
             rawScore,
             appearances,
-            priorK: 0,
+            priorK: prior,
             globalMean,
-            regularizedMeanScore: appearances > 0 ? rawScore / appearances : 0,
+            regularizedMeanScore: ballots > 0 ? rawScore / ballots : 0,
             regularizedTotalScore: rawScore
         };
     }
 
-    const regularizedMeanScore = (rawScore + prior * globalMean) / (appearances + prior);
+    // shrink against total contest ballots to avoid phantom points for zero-vote entries
+    const regularizedMeanScore = (rawScore + prior * globalMean) / (ballots + prior);
 
     return {
         entryId: breakdown.entryId,
@@ -37,7 +38,7 @@ export function calculateBayesianShrinkage(
         priorK: prior,
         globalMean,
         regularizedMeanScore,
-        regularizedTotalScore: ballots > 0 ? regularizedMeanScore * ballots : 0
+        regularizedTotalScore: regularizedMeanScore * ballots
     };
 }
 
@@ -50,5 +51,5 @@ export function calculateRegularizedLeaderboard(
 ): readonly BayesianShrinkageResult[] {
     return breakdowns
         .map((breakdown) => calculateBayesianShrinkage(breakdown, totalEntries, totalBallots, scheme, priorK))
-        .sort((a, b) => b.regularizedTotalScore - a.regularizedTotalScore);
+        .sort((a, b) => b.rawScore - a.rawScore || b.regularizedTotalScore - a.regularizedTotalScore || a.entryId.localeCompare(b.entryId));
 }

@@ -1,7 +1,8 @@
-import { ShotStatus } from "@platform/contracts";
+import { DocumentSlug, ShotStatus } from "@platform/contracts";
 import {
     ChannelType,
     PermissionFlagsBits,
+    WebhookClient,
     type CategoryChannel,
     type ForumChannel,
     type Guild,
@@ -11,14 +12,23 @@ import {
     type TextChannel
 } from "discord.js";
 import type { Logger } from "pino";
-import { message, panel } from "../Discord/Ui.js";
+import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
+import { message, panel, plain } from "../Discord/Ui.js";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
+import { htmlToDiscordMarkdown } from "../Views/NotificationViews.js";
 import { contributorRoleName, findStudioRole, normalizeName, permissionsForRole, studioRoles, StudioTier } from "./StudioRoles.js";
 
 export interface ProvisionSummary {
     readonly createdRoles: readonly string[];
     readonly createdChannels: readonly string[];
     readonly boundChannels: readonly string[];
+}
+
+export interface ServerProvisionerWebhooks {
+    readonly telemetry?: string;
+    readonly taskLogs?: string;
+    readonly moderationLogs?: string;
+    readonly rules?: string;
 }
 
 const forumTagNames: Readonly<Record<ShotStatus, string>> = {
@@ -50,67 +60,82 @@ const channelAliases: Readonly<Record<Exclude<ChannelPurpose, ChannelPurpose.Tas
 
 const forumName = "tasks";
 
+export function renderDocumentMarkdown(title: string, revision: number, sections: readonly { title: string; html: string }[]): string {
+    const lines: string[] = [`# ${plain(title)}`, "*Official community standards and pipeline etiquette.*", ""];
+    for (const section of sections) {
+        lines.push(`### ${section.title}`);
+        lines.push("");
+        lines.push(htmlToDiscordMarkdown(section.html));
+        lines.push("");
+    }
+    lines.push(`-# Revision ${revision} - Project Stairway Studio`);
+    return lines.join("\n").trim();
+}
+
 export const studioRules = [
     "# Project Stairway - Discord Rules",
     "*Official community standards and pipeline etiquette.*",
     "",
     "### 1. Conduct",
     "",
-    "• **Respect and Zero Tolerance:** Harassment, hate speech, slurs, doxxing, or personal attacks result in immediate removal.",
+    "- **Respect and Zero Tolerance:** Harassment, hate speech, slurs, doxxing, or personal attacks result in immediate removal.",
     "",
-    "• **PG-13 Standard:** Explicit, NSFW, gore, or disruptive media is strictly prohibited.",
+    "- **PG-13 Standard:** Explicit, NSFW, gore, or disruptive media is strictly prohibited.",
     "",
-    "• **No Spam or Promotion:** Unsolicited commercial advertising, DM self-promotion, and link spam are not allowed.",
+    "- **No Spam or Promotion:** Unsolicited commercial advertising, DM self-promotion, and link spam are not allowed.",
     "",
-    "• **Channel Discipline:** Keep discussions on-topic in designated department channels and production threads.",
+    "- **Channel Discipline:** Keep discussions on-topic in designated department channels and production threads.",
     "",
     "### 2. Moderation",
     "",
-    "• **Automated Inspection:** AutoMod actively deletes profanity, slurs, and obfuscated text variations across all channels.",
+    "- **Automated Inspection:** AutoMod actively deletes profanity, slurs, and obfuscated text variations across all channels.",
     "",
-    "• **Progressive Discipline:**\n• 1st Offence (5 warnings): 24-hour mute.\n• 2nd Offence (+3 warnings): 1-week mute.\n• 3rd Offence (+1 warning): 1-month server ban.",
+    "- **Progressive Discipline:**\n- 1st Offence (5 warnings): 24-hour mute.\n- 2nd Offence (+3 warnings): 1-week mute.\n- 3rd Offence (+1 warning): 1-month server ban.",
     "",
-    "• **Decay and Logs:** Infraction warnings decay after 30 days. All moderation actions are logged to staff channels.",
+    "- **Decay and Logs:** Infraction warnings decay after 30 days. All moderation actions are logged to staff channels.",
     "",
-    "• **Ban Apology Review:** Banned members can submit `/ban-apology` in direct messages with the bot for supervisor review.",
+    "- **Ban Apology Review:** Banned members can submit `/ban-apology` in direct messages with the bot for supervisor review.",
     "",
     "### 3. Permissions",
     "",
-    "• **Base Members:** Text-only access in public channels. File uploads, link embeds, and external emojis are restricted to prevent raids and spam.",
+    "- **Base Members:** Text-only access in public channels. File uploads, link embeds, and external emojis are restricted to prevent raids and spam.",
     "",
-    "• **Verified Voters:** Authenticated community members unlock file attachments, image uploads, link embeds, and external reactions.",
+    "- **Verified Voters:** Authenticated community members unlock file attachments, image uploads, link embeds, and external reactions.",
     "",
-    "• **Contributors:** Unlocks thread creation and active participation in task review discussions.",
+    "- **Contributors:** Unlocks thread creation and active participation in task review discussions.",
     "",
     "### 4. Grab-Box",
     "",
-    "• **Single Active Claim:** Contributors may hold only one active production task claim at a time.",
+    "- **Single Active Claim:** Contributors may hold only one active production task claim at a time.",
     "",
-    "• **Deadlines and Release:** Complete tasks within the allocated timeframe. If unable to finish, release the task promptly with `/release-task`.",
+    "- **Deadlines and Release:** Complete tasks within the allocated timeframe. If unable to finish, release the task promptly with `/release-task`.",
     "",
-    "• **Submission Standards:** Submissions must include packed, organized `.blend` files alongside compressed viewport preview video (`MP4`/`WebM`).",
+    "- **Submission Standards:** Submissions must include packed, organized `.blend` files alongside compressed viewport preview video (`MP4`/`WebM`).",
     "",
-    "• **Supervisor QA:** Deliverables must pass department supervisor review before merging into the master film timeline.",
+    "- **Supervisor QA:** Deliverables must pass department supervisor review before merging into the master film timeline.",
     "",
     "### 5. Charter & Links",
     "",
-    "• **Contributor Ownership:** You retain ownership of original work while granting the studio a perpetual license for film production and release.",
+    "- **Contributor Ownership:** You retain ownership of original work while granting the studio a perpetual license for film production and release.",
     "",
-    "• **Guidelines and Studio Charter:** [https://projectstairway.net/guidelines](https://projectstairway.net/guidelines)",
+    "- **Guidelines and Studio Charter:** [https://projectstairway.net/guidelines](https://projectstairway.net/guidelines)",
     "",
-    "• **Terms of Service:** [https://projectstairway.net/legal/terms](https://projectstairway.net/legal/terms)",
+    "- **Terms of Service:** [https://projectstairway.net/legal/terms](https://projectstairway.net/legal/terms)",
     "",
-    "• **Grab-Box Pipeline:** [https://projectstairway.net/grabbox](https://projectstairway.net/grabbox)",
+    "- **Grab-Box Pipeline:** [https://projectstairway.net/grabbox](https://projectstairway.net/grabbox)",
     "",
-    "• **Platform Dashboard:** [https://projectstairway.net](https://projectstairway.net)",
+    "- **Platform Dashboard:** [https://projectstairway.net](https://projectstairway.net)",
     "",
-    "-# Revision 1 • Project Stairway Studio"
+    "-# Revision 1 - Project Stairway Studio"
 ].join("\n");
 
 export class ServerProvisioner {
     public constructor(
         private readonly settings: SettingsStore,
-        private readonly logger: Logger
+        private readonly logger: Logger,
+        private readonly announcementsChannelId?: string,
+        private readonly api?: PlatformApiClient,
+        private readonly webhooks?: ServerProvisionerWebhooks
     ) {}
 
     public async bindExisting(guild: Guild): Promise<void> {
@@ -132,6 +157,10 @@ export class ServerProvisioner {
                     return aliases.some((alias) => normalizeName(alias) === normalized);
                 });
                 settings.channels[purpose] ??= match?.id;
+            }
+            if (this.announcementsChannelId !== undefined) {
+                // explicit configured announcements channel overrides name heuristic
+                settings.channels[ChannelPurpose.Announcements] = this.announcementsChannelId;
             }
             const forum = channels.find(
                 (channel) => channel !== null && channel.type === ChannelType.GuildForum && normalizeName(channel.name) === forumName
@@ -216,22 +245,32 @@ export class ServerProvisioner {
         ): Promise<TextChannel> => {
             const name = channelNames[purpose];
             const aliases = channelAliases[purpose];
-            const existing = channels.find((channel) => {
-                if (channel === null || channel.type !== ChannelType.GuildText) {
-                    return false;
-                }
-                const normalized = normalizeName(channel.name);
-                return aliases.some((alias) => normalizeName(alias) === normalized);
-            }) as TextChannel | undefined;
+            const configuredId = this.settings.channel(purpose);
+            const channelById = configuredId !== undefined ? channels.get(configuredId) : undefined;
+            const existing =
+                (channelById?.type === ChannelType.GuildText ? channelById : undefined) ??
+                (channels.find((channel) => {
+                    if (channel === null || channel.type !== ChannelType.GuildText) {
+                        return false;
+                    }
+                    const normalized = normalizeName(channel.name);
+                    return aliases.some((alias) => normalizeName(alias) === normalized);
+                }) as TextChannel | undefined);
 
             if (existing !== undefined) {
                 boundChannels.push(`#${existing.name}`);
-                // move to target parent category if misplaced
-                if (existing.parentId !== parent.id) {
-                    await existing.setParent(parent.id, { lockPermissions: false }).catch(() => undefined);
-                }
-                // sync permission overwrites so public channels (rules, welcome, announcements) stay visible
-                await existing.permissionOverwrites.set(overwrites).catch(() => undefined);
+                // ensure bot has basic access without modifying category hierarchy or overwriting existing permissions
+                await existing.permissionOverwrites
+                    .create(
+                        botId,
+                        {
+                            ViewChannel: true,
+                            SendMessages: true,
+                            ReadMessageHistory: true
+                        },
+                        { reason: "Ensure bot access to bound channel" }
+                    )
+                    .catch(() => undefined);
                 return existing;
             }
             createdChannels.push(`#${name}`);
@@ -282,37 +321,71 @@ export class ServerProvisioner {
             "Welcome to the studio! Member arrivals and onboarding.",
             readOnlyOverwrites
         );
+
         const announcements = await ensureText(
             ChannelPurpose.Announcements,
             platform,
             "Round results and studio news.",
             readOnlyOverwrites
         );
-        const telemetry = await ensureText(ChannelPurpose.Telemetry, staff, "Voting activity, bans and raid alerts.", privateOverwrites);
+
+        // telemetry channel (skip creating if webhook URL configured and channel not found)
+        const telemetryExisting = channels.find(
+            (channel) =>
+                channel !== null &&
+                channel.type === ChannelType.GuildText &&
+                channelAliases[ChannelPurpose.Telemetry].some((alias) => normalizeName(alias) === normalizeName(channel.name))
+        ) as TextChannel | undefined;
+        const telemetry =
+            this.webhooks?.telemetry !== undefined && telemetryExisting === undefined
+                ? undefined
+                : await ensureText(ChannelPurpose.Telemetry, staff, "Voting activity, bans and raid alerts.", privateOverwrites);
+
         const submissions = await ensureText(ChannelPurpose.TaskSubmissions, pipeline, "Deliverables waiting for review.", [
             { id: everyone, deny: [PermissionFlagsBits.ViewChannel] },
             ...staffRead,
             ...contributorRoles.map((role) => ({ id: role.id, allow: [PermissionFlagsBits.ViewChannel] })),
             botAccess
         ]);
-        const logs = await ensureText(ChannelPurpose.TaskLogs, staff, "Task activity log.", privateOverwrites);
-        const moderationLogs = await ensureText(
-            ChannelPurpose.ModerationLogs,
-            staff,
-            "Profanity warnings, timeouts, and AutoMod incident logs.",
-            privateOverwrites
-        );
+
+        // task logs channel (skip creating if webhook URL configured and channel not found)
+        const taskLogsExisting = channels.find(
+            (channel) =>
+                channel !== null &&
+                channel.type === ChannelType.GuildText &&
+                channelAliases[ChannelPurpose.TaskLogs].some((alias) => normalizeName(alias) === normalizeName(channel.name))
+        ) as TextChannel | undefined;
+        const logs =
+            this.webhooks?.taskLogs !== undefined && taskLogsExisting === undefined
+                ? undefined
+                : await ensureText(ChannelPurpose.TaskLogs, staff, "Task activity log.", privateOverwrites);
+
+        // moderation logs channel (skip creating if webhook URL configured and channel not found)
+        const modLogsExisting = channels.find(
+            (channel) =>
+                channel !== null &&
+                channel.type === ChannelType.GuildText &&
+                channelAliases[ChannelPurpose.ModerationLogs].some((alias) => normalizeName(alias) === normalizeName(channel.name))
+        ) as TextChannel | undefined;
+        const moderationLogs =
+            this.webhooks?.moderationLogs !== undefined && modLogsExisting === undefined
+                ? undefined
+                : await ensureText(
+                      ChannelPurpose.ModerationLogs,
+                      staff,
+                      "Profanity warnings, timeouts, and AutoMod incident logs.",
+                      privateOverwrites
+                  );
+
         const rules = await ensureText(
             ChannelPurpose.Rules,
             platform,
             "Community guidelines, voting invariants, and rules.",
             readOnlyOverwrites
         );
-        await welcome.setPosition(0).catch(() => undefined);
-        await rules.setPosition(1).catch(() => undefined);
-        await announcements.setPosition(2).catch(() => undefined);
 
         let forum = find(forumName, ChannelType.GuildForum) as ForumChannel | undefined;
+        const isExistingForum = forum !== undefined;
         if (forum === undefined) {
             forum = await guild.channels.create({
                 name: forumName,
@@ -325,26 +398,80 @@ export class ServerProvisioner {
         } else {
             boundChannels.push(forum.name);
         }
-        await this.ensureForumPermissions(forum);
+        await this.ensureForumPermissions(forum, isExistingForum);
         const tagged = await this.ensureForumTags(forum);
 
-        const pins = await rules.messages.fetchPinned().catch(() => null);
-        const botRulesMessage = pins?.find((msg) => msg.author.id === botId);
-        if (botRulesMessage !== undefined) {
-            await botRulesMessage.edit(message(panel(null, studioRules))).catch(() => undefined);
+        let rulesContent = studioRules;
+        if (this.api !== undefined) {
+            try {
+                const doc = await this.api.getDocument(DocumentSlug.Rules);
+                if (doc !== null && doc.sections.length > 0) {
+                    rulesContent = renderDocumentMarkdown(doc.title, doc.revision, doc.sections);
+                }
+            } catch {
+                // fall back to default rules content
+            }
+        }
+        const rulesPayload = message(panel(null, rulesContent));
+
+        if (this.webhooks?.rules !== undefined) {
+            try {
+                const webhook = new WebhookClient({ url: this.webhooks.rules });
+                const existingId = this.settings.rulesMessageId;
+                let edited = false;
+                if (existingId !== undefined) {
+                    try {
+                        await webhook.editMessage(existingId, {
+                            flags: rulesPayload.flags,
+                            components: rulesPayload.components,
+                            allowedMentions: rulesPayload.allowedMentions
+                        });
+                        edited = true;
+                    } catch {
+                        // ignore and post fresh message
+                    }
+                }
+                if (!edited) {
+                    const posted = await webhook.send({
+                        flags: rulesPayload.flags,
+                        components: rulesPayload.components,
+                        allowedMentions: rulesPayload.allowedMentions
+                    });
+                    await this.settings.update((settings) => {
+                        settings.rulesMessageId = posted.id;
+                    });
+                    await rules.messages.pin(posted.id).catch(() => undefined);
+                }
+            } catch (err: unknown) {
+                this.logger.warn({ err }, "failed to publish rules via webhook during setup");
+            }
         } else {
-            const posted = await rules.send(message(panel(null, studioRules)));
-            await posted.pin().catch(() => undefined);
+            const pins = await rules.messages.fetchPinned().catch(() => null);
+            const botRulesMessage = pins?.find((msg) => msg.author.id === botId);
+            if (botRulesMessage !== undefined) {
+                await botRulesMessage.edit(rulesPayload).catch(() => undefined);
+            } else {
+                const posted = await rules.send(rulesPayload);
+                await posted.pin().catch(() => undefined);
+            }
         }
 
         await this.settings.update((settings) => {
-            settings.channels[ChannelPurpose.Welcome] = welcome.id;
+            if (welcome !== undefined) {
+                settings.channels[ChannelPurpose.Welcome] = welcome.id;
+            }
             settings.channels[ChannelPurpose.Rules] = rules.id;
             settings.channels[ChannelPurpose.Announcements] = announcements.id;
-            settings.channels[ChannelPurpose.Telemetry] = telemetry.id;
+            if (telemetry !== undefined) {
+                settings.channels[ChannelPurpose.Telemetry] = telemetry.id;
+            }
             settings.channels[ChannelPurpose.TaskSubmissions] = submissions.id;
-            settings.channels[ChannelPurpose.TaskLogs] = logs.id;
-            settings.channels[ChannelPurpose.ModerationLogs] = moderationLogs.id;
+            if (logs !== undefined) {
+                settings.channels[ChannelPurpose.TaskLogs] = logs.id;
+            }
+            if (moderationLogs !== undefined) {
+                settings.channels[ChannelPurpose.ModerationLogs] = moderationLogs.id;
+            }
             settings.channels[ChannelPurpose.TaskForum] = tagged.id;
             settings.roles[BoundRole.Voter] = roleIds.get("Voters")?.id;
             settings.roles[BoundRole.Contributor] = roleIds.get(contributorRoleName)?.id;
@@ -376,9 +503,27 @@ export class ServerProvisioner {
         return updated;
     }
 
-    public async ensureForumPermissions(forum: ForumChannel): Promise<void> {
+    public async ensureForumPermissions(forum: ForumChannel, isExisting = false): Promise<void> {
         const guild = forum.guild;
         const botId = guild.client.user.id;
+        if (isExisting) {
+            // preserve existing permissions and only ensure bot access
+            await forum.permissionOverwrites
+                .create(
+                    botId,
+                    {
+                        ViewChannel: true,
+                        ReadMessageHistory: true,
+                        SendMessages: true,
+                        SendMessagesInThreads: true,
+                        CreatePublicThreads: true,
+                        ManageThreads: true
+                    },
+                    { reason: "Configure bot task forum permissions" }
+                )
+                .catch(() => undefined);
+            return;
+        }
         const everyone = guild.roles.everyone.id;
         const existingRoles = await guild.roles.fetch();
         const staffRoles = studioRoles

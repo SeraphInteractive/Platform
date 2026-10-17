@@ -26,7 +26,8 @@ const settingsSchema = z.object({
     channels: z.partialRecord(z.enum(ChannelPurpose), snowflake).default({}),
     roles: z.partialRecord(z.enum(BoundRole), snowflake).default({}),
     forumTags: z.partialRecord(z.enum(enumValues(ShotStatus)), snowflake).default({}),
-    notificationCursor: z.string().regex(notificationStreamIdPattern).nullable().default(null)
+    notificationCursor: z.string().regex(notificationStreamIdPattern).nullable().default(null),
+    rulesMessageId: snowflake.optional()
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -63,6 +64,10 @@ export class SettingsStore {
 
     public get notificationCursor(): string | null {
         return this.settings.notificationCursor;
+    }
+
+    public get rulesMessageId(): string | undefined {
+        return this.settings.rulesMessageId;
     }
 
     public snapshot(): Settings {

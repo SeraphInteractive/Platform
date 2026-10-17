@@ -304,7 +304,7 @@ export const apologyDecisionButtonHandler: ComponentHandler = {
                                 `Your ban apology has been reviewed and **APPROVED** by <@${interaction.user.id}>.\n\n` +
                                     `Your offences and warnings have been **automatically reset**.\n` +
                                     `Please review the server rules to avoid future disciplinary action:\n` +
-                                    `• [Discord Rules](https://dev-api.seraphinteractive.com/rules)`
+                                    `• [Discord Rules](https://dev-api.projectstairway.net/rules)`
                             )
                         )
                     )

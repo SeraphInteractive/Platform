@@ -42,7 +42,9 @@ export enum Specialty {
     LightingCompositingSupervisor = "lighting_compositing_supervisor",
     SoundDirector = "sound_director",
     Voter = "voter",
-    MediaTeam = "media_team"
+    MediaTeam = "media_team",
+    ModelingAndSurfacingLead = "modeling_and_surfacing_lead",
+    LightingAndVfxLead = "lighting_and_vfx_lead"
 }
 
 export const maximumSpecialties = 2;
@@ -82,19 +84,21 @@ export const selfSelectableSpecialties: readonly Specialty[] = [
     Specialty.VideoEditor
 ];
 
-export const adminSpecialties: readonly Specialty[] = [Specialty.Producer, Specialty.CreativeDirector, Specialty.ProductionManager];
+export const adminSpecialties: readonly Specialty[] = [
+    Specialty.Producer,
+    Specialty.CreativeDirector,
+    Specialty.ProductionManager,
+    Specialty.TechnicalDirector
+];
 
 export const supervisorSpecialties: readonly Specialty[] = [
-    Specialty.TechnicalDirector,
     Specialty.ArtDirector,
-    Specialty.EditorialSupervisor,
-    Specialty.LayoutPrevisLead,
-    Specialty.ModellingSupervisor,
+    Specialty.ModelingAndSurfacingLead,
     Specialty.RiggingSupervisor,
-    Specialty.SurfacingLookDevLead,
+    Specialty.LayoutPrevisLead,
     Specialty.AnimationSupervisor,
-    Specialty.CfxVfxSupervisor,
-    Specialty.LightingCompositingSupervisor,
+    Specialty.LightingAndVfxLead,
+    Specialty.EditorialSupervisor,
     Specialty.SoundDirector
 ];
 
@@ -105,6 +109,12 @@ export const teamSpecialties: readonly Specialty[] = [Specialty.MediaTeam];
 export const assignableSpecialties: readonly Specialty[] = [...adminSpecialties, ...supervisorSpecialties, ...teamSpecialties];
 
 export function specialtyLabel(specialty: Specialty): string {
+    if (specialty === Specialty.LightingAndVfxLead) {
+        return "Lighting and VFX Lead";
+    }
+    if (specialty === Specialty.ModelingAndSurfacingLead) {
+        return "Modeling and Surfacing Lead";
+    }
     const words = specialty.split("_").map((word) => (word === "3d" ? "3D" : `${word.charAt(0).toUpperCase()}${word.slice(1)}`));
     return words.join(" ");
 }
@@ -174,6 +184,11 @@ export const deliverableContentTypes: Readonly<Record<DeliverableKind, readonly 
     [DeliverableKind.Video]: ["video/mp4", "video/webm", "video/quicktime"],
     [DeliverableKind.Blend]: ["application/x-blender", "application/octet-stream"]
 };
+
+export enum ScreenplayRole {
+    Editor = "editor",
+    Viewer = "viewer"
+}
 
 export function enumValues<T extends Record<string, string>>(enumeration: T): [T[keyof T], ...T[keyof T][]] {
     return Object.values(enumeration) as [T[keyof T], ...T[keyof T][]];

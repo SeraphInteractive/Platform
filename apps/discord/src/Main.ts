@@ -38,9 +38,15 @@ async function main(): Promise<void> {
     });
     const api = new PlatformApiClient(configuration.apiBaseUrl, configuration.serviceToken, logger);
     const forum = new TaskForum(client, configuration.guildId, settings, api, logger);
-    const dispatcher = new NotificationDispatcher(client, configuration.guildId, settings, forum, logger);
+    const webhookUrls = {
+        telemetry: configuration.telemetryWebhookUrl,
+        taskLogs: configuration.taskLogsWebhookUrl,
+        moderationLogs: configuration.moderationLogsWebhookUrl,
+        rules: configuration.rulesWebhookUrl
+    };
+    const dispatcher = new NotificationDispatcher(client, configuration.guildId, settings, forum, logger, webhookUrls);
     const consumer = new NotificationConsumer(api, settings, (notification) => dispatcher.handle(notification), logger);
-    const provisioner = new ServerProvisioner(settings, logger);
+    const provisioner = new ServerProvisioner(settings, logger, configuration.announcementsChannelId, api, webhookUrls);
     const reminders = new ReminderStore(configuration.dataDirectory);
     await reminders.load();
     const reminderScheduler = new ReminderScheduler(client, reminders, logger);

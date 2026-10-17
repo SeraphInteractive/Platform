@@ -230,8 +230,9 @@ export class LeaderboardService {
             })
             .sort(
                 (a, b) =>
-                    (b.regularizedTotalScore ?? b.breakdown.rawScore) - (a.regularizedTotalScore ?? a.breakdown.rawScore) ||
                     b.breakdown.rawScore - a.breakdown.rawScore ||
+                    (b.regularizedTotalScore ?? b.breakdown.rawScore) - (a.regularizedTotalScore ?? a.breakdown.rawScore) ||
+                    (b.breakdown.rankCounts[0] ?? 0) - (a.breakdown.rankCounts[0] ?? 0) ||
                     a.breakdown.entryId.localeCompare(b.breakdown.entryId)
             );
 

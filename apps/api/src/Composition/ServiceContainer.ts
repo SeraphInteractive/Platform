@@ -26,6 +26,7 @@ import { DocumentsService } from "../Modules/Documents/DocumentsService.js";
 import { VerificationService } from "../Modules/Verification/VerificationService.js";
 import { UsersService } from "../Modules/Users/UsersService.js";
 import { AutoModService } from "../Modules/AutoMod/AutoModService.js";
+import { ScriptsService } from "../Modules/Scripts/ScriptsService.js";
 
 export interface Infrastructure {
     readonly database: Database;
@@ -63,6 +64,7 @@ export interface ServiceContainer extends Infrastructure {
     readonly verificationService: VerificationService;
     readonly documentsService: DocumentsService;
     readonly autoModService: AutoModService;
+    readonly scriptsService: ScriptsService;
 }
 
 export function createServiceContainer(
@@ -104,6 +106,7 @@ export function createServiceContainer(
         reviewsService: new ReviewsService(database, notifier, objectStorage),
         documentsService,
         autoModService: new AutoModService(database),
+        scriptsService: new ScriptsService(database, eventBus),
         verificationService: new VerificationService(
             database,
             keyValueStore,

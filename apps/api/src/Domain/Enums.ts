@@ -6,6 +6,7 @@ export {
     PollType,
     ReviewDecision,
     RoundStatus,
+    ScreenplayRole,
     ShotStatus,
     SubmissionStatus
 } from "@platform/contracts";

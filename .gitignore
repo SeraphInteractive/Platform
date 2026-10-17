@@ -12,3 +12,10 @@ npm-debug.log*
 .DS_Store
 .next/
 next-env.d.ts
+AGENTS.md
+GEMINI.md
+gemini.md
+.agent/
+.agents/
+.gemini/
+apps/script/data/

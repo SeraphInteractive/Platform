@@ -21,13 +21,14 @@ import {
 import { Kbd } from "@/Components/Ui/kbd";
 import { loginHref, useLogout, useSession } from "@/Hooks/UseSession";
 import { roundStatusLabels, shotStatusLabels } from "@/Lib/Format";
-import { isVisible } from "./AppSidebar";
+import { isVisible, useStudioAccess } from "./AppSidebar";
 import { navigationGroups } from "./Navigation";
 
 export function CommandMenu(): ReactNode {
     const router = useRouter();
     const pathname = usePathname();
     const { user } = useSession();
+    const hasStudioAccess = useStudioAccess(user);
     const logout = useLogout();
     const { resolvedTheme, setTheme } = useTheme();
     const [open, setOpen] = useState(false);
@@ -75,7 +76,7 @@ export function CommandMenu(): ReactNode {
                 <CommandList>
                     <CommandEmpty>Nothing matches that.</CommandEmpty>
                     {navigationGroups.map((group) => {
-                        const items = group.items.filter((item) => isVisible(item, user));
+                        const items = group.items.filter((item) => isVisible(item, user, hasStudioAccess));
                         return items.length === 0 ? null : (
                             <CommandGroup key={group.label} heading={group.label}>
                                 {items.map((item) => (
