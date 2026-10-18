@@ -6,7 +6,6 @@ import { createTestContext, json, serviceToken, type TestContext, type TestUser 
 describe("discord moderation API", () => {
     let context: TestContext;
     let supervisor: TestUser;
-    let moderator: TestUser;
     let voter: TestUser;
     const testUserId = "900000000000000001";
     const serviceHeaders = { authorization: `Bearer ${serviceToken}` };
@@ -14,7 +13,6 @@ describe("discord moderation API", () => {
     beforeAll(async () => {
         context = await createTestContext();
         supervisor = await context.createUser(Role.Supervisor);
-        moderator = await context.createUser(Role.Moderator);
         voter = await context.createUser(Role.Voter);
     });
 
@@ -22,7 +20,7 @@ describe("discord moderation API", () => {
         await context.close();
     });
 
-    it("rejects unauthorized and non-moderator requests", async () => {
+    it("rejects unauthorized and non-supervisor requests", async () => {
         const unauth = await context.application.inject({
             method: "GET",
             url: `/api/v1/discord/moderation/${testUserId}`
@@ -53,7 +51,7 @@ describe("discord moderation API", () => {
         expect(payload.apology.status).toBe("none");
     });
 
-    it("upserts and retrieves moderation records via service token and moderator", async () => {
+    it("upserts and retrieves moderation records via service token and supervisor", async () => {
         const updatePayload: UpdateUserModerationRecordDto = {
             offenceLevel: 1,
             stageWarnings: 2,
@@ -100,11 +98,11 @@ describe("discord moderation API", () => {
         expect(putData.apology.status).toBe("pending");
         expect(putData.apology.text).toBe("I am sorry for my behaviour.");
 
-        // get with moderator headers
+        // get with supervisor headers
         const getResponse = await context.application.inject({
             method: "GET",
             url: `/api/v1/discord/moderation/${testUserId}`,
-            headers: moderator.headers
+            headers: supervisor.headers
         });
         expect(getResponse.statusCode).toBe(200);
         const getData = json<{ data: UserModerationRecordDto }>(getResponse).data;
@@ -116,7 +114,7 @@ describe("discord moderation API", () => {
         const listResponse = await context.application.inject({
             method: "GET",
             url: "/api/v1/discord/moderation?offenceLevel=1&apologyStatus=pending",
-            headers: moderator.headers
+            headers: supervisor.headers
         });
         expect(listResponse.statusCode).toBe(200);
         const listData = json<{ data: UserModerationRecordDto[] }>(listResponse).data;
@@ -126,7 +124,7 @@ describe("discord moderation API", () => {
         const emptyList = await context.application.inject({
             method: "GET",
             url: "/api/v1/discord/moderation?offenceLevel=3",
-            headers: moderator.headers
+            headers: supervisor.headers
         });
         expect(emptyList.statusCode).toBe(200);
         const emptyData = json<{ data: UserModerationRecordDto[] }>(emptyList).data;

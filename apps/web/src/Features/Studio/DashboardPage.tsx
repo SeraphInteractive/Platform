@@ -267,7 +267,7 @@ export function DashboardPage(): ReactNode {
     const isAdmin = hasAtLeast(user, Role.Admin);
 
     return (
-        <RequireRole role={Role.Moderator}>
+        <RequireRole role={Role.Supervisor}>
             <PageHeader title="Studio" actions={isAdmin ? <AutoModDialog /> : undefined} />
             <Dashboard />
         </RequireRole>

@@ -7,6 +7,7 @@ import {
     type ModeratedUserDto,
     problemOf,
     Role,
+    selfSelectableSpecialties,
     type Specialty,
     type SpecialtyHolderDto,
     supervisorSpecialties,
@@ -15,7 +16,7 @@ import {
     type UserDto
 } from "@platform/contracts";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { UserPlus } from "lucide-react";
+import { Search, UserPlus } from "lucide-react";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { platformApi } from "@/Api/PlatformApi";
@@ -44,6 +45,7 @@ import { safeHttpUrl } from "@/Lib/SafeUrl";
 import { cn } from "@/Lib/Utils";
 
 const anyRole = "any";
+const anySpecialty = "any";
 
 function grantableRoles(actor: UserDto): Role[] {
     return rolesByRank.filter((role) => isGrantable(role) && (hasAtLeast(actor, Role.Admin) || outranks(actor.role, role)));
@@ -323,6 +325,7 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
                     </Avatar>
                     <div className="min-w-0">
                         <span className="truncate font-medium block">{target.username}</span>
+                        <span className="text-muted-foreground font-mono text-[11px] block truncate">{target.discordId}</span>
                         {personalSpecialties.length > 0 && (
                             <span className="text-muted-foreground text-xs truncate block">
                                 {personalSpecialties.map(specialtyLabel).join(", ")}
@@ -508,8 +511,26 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
 
 function PeopleTable({ actor }: { readonly actor: UserDto }): ReactNode {
     const [role, setRole] = useState<Role | typeof anyRole>(anyRole);
+    const [specialty, setSpecialty] = useState<Specialty | "none" | typeof anySpecialty>(anySpecialty);
+    const [discordIdInput, setDiscordIdInput] = useState("");
+    const [debouncedDiscordId, setDebouncedDiscordId] = useState("");
     const [page, setPage] = useState(1);
-    const query = { page, perPage: 20, role: role === anyRole ? undefined : role };
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedDiscordId(discordIdInput.trim());
+            setPage(1);
+        }, 250);
+        return () => clearTimeout(timer);
+    }, [discordIdInput]);
+
+    const query = {
+        page,
+        perPage: 20,
+        role: role === anyRole ? undefined : role,
+        specialty: specialty === anySpecialty ? undefined : specialty,
+        discordId: debouncedDiscordId.length === 0 ? undefined : debouncedDiscordId
+    };
     const users = useQuery({
         queryKey: queryKeys.users(query),
         queryFn: () => platformApi.users(query),
@@ -530,6 +551,16 @@ function PeopleTable({ actor }: { readonly actor: UserDto }): ReactNode {
                     )
                 }
             >
+                <div className="relative">
+                    <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
+                    <Input
+                        placeholder="Search Discord ID..."
+                        value={discordIdInput}
+                        onChange={(e) => setDiscordIdInput(e.target.value)}
+                        className="h-8 pl-8 text-xs w-44 sm:w-56"
+                        aria-label="Search Discord ID"
+                    />
+                </div>
                 <Select
                     value={role}
                     onValueChange={(value) => {
@@ -537,16 +568,63 @@ function PeopleTable({ actor }: { readonly actor: UserDto }): ReactNode {
                         setPage(1);
                     }}
                 >
-                    <SelectTrigger size="sm" className="w-44" aria-label="Role">
+                    <SelectTrigger size="sm" className="w-40" aria-label="Role">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value={anyRole}>Any role</SelectItem>
+                        <SelectItem value={anyRole}>Any primary role</SelectItem>
                         {rolesByRank.map((item) => (
                             <SelectItem key={item} value={item}>
                                 {roleLabels[item]}
                             </SelectItem>
                         ))}
+                    </SelectContent>
+                </Select>
+                <Select
+                    value={specialty}
+                    onValueChange={(value) => {
+                        setSpecialty(value as Specialty | "none" | typeof anySpecialty);
+                        setPage(1);
+                    }}
+                >
+                    <SelectTrigger size="sm" className="w-48" aria-label="Secondary Role">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value={anySpecialty}>Any secondary role</SelectItem>
+                        <SelectItem value="none">No secondary role</SelectItem>
+                        <SelectGroup>
+                            <SelectLabel>Admin Roles</SelectLabel>
+                            {adminSpecialties.map((item) => (
+                                <SelectItem key={item} value={item}>
+                                    {specialtyLabel(item)}
+                                </SelectItem>
+                            ))}
+                        </SelectGroup>
+                        <SelectGroup>
+                            <SelectLabel>Supervisor Roles</SelectLabel>
+                            {supervisorSpecialties.map((item) => (
+                                <SelectItem key={item} value={item}>
+                                    {specialtyLabel(item)}
+                                </SelectItem>
+                            ))}
+                        </SelectGroup>
+                        <SelectGroup>
+                            <SelectLabel>Team Roles</SelectLabel>
+                            {teamSpecialties.map((item) => (
+                                <SelectItem key={item} value={item}>
+                                    {specialtyLabel(item)}
+                                </SelectItem>
+                            ))}
+                        </SelectGroup>
+                        <SelectGroup>
+                            <SelectLabel>Craft Specialties</SelectLabel>
+                            {selfSelectableSpecialties.map((item) => (
+                                <SelectItem key={item} value={item}>
+                                    {specialtyLabel(item)}
+                                </SelectItem>
+                            ))}
+                        </SelectGroup>
                     </SelectContent>
                 </Select>
             </Toolbar>
@@ -708,7 +786,7 @@ function PeopleContent(): ReactNode {
 export function PeoplePage(): ReactNode {
     const { user } = useSession();
     return (
-        <RequireRole role={Role.Moderator}>
+        <RequireRole role={Role.Supervisor}>
             <PageHeader
                 title="People"
                 actions={

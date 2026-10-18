@@ -53,7 +53,6 @@ const perMinuteLimits: Readonly<Record<Role | "service" | "anonymous", number>> 
     [Role.Voter]: 120,
     [Role.Contributor]: 300,
     [Role.SeniorContributor]: 300,
-    [Role.Moderator]: 500,
     [Role.Supervisor]: 500,
     [Role.Admin]: 1000,
     [Role.SuperAdmin]: 1000,
@@ -215,7 +214,7 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
 
     await application.register(
         async (api) => {
-            api.get("/openapi.json", { schema: { hide: true }, preHandler: requireRole(Role.Moderator) }, async () =>
+            api.get("/openapi.json", { schema: { hide: true }, preHandler: requireRole(Role.Supervisor) }, async () =>
                 application.swagger()
             );
             await api.register(healthRoutes, { services });

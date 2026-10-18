@@ -106,7 +106,7 @@ function RoundLoader({ roundId }: { readonly roundId: string }): ReactNode {
 
 export function RoundPage({ roundId }: { readonly roundId: string }): ReactNode {
     return (
-        <RequireRole role={Role.Moderator}>
+        <RequireRole role={Role.Supervisor}>
             <RoundLoader roundId={roundId} />
         </RequireRole>
     );

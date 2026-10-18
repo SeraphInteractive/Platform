@@ -47,7 +47,7 @@ function EntryDetailDialog({
     readonly isMyEntry: boolean;
 }): ReactNode {
     const { user } = useSession();
-    const isStaff = user !== null && hasAtLeast(user, Role.Moderator);
+    const isStaff = user !== null && hasAtLeast(user, Role.Supervisor);
     if (entry === null) {
         return null;
     }
@@ -373,7 +373,7 @@ function RoundDetail({ round }: { readonly round: RoundDetailDto }): ReactNode {
                     )
                 }
             />
-            {hasAtLeast(user, Role.Moderator) && round.warnings.length > 0 && (
+            {hasAtLeast(user, Role.Supervisor) && round.warnings.length > 0 && (
                 <Alert className="mb-6">
                     <AlertTriangle />
                     <AlertTitle>Staff note</AlertTitle>

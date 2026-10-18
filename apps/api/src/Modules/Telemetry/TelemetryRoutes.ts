@@ -39,7 +39,7 @@ function toTelemetryResponse(record: RaidTelemetryRecord): z.infer<typeof teleme
 export const telemetryRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
     const { database, eventBus, configuration } = services;
     const security = [{ bearer: [] }];
-    const moderator = requireRole(Role.Moderator);
+    const supervisor = requireRole(Role.Supervisor);
     const openStreams = new Map<string, number>();
     const shutdownHandlers = new Set<() => void>();
 
@@ -59,7 +59,7 @@ export const telemetryRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer
     application.get(
         "/rounds/:roundId/telemetry",
         {
-            preHandler: moderator,
+            preHandler: supervisor,
             schema: {
                 tags: ["Telemetry"],
                 summary: "Latest raid telemetry snapshot for every entry in a round.",
@@ -82,7 +82,7 @@ export const telemetryRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer
     application.get(
         "/rounds/:roundId/entries/:entryId/telemetry",
         {
-            preHandler: moderator,
+            preHandler: supervisor,
             schema: {
                 tags: ["Telemetry"],
                 summary: "Recent raid telemetry history for an entry.",
@@ -106,7 +106,7 @@ export const telemetryRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer
     application.get(
         "/rounds/:roundId/events",
         {
-            preHandler: moderator,
+            preHandler: supervisor,
             schema: {
                 tags: ["Telemetry"],
                 summary: "Server-sent event stream of ballots, raid alerts and finalization for a round.",

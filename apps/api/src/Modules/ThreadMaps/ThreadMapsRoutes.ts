@@ -17,7 +17,7 @@ function toThreadMapResponse(map: ShotThreadMapRecord): z.infer<typeof threadMap
 export const threadMapsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
     const { database } = services;
     const security = [{ bearer: [] }];
-    const reader = requireRoleOrService(Role.Moderator);
+    const reader = requireRoleOrService(Role.Supervisor);
     const writer = requireRoleOrService(Role.Supervisor);
 
     application.get(

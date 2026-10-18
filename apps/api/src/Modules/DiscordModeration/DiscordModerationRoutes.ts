@@ -35,15 +35,13 @@ function toRecordResponse(record: DiscordModerationRecord): UserModerationRecord
 export const discordModerationRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
     const { database } = services;
     const security = [{ bearer: [] }];
-    // allow service token or moderators to read and record infractions
-    const moderatorOrService = requireRoleOrService(Role.Moderator);
-    // require supervisor or service token to reset records
+    // allow service token or supervisors to read and record infractions
     const supervisorOrService = requireRoleOrService(Role.Supervisor);
 
     application.get(
         "/discord/moderation",
         {
-            preHandler: moderatorOrService,
+            preHandler: supervisorOrService,
             schema: {
                 tags: ["Discord"],
                 summary: "List all user moderation records.",
@@ -74,7 +72,7 @@ export const discordModerationRoutes: FastifyPluginAsyncZod<{ services: ServiceC
     application.get(
         "/discord/moderation/:userId",
         {
-            preHandler: moderatorOrService,
+            preHandler: supervisorOrService,
             schema: {
                 tags: ["Discord"],
                 summary: "Get moderation record for a user.",
@@ -109,7 +107,7 @@ export const discordModerationRoutes: FastifyPluginAsyncZod<{ services: ServiceC
     application.put(
         "/discord/moderation/:userId",
         {
-            preHandler: moderatorOrService,
+            preHandler: supervisorOrService,
             schema: {
                 tags: ["Discord"],
                 summary: "Upsert moderation record for a user.",

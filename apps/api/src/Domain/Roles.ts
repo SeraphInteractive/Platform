@@ -19,7 +19,6 @@ const roleRanks: Readonly<Record<Role, number>> = Object.freeze({
     [Role.Voter]: 1,
     [Role.Contributor]: 2,
     [Role.SeniorContributor]: 3,
-    [Role.Moderator]: 4,
     [Role.Supervisor]: 4,
     [Role.Admin]: 5,
     [Role.SuperAdmin]: 6
@@ -29,7 +28,6 @@ const specialtyRoles: ReadonlySet<Role> = new Set([
     Role.SuperAdmin,
     Role.Admin,
     Role.Supervisor,
-    Role.Moderator,
     Role.SeniorContributor,
     Role.Contributor,
     Role.Voter,

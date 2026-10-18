@@ -56,7 +56,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
                 label: "Dashboard",
                 description: "Everything waiting on staff",
                 icon: LayoutDashboard,
-                minimumRole: Role.Moderator,
+                minimumRole: Role.Supervisor,
                 exact: true
             },
             {
@@ -71,14 +71,14 @@ export const navigationGroups: readonly NavigationGroup[] = [
                 label: "Rounds",
                 description: "Run voting rounds and moderate entries",
                 icon: ListChecks,
-                minimumRole: Role.Moderator
+                minimumRole: Role.Supervisor
             },
             {
                 href: "/studio/telemetry" as Route,
                 label: "Telemetry",
                 description: "Raid detection, invariance, and ballot network",
                 icon: Activity,
-                minimumRole: Role.Moderator
+                minimumRole: Role.Supervisor
             },
             {
                 href: "/studio/reviews",
@@ -99,7 +99,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
                 label: "People",
                 description: "Roles, specialties and voting access",
                 icon: Users,
-                minimumRole: Role.Moderator
+                minimumRole: Role.Supervisor
             },
             {
                 href: "/studio/content",

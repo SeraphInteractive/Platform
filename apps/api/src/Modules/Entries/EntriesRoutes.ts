@@ -28,7 +28,7 @@ export const entriesRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
         {
             schema: {
                 tags: ["Entries"],
-                summary: "List entries. The public sees approved entries only; moderators can filter by status.",
+                summary: "List entries. The public sees approved entries only; supervisors can filter by status.",
                 params: roundParams,
                 querystring: paginationQuerySchema.extend({ status: z.enum(EntryStatus).optional() }),
                 response: { 200: pageEnvelope(entrySchema), ...errorResponses }

@@ -5,7 +5,6 @@ export enum Role {
     Voter = "voter",
     Contributor = "contributor",
     SeniorContributor = "senior_contributor",
-    Moderator = "moderator",
     Supervisor = "supervisor",
     Admin = "admin",
     SuperAdmin = "super_admin",

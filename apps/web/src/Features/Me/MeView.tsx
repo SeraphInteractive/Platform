@@ -311,7 +311,7 @@ export function MeView(): ReactNode {
                     <Alert variant="destructive">
                         <AlertTitle>Voting is paused on your account</AlertTitle>
                         <AlertDescription>
-                            Your ballots aren&apos;t counted. If you think this is a mistake, talk to a moderator on Discord.
+                            Your ballots aren&apos;t counted. If you think this is a mistake, talk to a supervisor on Discord.
                         </AlertDescription>
                     </Alert>
                 )}

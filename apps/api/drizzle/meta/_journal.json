@@ -127,6 +127,13 @@
       "when": 1792344498581,
       "tag": "0017_silly_flatman",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792345000000,
+      "tag": "0018_remap_moderator_to_supervisor",
+      "breakpoints": true
     }
   ]
 }

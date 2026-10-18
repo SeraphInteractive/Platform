@@ -5,7 +5,6 @@ const roleRanks: Readonly<Record<Role, number>> = {
     [Role.Voter]: 1,
     [Role.Contributor]: 2,
     [Role.SeniorContributor]: 3,
-    [Role.Moderator]: 4,
     [Role.Supervisor]: 4,
     [Role.Admin]: 5,
     [Role.SuperAdmin]: 6
@@ -16,7 +15,6 @@ export const roleLabels: Readonly<Record<Role, string>> = {
     [Role.Voter]: "Voter",
     [Role.Contributor]: "Contributor",
     [Role.SeniorContributor]: "Senior Contributor",
-    [Role.Moderator]: "Supervisor",
     [Role.Supervisor]: "Supervisor",
     [Role.Admin]: "Admin",
     [Role.SuperAdmin]: "Super admin"

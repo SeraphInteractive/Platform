@@ -60,7 +60,6 @@ const roleOrder: readonly Role[] = [
     Role.Voter,
     Role.Contributor,
     Role.SeniorContributor,
-    Role.Moderator,
     Role.Supervisor,
     Role.Admin,
     Role.SuperAdmin

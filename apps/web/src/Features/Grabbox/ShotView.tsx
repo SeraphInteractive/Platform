@@ -161,7 +161,7 @@ function ActionPanel({ shot, user }: { readonly shot: ShotDetailDto; readonly us
             return (
                 <div className="space-y-3">
                     <p className="text-sm text-destructive">
-                        Your account has been blacklisted and cannot submit work on this task. Reach out to a moderator on Discord.
+                        Your account has been blacklisted and cannot submit work on this task. Reach out to a supervisor on Discord.
                     </p>
                     <ReleaseButton shot={shot} isClaimant />
                 </div>
@@ -197,7 +197,7 @@ function ActionPanel({ shot, user }: { readonly shot: ShotDetailDto; readonly us
         );
     }
     if (user.isBlacklisted) {
-        return <p className="text-sm">Your account can&apos;t claim tasks right now. Reach out to a moderator on Discord.</p>;
+        return <p className="text-sm">Your account can&apos;t claim tasks right now. Reach out to a supervisor on Discord.</p>;
     }
     if (shot.isSeniorLocked && !hasAtLeast(user, Role.SeniorContributor)) {
         return (

@@ -183,9 +183,6 @@ export class AuthService {
         if (assignments.supervisors.includes(discordId)) {
             return Role.Supervisor;
         }
-        if (assignments.moderators.includes(discordId)) {
-            return Role.Moderator;
-        }
         if (assignments.seniorContributors.includes(discordId)) {
             return Role.SeniorContributor;
         }

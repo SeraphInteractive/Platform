@@ -83,8 +83,8 @@ describe("roles", () => {
     });
 
     it("checks minimum roles", () => {
-        expect(hasAtLeast(user(Role.Supervisor), Role.Moderator)).toBe(true);
-        expect(hasAtLeast(user(Role.Contributor), Role.Moderator)).toBe(false);
+        expect(hasAtLeast(user(Role.Supervisor), Role.Contributor)).toBe(true);
+        expect(hasAtLeast(user(Role.Contributor), Role.Supervisor)).toBe(false);
         expect(hasAtLeast(null, Role.Voter)).toBe(false);
     });
 

@@ -20,7 +20,8 @@ export const queryKeys = {
     shot: (shotId: string) => ["shot", shotId] as const,
     reviewQueue: (query: PageQuery) => ["reviews", query] as const,
     reviewsAll: ["reviews"] as const,
-    users: (query: PageQuery & { readonly role?: string }) => ["users", query] as const,
+    users: (query: PageQuery & { readonly role?: string; readonly specialty?: string; readonly discordId?: string }) =>
+        ["users", query] as const,
     usersAll: ["users"] as const,
     entry: (roundId: string, entryId: string) => ["round", roundId, "entry", entryId] as const,
     entryTelemetry: (roundId: string, entryId: string) => ["round", roundId, "telemetry", entryId] as const,

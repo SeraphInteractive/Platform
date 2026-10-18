@@ -305,7 +305,13 @@ export class PlatformApi {
         return (await request(path, dataEnvelope(submissionSchema), { method: "POST", body: { decision, notes } })).data;
     }
 
-    public async users(query: PageQuery & { readonly role?: Role }): Promise<Page<ModeratedUserDto>> {
+    public async users(
+        query: PageQuery & {
+            readonly role?: Role;
+            readonly specialty?: Specialty | "none";
+            readonly discordId?: string;
+        }
+    ): Promise<Page<ModeratedUserDto>> {
         return request("/users", pageEnvelope(moderatedUserSchema), { query: { ...query } });
     }
 

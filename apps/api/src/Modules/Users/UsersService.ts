@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, ne, sql, type SQL } from "drizzle-orm";
 import { ConflictError, ErrorCode, ForbiddenError, NotFoundError } from "../../Common/Errors/ApplicationError.js";
 import { createPage, offsetOf, type Page, type PaginationQuery } from "../../Common/Http/Schemas.js";
 import type { Actor } from "../../Common/Security/Principal.js";
@@ -34,6 +34,8 @@ export interface RoleChange {
 
 export interface UserListQuery extends PaginationQuery {
     readonly role?: Role;
+    readonly specialty?: Specialty | "none";
+    readonly discordId?: string;
 }
 
 export class UsersService {
@@ -85,16 +87,33 @@ export class UsersService {
     }
 
     public async list(query: UserListQuery): Promise<Page<UserRecord>> {
-        const filter = query.role === undefined ? undefined : eq(users.role, query.role);
+        const conditions: SQL[] = [];
+        if (query.role !== undefined) {
+            conditions.push(eq(users.role, query.role));
+        }
+        if (query.specialty !== undefined) {
+            if (query.specialty === "none") {
+                conditions.push(sql`cardinality(${users.specialties}) = 0`);
+            } else {
+                conditions.push(sql`${query.specialty} = ANY(${users.specialties})`);
+            }
+        }
+        if (query.discordId !== undefined) {
+            const trimmed = query.discordId.replace(/[<@!>]/g, "").trim();
+            if (trimmed.length > 0) {
+                conditions.push(ilike(users.discordId, `%${trimmed}%`));
+            }
+        }
+        const whereClause = conditions.length === 0 ? undefined : and(...conditions);
         const [rows, totals] = await Promise.all([
             this.database
                 .select()
                 .from(users)
-                .where(filter)
+                .where(whereClause)
                 .orderBy(desc(users.createdAt), desc(users.id))
                 .limit(query.perPage)
                 .offset(offsetOf(query)),
-            this.database.select({ total: count() }).from(users).where(filter)
+            this.database.select({ total: count() }).from(users).where(whereClause)
         ]);
         return createPage(rows, totals[0]?.total ?? 0, query);
     }
