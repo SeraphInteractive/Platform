@@ -22,7 +22,8 @@ import { WarningStore } from "./State/WarningStore.js";
 async function main(): Promise<void> {
     const configuration = loadBotConfiguration();
     const logger = createLogger(configuration.logLevel, configuration.logFormat === "pretty");
-    const settings = new SettingsStore(configuration.dataDirectory);
+    const api = new PlatformApiClient(configuration.apiBaseUrl, configuration.serviceToken, logger);
+    const settings = new SettingsStore(configuration.dataDirectory, api, configuration.guildId);
     await settings.load();
 
     const warnings = new WarningStore(configuration.dataDirectory);
@@ -36,7 +37,6 @@ async function main(): Promise<void> {
             GatewayIntentBits.MessageContent
         ]
     });
-    const api = new PlatformApiClient(configuration.apiBaseUrl, configuration.serviceToken, logger);
     const forum = new TaskForum(client, configuration.guildId, settings, api, logger);
     const webhookUrls = {
         telemetry: configuration.telemetryWebhookUrl,

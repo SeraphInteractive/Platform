@@ -45,7 +45,10 @@ import {
     type Specialty,
     type SubmissionDto,
     type UserDto,
-    type AutoModRuleDto
+    type AutoModRuleDto,
+    discordSettingsSchema,
+    type DiscordSettingsDto,
+    type UpdateDiscordSettingsDto
 } from "@platform/contracts";
 
 import type { Logger } from "pino";
@@ -187,6 +190,26 @@ export class PlatformApiClient {
 
     public async listAutoModRules(): Promise<readonly AutoModRuleDto[]> {
         return (await this.send("/automod", dataEnvelope(z.array(autoModRuleSchema)))).data;
+    }
+
+    public async getDiscordSettings(guildId: string): Promise<DiscordSettingsDto | null> {
+        try {
+            return (await this.send(`/discord/settings/${guildId}`, dataEnvelope(discordSettingsSchema))).data;
+        } catch (error: unknown) {
+            if (error instanceof PlatformApiError && error.status === 404) {
+                return null;
+            }
+            throw error;
+        }
+    }
+
+    public async updateDiscordSettings(guildId: string, input: UpdateDiscordSettingsDto): Promise<DiscordSettingsDto> {
+        return (
+            await this.send(`/discord/settings/${guildId}`, dataEnvelope(discordSettingsSchema), {
+                method: "PUT",
+                body: input
+            })
+        ).data;
     }
 
     public async isHealthy(): Promise<{ healthy: boolean; latencyMs: number }> {

@@ -50,6 +50,35 @@ describe("settings store", () => {
             rulesMessageId: "100000000000000003"
         });
     });
+
+    it("loads from remote API and syncs updates", async () => {
+        directory = await mkdtemp(join(tmpdir(), "platform-discord-"));
+        let remoteSettings: Record<string, unknown> = {
+            guildId: "100000000000000001",
+            channels: { [ChannelPurpose.Welcome]: "200000000000000001" },
+            roles: {},
+            forumTags: {},
+            notificationCursor: "5-0",
+            rulesMessageId: null
+        };
+        const mockApi = {
+            getDiscordSettings: async () => remoteSettings as never,
+            updateDiscordSettings: async (_guildId: string, input: Record<string, unknown>) => {
+                remoteSettings = { ...remoteSettings, ...input };
+                return remoteSettings as never;
+            }
+        };
+        const store = new SettingsStore(directory, mockApi as never, "100000000000000001");
+        await store.load();
+        expect(store.channel(ChannelPurpose.Welcome)).toBe("200000000000000001");
+        expect(store.notificationCursor).toBe("5-0");
+
+        await store.update((settings) => {
+            settings.channels[ChannelPurpose.Telemetry] = "200000000000000002";
+        });
+        await store.flush();
+        expect((remoteSettings.channels as Record<string, string>)[ChannelPurpose.Telemetry]).toBe("200000000000000002");
+    });
 });
 
 describe("configuration", () => {

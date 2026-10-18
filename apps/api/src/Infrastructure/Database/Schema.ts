@@ -279,6 +279,25 @@ export const shotThreadMaps = pgTable("shot_thread_maps", {
     ...timestamps
 });
 
+export const discordSettings = pgTable("discord_settings", {
+    guildId: varchar("guild_id", { length: 20 }).primaryKey(),
+    channels: jsonb("channels")
+        .$type<Record<string, string>>()
+        .notNull()
+        .default(sql`'{}'::jsonb`),
+    roles: jsonb("roles")
+        .$type<Record<string, string>>()
+        .notNull()
+        .default(sql`'{}'::jsonb`),
+    forumTags: jsonb("forum_tags")
+        .$type<Record<string, string>>()
+        .notNull()
+        .default(sql`'{}'::jsonb`),
+    notificationCursor: varchar("notification_cursor", { length: 64 }),
+    rulesMessageId: varchar("rules_message_id", { length: 20 }),
+    ...timestamps
+});
+
 export const pipelineProgress = pgTable(
     "pipeline_progress",
     {
@@ -450,6 +469,7 @@ export type RoundResultRecord = typeof roundResults.$inferSelect;
 export type ShotRecord = typeof shots.$inferSelect;
 export type SubmissionRecord = typeof submissions.$inferSelect;
 export type ShotThreadMapRecord = typeof shotThreadMaps.$inferSelect;
+export type DiscordSettingsRecord = typeof discordSettings.$inferSelect;
 export type PipelineProgressRecord = typeof pipelineProgress.$inferSelect;
 export type DeletedStorageObjectRecord = typeof deletedStorageObjects.$inferSelect;
 export type AutomodRuleRecord = typeof automodRules.$inferSelect;

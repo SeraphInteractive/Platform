@@ -113,6 +113,13 @@
       "when": 1792004092150,
       "tag": "0015_remap_legacy_supervisor_specialties",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792343244756,
+      "tag": "0016_open_abomination",
+      "breakpoints": true
     }
   ]
 }

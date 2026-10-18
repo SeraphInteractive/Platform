@@ -552,3 +552,29 @@ export type ScreenplayDto = z.infer<typeof screenplaySchema>;
 export type CreateScreenplayDto = z.input<typeof createScreenplaySchema>;
 export type UpdateScreenplayDto = z.input<typeof updateScreenplaySchema>;
 export type ScreenplayEventDto = z.infer<typeof screenplayEventSchema>;
+
+export const discordSettingsSchema = z
+    .object({
+        guildId: snowflakeSchema,
+        channels: z.record(z.string(), snowflakeSchema).default({}),
+        roles: z.record(z.string(), snowflakeSchema).default({}),
+        forumTags: z.record(z.string(), snowflakeSchema).default({}),
+        notificationCursor: z.string().nullable().default(null),
+        rulesMessageId: snowflakeSchema.nullable().default(null),
+        createdAt: timestampSchema.optional(),
+        updatedAt: timestampSchema.optional()
+    })
+    .meta({ id: "DiscordSettings" });
+
+export const updateDiscordSettingsSchema = z
+    .object({
+        channels: z.record(z.string(), snowflakeSchema).optional(),
+        roles: z.record(z.string(), snowflakeSchema).optional(),
+        forumTags: z.record(z.string(), snowflakeSchema).optional(),
+        notificationCursor: z.string().nullable().optional(),
+        rulesMessageId: snowflakeSchema.nullable().optional()
+    })
+    .meta({ id: "UpdateDiscordSettings" });
+
+export type DiscordSettingsDto = z.infer<typeof discordSettingsSchema>;
+export type UpdateDiscordSettingsDto = z.input<typeof updateDiscordSettingsSchema>;
