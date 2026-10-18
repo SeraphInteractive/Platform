@@ -53,10 +53,21 @@ function isQuickTime(buffer: Buffer): boolean {
 }
 
 function isBlender(buffer: Buffer): boolean {
-    if (buffer.length < 7) {
+    if (buffer.length < 4) {
         return false;
     }
-    return buffer.toString("ascii", 0, 7) === "BLENDER";
+    if (buffer.length >= 7 && buffer.toString("ascii", 0, 7) === "BLENDER") {
+        return true;
+    }
+    // zstd compression is blender 3.0+ default
+    if (hasPrefix(buffer, [0x28, 0xb5, 0x2f, 0xfd])) {
+        return true;
+    }
+    // gzip compression was used in blender 2.x
+    if (hasPrefix(buffer, [0x1f, 0x8b])) {
+        return true;
+    }
+    return false;
 }
 
 export function matchesContentType(buffer: Buffer | null, contentType: string): boolean {
