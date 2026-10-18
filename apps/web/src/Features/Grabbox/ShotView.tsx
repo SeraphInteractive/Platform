@@ -231,7 +231,13 @@ function DownloadLink({ href, label }: { readonly href: string | null; readonly 
     );
 }
 
-function SubmissionTimeline({ submissions }: { readonly submissions: readonly SubmissionDto[] }): ReactNode {
+function SubmissionTimeline({
+    submissions,
+    isStaff
+}: {
+    readonly submissions: readonly SubmissionDto[];
+    readonly isStaff: boolean;
+}): ReactNode {
     if (submissions.length === 0) {
         return <p className="text-muted-foreground text-sm">No submissions.</p>;
     }
@@ -259,18 +265,20 @@ function SubmissionTimeline({ submissions }: { readonly submissions: readonly Su
                             <p className="whitespace-pre-line">{submission.supervisorNotes}</p>
                         </div>
                     )}
-                    <div className="flex flex-wrap gap-2">
-                        <DownloadLink href={submission.videoUrl} label="Video" />
-                        <DownloadLink href={submission.blendUrl} label="Project file" />
-                        {safeHttpUrl(submission.vaultUrl ?? null) !== null && (
-                            <Button asChild size="xs" variant="outline">
-                                <a href={safeHttpUrl(submission.vaultUrl ?? null)!} target="_blank" rel="noopener noreferrer">
-                                    <FolderOpen />
-                                    Vault
-                                </a>
-                            </Button>
-                        )}
-                    </div>
+                    {isStaff && (
+                        <div className="flex flex-wrap gap-2">
+                            <DownloadLink href={submission.videoUrl} label="Video" />
+                            <DownloadLink href={submission.blendUrl} label="Project file" />
+                            {safeHttpUrl(submission.vaultUrl ?? null) !== null && (
+                                <Button asChild size="xs" variant="outline">
+                                    <a href={safeHttpUrl(submission.vaultUrl ?? null)!} target="_blank" rel="noopener noreferrer">
+                                        <FolderOpen />
+                                        Vault
+                                    </a>
+                                </Button>
+                            )}
+                        </div>
+                    )}
                 </li>
             ))}
         </ol>
@@ -329,7 +337,7 @@ function ShotDetail({ shot }: { readonly shot: ShotDetailDto }): ReactNode {
                         )}
                     </Section>
                     <Section title="Submissions">
-                        <SubmissionTimeline submissions={shot.submissions} />
+                        <SubmissionTimeline submissions={shot.submissions} isStaff={hasAtLeast(user, Role.Supervisor)} />
                     </Section>
                 </div>
                 <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">

@@ -205,12 +205,12 @@ export class ShotsService {
         const isStaff = viewer !== null && hasAtLeast(viewer.role, Role.Supervisor);
         const views = await Promise.all(
             submissionRows.map(async (item) => {
-                const canDownload = isStaff || (viewer !== null && item.submission.contributorId === viewer.id);
+                const canViewNotes = isStaff || (viewer !== null && item.submission.contributorId === viewer.id);
                 return {
-                    submission: canDownload ? item.submission : { ...item.submission, notes: null, supervisorNotes: null },
+                    submission: canViewNotes ? item.submission : { ...item.submission, notes: null, supervisorNotes: null },
                     contributor: item.contributor,
                     reviewer: item.reviewer,
-                    ...(await this.downloadUrls(item.submission, canDownload, isStaff))
+                    ...(await this.downloadUrls(item.submission, isStaff, isStaff))
                 };
             })
         );
@@ -420,7 +420,7 @@ export class ShotsService {
         this.assertActiveClaim(shot, user);
         return this.storage.createUpload(
             StorageBucket.Deliverables,
-            createDeliverableKey(shotId, user.id, fileName),
+            createDeliverableKey(shot.shotCode, fileName),
             input.contentType,
             input.sizeBytes
         );
@@ -430,9 +430,31 @@ export class ShotsService {
         if (user.isBlacklisted) {
             throw new ForbiddenError("Your account cannot submit tasks.", ErrorCode.UserBlacklisted);
         }
+        const [shotRecord] = await this.database.select().from(shots).where(eq(shots.id, shotId)).limit(1);
+        if (shotRecord === undefined) {
+            throw new NotFoundError("Shot");
+        }
         const maxBytes = this.storageConfiguration.deliverableMaxBytes;
-        await assertDeliverable(this.storage, input.videoKey, DeliverableKind.Video, shotId, user.id, maxBytes, "videoKey");
-        await assertDeliverable(this.storage, input.blendKey, DeliverableKind.Blend, shotId, user.id, maxBytes, "blendKey");
+        await assertDeliverable(
+            this.storage,
+            input.videoKey,
+            DeliverableKind.Video,
+            shotRecord.shotCode,
+            shotId,
+            user.id,
+            maxBytes,
+            "videoKey"
+        );
+        await assertDeliverable(
+            this.storage,
+            input.blendKey,
+            DeliverableKind.Blend,
+            shotRecord.shotCode,
+            shotId,
+            user.id,
+            maxBytes,
+            "blendKey"
+        );
 
         const buffer = await this.storage.getObject(StorageBucket.Deliverables, input.videoKey, 524288);
         const detection = inspectMediaAiSignatures(buffer);

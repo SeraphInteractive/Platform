@@ -72,12 +72,7 @@ describe("shot grab-box", () => {
         });
         expect(upload.statusCode).toBe(201);
         const { key } = json<Envelope<{ key: string }>>(upload).data;
-        expect(key).toMatch(
-            new RegExp(
-                `^Project Stairway/Submission Reviews/Pending/shots/${shotId}/${voter.record.id}/[0-9a-f-]{36}-final_cut\\.mp4$`,
-                "u"
-            )
-        );
+        expect(key).toBe("Project Stairway/Submission Reviews/Pending/SC01-010/final_cut.mp4");
 
         const blendUpload = await context.application.inject({
             method: "POST",
@@ -87,6 +82,7 @@ describe("shot grab-box", () => {
         });
         expect(blendUpload.statusCode).toBe(201);
         const blendKey = json<Envelope<{ key: string }>>(blendUpload).data.key;
+        expect(blendKey).toBe("Project Stairway/Submission Reviews/Pending/SC01-010/project.blend");
 
         const missing = await context.application.inject({
             method: "POST",
@@ -107,7 +103,7 @@ describe("shot grab-box", () => {
         expect(submitted.statusCode).toBe(201);
         const submission = json<Envelope<{ id: string; version: number; videoUrl: string | null }>>(submitted).data;
         expect(submission.version).toBe(1);
-        expect(submission.videoUrl).not.toBeNull();
+        expect(submission.videoUrl).toBeNull();
 
         // submitting work promotes voter to contributor
         const [updatedUser] = await context.database.select().from(users).where(eq(users.id, voter.record.id));
@@ -116,12 +112,24 @@ describe("shot grab-box", () => {
         const publicDetail = await context.application.inject({ method: "GET", url: `/api/v1/shots/${shotId}` });
         expect(json<Envelope<{ submissions: { videoUrl: string | null }[] }>>(publicDetail).data.submissions[0]?.videoUrl).toBeNull();
 
+        const claimantDetail = await context.application.inject({ method: "GET", url: `/api/v1/shots/${shotId}`, headers: voter.headers });
+        expect(json<Envelope<{ submissions: { videoUrl: string | null }[] }>>(claimantDetail).data.submissions[0]?.videoUrl).toBeNull();
+
+        const supervisorDetail = await context.application.inject({
+            method: "GET",
+            url: `/api/v1/shots/${shotId}`,
+            headers: supervisor.headers
+        });
+        expect(
+            json<Envelope<{ submissions: { videoUrl: string | null }[] }>>(supervisorDetail).data.submissions[0]?.videoUrl
+        ).not.toBeNull();
+
         const queue = await context.application.inject({ method: "GET", url: "/api/v1/reviews", headers: supervisor.headers });
         const queueItems = json<{ data: { id: string; vaultUrl: string | null }[] }>(queue).data;
         expect(queueItems.map((item) => item.id)).toContain(submission.id);
         const queueEntry = queueItems.find((item) => item.id === submission.id);
         expect(queueEntry?.vaultUrl).toBe(
-            `https://vault.test/apps/files/folders?dir=/Project%20Stairway/Submission%20Reviews/Pending/shots/${shotId}/${voter.record.id}`
+            `https://vault.test/apps/files/folders?dir=/Project%20Stairway/Submission%20Reviews/Pending/SC01-010`
         );
 
         const revision = await context.application.inject({

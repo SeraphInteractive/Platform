@@ -15,6 +15,7 @@ import { StorageBucket, type PresignedUpload } from "../../Infrastructure/Storag
 import { createMediaKey, MediaContentType } from "./MediaPolicy.js";
 import { consumeUploadQuota, UploadQuota } from "./UploadQuota.js";
 import { matchesContentType, matchesDeliverableKind } from "./MagicBytes.js";
+import { deliverableVaultPendingPrefix } from "../Shots/DeliverablePolicy.js";
 
 export function toPresignedUploadResponse(upload: PresignedUpload): z.infer<typeof presignedUploadSchema> {
     return {
@@ -94,7 +95,11 @@ export const uploadsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
                 if (!matchesContentType(buffer, contentType)) {
                     throw new BadRequestError("The uploaded file signature does not match its content type.", ErrorCode.ValidationFailed);
                 }
-            } else if ((key.startsWith("shots/") || key.includes("/shots/")) && key.includes(`/${user.id}/`)) {
+            } else if (
+                key.startsWith(deliverableVaultPendingPrefix) ||
+                key.startsWith("Pending/") ||
+                ((key.startsWith("shots/") || key.includes("/shots/")) && key.includes(`/${user.id}/`))
+            ) {
                 bucket = StorageBucket.Deliverables;
                 if (!objectStorage.isEnabled(bucket)) {
                     throw new ServiceUnavailableError("Deliverables storage is not configured.");
