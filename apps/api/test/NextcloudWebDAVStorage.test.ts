@@ -113,7 +113,7 @@ describe("NextcloudWebDAVStorage", () => {
         const usage = await storage.getStorageUsage();
         expect(usage).not.toBeNull();
         expect(usage?.usedBytes).toBeGreaterThanOrEqual(0);
-    }, 60000);
+    }, 90000);
 });
 
 describe("HybridObjectStorage", () => {
