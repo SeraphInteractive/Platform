@@ -2,6 +2,7 @@
 
 import {
     adminSpecialties,
+    assignableSpecialties,
     fieldRules,
     type ModeratedUserDto,
     problemOf,
@@ -58,67 +59,56 @@ function canManage(actor: UserDto, target: ModeratedUserDto): boolean {
 }
 
 function canManageSecondary(actor: UserDto, target: ModeratedUserDto): boolean {
-    if (target.role === Role.Member || target.role === Role.Voter || target.role === Role.Contributor) {
-        return false;
-    }
     return hasAtLeast(actor, Role.Admin) || canManage(actor, target);
 }
 
 interface SpecialtySelectContentProps {
     readonly holders: Record<Specialty, SpecialtyHolderDto | null>;
-    readonly targetRole?: Role;
     readonly currentSpecialty?: Specialty | null;
     readonly targetId?: string;
 }
 
-function SpecialtySelectContent({ holders, targetRole, targetId }: SpecialtySelectContentProps): ReactNode {
-    const showAdmin = targetRole === undefined || hasAtLeast(targetRole, Role.Admin);
-    const showSupervisor = targetRole === undefined || targetRole === Role.Supervisor;
-    const showTeam = targetRole === undefined || hasAtLeast(targetRole, Role.SeniorContributor);
+function SpecialtySelectContent({ holders, currentSpecialty, targetId }: SpecialtySelectContentProps): ReactNode {
+    const isCustomCraft = currentSpecialty !== null && currentSpecialty !== undefined && !assignableSpecialties.includes(currentSpecialty);
 
     return (
         <SelectContent>
             <SelectItem value="__none__">None</SelectItem>
-            {showAdmin && (
-                <SelectGroup>
-                    <SelectLabel>Admin Roles</SelectLabel>
-                    {adminSpecialties.map((s) => {
-                        const holder = holders[s];
-                        const isHeldElsewhere = holder !== null && holder !== undefined && holder.id !== targetId;
-                        return (
-                            <SelectItem key={s} value={s}>
-                                {specialtyLabel(s)}
-                                {isHeldElsewhere && ` (held by @${holder.username})`}
-                            </SelectItem>
-                        );
-                    })}
-                </SelectGroup>
-            )}
-            {showSupervisor && (
-                <SelectGroup>
-                    <SelectLabel>Supervisor Roles</SelectLabel>
-                    {supervisorSpecialties.map((s) => {
-                        const holder = holders[s];
-                        const isHeldElsewhere = holder !== null && holder !== undefined && holder.id !== targetId;
-                        return (
-                            <SelectItem key={s} value={s}>
-                                {specialtyLabel(s)}
-                                {isHeldElsewhere && ` (held by @${holder.username})`}
-                            </SelectItem>
-                        );
-                    })}
-                </SelectGroup>
-            )}
-            {showTeam && (
-                <SelectGroup>
-                    <SelectLabel>Team Roles</SelectLabel>
-                    {teamSpecialties.map((s) => (
+            {isCustomCraft && <SelectItem value={currentSpecialty}>{specialtyLabel(currentSpecialty)} (Craft)</SelectItem>}
+            <SelectGroup>
+                <SelectLabel>Admin Roles</SelectLabel>
+                {adminSpecialties.map((s) => {
+                    const holder = holders[s];
+                    const isHeldElsewhere = holder !== null && holder !== undefined && holder.id !== targetId;
+                    return (
                         <SelectItem key={s} value={s}>
                             {specialtyLabel(s)}
+                            {isHeldElsewhere && ` (held by @${holder.username})`}
                         </SelectItem>
-                    ))}
-                </SelectGroup>
-            )}
+                    );
+                })}
+            </SelectGroup>
+            <SelectGroup>
+                <SelectLabel>Supervisor Roles</SelectLabel>
+                {supervisorSpecialties.map((s) => {
+                    const holder = holders[s];
+                    const isHeldElsewhere = holder !== null && holder !== undefined && holder.id !== targetId;
+                    return (
+                        <SelectItem key={s} value={s}>
+                            {specialtyLabel(s)}
+                            {isHeldElsewhere && ` (held by @${holder.username})`}
+                        </SelectItem>
+                    );
+                })}
+            </SelectGroup>
+            <SelectGroup>
+                <SelectLabel>Team Roles</SelectLabel>
+                {teamSpecialties.map((s) => (
+                    <SelectItem key={s} value={s}>
+                        {specialtyLabel(s)}
+                    </SelectItem>
+                ))}
+            </SelectGroup>
         </SelectContent>
     );
 }
@@ -421,7 +411,6 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
                             </SelectTrigger>
                             <SpecialtySelectContent
                                 holders={specialtyHolders}
-                                targetRole={target.role}
                                 currentSpecialty={assignedStaffSpecialty}
                                 targetId={target.id}
                             />
@@ -678,16 +667,7 @@ function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProp
                     </div>
                     <div className="space-y-1.5">
                         <Label htmlFor="discord-role">Studio Role</Label>
-                        <Select
-                            value={role}
-                            onValueChange={(val) => {
-                                const nextRole = val as Role;
-                                setRole(nextRole);
-                                if (nextRole === Role.Member || nextRole === Role.Voter || nextRole === Role.Contributor) {
-                                    setSecondaryRole("__none__");
-                                }
-                            }}
-                        >
+                        <Select value={role} onValueChange={(val) => setRole(val as Role)}>
                             <SelectTrigger id="discord-role">
                                 <SelectValue />
                             </SelectTrigger>
@@ -702,15 +682,11 @@ function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProp
                     </div>
                     <div className="space-y-1.5">
                         <Label htmlFor="discord-secondary-role">Secondary Role (Specialty)</Label>
-                        <Select
-                            value={secondaryRole}
-                            onValueChange={setSecondaryRole}
-                            disabled={role === Role.Member || role === Role.Voter || role === Role.Contributor}
-                        >
+                        <Select value={secondaryRole} onValueChange={setSecondaryRole}>
                             <SelectTrigger id="discord-secondary-role">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SpecialtySelectContent holders={specialtyHolders} targetRole={role} currentSpecialty={null} />
+                            <SpecialtySelectContent holders={specialtyHolders} currentSpecialty={null} />
                         </Select>
                     </div>
                     <DialogFooter>
