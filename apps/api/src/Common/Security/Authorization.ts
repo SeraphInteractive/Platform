@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from "fastify";
 import { ErrorCode, ForbiddenError, UnauthorizedError } from "../Errors/ApplicationError.js";
 import { hasAtLeast, type Role } from "../../Domain/Roles.js";
+import type { AgreementCheck } from "../../Modules/Cla/ClaService.js";
 import type { LegalAcceptance } from "../../Modules/Documents/DocumentsService.js";
 import {
     actorFor,
@@ -53,6 +54,15 @@ export function requireParticipant(role: Role, legal: LegalAcceptance): preHandl
         }
         if (!hasAtLeast(user.role, role)) {
             throw new ForbiddenError(`This action requires the ${role} role or higher.`, ErrorCode.InsufficientRole);
+        }
+    };
+}
+
+export function requireSignedCla(agreements: AgreementCheck): preHandlerAsyncHookHandler {
+    return async function (request: FastifyRequest): Promise<void> {
+        const { user } = userPrincipalOf(request);
+        if (!(await agreements.hasActiveAgreement(user.id))) {
+            throw new ForbiddenError("Sign the contributor license agreement first.", ErrorCode.ClaRequired);
         }
     };
 }

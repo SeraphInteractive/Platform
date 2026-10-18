@@ -18,6 +18,7 @@ export interface SecurityConfiguration {
     readonly sessionTtlDays: number;
     readonly serviceToken: string | undefined;
     readonly secureCookies: boolean;
+    readonly piiEncryptionKey: string | undefined;
 }
 
 export interface DatabaseConfiguration {
@@ -107,7 +108,8 @@ export function createConfiguration(environment: Environment): ApplicationConfig
             webAuthCallbackPath: environment.WEB_AUTH_CALLBACK_PATH,
             sessionTtlDays: environment.SESSION_TTL_DAYS,
             serviceToken: environment.SERVICE_TOKEN,
-            secureCookies: new URL(environment.APP_URL).protocol === "https:"
+            secureCookies: new URL(environment.APP_URL).protocol === "https:",
+            piiEncryptionKey: environment.PII_ENCRYPTION_KEY
         },
         database: {
             host: environment.DB_HOST,

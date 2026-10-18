@@ -4,6 +4,8 @@ import {
     BookOpen,
     Clapperboard,
     ClipboardCheck,
+    FileCheck,
+    FileSignature,
     FileText,
     Gauge,
     Hammer,
@@ -41,7 +43,14 @@ export const navigationGroups: readonly NavigationGroup[] = [
             { href: "/voting", label: "Vote", description: "Pitch ideas and rank your favourites", icon: Vote },
             { href: "/grabbox", label: "Grab-box", description: "Claim a production task and deliver it", icon: Hammer },
             { href: "/roadmap", label: "Roadmap", description: "The road from pitch to final mix", icon: Map },
-            { href: "/me", label: "My work", description: "Your role, claims and submissions", icon: UserRound, requiresSession: true }
+            { href: "/me", label: "My work", description: "Your role, claims and submissions", icon: UserRound, requiresSession: true },
+            {
+                href: "/cla",
+                label: "Agreement",
+                description: "Sign the contributor license agreement",
+                icon: FileSignature,
+                requiresSession: true
+            }
         ]
     },
     {
@@ -102,6 +111,13 @@ export const navigationGroups: readonly NavigationGroup[] = [
                 minimumRole: Role.Moderator
             },
             {
+                href: "/studio/agreements",
+                label: "Agreements",
+                description: "Contributor agreements and guardian consent",
+                icon: FileCheck,
+                minimumRole: Role.Admin
+            },
+            {
                 href: "/studio/content",
                 label: "Content",
                 description: "Edit the guidelines and legal pages",
@@ -133,7 +149,10 @@ export const segmentLabels: Readonly<Record<string, string>> = {
     terms: "Terms",
     privacy: "Privacy",
     "acceptable-use": "Acceptable use",
-    verify: "Verify"
+    verify: "Verify",
+    cla: "Agreement",
+    guardian: "Guardian consent",
+    agreements: "Agreements"
 };
 
 export function isActivePath(pathname: string, item: NavigationItem): boolean {

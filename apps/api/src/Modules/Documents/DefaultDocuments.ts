@@ -151,5 +151,15 @@ export const defaultDocuments: Readonly<Record<DocumentSlug, DefaultDocument>> =
                 html: "<p>Platform administrators actively investigate telemetry alerts and user reports. Suspected violations will result in immediate investigative quarantine, followed by role revocation, submission forfeiture, or permanent blacklisting upon confirmation of bad faith.</p>"
             }
         ]
+    },
+    [DocumentSlug.Cla]: {
+        title: "Contributor License Agreement",
+        sections: [
+            {
+                id: "unpublished",
+                title: "Not published yet",
+                html: "<p>The Contributor License Agreement hasn't been published yet. You can sign it once it's available.</p>"
+            }
+        ]
     }
 };

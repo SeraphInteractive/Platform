@@ -38,6 +38,7 @@ describe("shot grab-box", () => {
     it("runs claim, upload, submit and review", async () => {
         const shotId = await createShot("SC01-010");
         const voter = await context.createUser(Role.Voter);
+        await context.signCla(voter);
 
         // users without contributor role can claim tasks
         const claim = await context.application.inject({
@@ -154,6 +155,7 @@ describe("shot grab-box", () => {
     it("promotes approved submission deliverables from Pending to Affirmed vault", async () => {
         const shotId = await createShot("SC01-099");
         const voter = await context.createUser(Role.Voter);
+        await context.signCla(voter);
         await context.application.inject({ method: "POST", url: `/api/v1/shots/${shotId}/claim`, headers: voter.headers });
 
         const upload = await context.application.inject({
@@ -215,6 +217,7 @@ describe("shot grab-box", () => {
     it("prevents supervisors from reviewing their own work", async () => {
         const shotId = await createShot("SC02-010");
         const worker = await context.createUser(Role.Supervisor);
+        await context.signCla(worker);
         await context.application.inject({ method: "POST", url: `/api/v1/shots/${shotId}/claim`, headers: worker.headers });
         const upload = json<Envelope<{ key: string }>>(
             await context.application.inject({
@@ -254,7 +257,9 @@ describe("shot grab-box", () => {
     it("enforces the senior priority window", async () => {
         const shotId = await createShot("SC03-010", DifficultyTier.Complex, 24);
         const contributor = await context.createUser(Role.Contributor);
+        await context.signCla(contributor);
         const senior = await context.createUser(Role.SeniorContributor);
+        await context.signCla(senior);
         const listed = await context.application.inject({
             method: "GET",
             url: "/api/v1/shots?difficultyTier=complex",
@@ -276,6 +281,7 @@ describe("shot grab-box", () => {
     it("reclaims expired claims", async () => {
         const shotId = await createShot("SC04-010");
         const contributor = await context.createUser(Role.Contributor);
+        await context.signCla(contributor);
         await context.application.inject({ method: "POST", url: `/api/v1/shots/${shotId}/claim`, headers: contributor.headers });
         await context.database
             .update(shots)
@@ -376,6 +382,7 @@ describe("shot grab-box", () => {
     it("scans task deliverables for AI video signatures and notifies supervisors", async () => {
         const shotId = await createShot("SC07-010");
         const worker = await context.createUser(Role.Contributor);
+        await context.signCla(worker);
 
         await context.application.inject({
             method: "POST",
@@ -419,6 +426,7 @@ describe("shot grab-box", () => {
     it("prevents blacklisted users from claiming or submitting tasks", async () => {
         const shotId = await createShot("SC08-010");
         const worker = await context.createUser(Role.Contributor);
+        await context.signCla(worker);
         await context.database.update(users).set({ isBlacklisted: true }).where(eq(users.id, worker.record.id));
 
         const claimAttempt = await context.application.inject({

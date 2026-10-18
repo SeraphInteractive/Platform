@@ -6,7 +6,8 @@ export const documentPaths: Readonly<Record<DocumentSlug, Route>> = {
     [DocumentSlug.Rules]: "/rules",
     [DocumentSlug.Terms]: "/legal/terms",
     [DocumentSlug.Privacy]: "/legal/privacy",
-    [DocumentSlug.AcceptableUse]: "/legal/acceptable-use"
+    [DocumentSlug.AcceptableUse]: "/legal/acceptable-use",
+    [DocumentSlug.Cla]: "/legal/cla"
 };
 
 export const documentNames: Readonly<Record<DocumentSlug, string>> = {
@@ -14,7 +15,8 @@ export const documentNames: Readonly<Record<DocumentSlug, string>> = {
     [DocumentSlug.Rules]: "Discord Rules",
     [DocumentSlug.Terms]: "Terms of Service",
     [DocumentSlug.Privacy]: "Privacy Policy",
-    [DocumentSlug.AcceptableUse]: "Acceptable Use Policy"
+    [DocumentSlug.AcceptableUse]: "Acceptable Use Policy",
+    [DocumentSlug.Cla]: "Contributor License Agreement"
 };
 
 export function editorPath(slug: DocumentSlug): Route {

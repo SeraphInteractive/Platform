@@ -3,6 +3,7 @@ import type { KeyValueStore } from "../Infrastructure/Cache/KeyValueStore.js";
 import type { TokenService } from "../Modules/Auth/TokenService.js";
 import type { ShotsService } from "../Modules/Shots/ShotsService.js";
 import type { LeaderboardService } from "../Modules/Leaderboards/LeaderboardService.js";
+import type { ClaService } from "../Modules/Cla/ClaService.js";
 
 interface ScheduledJob {
     readonly name: string;
@@ -18,6 +19,7 @@ export class MaintenanceScheduler {
         shotsService: ShotsService,
         tokenService: TokenService,
         leaderboardService: LeaderboardService,
+        claService: ClaService,
         private readonly store: KeyValueStore,
         private readonly logger: FastifyBaseLogger
     ) {
@@ -46,6 +48,26 @@ export class MaintenanceScheduler {
                     const result = await leaderboardService.finalizeExpired();
                     if (result.finalizedCount > 0) {
                         this.logger.info({ finalized: result.roundIds }, "auto-finalized expired voting rounds");
+                    }
+                }
+            },
+            {
+                name: "expire-guardian-consents",
+                intervalMs: 15 * 60 * 1000,
+                run: async (): Promise<void> => {
+                    const expired = await claService.expirePending();
+                    if (expired > 0) {
+                        this.logger.info({ expired }, "expired pending guardian consent requests");
+                    }
+                }
+            },
+            {
+                name: "purge-agreement-pii",
+                intervalMs: 6 * 60 * 60 * 1000,
+                run: async (): Promise<void> => {
+                    const purged = await claService.purgeExpiredPii();
+                    if (purged > 0) {
+                        this.logger.info({ purged }, "purged personal data from closed agreements");
                     }
                 }
             }

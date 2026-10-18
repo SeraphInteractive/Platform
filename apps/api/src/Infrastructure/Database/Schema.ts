@@ -16,6 +16,7 @@ import {
     varchar
 } from "drizzle-orm/pg-core";
 import { RaidSeverity, type PairwiseSeparation, type RaidFlag } from "@platform/scoring";
+import { ClaActorKind, ClaEventType, ClaStatus } from "@platform/contracts";
 import {
     DifficultyTier,
     EntryStatus,
@@ -47,6 +48,9 @@ export const shotStatusEnum = pgEnum("shot_status", enumValues(ShotStatus));
 export const submissionStatusEnum = pgEnum("submission_status", enumValues(SubmissionStatus));
 export const raidSeverityEnum = pgEnum("raid_severity", enumValues(RaidSeverity));
 export const screenplayRoleEnum = pgEnum("screenplay_role", enumValues(ScreenplayRole));
+export const claStatusEnum = pgEnum("cla_status", enumValues(ClaStatus));
+export const claEventTypeEnum = pgEnum("cla_event_type", enumValues(ClaEventType));
+export const claActorKindEnum = pgEnum("cla_actor_kind", enumValues(ClaActorKind));
 
 export const users = pgTable(
     "users",
@@ -439,6 +443,98 @@ export const screenplayVersions = pgTable(
     ]
 );
 
+export const claSignatures = pgTable(
+    "cla_signatures",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        userId: uuid("user_id")
+            .notNull()
+            .references(() => users.id),
+        status: claStatusEnum("status").notNull(),
+        documentRevision: integer("document_revision").notNull(),
+        documentHash: varchar("document_hash", { length: 64 }).notNull(),
+        country: varchar("country", { length: 2 }).notNull(),
+        region: varchar("region", { length: 8 }),
+        ageOfMajority: integer("age_of_majority").notNull(),
+        isMinor: boolean("is_minor").notNull(),
+        contributorPii: text("contributor_pii"),
+        signedAt: timestamp("signed_at", { withTimezone: true }).notNull(),
+        guardianPii: text("guardian_pii"),
+        guardianTokenHash: varchar("guardian_token_hash", { length: 64 }).unique(),
+        guardianRequestedAt: timestamp("guardian_requested_at", { withTimezone: true }),
+        guardianExpiresAt: timestamp("guardian_expires_at", { withTimezone: true }),
+        guardianDecidedAt: timestamp("guardian_decided_at", { withTimezone: true }),
+        guardianDecisionPii: text("guardian_decision_pii"),
+        activatedAt: timestamp("activated_at", { withTimezone: true }),
+        revokedAt: timestamp("revoked_at", { withTimezone: true }),
+        revokedBy: uuid("revoked_by").references(() => users.id),
+        revocationReason: varchar("revocation_reason", { length: 300 }),
+        purgeAfter: timestamp("purge_after", { withTimezone: true }),
+        piiPurgedAt: timestamp("pii_purged_at", { withTimezone: true }),
+        ...timestamps
+    },
+    (table) => [
+        index("cla_signatures_user_signed_idx").on(table.userId, table.signedAt.desc()),
+        index("cla_signatures_status_signed_idx").on(table.status, table.signedAt.desc()),
+        uniqueIndex("cla_signatures_one_open_per_user")
+            .on(table.userId)
+            .where(sql`${table.status} IN ('pending_guardian', 'active')`),
+        index("cla_signatures_guardian_expiry_idx")
+            .on(table.guardianExpiresAt)
+            .where(sql`${table.status} = 'pending_guardian'`),
+        index("cla_signatures_purge_idx")
+            .on(table.purgeAfter)
+            .where(sql`${table.piiPurgedAt} IS NULL`),
+        check("cla_signatures_active_has_activation", sql`${table.status} <> 'active' OR ${table.activatedAt} IS NOT NULL`),
+        check("cla_signatures_revoked_has_time", sql`${table.status} <> 'revoked' OR ${table.revokedAt} IS NOT NULL`),
+        check("cla_signatures_pending_is_minor", sql`${table.status} <> 'pending_guardian' OR ${table.isMinor}`),
+        check("cla_signatures_country_code", sql`${table.country} ~ '^[A-Z]{2}$'`)
+    ]
+);
+
+export type ClaEventDetails = Readonly<Record<string, string | number | boolean | null>>;
+
+export const claEvents = pgTable(
+    "cla_events",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        signatureId: uuid("signature_id")
+            .notNull()
+            .references(() => claSignatures.id),
+        sequence: integer("sequence").notNull(),
+        type: claEventTypeEnum("type").notNull(),
+        actorKind: claActorKindEnum("actor_kind").notNull(),
+        actorUserId: uuid("actor_user_id").references(() => users.id),
+        details: jsonb("details").$type<ClaEventDetails>().notNull(),
+        previousHash: varchar("previous_hash", { length: 64 }),
+        hash: varchar("hash", { length: 64 }).notNull(),
+        occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull()
+    },
+    (table) => [
+        uniqueIndex("cla_events_signature_sequence").on(table.signatureId, table.sequence),
+        check("cla_events_sequence_positive", sql`${table.sequence} > 0`)
+    ]
+);
+
+export const claPiiAccessLog = pgTable(
+    "cla_pii_access_log",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        signatureId: uuid("signature_id")
+            .notNull()
+            .references(() => claSignatures.id),
+        accessorKind: claActorKindEnum("accessor_kind").notNull(),
+        accessorUserId: uuid("accessor_user_id").references(() => users.id),
+        purpose: varchar("purpose", { length: 300 }).notNull(),
+        fields: text("fields").array().notNull(),
+        accessedAt: timestamp("accessed_at", { withTimezone: true }).notNull().defaultNow()
+    },
+    (table) => [
+        index("cla_pii_access_log_signature_idx").on(table.signatureId, table.accessedAt.desc()),
+        index("cla_pii_access_log_accessed_idx").on(table.accessedAt.desc())
+    ]
+);
+
 export type UserRecord = typeof users.$inferSelect;
 export type DocumentRecord = typeof documents.$inferSelect;
 export type DocumentRevisionRecord = typeof documentRevisions.$inferSelect;
@@ -457,3 +553,6 @@ export type ScreenplayShelfRecord = typeof screenplayShelves.$inferSelect;
 export type ScreenplayRecord = typeof screenplays.$inferSelect;
 export type ScreenplayCollaboratorRecord = typeof screenplayCollaborators.$inferSelect;
 export type ScreenplayVersionRecord = typeof screenplayVersions.$inferSelect;
+export type ClaSignatureRecord = typeof claSignatures.$inferSelect;
+export type ClaEventRecord = typeof claEvents.$inferSelect;
+export type ClaPiiAccessLogRecord = typeof claPiiAccessLog.$inferSelect;

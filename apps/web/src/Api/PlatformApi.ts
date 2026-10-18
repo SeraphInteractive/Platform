@@ -1,4 +1,25 @@
 import {
+    claAccessLogEntrySchema,
+    claAgreementSchema,
+    claAuditTrailSchema,
+    claPiiSchema,
+    claReceiptSchema,
+    claSignatureSummarySchema,
+    guardianDecisionResultSchema,
+    guardianReviewSchema,
+    myClaSchema,
+    type ClaAccessLogEntryDto,
+    type ClaAgreementDto,
+    type ClaAuditTrailDto,
+    type ClaPiiDto,
+    type ClaReceiptDto,
+    type ClaSignatureSummaryDto,
+    type ClaSignInputDto,
+    type ClaStatus,
+    type GuardianDecisionInputDto,
+    type GuardianDecisionResultDto,
+    type GuardianReviewDto,
+    type MyClaDto,
     autoModRuleSchema,
     ballotSchema,
     PresenceStatus,
@@ -417,6 +438,59 @@ export class PlatformApi {
 
     public async deleteAutomodRule(id: string): Promise<void> {
         await requestNoContent(`/automod/${segment(id)}`, { method: "DELETE" });
+    }
+
+    public async myCla(): Promise<MyClaDto> {
+        return (await request("/cla/me", dataEnvelope(myClaSchema))).data;
+    }
+
+    public async signCla(input: ClaSignInputDto): Promise<ClaAgreementDto> {
+        return (await request("/cla/me", dataEnvelope(claAgreementSchema), { method: "POST", body: input })).data;
+    }
+
+    public async resendGuardianRequest(): Promise<ClaAgreementDto> {
+        return (await request("/cla/me/guardian/resend", dataEnvelope(claAgreementSchema), { method: "POST" })).data;
+    }
+
+    public async revokeCla(reason: string | null): Promise<ClaAgreementDto> {
+        return (await request("/cla/me/revoke", dataEnvelope(claAgreementSchema), { method: "POST", body: { reason } })).data;
+    }
+
+    public async claReceipt(): Promise<ClaReceiptDto> {
+        return (await request("/cla/me/receipt", dataEnvelope(claReceiptSchema))).data;
+    }
+
+    public async guardianReview(token: string): Promise<GuardianReviewDto> {
+        return (await request(`/cla/guardian/${segment(token)}`, dataEnvelope(guardianReviewSchema))).data;
+    }
+
+    public async guardianDecide(token: string, input: GuardianDecisionInputDto): Promise<GuardianDecisionResultDto> {
+        return (
+            await request(`/cla/guardian/${segment(token)}`, dataEnvelope(guardianDecisionResultSchema), { method: "POST", body: input })
+        ).data;
+    }
+
+    public async claSignatures(query: PageQuery & { readonly status?: ClaStatus }): Promise<Page<ClaSignatureSummaryDto>> {
+        return request("/cla/signatures", pageEnvelope(claSignatureSummarySchema), { query: { ...query } });
+    }
+
+    public async claAuditTrail(signatureId: string): Promise<ClaAuditTrailDto> {
+        return (await request(`/cla/signatures/${segment(signatureId)}/events`, dataEnvelope(claAuditTrailSchema))).data;
+    }
+
+    public async revealClaPii(signatureId: string, reason: string): Promise<ClaPiiDto> {
+        return (
+            await request(`/cla/signatures/${segment(signatureId)}/pii`, dataEnvelope(claPiiSchema), { method: "POST", body: { reason } })
+        ).data;
+    }
+
+    public async revokeClaByStaff(signatureId: string, reason: string): Promise<ClaAgreementDto> {
+        const path = `/cla/signatures/${segment(signatureId)}/revoke`;
+        return (await request(path, dataEnvelope(claAgreementSchema), { method: "POST", body: { reason } })).data;
+    }
+
+    public async claAccessLog(query: PageQuery & { readonly signatureId?: string }): Promise<Page<ClaAccessLogEntryDto>> {
+        return request("/cla/access-log", pageEnvelope(claAccessLogEntrySchema), { query: { ...query } });
     }
 }
 

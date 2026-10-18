@@ -30,5 +30,11 @@ export const queryKeys = {
     documentRevisions: (slug: string) => ["document", slug, "revisions"] as const,
     legalAcceptance: ["legal-acceptance"] as const,
     specialtyHolders: ["users", "specialty-holders"] as const,
-    automodRules: ["automod-rules"] as const
+    automodRules: ["automod-rules"] as const,
+    myCla: ["cla", "me"] as const,
+    guardianReview: (token: string) => ["cla", "guardian", token] as const,
+    claSignatures: (query: PageQuery & { readonly status?: string }) => ["cla", "signatures", query] as const,
+    claSignaturesAll: ["cla", "signatures"] as const,
+    claAuditTrail: (signatureId: string) => ["cla", "signatures", signatureId, "events"] as const,
+    claAccessLog: (page: number) => ["cla", "access-log", page] as const
 };

@@ -10,7 +10,7 @@ import { pino } from "pino";
 import { buildApplication } from "../../src/App.js";
 import type { ApplicationConfiguration } from "../../src/Configuration/ApplicationConfiguration.js";
 import { createServiceContainer, type ServiceContainer } from "../../src/Composition/ServiceContainer.js";
-import { initialTermsVersion } from "@platform/contracts";
+import { ClaStatus, initialTermsVersion } from "@platform/contracts";
 import { Role } from "../../src/Domain/Roles.js";
 import { MemoryKeyValueStore } from "../../src/Infrastructure/Cache/MemoryKeyValueStore.js";
 import type { Database } from "../../src/Infrastructure/Database/Database.js";
@@ -41,7 +41,8 @@ export const testConfiguration: ApplicationConfiguration = {
         webAuthCallbackPath: "/auth/callback",
         sessionTtlDays: 30,
         serviceToken,
-        secureCookies: true
+        secureCookies: true,
+        piiEncryptionKey: undefined
     },
     database: { host: "localhost", port: 5432, user: "test", password: "test", database: "test", ssl: "disable", poolMax: 1 },
     redis: { host: "localhost", port: 6379, password: undefined, tls: false },
@@ -88,6 +89,7 @@ export interface TestContext {
     readonly discord: FakeDiscordOAuthClient;
     readonly emailSender: RecordingEmailSender;
     createUser(role: Role, overrides?: Partial<schema.UserRecord>): Promise<TestUser>;
+    signCla(user: TestUser): Promise<void>;
     close(): Promise<void>;
 }
 
@@ -195,6 +197,20 @@ export async function createTestContext(): Promise<TestContext> {
             }
             const { token } = await services.tokenService.issue(record.id);
             return { record, token, headers: { authorization: `Bearer ${token}` } };
+        },
+        signCla: async (user) => {
+            const now = new Date();
+            await database.insert(schema.claSignatures).values({
+                userId: user.record.id,
+                status: ClaStatus.Active,
+                documentRevision: 1,
+                documentHash: "0".repeat(64),
+                country: "DE",
+                ageOfMajority: 18,
+                isMinor: false,
+                signedAt: now,
+                activatedAt: now
+            });
         },
         close: async () => {
             await application.close();

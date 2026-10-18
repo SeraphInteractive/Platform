@@ -37,6 +37,7 @@ import { verificationRoutes } from "./Modules/Verification/VerificationRoutes.js
 import { usersRoutes } from "./Modules/Users/UsersRoutes.js";
 import { autoModRoutes } from "./Modules/AutoMod/AutoModRoutes.js";
 import { scriptsRoutes } from "./Modules/Scripts/ScriptsRoutes.js";
+import { claRoutes } from "./Modules/Cla/ClaRoutes.js";
 
 export const apiPrefix = "/api/v1";
 
@@ -230,6 +231,7 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
             await api.register(notificationRoutes, { services });
             await api.register(verificationRoutes, { services });
             await api.register(documentsRoutes, { services });
+            await api.register(claRoutes, { services });
             await api.register(autoModRoutes, { prefix: "/automod", services });
             await api.register(scriptsRoutes, { prefix: "/scripts", services });
         },

@@ -17,6 +17,7 @@ async function main(): Promise<void> {
         services.shotsService,
         services.tokenService,
         services.leaderboardService,
+        services.claService,
         services.keyValueStore,
         logger
     );

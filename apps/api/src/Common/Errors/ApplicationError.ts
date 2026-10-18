@@ -24,6 +24,8 @@ export enum ErrorCode {
     VerificationRequired = "VERIFICATION_REQUIRED",
     VerificationFailed = "VERIFICATION_FAILED",
     AccountNotLinked = "ACCOUNT_NOT_LINKED",
+    ClaRequired = "CLA_REQUIRED",
+    GuardianRequired = "GUARDIAN_REQUIRED",
     PayloadTooLarge = "PAYLOAD_TOO_LARGE",
     UnsupportedMediaType = "UNSUPPORTED_MEDIA_TYPE",
     TooManyRequests = "TOO_MANY_REQUESTS",

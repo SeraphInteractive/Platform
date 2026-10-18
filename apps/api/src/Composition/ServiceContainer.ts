@@ -27,6 +27,8 @@ import { VerificationService } from "../Modules/Verification/VerificationService
 import { UsersService } from "../Modules/Users/UsersService.js";
 import { AutoModService } from "../Modules/AutoMod/AutoModService.js";
 import { ScriptsService } from "../Modules/Scripts/ScriptsService.js";
+import { ClaService } from "../Modules/Cla/ClaService.js";
+import { PiiCipher } from "../Common/Security/PiiCipher.js";
 
 export interface Infrastructure {
     readonly database: Database;
@@ -65,6 +67,7 @@ export interface ServiceContainer extends Infrastructure {
     readonly documentsService: DocumentsService;
     readonly autoModService: AutoModService;
     readonly scriptsService: ScriptsService;
+    readonly claService: ClaService;
 }
 
 export function createServiceContainer(
@@ -107,6 +110,17 @@ export function createServiceContainer(
         documentsService,
         autoModService: new AutoModService(database),
         scriptsService: new ScriptsService(database, eventBus),
+        claService: new ClaService(
+            database,
+            documentsService,
+            keyValueStore,
+            infrastructure.emailSender,
+            infrastructure.mailDomainChecker,
+            new PiiCipher(configuration.security.piiEncryptionKey, configuration.security.appKey),
+            configuration.security.appKey,
+            configuration.security.corsOrigins[0] ?? configuration.security.appUrl,
+            logger
+        ),
         verificationService: new VerificationService(
             database,
             keyValueStore,

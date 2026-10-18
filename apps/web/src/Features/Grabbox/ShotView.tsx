@@ -1,8 +1,9 @@
 "use client";
 
-import { Role, ShotStatus, SubmissionStatus, type ShotDetailDto, type SubmissionDto, type UserDto } from "@platform/contracts";
+import { ClaStatus, Role, ShotStatus, SubmissionStatus, type ShotDetailDto, type SubmissionDto, type UserDto } from "@platform/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, ExternalLink, FolderOpen, Lock } from "lucide-react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useId, useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -129,6 +130,7 @@ function ReleaseButton({ shot, isClaimant }: { readonly shot: ShotDetailDto; rea
 
 function ActionPanel({ shot, user }: { readonly shot: ShotDetailDto; readonly user: UserDto | null }): ReactNode {
     const pathname = usePathname();
+    const agreement = useQuery({ queryKey: queryKeys.myCla, queryFn: () => platformApi.myCla(), enabled: user !== null });
     const isClaimant = user !== null && shot.claimer?.id === user.id;
     const isStaff = hasAtLeast(user, Role.Supervisor);
     const latest = shot.submissions[0];
@@ -206,6 +208,16 @@ function ActionPanel({ shot, user }: { readonly shot: ShotDetailDto; readonly us
                 Senior contributors get first pick.
                 {shot.seniorPriorityUntil !== null && <RelativeTime value={shot.seniorPriorityUntil} prefix="Opens to everyone" />}
             </p>
+        );
+    }
+    if (agreement.data !== undefined && agreement.data.current?.status !== ClaStatus.Active) {
+        return (
+            <div className="space-y-3">
+                <p className="text-sm">Sign the contributor license agreement to claim tasks.</p>
+                <Button asChild>
+                    <Link href="/cla">Review and sign</Link>
+                </Button>
+            </div>
         );
     }
     return (
