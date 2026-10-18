@@ -216,7 +216,7 @@ export const shots = pgTable(
         title: varchar("title", { length: 255 }).notNull(),
         description: varchar("description", { length: 5000 }),
         difficultyTier: difficultyTierEnum("difficulty_tier").notNull(),
-        shotType: shotTypeEnum("shot_type").notNull(),
+        shotType: shotTypeEnum("shot_type").notNull().default(ShotType.Animation),
         status: shotStatusEnum("status").notNull().default(ShotStatus.Available),
         claimedBy: uuid("claimed_by").references(() => users.id, { onDelete: "set null" }),
         claimedAt: timestamp("claimed_at", { withTimezone: true }),
@@ -246,52 +246,38 @@ export const shots = pgTable(
     ]
 );
 
-/*
-Departments contain a list of specialties that are a part of it
-- this includes regular, senior, supervisor and admin roles.
-
-The power of each specialty within the department = the power given to each specialty.
-Eg:
-*/
-export const departments = pgTable("departments",
-    {
-        id: uuid("id").primaryKey().defaultRandom(),
-        name: varchar("name", { length: 20 }).notNull().unique(),
-        specialties: specialtyEnum("specialties")
-            .array()
-            .notNull()
-            .default(sql`'{}'`),
-        shotTypes: shotTypeEnum("type")
-            .array()
-            .notNull()
-            .default(sql`'{}'`),
-        ...timestamps
-    },
-)
-
-export const shotTypes = pgTable("shot_types",
-    {
-        id: uuid("id").primaryKey().defaultRandom(),
-        type: shotTypeEnum("type").notNull().unique(),
-        specialties: specialtyEnum("specialties")
-            .array()
-            .notNull()
-            .default(sql`'{}'`),
-        ...timestamps
-    },
-)
-
-export const departmentDiscordMaps = pgTable("department_discord_maps", {
-    departmentId: uuid("departmentId")
-        .primaryKey()
-        .references(() => departments.id, { onDelete: "cascade" }),
-    categoryId: varchar("discord_thread_id", { length: 20 }).notNull().unique(),
-    forumChannelId: varchar("discord_thread_id", { length: 20 }).notNull().unique(),
-
-
+export const departments = pgTable("departments", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 64 }).notNull().unique(),
+    specialties: specialtyEnum("specialties")
+        .array()
+        .notNull()
+        .default(sql`'{}'::user_specialty[]`),
+    shotTypes: shotTypeEnum("shot_types")
+        .array()
+        .notNull()
+        .default(sql`'{}'::shot_type[]`),
     ...timestamps
 });
 
+export const shotTypes = pgTable("shot_types", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    type: shotTypeEnum("type").notNull().unique(),
+    specialties: specialtyEnum("specialties")
+        .array()
+        .notNull()
+        .default(sql`'{}'::user_specialty[]`),
+    ...timestamps
+});
+
+export const departmentDiscordMaps = pgTable("department_discord_maps", {
+    departmentId: uuid("department_id")
+        .primaryKey()
+        .references(() => departments.id, { onDelete: "cascade" }),
+    categoryId: varchar("discord_category_id", { length: 20 }).notNull().unique(),
+    forumChannelId: varchar("discord_forum_id", { length: 20 }).notNull().unique(),
+    ...timestamps
+});
 
 export const submissions = pgTable(
     "submissions",
