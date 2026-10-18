@@ -47,6 +47,17 @@ export enum Specialty {
     LightingAndVfxLead = "lighting_and_vfx_lead"
 }
 
+export enum ShotType {
+    // Postgres enum order is append-only: add new values at the end.
+    Modelling3d = "3d_modelling",
+    Rigging = "rigging",
+    Animation = "animation",
+    Vfx = "vfx",
+    SurfaceTextureArt = "surface_texture_art",
+    Lighting = "lighting",
+    ConceptArt = "concept_art"
+}
+
 export const maximumSpecialties = 2;
 export const maximumTotalSpecialties = 3;
 

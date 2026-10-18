@@ -8,5 +8,6 @@ export {
     RoundStatus,
     ScreenplayRole,
     ShotStatus,
+    ShotType,
     SubmissionStatus
 } from "@platform/contracts";

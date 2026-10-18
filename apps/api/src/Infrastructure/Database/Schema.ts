@@ -24,6 +24,7 @@ import {
     RoundStatus,
     ScreenplayRole,
     ShotStatus,
+    ShotType,
     SubmissionStatus
 } from "../../Domain/Enums.js";
 import { Role, Specialty } from "../../Domain/Roles.js";
@@ -39,6 +40,7 @@ const timestamps = {
 
 export const roleEnum = pgEnum("user_role", enumValues(Role));
 export const specialtyEnum = pgEnum("user_specialty", enumValues(Specialty));
+export const shotTypeEnum = pgEnum("shot_type", enumValues(ShotType));
 export const roundStatusEnum = pgEnum("round_status", enumValues(RoundStatus));
 export const pollTypeEnum = pgEnum("poll_type", enumValues(PollType));
 export const entryStatusEnum = pgEnum("entry_status", enumValues(EntryStatus));
@@ -214,6 +216,7 @@ export const shots = pgTable(
         title: varchar("title", { length: 255 }).notNull(),
         description: varchar("description", { length: 5000 }),
         difficultyTier: difficultyTierEnum("difficulty_tier").notNull(),
+        shotType: shotTypeEnum("shot_type").notNull(),
         status: shotStatusEnum("status").notNull().default(ShotStatus.Available),
         claimedBy: uuid("claimed_by").references(() => users.id, { onDelete: "set null" }),
         claimedAt: timestamp("claimed_at", { withTimezone: true }),
@@ -242,6 +245,53 @@ export const shots = pgTable(
         )
     ]
 );
+
+/*
+Departments contain a list of specialties that are a part of it
+- this includes regular, senior, supervisor and admin roles.
+
+The power of each specialty within the department = the power given to each specialty.
+Eg:
+*/
+export const departments = pgTable("departments",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        name: varchar("name", { length: 20 }).notNull().unique(),
+        specialties: specialtyEnum("specialties")
+            .array()
+            .notNull()
+            .default(sql`'{}'`),
+        shotTypes: shotTypeEnum("type")
+            .array()
+            .notNull()
+            .default(sql`'{}'`),
+        ...timestamps
+    },
+)
+
+export const shotTypes = pgTable("shot_types",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        type: shotTypeEnum("type").notNull().unique(),
+        specialties: specialtyEnum("specialties")
+            .array()
+            .notNull()
+            .default(sql`'{}'`),
+        ...timestamps
+    },
+)
+
+export const departmentDiscordMaps = pgTable("department_discord_maps", {
+    departmentId: uuid("departmentId")
+        .primaryKey()
+        .references(() => departments.id, { onDelete: "cascade" }),
+    categoryId: varchar("discord_thread_id", { length: 20 }).notNull().unique(),
+    forumChannelId: varchar("discord_thread_id", { length: 20 }).notNull().unique(),
+
+
+    ...timestamps
+});
+
 
 export const submissions = pgTable(
     "submissions",
