@@ -57,6 +57,7 @@ export interface SubmissionView {
     readonly reviewer: UserSummaryRecord | null;
     readonly videoUrl: string | null;
     readonly blendUrl: string | null;
+    readonly vaultUrl?: string | null;
 }
 
 export interface ShotDetail extends ShotListItem {
@@ -209,7 +210,7 @@ export class ShotsService {
                     submission: canDownload ? item.submission : { ...item.submission, notes: null, supervisorNotes: null },
                     contributor: item.contributor,
                     reviewer: item.reviewer,
-                    ...(await this.downloadUrls(item.submission, canDownload))
+                    ...(await this.downloadUrls(item.submission, canDownload, isStaff))
                 };
             })
         );
@@ -560,15 +561,24 @@ export class ShotsService {
 
     private async downloadUrls(
         submission: SubmissionRecord,
-        allowed: boolean
-    ): Promise<{ videoUrl: string | null; blendUrl: string | null }> {
+        allowed: boolean,
+        isStaff = false
+    ): Promise<{ videoUrl: string | null; blendUrl: string | null; vaultUrl: string | null }> {
         if (!allowed || !this.storage.isEnabled(StorageBucket.Deliverables)) {
-            return { videoUrl: null, blendUrl: null };
+            return { videoUrl: null, blendUrl: null, vaultUrl: null };
         }
+        const folderPath = submission.videoKey.includes("/")
+            ? submission.videoKey.slice(0, submission.videoKey.lastIndexOf("/"))
+            : "Pending";
+        const vaultUrl =
+            isStaff && typeof this.storage.getVaultFolderUrl === "function"
+                ? this.storage.getVaultFolderUrl(StorageBucket.Deliverables, folderPath)
+                : null;
         return {
             videoUrl: await this.storage.createDownloadUrl(StorageBucket.Deliverables, submission.videoKey),
             blendUrl:
-                submission.blendKey === null ? null : await this.storage.createDownloadUrl(StorageBucket.Deliverables, submission.blendKey)
+                submission.blendKey === null ? null : await this.storage.createDownloadUrl(StorageBucket.Deliverables, submission.blendKey),
+            vaultUrl
         };
     }
 

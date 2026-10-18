@@ -20,6 +20,7 @@ import {
     type Notifier
 } from "../../Infrastructure/Notifications/Notification.js";
 import { StorageBucket, type ObjectStorage } from "../../Infrastructure/Storage/ObjectStorage.js";
+import { deliverableVaultAffirmedPrefix, deliverableVaultPendingPrefix } from "./DeliverablePolicy.js";
 import { ShotsService } from "./ShotsService.js";
 
 export interface ReviewQueueItem {
@@ -28,6 +29,7 @@ export interface ReviewQueueItem {
     readonly contributor: Pick<UserRecord, "id" | "discordId" | "discordUsername" | "discordAvatar"> | null;
     readonly videoUrl: string | null;
     readonly blendUrl: string | null;
+    readonly vaultUrl: string | null;
 }
 
 export class ReviewsService {
@@ -63,14 +65,23 @@ export class ReviewsService {
 
         const enabled = this.storage.isEnabled(StorageBucket.Deliverables);
         const items = await Promise.all(
-            rows.map(async (row) => ({
-                ...row,
-                videoUrl: enabled ? await this.storage.createDownloadUrl(StorageBucket.Deliverables, row.submission.videoKey) : null,
-                blendUrl:
-                    enabled && row.submission.blendKey !== null
-                        ? await this.storage.createDownloadUrl(StorageBucket.Deliverables, row.submission.blendKey)
-                        : null
-            }))
+            rows.map(async (row) => {
+                const folderPath = row.submission.videoKey.includes("/")
+                    ? row.submission.videoKey.slice(0, row.submission.videoKey.lastIndexOf("/"))
+                    : "Pending";
+                const vaultUrl = this.storage.getVaultFolderUrl
+                    ? this.storage.getVaultFolderUrl(StorageBucket.Deliverables, folderPath)
+                    : null;
+                return {
+                    ...row,
+                    videoUrl: enabled ? await this.storage.createDownloadUrl(StorageBucket.Deliverables, row.submission.videoKey) : null,
+                    blendUrl:
+                        enabled && row.submission.blendKey !== null
+                            ? await this.storage.createDownloadUrl(StorageBucket.Deliverables, row.submission.blendKey)
+                            : null,
+                    vaultUrl
+                };
+            })
         );
         return createPage(items, totals[0]?.total ?? 0, query);
     }
@@ -98,13 +109,37 @@ export class ReviewsService {
             }
 
             const approved = decision === ReviewDecision.Approved;
+            let videoKey = current.videoKey;
+            let blendKey = current.blendKey;
+
+            if (approved) {
+                // promote approved deliverables from pending to affirmed vault
+                videoKey = current.videoKey.startsWith(deliverableVaultPendingPrefix)
+                    ? `${deliverableVaultAffirmedPrefix}${current.videoKey.slice(deliverableVaultPendingPrefix.length)}`
+                    : `${deliverableVaultAffirmedPrefix}${current.videoKey}`;
+
+                if (current.blendKey !== null) {
+                    blendKey = current.blendKey.startsWith(deliverableVaultPendingPrefix)
+                        ? `${deliverableVaultAffirmedPrefix}${current.blendKey.slice(deliverableVaultPendingPrefix.length)}`
+                        : `${deliverableVaultAffirmedPrefix}${current.blendKey}`;
+                }
+
+                if (typeof this.storage.moveObject === "function" && this.storage.isEnabled(StorageBucket.Deliverables)) {
+                    await this.storage.moveObject(StorageBucket.Deliverables, current.videoKey, videoKey);
+                    if (current.blendKey !== null && blendKey !== null) {
+                        await this.storage.moveObject(StorageBucket.Deliverables, current.blendKey, blendKey);
+                    }
+                }
+            }
+
             const [updated] = await transaction
                 .update(submissions)
                 .set({
                     status: approved ? SubmissionStatus.Approved : SubmissionStatus.RevisionRequested,
                     supervisorNotes: notes,
                     reviewedBy: reviewer.userId,
-                    reviewedAt: new Date()
+                    reviewedAt: new Date(),
+                    ...(approved ? { videoKey, blendKey } : {})
                 })
                 .where(eq(submissions.id, submissionId))
                 .returning();

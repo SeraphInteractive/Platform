@@ -113,7 +113,18 @@ const environmentObject = z.object({
         .number()
         .int()
         .min(1024)
-        .default(2 * 1024 * 1024 * 1024)
+        .default(2 * 1024 * 1024 * 1024),
+    NEXTCLOUD_URL: z
+        .url({ protocol: /^https?$/u })
+        .optional()
+        .or(z.literal("").transform(() => undefined)),
+    NEXTCLOUD_USERNAME: optionalString,
+    NEXTCLOUD_PASSWORD: optionalString,
+    NEXTCLOUD_BASE_PATH: z.string().default("/remote.php/dav/files"),
+    NEXTCLOUD_PUBLIC_URL: z
+        .url({ protocol: /^https?$/u })
+        .optional()
+        .or(z.literal("").transform(() => undefined))
 });
 
 export const databaseEnvironmentSchema = environmentObject.pick({

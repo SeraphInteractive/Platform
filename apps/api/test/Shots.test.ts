@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DifficultyTier, ShotStatus } from "../src/Domain/Enums.js";
+import { DifficultyTier, ShotStatus, SubmissionStatus } from "../src/Domain/Enums.js";
 import { Role } from "../src/Domain/Roles.js";
-import { shots, users } from "../src/Infrastructure/Database/Schema.js";
+import { shots, submissions, users } from "../src/Infrastructure/Database/Schema.js";
 import { NotificationType } from "../src/Infrastructure/Notifications/Notification.js";
 import { StorageBucket } from "../src/Infrastructure/Storage/ObjectStorage.js";
 import { createTestContext, json, nextSnowflake, serviceToken, type TestContext, type TestUser } from "./Support/TestApplication.js";
@@ -72,7 +72,7 @@ describe("shot grab-box", () => {
         });
         expect(upload.statusCode).toBe(201);
         const { key } = json<Envelope<{ key: string }>>(upload).data;
-        expect(key).toMatch(new RegExp(`^shots/${shotId}/${voter.record.id}/[0-9a-f-]{36}-final_cut\\.mp4$`, "u"));
+        expect(key).toMatch(new RegExp(`^Pending/shots/${shotId}/${voter.record.id}/[0-9a-f-]{36}-final_cut\\.mp4$`, "u"));
 
         const blendUpload = await context.application.inject({
             method: "POST",
@@ -112,7 +112,10 @@ describe("shot grab-box", () => {
         expect(json<Envelope<{ submissions: { videoUrl: string | null }[] }>>(publicDetail).data.submissions[0]?.videoUrl).toBeNull();
 
         const queue = await context.application.inject({ method: "GET", url: "/api/v1/reviews", headers: supervisor.headers });
-        expect(json<{ data: { id: string }[] }>(queue).data.map((item) => item.id)).toContain(submission.id);
+        const queueItems = json<{ data: { id: string; vaultUrl: string | null }[] }>(queue).data;
+        expect(queueItems.map((item) => item.id)).toContain(submission.id);
+        const queueEntry = queueItems.find((item) => item.id === submission.id);
+        expect(queueEntry?.vaultUrl).toBe(`https://vault.test/apps/files/folders?dir=/Pending/shots/${shotId}/${voter.record.id}`);
 
         const revision = await context.application.inject({
             method: "POST",
@@ -131,6 +134,61 @@ describe("shot grab-box", () => {
 
         const [afterRevision] = await context.database.select().from(shots).where(eq(shots.id, shotId));
         expect(afterRevision?.status).toBe(ShotStatus.Claimed);
+    });
+
+    it("promotes approved submission deliverables from Pending to Affirmed vault", async () => {
+        const shotId = await createShot("SC01-099");
+        const voter = await context.createUser(Role.Voter);
+        await context.application.inject({ method: "POST", url: `/api/v1/shots/${shotId}/claim`, headers: voter.headers });
+
+        const upload = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${shotId}/uploads`,
+            headers: voter.headers,
+            payload: { kind: "video", fileName: "shot.mp4", contentType: "video/mp4", sizeBytes: 1024 }
+        });
+        const { key: videoKey } = json<Envelope<{ key: string }>>(upload).data;
+
+        const blendUpload = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${shotId}/uploads`,
+            headers: voter.headers,
+            payload: { kind: "blend", fileName: "shot.blend", contentType: "application/octet-stream", sizeBytes: 2048 }
+        });
+        const { key: blendKey } = json<Envelope<{ key: string }>>(blendUpload).data;
+
+        context.storage.store(StorageBucket.Deliverables, videoKey, 1024, "video/mp4");
+        context.storage.store(StorageBucket.Deliverables, blendKey, 2048, "application/octet-stream");
+
+        const submitted = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${shotId}/submissions`,
+            headers: voter.headers,
+            payload: { videoKey, blendKey, notes: "ready for review" }
+        });
+        const { id: submissionId } = json<Envelope<{ id: string }>>(submitted).data;
+
+        const approved = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/submissions/${submissionId}/review`,
+            headers: supervisor.headers,
+            payload: { decision: "approved" }
+        });
+        expect(approved.statusCode).toBe(200);
+
+        // pending keys should be moved to affirmed prefix
+        expect(await context.storage.getMetadata(StorageBucket.Deliverables, videoKey)).toBeNull();
+        expect(await context.storage.getMetadata(StorageBucket.Deliverables, blendKey)).toBeNull();
+
+        const affirmedVideoKey = videoKey.replace(/^Pending\//u, "Affirmed/");
+        const affirmedBlendKey = blendKey.replace(/^Pending\//u, "Affirmed/");
+        expect(await context.storage.getMetadata(StorageBucket.Deliverables, affirmedVideoKey)).not.toBeNull();
+        expect(await context.storage.getMetadata(StorageBucket.Deliverables, affirmedBlendKey)).not.toBeNull();
+
+        const [dbSubmission] = await context.database.select().from(submissions).where(eq(submissions.id, submissionId));
+        expect(dbSubmission?.videoKey).toBe(affirmedVideoKey);
+        expect(dbSubmission?.blendKey).toBe(affirmedBlendKey);
+        expect(dbSubmission?.status).toBe(SubmissionStatus.Approved);
     });
 
     it("prevents supervisors from reviewing their own work", async () => {

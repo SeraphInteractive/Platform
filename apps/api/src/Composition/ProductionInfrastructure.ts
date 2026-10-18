@@ -14,6 +14,9 @@ import { RedisEventBus } from "../Infrastructure/Events/RedisEventBus.js";
 import { StreamNotifier } from "../Infrastructure/Notifications/NotificationLog.js";
 import { RedisNotificationLog } from "../Infrastructure/Notifications/RedisNotificationLog.js";
 import { S3ObjectStorage } from "../Infrastructure/Storage/S3ObjectStorage.js";
+import { NextcloudWebDAVStorage } from "../Infrastructure/Storage/NextcloudWebDAVStorage.js";
+import { HybridObjectStorage } from "../Infrastructure/Storage/HybridObjectStorage.js";
+import { StorageBucket } from "../Infrastructure/Storage/ObjectStorage.js";
 import type { Infrastructure } from "./ServiceContainer.js";
 
 function createEmailSender(configuration: ApplicationConfiguration, logger: FastifyBaseLogger): EmailSender {
@@ -51,12 +54,23 @@ export function createProductionInfrastructure(configuration: ApplicationConfigu
     const eventBus = new RedisEventBus(redis, subscriber);
     const notificationLog = new RedisNotificationLog(redis);
 
+    const s3Storage = new S3ObjectStorage(configuration.storage);
+    const nextcloudStorage = new NextcloudWebDAVStorage({
+        url: configuration.storage.nextcloudUrl,
+        username: configuration.storage.nextcloudUsername,
+        password: configuration.storage.nextcloudPassword,
+        basePath: configuration.storage.nextcloudBasePath,
+        publicUrl: configuration.storage.nextcloudPublicUrl
+    });
+    const deliverablesStorage = nextcloudStorage.isEnabled(StorageBucket.Deliverables) ? nextcloudStorage : s3Storage;
+    const objectStorage = new HybridObjectStorage(deliverablesStorage, s3Storage);
+
     return {
         database: connection.database,
         databasePing: () => connection.ping(),
         keyValueStore,
         eventBus,
-        objectStorage: new S3ObjectStorage(configuration.storage),
+        objectStorage,
         discordOAuth: new HttpDiscordOAuthClient(configuration.discord),
         presenceProvider: new LanyardPresenceProvider(keyValueStore),
         notifier: new StreamNotifier(notificationLog, logger),

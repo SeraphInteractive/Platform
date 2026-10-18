@@ -60,7 +60,12 @@ export const testConfiguration: ApplicationConfiguration = {
         mediaBucket: "media",
         mediaPublicUrl: "https://media.test",
         mediaMaxBytes: 5 * 1024 * 1024,
-        deliverableMaxBytes: 100 * 1024 * 1024
+        deliverableMaxBytes: 100 * 1024 * 1024,
+        nextcloudUrl: undefined,
+        nextcloudUsername: undefined,
+        nextcloudPassword: undefined,
+        nextcloudBasePath: "/remote.php/dav/files",
+        nextcloudPublicUrl: undefined
     },
     email: { resendApiKey: undefined, from: undefined },
     verification: { turnstileSecretKey: undefined }

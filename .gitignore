@@ -19,3 +19,4 @@ gemini.md
 .agents/
 .gemini/
 apps/script/data/
+docker/test-vps/data/

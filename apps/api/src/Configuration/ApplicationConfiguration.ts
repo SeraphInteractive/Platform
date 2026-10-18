@@ -61,6 +61,11 @@ export interface StorageConfiguration {
     readonly mediaPublicUrl: string | undefined;
     readonly mediaMaxBytes: number;
     readonly deliverableMaxBytes: number;
+    readonly nextcloudUrl: string | undefined;
+    readonly nextcloudUsername: string | undefined;
+    readonly nextcloudPassword: string | undefined;
+    readonly nextcloudBasePath: string;
+    readonly nextcloudPublicUrl: string | undefined;
 }
 
 export interface EmailConfiguration {
@@ -140,7 +145,12 @@ export function createConfiguration(environment: Environment): ApplicationConfig
             mediaBucket: environment.S3_MEDIA_BUCKET,
             mediaPublicUrl: environment.S3_MEDIA_PUBLIC_URL,
             mediaMaxBytes: environment.MEDIA_MAX_BYTES,
-            deliverableMaxBytes: environment.DELIVERABLE_MAX_BYTES
+            deliverableMaxBytes: environment.DELIVERABLE_MAX_BYTES,
+            nextcloudUrl: environment.NEXTCLOUD_URL,
+            nextcloudUsername: environment.NEXTCLOUD_USERNAME,
+            nextcloudPassword: environment.NEXTCLOUD_PASSWORD,
+            nextcloudBasePath: environment.NEXTCLOUD_BASE_PATH,
+            nextcloudPublicUrl: environment.NEXTCLOUD_PUBLIC_URL
         },
         email: {
             resendApiKey: environment.RESEND_API_KEY,

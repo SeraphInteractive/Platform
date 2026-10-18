@@ -38,8 +38,11 @@ export function sanitizeFileName(fileName: string, kind: DeliverableKind): strin
     return cleaned;
 }
 
+export const deliverableVaultPendingPrefix = "Pending/";
+export const deliverableVaultAffirmedPrefix = "Affirmed/";
+
 export function deliverablePrefix(shotId: string, userId: string): string {
-    return `shots/${shotId}/${userId}/`;
+    return `${deliverableVaultPendingPrefix}shots/${shotId}/${userId}/`;
 }
 
 export function createDeliverableKey(shotId: string, userId: string, fileName: string): string {
@@ -56,7 +59,12 @@ export async function assertDeliverable(
     field: string
 ): Promise<void> {
     const prefix = deliverablePrefix(shotId, userId);
-    const remainder = key.startsWith(prefix) ? key.slice(prefix.length) : "";
+    const legacyPrefix = `shots/${shotId}/${userId}/`;
+    const remainder = key.startsWith(prefix)
+        ? key.slice(prefix.length)
+        : key.startsWith(legacyPrefix)
+          ? key.slice(legacyPrefix.length)
+          : "";
     const isWellFormed = /^[0-9a-f-]{36}-[A-Za-z0-9._-]{1,100}$/u.test(remainder) && !remainder.includes("..");
     const metadata = isWellFormed ? await storage.getMetadata(StorageBucket.Deliverables, key) : null;
     if (

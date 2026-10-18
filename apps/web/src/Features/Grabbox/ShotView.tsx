@@ -2,7 +2,7 @@
 
 import { Role, ShotStatus, SubmissionStatus, type ShotDetailDto, type SubmissionDto, type UserDto } from "@platform/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, ExternalLink, Lock } from "lucide-react";
+import { Download, ExternalLink, FolderOpen, Lock } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useId, useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -262,6 +262,14 @@ function SubmissionTimeline({ submissions }: { readonly submissions: readonly Su
                     <div className="flex flex-wrap gap-2">
                         <DownloadLink href={submission.videoUrl} label="Video" />
                         <DownloadLink href={submission.blendUrl} label="Project file" />
+                        {safeHttpUrl(submission.vaultUrl ?? null) !== null && (
+                            <Button asChild size="xs" variant="outline">
+                                <a href={safeHttpUrl(submission.vaultUrl ?? null)!} target="_blank" rel="noopener noreferrer">
+                                    <FolderOpen />
+                                    Vault
+                                </a>
+                            </Button>
+                        )}
                     </div>
                 </li>
             ))}

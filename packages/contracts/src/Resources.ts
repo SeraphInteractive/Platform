@@ -254,6 +254,7 @@ export const submissionSchema = z
         reviewedAt: timestampSchema.nullable(),
         videoUrl: z.url().nullable().describe("Short-lived download link, only for staff and the contributor."),
         blendUrl: z.url().nullable(),
+        vaultUrl: z.url().nullable().optional(),
         aiFlags: z.array(z.string()).default([]),
         createdAt: timestampSchema
     })
