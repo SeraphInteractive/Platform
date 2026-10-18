@@ -36,8 +36,12 @@ export function isGrantable(role: Role): boolean {
     return role !== Role.SuperAdmin;
 }
 
-export function hasAtLeast(user: UserDto | null | undefined, required: Role): boolean {
-    return user !== null && user !== undefined && roleRanks[user.role] >= roleRanks[required];
+export function hasAtLeast(subject: UserDto | Role | null | undefined, required: Role): boolean {
+    if (subject === null || subject === undefined) {
+        return false;
+    }
+    const role = typeof subject === "string" ? subject : subject.role;
+    return roleRanks[role] >= roleRanks[required];
 }
 
 export function outranks(role: Role, other: Role): boolean {

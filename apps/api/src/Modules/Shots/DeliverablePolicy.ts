@@ -38,8 +38,9 @@ export function sanitizeFileName(fileName: string, kind: DeliverableKind): strin
     return cleaned;
 }
 
-export const deliverableVaultPendingPrefix = "Pending/";
-export const deliverableVaultAffirmedPrefix = "Affirmed/";
+export const deliverableVaultRoot = "Project Stairway/Submission Reviews";
+export const deliverableVaultPendingPrefix = `${deliverableVaultRoot}/Pending/`;
+export const deliverableVaultAffirmedPrefix = `${deliverableVaultRoot}/Affirmed/`;
 
 export function deliverablePrefix(shotId: string, userId: string): string {
     return `${deliverableVaultPendingPrefix}shots/${shotId}/${userId}/`;
@@ -59,12 +60,18 @@ export async function assertDeliverable(
     field: string
 ): Promise<void> {
     const prefix = deliverablePrefix(shotId, userId);
-    const legacyPrefix = `shots/${shotId}/${userId}/`;
-    const remainder = key.startsWith(prefix)
-        ? key.slice(prefix.length)
-        : key.startsWith(legacyPrefix)
-          ? key.slice(legacyPrefix.length)
-          : "";
+    const legacyPrefixes = [`Pending/shots/${shotId}/${userId}/`, `shots/${shotId}/${userId}/`];
+    let remainder = "";
+    if (key.startsWith(prefix)) {
+        remainder = key.slice(prefix.length);
+    } else {
+        for (const legacy of legacyPrefixes) {
+            if (key.startsWith(legacy)) {
+                remainder = key.slice(legacy.length);
+                break;
+            }
+        }
+    }
     const isWellFormed = /^[0-9a-f-]{36}-[A-Za-z0-9._-]{1,100}$/u.test(remainder) && !remainder.includes("..");
     const metadata = isWellFormed ? await storage.getMetadata(StorageBucket.Deliverables, key) : null;
     if (

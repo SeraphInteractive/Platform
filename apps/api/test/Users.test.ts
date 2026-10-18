@@ -310,8 +310,8 @@ describe("user management", () => {
         const admin = await context.createUser(Role.Admin);
         const supervisorA = await context.createUser(Role.Supervisor, { specialties: [Specialty.EditorialSupervisor] });
         const supervisorB = await context.createUser(Role.Supervisor);
-        const member1 = await context.createUser(Role.Contributor);
-        const member2 = await context.createUser(Role.Contributor);
+        const senior1 = await context.createUser(Role.SeniorContributor);
+        const senior2 = await context.createUser(Role.SeniorContributor);
 
         // specialty-holders lists current holder
         const holders = await context.application.inject({
@@ -354,18 +354,76 @@ describe("user management", () => {
         // multiple users can hold team specialties like media_team
         const team1 = await context.application.inject({
             method: "PATCH",
-            url: `/api/v1/users/${member1.record.id}/role`,
+            url: `/api/v1/users/${senior1.record.id}/role`,
             headers: admin.headers,
-            payload: { role: Role.Contributor, specialties: [Specialty.MediaTeam] }
+            payload: { role: Role.SeniorContributor, specialties: [Specialty.MediaTeam] }
         });
         expect(team1.statusCode).toBe(200);
 
         const team2 = await context.application.inject({
             method: "PATCH",
-            url: `/api/v1/users/${member2.record.id}/role`,
+            url: `/api/v1/users/${senior2.record.id}/role`,
+            headers: admin.headers,
+            payload: { role: Role.SeniorContributor, specialties: [Specialty.MediaTeam] }
+        });
+        expect(team2.statusCode).toBe(200);
+    });
+
+    it("restricts secondary roles by primary role hierarchy", async () => {
+        const admin = await context.createUser(Role.Admin);
+        const contributor = await context.createUser(Role.Contributor);
+        const seniorContributor = await context.createUser(Role.SeniorContributor);
+
+        // base contributor cannot be assigned team or supervisor secondary roles
+        const baseTeam = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${contributor.record.id}/role`,
             headers: admin.headers,
             payload: { role: Role.Contributor, specialties: [Specialty.MediaTeam] }
         });
-        expect(team2.statusCode).toBe(200);
+        expect(baseTeam.statusCode).toBe(403);
+
+        const baseSupervisorLead = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${contributor.record.id}/role`,
+            headers: admin.headers,
+            payload: { role: Role.Contributor, specialties: [Specialty.ArtDirector] }
+        });
+        expect(baseSupervisorLead.statusCode).toBe(403);
+
+        // senior contributor can hold team roles but not supervisor secondary roles
+        const seniorTeam = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${seniorContributor.record.id}/role`,
+            headers: admin.headers,
+            payload: { role: Role.SeniorContributor, specialties: [Specialty.MediaTeam] }
+        });
+        expect(seniorTeam.statusCode).toBe(200);
+
+        const seniorSupervisorLead = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${seniorContributor.record.id}/role`,
+            headers: admin.headers,
+            payload: { role: Role.SeniorContributor, specialties: [Specialty.ArtDirector] }
+        });
+        expect(seniorSupervisorLead.statusCode).toBe(403);
+
+        // supervisor secondary roles can only be assigned to supervisors
+        const supervisor = await context.createUser(Role.Supervisor);
+        const supervisorLead = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${supervisor.record.id}/role`,
+            headers: admin.headers,
+            payload: { role: Role.Supervisor, specialties: [Specialty.ArtDirector] }
+        });
+        expect(supervisorLead.statusCode).toBe(200);
+
+        const adminSupervisorLead = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${admin.record.id}/role`,
+            headers: admin.headers,
+            payload: { role: Role.Admin, specialties: [Specialty.ArtDirector] }
+        });
+        expect(adminSupervisorLead.statusCode).toBe(403);
     });
 });

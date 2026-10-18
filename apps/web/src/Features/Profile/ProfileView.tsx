@@ -40,7 +40,7 @@ function Specialties({ user }: { readonly user: UserDto }): ReactNode {
     const [selected, setSelected] = useState<Specialty[]>(chosen);
     const choose = useChooseSpecialties();
     const changed = selected.length !== chosen.length || selected.some((item) => !chosen.includes(item));
-    const limit = maximumSpecialties - assigned.length;
+    const limit = maximumSpecialties;
 
     return (
         <Section title="Specialties">

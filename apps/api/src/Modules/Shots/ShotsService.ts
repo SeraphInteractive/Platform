@@ -569,7 +569,7 @@ export class ShotsService {
         }
         const folderPath = submission.videoKey.includes("/")
             ? submission.videoKey.slice(0, submission.videoKey.lastIndexOf("/"))
-            : "Pending";
+            : "Project Stairway/Submission Reviews/Pending";
         const vaultUrl =
             isStaff && typeof this.storage.getVaultFolderUrl === "function"
                 ? this.storage.getVaultFolderUrl(StorageBucket.Deliverables, folderPath)

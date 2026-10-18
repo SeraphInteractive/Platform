@@ -3,6 +3,8 @@ import { ConflictError, ErrorCode, ForbiddenError, NotFoundError } from "../../C
 import { createPage, offsetOf, type Page, type PaginationQuery } from "../../Common/Http/Schemas.js";
 import type { Actor } from "../../Common/Security/Principal.js";
 import {
+    adminSpecialties,
+    assignableSpecialties,
     exclusiveSpecialties,
     hasAtLeast,
     isGrantable,
@@ -14,7 +16,9 @@ import {
     selfSelectableSpecialties,
     settleRole,
     Specialty,
-    specialtyLabel
+    specialtyLabel,
+    supervisorSpecialties,
+    teamSpecialties
 } from "../../Domain/Roles.js";
 import type { Database, Transaction } from "../../Infrastructure/Database/Database.js";
 import { users, type UserRecord } from "../../Infrastructure/Database/Schema.js";
@@ -111,6 +115,7 @@ export class UsersService {
                 }
                 const initialRole = settleRole(change.role, false, null);
                 const initialSpecialties = normalizeSpecialties(change.role, change.specialties ?? []);
+                this.assertValidSpecialtiesForRole(initialRole, initialSpecialties);
                 await this.enforceSpecialtyExclusivity(transaction, null, initialSpecialties, change.transfer, transferredHolders);
                 const [created] = await transaction
                     .insert(users)
@@ -139,6 +144,7 @@ export class UsersService {
                 isDemoted = true;
             }
             const specialties = normalizeSpecialties(role, change.specialties ?? target.specialties);
+            this.assertValidSpecialtiesForRole(role, specialties);
             await this.enforceSpecialtyExclusivity(transaction, target.id, specialties, change.transfer, transferredHolders);
             const [updated] = await transaction
                 .update(users)
@@ -331,6 +337,30 @@ export class UsersService {
             return;
         }
         this.assertCanManage(actor, target);
+    }
+
+    private assertValidSpecialtiesForRole(role: Role, specialties: readonly Specialty[]): void {
+        // secondary roles are staff-only: teams need senior+, supervisor leads stay on supervisors, no secondary roles on base tiers
+        const staffSpecialties = specialties.filter((s) => assignableSpecialties.includes(s));
+        if (staffSpecialties.length === 0) {
+            return;
+        }
+
+        if (role === Role.Member || role === Role.Voter || role === Role.Contributor) {
+            throw new ForbiddenError("Secondary roles cannot be assigned to members, voters, or contributors.");
+        }
+
+        for (const spec of staffSpecialties) {
+            if (supervisorSpecialties.includes(spec) && role !== Role.Supervisor) {
+                throw new ForbiddenError("Supervisor secondary roles can only be assigned to supervisors.");
+            }
+            if (teamSpecialties.includes(spec) && !hasAtLeast(role, Role.SeniorContributor)) {
+                throw new ForbiddenError("Team roles require at least senior contributor.");
+            }
+            if (adminSpecialties.includes(spec) && !hasAtLeast(role, Role.Admin)) {
+                throw new ForbiddenError("Admin secondary roles can only be assigned to administrators.");
+            }
+        }
     }
 
     private async enforceSpecialtyExclusivity(

@@ -31,6 +31,11 @@ create_folder() {
 }
 
 # seed base folder hierarchy
+create_folder "Project Stairway"
+create_folder "Project Stairway/Production"
+create_folder "Project Stairway/Submission Reviews"
+create_folder "Project Stairway/Submission Reviews/Pending"
+create_folder "Project Stairway/Submission Reviews/Affirmed"
 create_folder "Pending"
 create_folder "Affirmed"
 create_folder "submissions"

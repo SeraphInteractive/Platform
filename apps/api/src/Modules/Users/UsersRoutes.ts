@@ -19,14 +19,14 @@ import {
     requireUser
 } from "../../Common/Security/Authorization.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
-import { maximumSpecialties, Role, selfSelectableSpecialties, Specialty } from "../../Domain/Roles.js";
+import { maximumSpecialties, maximumTotalSpecialties, Role, selfSelectableSpecialties, Specialty } from "../../Domain/Roles.js";
 import { PresenceStatus } from "../../Infrastructure/Discord/PresenceProvider.js";
 import { moderatedUserSchema, toModeratedUserResponse, toUserResponse, userSchema } from "./UserPresenter.js";
 import type { UserReference } from "./UsersService.js";
 
 const roleChangeSchema = z.object({
     role: z.enum(Role),
-    specialties: z.array(z.enum(Specialty)).max(maximumSpecialties).optional(),
+    specialties: z.array(z.enum(Specialty)).max(maximumTotalSpecialties).optional(),
     transfer: z.boolean().optional()
 });
 

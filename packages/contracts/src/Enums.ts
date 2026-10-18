@@ -48,6 +48,7 @@ export enum Specialty {
 }
 
 export const maximumSpecialties = 2;
+export const maximumTotalSpecialties = 3;
 
 export const initialTermsVersion = "2026-09-27";
 

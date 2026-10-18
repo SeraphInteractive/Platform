@@ -94,7 +94,7 @@ export const uploadsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
                 if (!matchesContentType(buffer, contentType)) {
                     throw new BadRequestError("The uploaded file signature does not match its content type.", ErrorCode.ValidationFailed);
                 }
-            } else if (key.startsWith("shots/") && key.includes(`/${user.id}/`)) {
+            } else if ((key.startsWith("shots/") || key.includes("/shots/")) && key.includes(`/${user.id}/`)) {
                 bucket = StorageBucket.Deliverables;
                 if (!objectStorage.isEnabled(bucket)) {
                     throw new ServiceUnavailableError("Deliverables storage is not configured.");

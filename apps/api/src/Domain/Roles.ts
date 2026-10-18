@@ -1,10 +1,11 @@
-import { maximumSpecialties, Role, type Specialty } from "@platform/contracts";
+import { maximumTotalSpecialties, Role, type Specialty } from "@platform/contracts";
 
 export {
     adminSpecialties,
     assignableSpecialties,
     exclusiveSpecialties,
     maximumSpecialties,
+    maximumTotalSpecialties,
     Role,
     selfSelectableSpecialties,
     Specialty,
@@ -68,5 +69,5 @@ export function normalizeSpecialties(role: Role, specialties: readonly Specialty
     if (!canHoldSpecialties(role)) {
         return [];
     }
-    return [...new Set(specialties)].slice(0, maximumSpecialties);
+    return [...new Set(specialties)].slice(0, maximumTotalSpecialties);
 }

@@ -72,7 +72,12 @@ describe("shot grab-box", () => {
         });
         expect(upload.statusCode).toBe(201);
         const { key } = json<Envelope<{ key: string }>>(upload).data;
-        expect(key).toMatch(new RegExp(`^Pending/shots/${shotId}/${voter.record.id}/[0-9a-f-]{36}-final_cut\\.mp4$`, "u"));
+        expect(key).toMatch(
+            new RegExp(
+                `^Project Stairway/Submission Reviews/Pending/shots/${shotId}/${voter.record.id}/[0-9a-f-]{36}-final_cut\\.mp4$`,
+                "u"
+            )
+        );
 
         const blendUpload = await context.application.inject({
             method: "POST",
@@ -115,7 +120,9 @@ describe("shot grab-box", () => {
         const queueItems = json<{ data: { id: string; vaultUrl: string | null }[] }>(queue).data;
         expect(queueItems.map((item) => item.id)).toContain(submission.id);
         const queueEntry = queueItems.find((item) => item.id === submission.id);
-        expect(queueEntry?.vaultUrl).toBe(`https://vault.test/apps/files/folders?dir=/Pending/shots/${shotId}/${voter.record.id}`);
+        expect(queueEntry?.vaultUrl).toBe(
+            `https://vault.test/apps/files/folders?dir=/Project%20Stairway/Submission%20Reviews/Pending/shots/${shotId}/${voter.record.id}`
+        );
 
         const revision = await context.application.inject({
             method: "POST",
@@ -180,8 +187,14 @@ describe("shot grab-box", () => {
         expect(await context.storage.getMetadata(StorageBucket.Deliverables, videoKey)).toBeNull();
         expect(await context.storage.getMetadata(StorageBucket.Deliverables, blendKey)).toBeNull();
 
-        const affirmedVideoKey = videoKey.replace(/^Pending\//u, "Affirmed/");
-        const affirmedBlendKey = blendKey.replace(/^Pending\//u, "Affirmed/");
+        const affirmedVideoKey = videoKey.replace(
+            /^Project Stairway\/Submission Reviews\/Pending\//u,
+            "Project Stairway/Submission Reviews/Affirmed/"
+        );
+        const affirmedBlendKey = blendKey.replace(
+            /^Project Stairway\/Submission Reviews\/Pending\//u,
+            "Project Stairway/Submission Reviews/Affirmed/"
+        );
         expect(await context.storage.getMetadata(StorageBucket.Deliverables, affirmedVideoKey)).not.toBeNull();
         expect(await context.storage.getMetadata(StorageBucket.Deliverables, affirmedBlendKey)).not.toBeNull();
 

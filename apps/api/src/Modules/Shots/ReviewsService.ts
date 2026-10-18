@@ -114,14 +114,18 @@ export class ReviewsService {
 
             if (approved) {
                 // promote approved deliverables from pending to affirmed vault
-                videoKey = current.videoKey.startsWith(deliverableVaultPendingPrefix)
-                    ? `${deliverableVaultAffirmedPrefix}${current.videoKey.slice(deliverableVaultPendingPrefix.length)}`
-                    : `${deliverableVaultAffirmedPrefix}${current.videoKey}`;
-
+                const promoteKey = (key: string): string => {
+                    if (key.startsWith(deliverableVaultPendingPrefix)) {
+                        return `${deliverableVaultAffirmedPrefix}${key.slice(deliverableVaultPendingPrefix.length)}`;
+                    }
+                    if (key.startsWith("Pending/")) {
+                        return `${deliverableVaultAffirmedPrefix}${key.slice("Pending/".length)}`;
+                    }
+                    return `${deliverableVaultAffirmedPrefix}${key}`;
+                };
+                videoKey = promoteKey(current.videoKey);
                 if (current.blendKey !== null) {
-                    blendKey = current.blendKey.startsWith(deliverableVaultPendingPrefix)
-                        ? `${deliverableVaultAffirmedPrefix}${current.blendKey.slice(deliverableVaultPendingPrefix.length)}`
-                        : `${deliverableVaultAffirmedPrefix}${current.blendKey}`;
+                    blendKey = promoteKey(current.blendKey);
                 }
 
                 if (typeof this.storage.moveObject === "function" && this.storage.isEnabled(StorageBucket.Deliverables)) {
