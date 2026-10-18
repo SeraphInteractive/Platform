@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { parseServerSentEvents } from "../src/Api/NotificationConsumer.js";
 import { loadBotConfiguration } from "../src/Configuration/BotConfiguration.js";
 import { ChannelPurpose, SettingsStore } from "../src/State/SettingsStore.js";
+import { WarningStore } from "../src/State/WarningStore.js";
 
 describe("server-sent event parsing", () => {
     it("splits complete events and keeps partial ones", () => {
@@ -78,6 +79,61 @@ describe("settings store", () => {
         });
         await store.flush();
         expect((remoteSettings.channels as Record<string, string>)[ChannelPurpose.Telemetry]).toBe("200000000000000002");
+    });
+});
+
+describe("warning store remote sync", () => {
+    let directory = "";
+
+    afterEach(async () => {
+        await rm(directory, { recursive: true, force: true });
+    });
+
+    it("loads from remote API and syncs mutations and resets", async () => {
+        directory = await mkdtemp(join(tmpdir(), "platform-warnings-"));
+        const remoteRecords = new Map<string, Record<string, unknown>>([
+            [
+                "user1",
+                {
+                    userId: "user1",
+                    offenceLevel: 1,
+                    stageWarnings: 2,
+                    infractions: [],
+                    timeouts: [],
+                    apology: { status: "none", text: null, submittedAt: null }
+                }
+            ]
+        ]);
+
+        const mockApi = {
+            listModerationRecords: async () => Array.from(remoteRecords.values()) as never,
+            updateModerationRecord: async (userId: string, input: Record<string, unknown>) => {
+                remoteRecords.set(userId, { ...remoteRecords.get(userId), ...input, userId });
+                return remoteRecords.get(userId) as never;
+            },
+            deleteModerationRecord: async (userId: string) => {
+                remoteRecords.delete(userId);
+                return true;
+            }
+        };
+
+        const store = new WarningStore(directory, mockApi as never);
+        await store.load();
+
+        const record = store.getRecord("user1");
+        expect(record?.offenceLevel).toBe(1);
+        expect(record?.stageWarnings).toBe(2);
+
+        // mutate user1 (reaches 3 warnings in stage 1, promoting to stage 2)
+        store.addWarning("user1", "bad language", "chan1", "snippet");
+        await store.flush();
+        expect(remoteRecords.get("user1")?.offenceLevel).toBe(2);
+        expect(remoteRecords.get("user1")?.stageWarnings).toBe(0);
+
+        // reset user1
+        store.resetUser("user1");
+        await store.flush();
+        expect(remoteRecords.has("user1")).toBe(false);
     });
 });
 

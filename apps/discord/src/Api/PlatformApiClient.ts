@@ -48,7 +48,10 @@ import {
     type AutoModRuleDto,
     discordSettingsSchema,
     type DiscordSettingsDto,
-    type UpdateDiscordSettingsDto
+    type UpdateDiscordSettingsDto,
+    userModerationRecordSchema,
+    type UserModerationRecordDto,
+    type UpdateUserModerationRecordDto
 } from "@platform/contracts";
 
 import type { Logger } from "pino";
@@ -210,6 +213,43 @@ export class PlatformApiClient {
                 body: input
             })
         ).data;
+    }
+
+    public async listModerationRecords(query?: {
+        offenceLevel?: number;
+        apologyStatus?: string;
+    }): Promise<readonly UserModerationRecordDto[]> {
+        const search = new URLSearchParams();
+        if (query?.offenceLevel !== undefined) {
+            search.set("offenceLevel", String(query.offenceLevel));
+        }
+        if (query?.apologyStatus !== undefined) {
+            search.set("apologyStatus", query.apologyStatus);
+        }
+        const qs = search.toString();
+        const path = `/discord/moderation${qs ? `?${qs}` : ""}`;
+        return (await this.send(path, dataEnvelope(z.array(userModerationRecordSchema)))).data;
+    }
+
+    public async getModerationRecord(userId: string): Promise<UserModerationRecordDto> {
+        return (await this.send(`/discord/moderation/${userId}`, dataEnvelope(userModerationRecordSchema))).data;
+    }
+
+    public async updateModerationRecord(userId: string, input: UpdateUserModerationRecordDto): Promise<UserModerationRecordDto> {
+        return (
+            await this.send(`/discord/moderation/${userId}`, dataEnvelope(userModerationRecordSchema), {
+                method: "PUT",
+                body: input
+            })
+        ).data;
+    }
+
+    public async deleteModerationRecord(userId: string): Promise<boolean> {
+        return (
+            await this.send(`/discord/moderation/${userId}`, dataEnvelope(z.object({ deleted: z.boolean() })), {
+                method: "DELETE"
+            })
+        ).data.deleted;
     }
 
     public async isHealthy(): Promise<{ healthy: boolean; latencyMs: number }> {

@@ -578,3 +578,62 @@ export const updateDiscordSettingsSchema = z
 
 export type DiscordSettingsDto = z.infer<typeof discordSettingsSchema>;
 export type UpdateDiscordSettingsDto = z.input<typeof updateDiscordSettingsSchema>;
+
+export const infractionSchema = z
+    .object({
+        id: z.string(),
+        timestamp: z.string(),
+        reason: z.string(),
+        channelId: z.string(),
+        messageSnippet: z.string()
+    })
+    .meta({ id: "Infraction" });
+
+export const timeoutRecordSchema = z
+    .object({
+        id: z.string(),
+        timestamp: z.string(),
+        durationMs: z.number(),
+        reason: z.string(),
+        level: z.number().default(1)
+    })
+    .meta({ id: "TimeoutRecord" });
+
+export const apologyRecordSchema = z
+    .object({
+        status: z.enum(["none", "pending", "approved", "rejected"]).default("none"),
+        text: z.string().nullable().default(null),
+        submittedAt: z.string().nullable().default(null),
+        reviewedBy: z.string().nullable().optional(),
+        reviewedAt: z.string().nullable().optional()
+    })
+    .meta({ id: "ApologyRecord" });
+
+export const userModerationRecordSchema = z
+    .object({
+        userId: snowflakeSchema,
+        offenceLevel: z.number().int().default(0),
+        stageWarnings: z.number().int().default(0),
+        infractions: z.array(infractionSchema).default([]),
+        timeouts: z.array(timeoutRecordSchema).default([]),
+        apology: apologyRecordSchema.default({ status: "none", text: null, submittedAt: null }),
+        createdAt: timestampSchema.optional(),
+        updatedAt: timestampSchema.optional()
+    })
+    .meta({ id: "UserModerationRecord" });
+
+export const updateUserModerationRecordSchema = z
+    .object({
+        offenceLevel: z.number().int().optional(),
+        stageWarnings: z.number().int().optional(),
+        infractions: z.array(infractionSchema).optional(),
+        timeouts: z.array(timeoutRecordSchema).optional(),
+        apology: apologyRecordSchema.optional()
+    })
+    .meta({ id: "UpdateUserModerationRecord" });
+
+export type InfractionDto = z.infer<typeof infractionSchema>;
+export type TimeoutRecordDto = z.infer<typeof timeoutRecordSchema>;
+export type ApologyRecordDto = z.infer<typeof apologyRecordSchema>;
+export type UserModerationRecordDto = z.infer<typeof userModerationRecordSchema>;
+export type UpdateUserModerationRecordDto = z.input<typeof updateUserModerationRecordSchema>;

@@ -16,6 +16,7 @@ import {
     varchar
 } from "drizzle-orm/pg-core";
 import { RaidSeverity, type PairwiseSeparation, type RaidFlag } from "@platform/scoring";
+import type { InfractionDto, TimeoutRecordDto } from "@platform/contracts";
 import {
     DifficultyTier,
     EntryStatus,
@@ -298,6 +299,33 @@ export const discordSettings = pgTable("discord_settings", {
     ...timestamps
 });
 
+export const discordModerationRecords = pgTable(
+    "discord_moderation_records",
+    {
+        userId: varchar("discord_user_id", { length: 20 }).primaryKey(),
+        offenceLevel: integer("offence_level").notNull().default(0),
+        stageWarnings: integer("stage_warnings").notNull().default(0),
+        infractions: jsonb("infractions")
+            .$type<InfractionDto[]>()
+            .notNull()
+            .default(sql`'[]'::jsonb`),
+        timeouts: jsonb("timeouts")
+            .$type<TimeoutRecordDto[]>()
+            .notNull()
+            .default(sql`'[]'::jsonb`),
+        apologyStatus: varchar("apology_status", { length: 20 }).notNull().default("none"),
+        apologyText: text("apology_text"),
+        apologySubmittedAt: timestamp("apology_submitted_at", { withTimezone: true }),
+        apologyReviewedBy: varchar("apology_reviewed_by", { length: 20 }),
+        apologyReviewedAt: timestamp("apology_reviewed_at", { withTimezone: true }),
+        ...timestamps
+    },
+    (table) => [
+        index("discord_moderation_records_offence_level_idx").on(table.offenceLevel),
+        index("discord_moderation_records_apology_status_idx").on(table.apologyStatus)
+    ]
+);
+
 export const pipelineProgress = pgTable(
     "pipeline_progress",
     {
@@ -470,6 +498,7 @@ export type ShotRecord = typeof shots.$inferSelect;
 export type SubmissionRecord = typeof submissions.$inferSelect;
 export type ShotThreadMapRecord = typeof shotThreadMaps.$inferSelect;
 export type DiscordSettingsRecord = typeof discordSettings.$inferSelect;
+export type DiscordModerationRecord = typeof discordModerationRecords.$inferSelect;
 export type PipelineProgressRecord = typeof pipelineProgress.$inferSelect;
 export type DeletedStorageObjectRecord = typeof deletedStorageObjects.$inferSelect;
 export type AutomodRuleRecord = typeof automodRules.$inferSelect;

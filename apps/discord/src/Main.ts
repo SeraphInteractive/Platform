@@ -26,7 +26,7 @@ async function main(): Promise<void> {
     const settings = new SettingsStore(configuration.dataDirectory, api, configuration.guildId);
     await settings.load();
 
-    const warnings = new WarningStore(configuration.dataDirectory);
+    const warnings = new WarningStore(configuration.dataDirectory, api);
     await warnings.load();
 
     const client = new Client({
