@@ -11,7 +11,7 @@ import { departmentDiscordMaps, departments, discordSettings } from "../../Infra
 const embedColor = 0x3498db; // clean stairway blue accent
 
 export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
-    const { database } = services;
+    const { database, configuration } = services;
     const security = [{ bearer: [] }];
 
     application.post(
@@ -29,8 +29,11 @@ export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceConta
         async (request): Promise<{ data: AnnouncementPublishResultDto }> => {
             const { target, title, content } = request.body;
             const authorName = optionalUser(request)?.discordUsername ?? "Studio";
+            const botAvatarUrl = `${configuration.security.appUrl.replace(/\/+$/, "")}/branding/bot-pfp-temp.png`;
 
             const webhookPayload = {
+                username: "Project Stairway",
+                avatar_url: botAvatarUrl,
                 content: null,
                 embeds: [
                     {
@@ -38,7 +41,8 @@ export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceConta
                         description: content.trim(),
                         color: embedColor,
                         footer: {
-                            text: `Published by ${authorName} - Project Stairway`
+                            text: `Published by ${authorName} - Project Stairway`,
+                            icon_url: botAvatarUrl
                         },
                         timestamp: new Date().toISOString()
                     }

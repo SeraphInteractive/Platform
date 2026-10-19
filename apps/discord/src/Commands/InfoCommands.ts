@@ -61,11 +61,9 @@ export const statusCommand: SlashCommand = {
             `Platform API: ${health.healthy ? `healthy, ${health.latencyMs} ms` : "unreachable"}`,
             `Notification stream: ${stream.connected ? "connected" : "disconnected"}${stream.lastEventAt === null ? "" : `, last event ${when(stream.lastEventAt.toISOString())}`}`,
             "",
-            `Welcome: ${channel(ChannelPurpose.Welcome)}`,
             `Announcements: ${channel(ChannelPurpose.Announcements)}`,
+            `Rules: ${channel(ChannelPurpose.Rules)}`,
             `Telemetry: ${context.configuration.telemetryWebhookUrl ? "webhook configured" : channel(ChannelPurpose.Telemetry)}`,
-            `Task forum: ${channel(ChannelPurpose.TaskForum)}`,
-            `Task submissions: ${channel(ChannelPurpose.TaskSubmissions)}`,
             `Moderation logs: ${context.configuration.moderationLogsWebhookUrl ? "webhook configured" : channel(ChannelPurpose.ModerationLogs)}`
         ];
         await interaction.editReply({

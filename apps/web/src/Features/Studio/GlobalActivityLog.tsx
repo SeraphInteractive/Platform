@@ -355,7 +355,6 @@ export function GlobalActivityLog(): ReactNode {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h2 className="text-base font-semibold">Global Activity & Telemetry</h2>
-                    <p className="text-muted-foreground text-xs">Real-time audit log across tasks, voting, roles, and safety telemetry.</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1.5 px-2 py-1 text-xs">

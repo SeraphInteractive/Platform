@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { DepartmentSlug, DocumentSlug, ShotStatus } from "@platform/contracts";
 import {
     ChannelType,
@@ -9,7 +11,8 @@ import {
     type GuildBasedChannel,
     type OverwriteResolvable,
     type Role as DiscordRole,
-    type TextChannel
+    type TextChannel,
+    type VoiceChannel
 } from "discord.js";
 import type { Logger } from "pino";
 import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
@@ -34,7 +37,33 @@ export const departmentGrabBoxName: Readonly<Record<DepartmentSlug, string>> = O
     [DepartmentSlug.PostProduction]: "Post-Production-GrabBox"
 });
 
-async function ensureWebhookOnChannel(channel: TextChannel, name: string, logger: Logger): Promise<string | null> {
+function loadBotAvatar(): Buffer | undefined {
+    const candidates = [
+        join(process.cwd(), "assets", "bot-pfp-temp.png"),
+        join(process.cwd(), "apps", "discord", "assets", "bot-pfp-temp.png"),
+        join(process.cwd(), "apps", "web", "public", "branding", "bot-pfp-temp.png"),
+        "/home/yierke/mnt/extra/BACKUP!!!/Videos/bot-pfp.png"
+    ];
+    for (const candidate of candidates) {
+        if (existsSync(candidate)) {
+            try {
+                return readFileSync(candidate);
+            } catch {
+                // ignore unreadable avatar file
+            }
+        }
+    }
+    return undefined;
+}
+
+const botAvatarBuffer = loadBotAvatar();
+
+async function ensureWebhookOnChannel(
+    channel: TextChannel,
+    name: string,
+    logger: Logger,
+    avatar: Buffer | undefined = botAvatarBuffer
+): Promise<string | null> {
     try {
         const webhooks = await channel.fetchWebhooks();
         const existing = webhooks.find((hook) => hook.name.toLowerCase() === name.toLowerCase());
@@ -43,6 +72,7 @@ async function ensureWebhookOnChannel(channel: TextChannel, name: string, logger
         }
         const created = await channel.createWebhook({
             name,
+            avatar,
             reason: "Studio department webhook setup"
         });
         return created.url;
@@ -72,32 +102,28 @@ export interface ServerProvisionerWebhooks {
     readonly rules?: string;
 }
 
-const forumTagNames: Readonly<Record<ShotStatus, string>> = {
+export const forumTagNames: Readonly<Record<ShotStatus, string>> = {
     [ShotStatus.Available]: "Available",
     [ShotStatus.Claimed]: "Claimed",
     [ShotStatus.Submitted]: "Submitted",
     [ShotStatus.Approved]: "Approved"
 };
 
-const channelNames: Readonly<Record<Exclude<ChannelPurpose, ChannelPurpose.TaskForum | ChannelPurpose.TaskLogs>, string>> = {
-    [ChannelPurpose.Welcome]: "welcome",
+type SystemChannelPurpose = ChannelPurpose.Rules | ChannelPurpose.Announcements | ChannelPurpose.Telemetry | ChannelPurpose.ModerationLogs;
+
+const channelNames: Readonly<Record<SystemChannelPurpose, string>> = {
     [ChannelPurpose.Rules]: "rules",
     [ChannelPurpose.Announcements]: "announcements",
     [ChannelPurpose.Telemetry]: "telemetry-alerts",
-    [ChannelPurpose.TaskSubmissions]: "task-submissions",
     [ChannelPurpose.ModerationLogs]: "moderation-logs"
 };
 
-const channelAliases: Readonly<Record<Exclude<ChannelPurpose, ChannelPurpose.TaskForum | ChannelPurpose.TaskLogs>, readonly string[]>> = {
-    [ChannelPurpose.Welcome]: ["welcome", "welcome-and-rules", "arrivals", "general-welcome"],
+const channelAliases: Readonly<Record<SystemChannelPurpose, readonly string[]>> = {
     [ChannelPurpose.Rules]: ["rules", "studio-rules", "guidelines", "rules-and-guidelines"],
     [ChannelPurpose.Announcements]: ["announcements", "announcement", "studio-announcements"],
     [ChannelPurpose.Telemetry]: ["telemetry-alerts", "telemetry", "bot-alerts", "alerts"],
-    [ChannelPurpose.TaskSubmissions]: ["task-submissions", "submissions", "deliverables"],
     [ChannelPurpose.ModerationLogs]: ["moderation-logs", "mod-logs", "supervisor-logs", "mod-log"]
 };
-
-const forumName = "tasks";
 
 export function renderDocumentMarkdown(title: string, revision: number, sections: readonly { title: string; html: string }[]): string {
     const lines: string[] = [`# ${plain(title)}`, "*Official community standards and pipeline etiquette.*", ""];
@@ -180,16 +206,17 @@ export class ServerProvisioner {
     public async bindExisting(guild: Guild): Promise<void> {
         const [roles, channels] = await Promise.all([guild.roles.fetch(), guild.channels.fetch()]);
         await this.settings.update((settings) => {
+            delete settings.channels.welcome;
+            delete settings.channels.taskSubmissions;
+            delete settings.channels.taskForum;
+
             const member = roles.find((role) => findStudioRole(role.name)?.name === "Members");
             const voter = roles.find((role) => findStudioRole(role.name)?.name === "Voters");
             const contributor = roles.find((role) => findStudioRole(role.name)?.name === contributorRoleName);
             settings.roles[BoundRole.Member] ??= member?.id;
             settings.roles[BoundRole.Voter] ??= voter?.id;
             settings.roles[BoundRole.Contributor] ??= contributor?.id;
-            for (const purpose of Object.keys(channelAliases) as Exclude<
-                ChannelPurpose,
-                ChannelPurpose.TaskForum | ChannelPurpose.TaskLogs
-            >[]) {
+            for (const purpose of Object.keys(channelAliases) as SystemChannelPurpose[]) {
                 const aliases = channelAliases[purpose];
                 const match = channels.find((channel) => {
                     if (channel === null || channel.type !== ChannelType.GuildText) {
@@ -203,15 +230,6 @@ export class ServerProvisioner {
             if (this.announcementsChannelId !== undefined) {
                 // explicit configured announcements channel overrides name heuristic
                 settings.channels[ChannelPurpose.Announcements] = this.announcementsChannelId;
-            }
-            const forum = channels.find(
-                (channel) => channel !== null && channel.type === ChannelType.GuildForum && normalizeName(channel.name) === forumName
-            );
-            if (forum?.type === ChannelType.GuildForum) {
-                settings.channels[ChannelPurpose.TaskForum] ??= forum.id;
-                for (const status of Object.values(ShotStatus)) {
-                    settings.forumTags[status] ??= forum.availableTags.find((tag) => tag.name === forumTagNames[status])?.id;
-                }
             }
         });
 
@@ -296,6 +314,17 @@ export class ServerProvisioner {
                             discordLogsWebhookUrl: logsWebhookUrl,
                             discordApplyChannelId: deptApply?.id ?? null
                         });
+
+                        if (deptForum.type === ChannelType.GuildForum && Array.isArray(deptForum.availableTags)) {
+                            await this.settings.update((settings) => {
+                                for (const status of Object.values(ShotStatus)) {
+                                    const tag = deptForum.availableTags.find((candidate) => candidate.name === forumTagNames[status]);
+                                    if (tag !== undefined) {
+                                        settings.forumTags[status] ??= tag.id;
+                                    }
+                                }
+                            });
+                        }
                     }
                 }
             } catch (err: unknown) {
@@ -340,10 +369,6 @@ export class ServerProvisioner {
 
         const staffRoles = studioRoles
             .filter((role) => role.tier <= StudioTier.Department)
-            .map((role) => roleIds.get(role.name))
-            .filter((role): role is DiscordRole => role !== undefined);
-        const contributorRoles = studioRoles
-            .filter((role) => role.tier === StudioTier.Contributor)
             .map((role) => roleIds.get(role.name))
             .filter((role): role is DiscordRole => role !== undefined);
         const botId = guild.client.user.id;
@@ -409,8 +434,47 @@ export class ServerProvisioner {
             });
         };
 
+        const ensureNamedVoice = async (
+            name: string,
+            aliases: readonly string[],
+            parent: CategoryChannel,
+            overwrites: OverwriteResolvable[]
+        ): Promise<VoiceChannel> => {
+            const existing = channels.find((channel) => {
+                if (channel === null || channel.type !== ChannelType.GuildVoice) {
+                    return false;
+                }
+                const normalized = normalizeName(channel.name);
+                return aliases.some((alias) => normalizeName(alias) === normalized);
+            }) as VoiceChannel | undefined;
+
+            if (existing !== undefined) {
+                boundChannels.push(existing.name);
+                await existing.permissionOverwrites
+                    .create(
+                        botId,
+                        {
+                            ViewChannel: true,
+                            Connect: true,
+                            Speak: true
+                        },
+                        { reason: "Ensure bot access to bound voice channel" }
+                    )
+                    .catch(() => undefined);
+                return existing;
+            }
+            createdChannels.push(name);
+            return guild.channels.create({
+                name,
+                type: ChannelType.GuildVoice,
+                parent: parent.id,
+                permissionOverwrites: overwrites,
+                reason: "Studio setup"
+            });
+        };
+
         const ensureText = async (
-            purpose: Exclude<ChannelPurpose, ChannelPurpose.TaskForum | ChannelPurpose.TaskLogs>,
+            purpose: SystemChannelPurpose,
             parent: CategoryChannel,
             topic: string,
             overwrites: OverwriteResolvable[]
@@ -462,16 +526,50 @@ export class ServerProvisioner {
             botAccess
         ];
 
-        const platform = await ensureCategory("Platform", []);
-        const pipeline = await ensureCategory("Task pipeline", []);
-        const staff = await ensureCategory("Staff", privateOverwrites);
-
-        const welcome = await ensureText(
-            ChannelPurpose.Welcome,
-            platform,
-            "Welcome to the studio! Member arrivals and onboarding.",
-            readOnlyOverwrites
+        // clean up legacy global task pipeline channels if present
+        const legacyForumId = this.settings.channel(ChannelPurpose.TaskForum);
+        const legacyTasksForums = channels.filter(
+            (channel) =>
+                channel !== null &&
+                channel.type === ChannelType.GuildForum &&
+                (channel.id === legacyForumId || normalizeName(channel.name) === "tasks" || normalizeName(channel.name) === "taskpipeline")
         );
+        for (const [, forumCh] of legacyTasksForums) {
+            if (forumCh !== null) {
+                await forumCh.delete("Remove legacy global task forum").catch(() => undefined);
+                channels.delete(forumCh.id);
+            }
+        }
+
+        const legacySubmissionsId = this.settings.channel(ChannelPurpose.TaskSubmissions);
+        const legacySubmissionChannels = channels.filter(
+            (channel) =>
+                channel !== null &&
+                channel.type === ChannelType.GuildText &&
+                (channel.id === legacySubmissionsId ||
+                    normalizeName(channel.name) === "tasksubmissions" ||
+                    normalizeName(channel.name) === "submissions")
+        );
+        for (const [, subCh] of legacySubmissionChannels) {
+            if (subCh !== null) {
+                await subCh.delete("Remove legacy task submissions channel").catch(() => undefined);
+                channels.delete(subCh.id);
+            }
+        }
+
+        const legacyPipelineCategory = channels.find(
+            (channel) =>
+                channel !== null &&
+                channel.type === ChannelType.GuildCategory &&
+                normalizeName(channel.name) === normalizeName("Task pipeline")
+        );
+        if (legacyPipelineCategory !== undefined && legacyPipelineCategory !== null) {
+            await legacyPipelineCategory.delete("Remove legacy task pipeline category").catch(() => undefined);
+            channels.delete(legacyPipelineCategory.id);
+        }
+
+        const platform = await ensureCategory("Platform", []);
+        const staff = await ensureCategory("Staff", privateOverwrites);
 
         const announcements = await ensureText(
             ChannelPurpose.Announcements,
@@ -491,6 +589,13 @@ export class ServerProvisioner {
                 .catch(() => undefined);
         }
 
+        const rules = await ensureText(
+            ChannelPurpose.Rules,
+            platform,
+            "Community guidelines, voting invariants, and rules.",
+            readOnlyOverwrites
+        );
+
         // telemetry channel (skip creating if webhook URL configured and channel not found)
         const telemetryExisting = channels.find(
             (channel) =>
@@ -502,13 +607,6 @@ export class ServerProvisioner {
             this.webhooks?.telemetry !== undefined && telemetryExisting === undefined
                 ? undefined
                 : await ensureText(ChannelPurpose.Telemetry, staff, "Voting activity, bans and raid alerts.", privateOverwrites);
-
-        const submissions = await ensureText(ChannelPurpose.TaskSubmissions, pipeline, "Deliverables waiting for review.", [
-            { id: everyone, deny: [PermissionFlagsBits.ViewChannel] },
-            ...staffRead,
-            ...contributorRoles.map((role) => ({ id: role.id, allow: [PermissionFlagsBits.ViewChannel] })),
-            botAccess
-        ]);
 
         // moderation logs channel (skip creating if webhook URL configured and channel not found)
         const modLogsExisting = channels.find(
@@ -527,7 +625,38 @@ export class ServerProvisioner {
                       privateOverwrites
                   );
 
-        const supervisorGeneralOverwrites: OverwriteResolvable[] = [
+        const contributorRoles = studioRoles
+            .filter((role) => role.tier <= StudioTier.Contributor)
+            .map((role) => roleIds.get(role.name))
+            .filter((role): role is DiscordRole => role !== undefined);
+
+        const production = await ensureCategory("Production", []);
+
+        const productionGeneralOverwrites: OverwriteResolvable[] = [
+            { id: everyone, deny: [PermissionFlagsBits.ViewChannel] },
+            ...contributorRoles.map((role) => ({
+                id: role.id,
+                allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.ReadMessageHistory,
+                    PermissionFlagsBits.SendMessages,
+                    PermissionFlagsBits.AttachFiles,
+                    PermissionFlagsBits.EmbedLinks,
+                    PermissionFlagsBits.AddReactions
+                ]
+            })),
+            botAccess
+        ];
+
+        await ensureNamedText(
+            "production-general",
+            ["production-general", "production", "all-contributors", "studio-general"],
+            production,
+            "General cross-department discussion for all studio contributors.",
+            productionGeneralOverwrites
+        );
+
+        const productionManagementOverwrites: OverwriteResolvable[] = [
             { id: everyone, deny: [PermissionFlagsBits.ViewChannel] },
             ...staffRoles.map((role) => ({
                 id: role.id,
@@ -543,36 +672,12 @@ export class ServerProvisioner {
         ];
 
         await ensureNamedText(
-            "supervisor-general",
-            ["supervisor-general", "supervisors", "supervisor-chat"],
-            staff,
-            "Cross-department supervisor coordination.",
-            supervisorGeneralOverwrites
+            "production-management",
+            ["production-management", "production-leads", "supervisor-general", "supervisors", "supervisor-chat"],
+            production,
+            "Cross-department supervisor and production coordination.",
+            productionManagementOverwrites
         );
-
-        const rules = await ensureText(
-            ChannelPurpose.Rules,
-            platform,
-            "Community guidelines, voting invariants, and rules.",
-            readOnlyOverwrites
-        );
-
-        let forum = find(forumName, ChannelType.GuildForum) as ForumChannel | undefined;
-        const isExistingForum = forum !== undefined;
-        if (forum === undefined) {
-            forum = await guild.channels.create({
-                name: forumName,
-                type: ChannelType.GuildForum,
-                parent: pipeline.id,
-                topic: "Open tasks. Use /take-task in a post to claim it.",
-                reason: "Studio setup"
-            });
-            createdChannels.push(forumName);
-        } else {
-            boundChannels.push(forum.name);
-        }
-        await this.ensureForumPermissions(forum, isExistingForum);
-        const tagged = await this.ensureForumTags(forum);
 
         const departmentSummaries: DepartmentProvisionSummary[] = [];
         if (this.api !== undefined) {
@@ -582,42 +687,7 @@ export class ServerProvisioner {
                     const prefix = departmentChannelPrefix[dept.slug] ?? dept.slug;
                     const category = await ensureCategory(dept.name, []);
 
-                    const tasksForumName = departmentGrabBoxName[dept.slug] ?? `${prefix}-grabbox`;
-                    const forumAliases = [
-                        tasksForumName,
-                        `${dept.name}-GrabBox`,
-                        `${dept.slug}-grabbox`,
-                        `${prefix}-grabbox`,
-                        "lighting-vfx-grabbox",
-                        "art-and-writing-grabbox",
-                        `${prefix}-tasks`,
-                        `${dept.slug}-tasks`
-                    ];
-                    let deptForum = channels.find(
-                        (channel) =>
-                            channel !== null &&
-                            channel.type === ChannelType.GuildForum &&
-                            forumAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
-                    ) as ForumChannel | undefined;
-                    const isExistingDeptForum = deptForum !== undefined;
-                    if (deptForum === undefined) {
-                        deptForum = await guild.channels.create({
-                            name: tasksForumName,
-                            type: ChannelType.GuildForum,
-                            parent: category.id,
-                            topic: `Grab-box tasks for ${dept.name}. Use /take-task in a post to claim it.`,
-                            reason: "Studio department setup"
-                        });
-                        createdChannels.push(tasksForumName);
-                    } else {
-                        if (deptForum.name !== tasksForumName) {
-                            await deptForum.setName(tasksForumName, "Rename to department grabbox").catch(() => undefined);
-                        }
-                        boundChannels.push(deptForum.name);
-                    }
-                    await this.ensureForumPermissions(deptForum, isExistingDeptForum);
-                    await this.ensureForumTags(deptForum, false);
-
+                    // 1. Info channel (<prefix>-info)
                     const infoName = `${prefix}-info`;
                     const infoAliases = [infoName, `${dept.slug}-info`, `${prefix}-announcements`, `${dept.slug}-announcements`];
                     const deptInfoOverwrites: OverwriteResolvable[] = [
@@ -654,6 +724,128 @@ export class ServerProvisioner {
                     );
                     const infoWebhookUrl = await ensureWebhookOnChannel(deptInfo, `${dept.name} Info`, this.logger);
 
+                    // 2. Apply channel (<prefix>-apply)
+                    const applyName = `${prefix}-apply`;
+                    const applyAliases = [applyName, `${dept.slug}-apply`, `${prefix}-tickets`, `${dept.slug}-tickets`];
+                    const deptApplyOverwrites: OverwriteResolvable[] = [
+                        {
+                            id: everyone,
+                            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
+                            deny: [PermissionFlagsBits.SendMessages]
+                        },
+                        ...staffRoles.map((role) => ({
+                            id: role.id,
+                            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
+                            deny: [PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ManageChannels]
+                        })),
+                        {
+                            id: botId,
+                            allow: [
+                                PermissionFlagsBits.ViewChannel,
+                                PermissionFlagsBits.SendMessages,
+                                PermissionFlagsBits.ReadMessageHistory,
+                                PermissionFlagsBits.ManageChannels,
+                                PermissionFlagsBits.ManageMessages
+                            ]
+                        }
+                    ];
+                    const deptApply = await ensureNamedText(
+                        applyName,
+                        applyAliases,
+                        category,
+                        `Apply for ${dept.name} department contributor role.`,
+                        deptApplyOverwrites
+                    );
+
+                    // 3. Grab-box forum (<dept>-grabbox)
+                    const tasksForumName = departmentGrabBoxName[dept.slug] ?? `${prefix}-grabbox`;
+                    const forumAliases = [
+                        tasksForumName,
+                        `${dept.name}-GrabBox`,
+                        `${dept.slug}-grabbox`,
+                        `${prefix}-grabbox`,
+                        "lighting-vfx-grabbox",
+                        "art-and-writing-grabbox",
+                        `${prefix}-tasks`,
+                        `${dept.slug}-tasks`
+                    ];
+                    let deptForum = channels.find(
+                        (channel) =>
+                            channel !== null &&
+                            channel.type === ChannelType.GuildForum &&
+                            forumAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
+                    ) as ForumChannel | undefined;
+                    const isExistingDeptForum = deptForum !== undefined;
+                    if (deptForum === undefined) {
+                        deptForum = await guild.channels.create({
+                            name: tasksForumName,
+                            type: ChannelType.GuildForum,
+                            parent: category.id,
+                            topic: `Grab-box tasks for ${dept.name}. Use /take-task in a post to claim it.`,
+                            reason: "Studio department setup"
+                        });
+                        createdChannels.push(tasksForumName);
+                    } else {
+                        if (deptForum.name !== tasksForumName) {
+                            await deptForum.setName(tasksForumName, "Rename to department grabbox").catch(() => undefined);
+                        }
+                        boundChannels.push(deptForum.name);
+                    }
+                    await this.ensureForumPermissions(deptForum, isExistingDeptForum);
+                    await this.ensureForumTags(deptForum, true);
+
+                    // 4. General discussion (<prefix>-general) - department-gated chat
+                    const generalName = `${prefix}-general`;
+                    const generalAliases = [generalName, dept.slug, `${prefix}-chat`, `${dept.slug}-chat`];
+
+                    const deptSpecialties = new Set([...dept.contributorSpecialties, ...dept.supervisorSpecialties]);
+                    const deptRoles = studioRoles
+                        .filter(
+                            (sr) => sr.tier <= StudioTier.Executive || (sr.specialty !== undefined && deptSpecialties.has(sr.specialty))
+                        )
+                        .map((sr) => roleIds.get(sr.name))
+                        .filter((role): role is DiscordRole => role !== undefined);
+                    const supervisorRole = roleIds.get("Supervisor");
+                    if (supervisorRole !== undefined && !deptRoles.some((r) => r.id === supervisorRole.id)) {
+                        deptRoles.push(supervisorRole);
+                    }
+
+                    const deptGeneralOverwrites: OverwriteResolvable[] = [
+                        {
+                            id: everyone,
+                            allow: [
+                                PermissionFlagsBits.ViewChannel,
+                                PermissionFlagsBits.ReadMessageHistory,
+                                PermissionFlagsBits.AddReactions
+                            ],
+                            deny: [
+                                PermissionFlagsBits.SendMessages,
+                                PermissionFlagsBits.CreatePublicThreads,
+                                PermissionFlagsBits.CreatePrivateThreads
+                            ]
+                        },
+                        ...deptRoles.map((role) => ({
+                            id: role.id,
+                            allow: [
+                                PermissionFlagsBits.ViewChannel,
+                                PermissionFlagsBits.ReadMessageHistory,
+                                PermissionFlagsBits.SendMessages,
+                                PermissionFlagsBits.AttachFiles,
+                                PermissionFlagsBits.EmbedLinks,
+                                PermissionFlagsBits.AddReactions
+                            ]
+                        })),
+                        botAccess
+                    ];
+                    const deptChat = await ensureNamedText(
+                        generalName,
+                        generalAliases,
+                        category,
+                        `${dept.name} department discussion.`,
+                        deptGeneralOverwrites
+                    );
+
+                    // 5. Task logs (<prefix>-logs)
                     const logsName = `${prefix}-logs`;
                     const logsAliases = [logsName, `${dept.slug}-logs`, `${prefix}-task-logs`, `${dept.slug}-task-logs`];
                     const deptLogsOverwrites: OverwriteResolvable[] = [
@@ -690,61 +882,49 @@ export class ServerProvisioner {
                     );
                     const logsWebhookUrl = await ensureWebhookOnChannel(deptLogs, `${dept.name} Logs`, this.logger);
 
-                    const generalName = `${prefix}-general`;
-                    const generalAliases = [generalName, dept.slug, `${prefix}-chat`, `${dept.slug}-chat`];
-                    const deptGeneralOverwrites: OverwriteResolvable[] = [
+                    // 6. Voice channel (<dep> general) - department-gated connect
+                    const voiceName = `${dept.name} General`;
+                    const voiceAliases = [
+                        voiceName,
+                        `${dept.name} Voice`,
+                        `${prefix}-voice`,
+                        `${dept.slug}-voice`,
+                        `${prefix}-general-voice`,
+                        `${dept.name.toLowerCase()} general`
+                    ];
+                    const deptVoiceOverwrites: OverwriteResolvable[] = [
                         {
                             id: everyone,
+                            allow: [PermissionFlagsBits.ViewChannel],
+                            deny: [PermissionFlagsBits.Connect, PermissionFlagsBits.Speak]
+                        },
+                        ...deptRoles.map((role) => ({
+                            id: role.id,
                             allow: [
                                 PermissionFlagsBits.ViewChannel,
-                                PermissionFlagsBits.ReadMessageHistory,
-                                PermissionFlagsBits.SendMessages,
-                                PermissionFlagsBits.AttachFiles,
-                                PermissionFlagsBits.EmbedLinks,
-                                PermissionFlagsBits.AddReactions
+                                PermissionFlagsBits.Connect,
+                                PermissionFlagsBits.Speak,
+                                PermissionFlagsBits.Stream,
+                                PermissionFlagsBits.UseVAD
                             ]
-                        },
+                        })),
                         botAccess
                     ];
-                    const deptChat = await ensureNamedText(
-                        generalName,
-                        generalAliases,
-                        category,
-                        `${dept.name} department discussion.`,
-                        deptGeneralOverwrites
-                    );
+                    const deptVoice = await ensureNamedVoice(voiceName, voiceAliases, category, deptVoiceOverwrites);
 
-                    const applyName = `${prefix}-apply`;
-                    const applyAliases = [applyName, `${dept.slug}-apply`, `${prefix}-tickets`, `${dept.slug}-tickets`];
-                    const deptApplyOverwrites: OverwriteResolvable[] = [
-                        {
-                            id: everyone,
-                            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
-                            deny: [PermissionFlagsBits.SendMessages]
-                        },
-                        ...staffRoles.map((role) => ({
-                            id: role.id,
-                            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
-                            deny: [PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ManageChannels]
-                        })),
-                        {
-                            id: botId,
-                            allow: [
-                                PermissionFlagsBits.ViewChannel,
-                                PermissionFlagsBits.SendMessages,
-                                PermissionFlagsBits.ReadMessageHistory,
-                                PermissionFlagsBits.ManageChannels,
-                                PermissionFlagsBits.ManageMessages
-                            ]
+                    // enforce requested department channel hierarchy within the category:
+                    // 1. <prefix>-info (0)
+                    // 2. <prefix>-apply (1)
+                    // 3. <dept>-grabbox (2)
+                    // 4. <prefix>-general (3)
+                    // 5. <prefix>-logs (4)
+                    // 6. <dep> General (5) [Voice]
+                    const orderedChannels = [deptInfo, deptApply, deptForum, deptChat, deptLogs, deptVoice];
+                    for (const [index, ch] of orderedChannels.entries()) {
+                        if (ch.parentId === category.id || !ch.parentId) {
+                            await ch.setPosition(index).catch(() => undefined);
                         }
-                    ];
-                    const deptApply = await ensureNamedText(
-                        applyName,
-                        applyAliases,
-                        category,
-                        `Apply for ${dept.name} department contributor role.`,
-                        deptApplyOverwrites
-                    );
+                    }
 
                     await this.api.bindDepartmentDiscordMap(dept.id, {
                         discordCategoryId: category.id,
@@ -761,7 +941,7 @@ export class ServerProvisioner {
                         departmentName: dept.name,
                         categoryName: category.name,
                         forumName: tasksForumName,
-                        channels: [`#${infoName}`, `#${logsName}`, `#${generalName}`, `#${applyName}`]
+                        channels: [`#${infoName}`, `#${applyName}`, tasksForumName, `#${deptChat.name}`, `#${logsName}`, deptVoice.name]
                     });
                 }
             } catch (err: unknown) {
@@ -825,19 +1005,18 @@ export class ServerProvisioner {
         }
 
         await this.settings.update((settings) => {
-            if (welcome !== undefined) {
-                settings.channels[ChannelPurpose.Welcome] = welcome.id;
-            }
+            delete settings.channels.welcome;
+            delete settings.channels.taskSubmissions;
+            delete settings.channels.taskForum;
+
             settings.channels[ChannelPurpose.Rules] = rules.id;
             settings.channels[ChannelPurpose.Announcements] = announcements.id;
             if (telemetry !== undefined) {
                 settings.channels[ChannelPurpose.Telemetry] = telemetry.id;
             }
-            settings.channels[ChannelPurpose.TaskSubmissions] = submissions.id;
             if (moderationLogs !== undefined) {
                 settings.channels[ChannelPurpose.ModerationLogs] = moderationLogs.id;
             }
-            settings.channels[ChannelPurpose.TaskForum] = tagged.id;
             settings.roles[BoundRole.Voter] = roleIds.get("Voters")?.id;
             settings.roles[BoundRole.Contributor] = roleIds.get(contributorRoleName)?.id;
         });
@@ -858,7 +1037,6 @@ export class ServerProvisioner {
                   );
         if (isDefaultTaskForum) {
             await this.settings.update((settings) => {
-                settings.channels[ChannelPurpose.TaskForum] = updated.id;
                 for (const status of Object.values(ShotStatus)) {
                     const tag = updated.availableTags.find((candidate) => candidate.name === forumTagNames[status]);
                     if (tag !== undefined) {

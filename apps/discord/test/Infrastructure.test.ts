@@ -56,7 +56,7 @@ describe("settings store", () => {
         directory = await mkdtemp(join(tmpdir(), "platform-discord-"));
         let remoteSettings: Record<string, unknown> = {
             guildId: "100000000000000001",
-            channels: { [ChannelPurpose.Welcome]: "200000000000000001" },
+            channels: { [ChannelPurpose.Rules]: "200000000000000001" },
             roles: {},
             forumTags: {},
             notificationCursor: "5-0",
@@ -71,7 +71,7 @@ describe("settings store", () => {
         };
         const store = new SettingsStore(directory, mockApi as never, "100000000000000001");
         await store.load();
-        expect(store.channel(ChannelPurpose.Welcome)).toBe("200000000000000001");
+        expect(store.channel(ChannelPurpose.Rules)).toBe("200000000000000001");
         expect(store.notificationCursor).toBe("5-0");
 
         await store.update((settings) => {

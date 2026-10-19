@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Eye, Megaphone, Send } from "lucide-react";
+import { Eye, Send } from "lucide-react";
 import { useState, useTransition, type ReactNode } from "react";
 import { toast } from "sonner";
 import { platformApi } from "@/Api/PlatformApi";
@@ -55,10 +55,7 @@ export function AnnouncementPublisher(): ReactNode {
     };
 
     return (
-        <Section
-            title="Announcements"
-            description="Dispatch markdown announcements directly to Discord announcement and department info channels."
-        >
+        <Section title="Announcements">
             <Card className="p-5">
                 <div className="grid gap-6 lg:grid-cols-2">
                     <div className="space-y-4">
@@ -78,9 +75,6 @@ export function AnnouncementPublisher(): ReactNode {
                                     ))}
                                 </SelectContent>
                             </Select>
-                            <p className="text-muted-foreground text-xs">
-                                Posts via secure webhook. Only authorized supervisors can broadcast.
-                            </p>
                         </div>
 
                         <div className="space-y-1.5">
@@ -131,9 +125,7 @@ export function AnnouncementPublisher(): ReactNode {
                         </div>
                         <div className="rounded-lg border bg-neutral-950 p-4 font-sans text-neutral-100">
                             <div className="flex items-center gap-2 mb-3">
-                                <div className="h-6 w-6 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white">
-                                    <Megaphone className="h-3.5 w-3.5" />
-                                </div>
+                                <img src="/branding/bot-pfp-temp.png" alt="" className="h-6 w-6 rounded-full object-cover shrink-0" />
                                 <div>
                                     <span className="text-xs font-semibold text-white">Project Stairway</span>
                                     <span className="ml-1.5 text-[10px] bg-[#5865F2] text-white px-1 py-0.5 rounded font-mono font-bold">

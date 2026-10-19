@@ -809,6 +809,13 @@
           "notNull": true,
           "default": "'{}'::jsonb"
         },
+        "webhooks": {
+          "name": "webhooks",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
         "roles": {
           "name": "roles",
           "type": "jsonb",

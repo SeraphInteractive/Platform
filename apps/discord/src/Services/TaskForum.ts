@@ -5,6 +5,7 @@ import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
 import type { V2Message } from "../Discord/Ui.js";
 import { ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
 import { threadStarter } from "../Views/TaskViews.js";
+import { forumTagNames } from "./ServerProvisioner.js";
 
 export interface SyncSummary {
     readonly created: number;
@@ -126,7 +127,8 @@ export class TaskForum {
         if (forum === null) {
             return null;
         }
-        const tag = this.settings.forumTag(status);
+        const forumTag = forum.availableTags.find((t) => t.name === forumTagNames[status]);
+        const tag = forumTag?.id ?? this.settings.forumTag(status);
         const thread = await forum.threads.create({
             name: this.threadName(shot),
             message: threadStarter(shot, description),
@@ -147,8 +149,13 @@ export class TaskForum {
 
     public async setStatus(shotId: string, status: ShotStatus): Promise<void> {
         const thread = await this.thread(shotId);
-        const tag = this.settings.forumTag(status);
-        if (thread === null || tag === undefined) {
+        if (thread === null) {
+            return;
+        }
+        const parentForum = thread.parent?.type === ChannelType.GuildForum ? thread.parent : null;
+        const forumTag = parentForum?.availableTags.find((t) => t.name === forumTagNames[status]);
+        const tag = forumTag?.id ?? this.settings.forumTag(status);
+        if (tag === undefined) {
             return;
         }
         if (thread.appliedTags.length !== 1 || thread.appliedTags[0] !== tag) {
@@ -235,9 +242,25 @@ export class TaskForum {
     }
 
     public async sync(shots: readonly ShotDto[]): Promise<SyncSummary> {
-        const forum = await this.forum();
-        if (forum === null) {
-            throw new Error("The task forum isn't configured. Run /setup-forum first.");
+        const defaultForum = await this.forum();
+        const depts = await this.api.listDepartments().catch(() => []);
+        const deptForumIds = new Set<string>();
+        const forums: ForumChannel[] = [];
+        if (defaultForum !== null) {
+            forums.push(defaultForum);
+            deptForumIds.add(defaultForum.id);
+        }
+        for (const dept of depts) {
+            if (dept.discordForumId && !deptForumIds.has(dept.discordForumId)) {
+                const ch = await this.client.channels.fetch(dept.discordForumId).catch(() => null);
+                if (ch !== null && ch.type === ChannelType.GuildForum && ch.guildId === this.guildId) {
+                    forums.push(ch);
+                    deptForumIds.add(ch.id);
+                }
+            }
+        }
+        if (forums.length === 0) {
+            throw new Error("No task forums are configured. Run /bot-setup first.");
         }
         let created = 0;
         let updated = 0;
@@ -256,7 +279,9 @@ export class TaskForum {
                     continue;
                 }
                 known.add(existing.id);
-                const tag = this.settings.forumTag(shot.status);
+                const parentForum = existing.parent?.type === ChannelType.GuildForum ? existing.parent : await this.forumFor(shot.shotType);
+                const forumTag = parentForum?.availableTags.find((t) => t.name === forumTagNames[shot.status]);
+                const tag = forumTag?.id ?? this.settings.forumTag(shot.status);
                 const shouldBeLocked = shot.status === ShotStatus.Approved;
                 const stale =
                     existing.name !== this.threadName(reference) ||
@@ -274,13 +299,19 @@ export class TaskForum {
         }
 
         let removed = 0;
-        const active = await forum.threads.fetchActive();
-        for (const [threadId, thread] of active.threads) {
-            if (thread.parentId === forum.id && !known.has(threadId) && thread.ownerId === this.client.user?.id) {
-                await thread.delete("Task no longer exists").then(
-                    () => removed++,
-                    () => failed++
-                );
+        for (const forum of forums) {
+            try {
+                const active = await forum.threads.fetchActive();
+                for (const [threadId, thread] of active.threads) {
+                    if (thread.parentId === forum.id && !known.has(threadId) && thread.ownerId === this.client.user?.id) {
+                        await thread.delete("Task no longer exists").then(
+                            () => removed++,
+                            () => failed++
+                        );
+                    }
+                }
+            } catch {
+                // ignore fetchActive failure for inactive or inaccessible forums
             }
         }
         return { created, updated, removed, failed };
