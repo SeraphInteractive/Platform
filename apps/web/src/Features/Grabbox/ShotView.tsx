@@ -1,6 +1,14 @@
 "use client";
 
-import { Role, ShotStatus, SubmissionStatus, type ShotDetailDto, type SubmissionDto, type UserDto } from "@platform/contracts";
+import {
+    Role,
+    ShotStatus,
+    shotTypeRequiredSpecialties,
+    SubmissionStatus,
+    type ShotDetailDto,
+    type SubmissionDto,
+    type UserDto
+} from "@platform/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, ExternalLink, FolderOpen, Lock } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -27,7 +35,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/Components/Ui/label";
 import { useNow } from "@/Hooks/UseNow";
 import { loginHref, useSession } from "@/Hooks/UseSession";
-import { difficultyLabels, formatDateTime, pluralize } from "@/Lib/Format";
+import { difficultyLabels, formatDateTime, pluralize, shotTypeLabels, specialtyLabel } from "@/Lib/Format";
 import { hasAtLeast } from "@/Lib/Roles";
 import { safeHttpUrl } from "@/Lib/SafeUrl";
 import { SubmitWorkDialog } from "./SubmitWorkDialog";
@@ -199,6 +207,22 @@ function ActionPanel({ shot, user }: { readonly shot: ShotDetailDto; readonly us
     if (user.isBlacklisted) {
         return <p className="text-sm">Your account can&apos;t claim tasks right now. Reach out to a supervisor on Discord.</p>;
     }
+    if (!hasAtLeast(user, Role.Contributor) && !hasAtLeast(user, Role.Admin)) {
+        return <p className="text-sm">You need the Contributor role to claim tasks. Apply to contribute on Discord.</p>;
+    }
+    const requiredSpecialties = shotTypeRequiredSpecialties[shot.shotType] ?? [];
+    if (
+        requiredSpecialties.length > 0 &&
+        !hasAtLeast(user, Role.Admin) &&
+        !requiredSpecialties.some((specialty) => user.specialties?.includes(specialty) ?? false)
+    ) {
+        return (
+            <p className="text-sm">
+                This task requires the {requiredSpecialties.map(specialtyLabel).join(" or ")} specialty. Apply for department specialties on
+                Discord.
+            </p>
+        );
+    }
     if (shot.isSeniorLocked && !hasAtLeast(user, Role.SeniorContributor)) {
         return (
             <p className="flex items-center gap-2 text-sm">
@@ -305,7 +329,7 @@ function ShotDetail({ shot }: { readonly shot: ShotDetailDto }): ReactNode {
     return (
         <>
             <PageHeader
-                eyebrow={`${shot.shotCode} · Scene ${shot.sceneNumber}`}
+                eyebrow={`${shot.shotCode} · Scene ${shot.sceneNumber} · ${shotTypeLabels[shot.shotType]}`}
                 title={shot.title}
                 description={
                     <span className="flex items-center gap-2 flex-wrap">
@@ -347,10 +371,14 @@ function ShotDetail({ shot }: { readonly shot: ShotDetailDto }): ReactNode {
                         </CardContent>
                     </Card>
                     <dl className="grid grid-cols-2 gap-4">
+                        <Fact label="Task type">{shotTypeLabels[shot.shotType]}</Fact>
+                        <Fact label="Required expertise">
+                            {(shotTypeRequiredSpecialties[shot.shotType] ?? []).map(specialtyLabel).join(" or ")}
+                        </Fact>
                         <Fact label="Difficulty">{difficultyLabels[shot.difficultyTier]}</Fact>
                         <Fact label="Time to deliver">{pluralize(shot.tierDays, "day")}</Fact>
                         <Fact label="Claimed by">{shot.claimer?.username ?? "Nobody yet"}</Fact>
-                        <Fact label="Due">{shot.deadlineAt === null ? "—" : <RelativeTime value={shot.deadlineAt} />}</Fact>
+                        <Fact label="Due">{shot.deadlineAt === null ? "-" : <RelativeTime value={shot.deadlineAt} />}</Fact>
                     </dl>
                 </aside>
             </div>

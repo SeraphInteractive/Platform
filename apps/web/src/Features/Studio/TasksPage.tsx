@@ -7,6 +7,7 @@ import {
     problemOf,
     Role,
     ShotStatus,
+    ShotType,
     textLimits,
     type ShotDto
 } from "@platform/contracts";
@@ -43,7 +44,7 @@ import { Progress } from "@/Components/Ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/Ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/Ui/table";
 import { useSession } from "@/Hooks/UseSession";
-import { difficultyLabels, shotStatusLabels } from "@/Lib/Format";
+import { difficultyLabels, shotStatusLabels, shotTypeLabels } from "@/Lib/Format";
 import { hasAtLeast } from "@/Lib/Roles";
 
 const anyValue = "any";
@@ -67,6 +68,7 @@ interface ShotDraft {
     readonly title: string;
     readonly description: string;
     readonly difficultyTier: DifficultyTier;
+    readonly shotType: ShotType;
     readonly seniorPriorityHours: string;
 }
 
@@ -77,6 +79,7 @@ function draftOf(shot: ShotDto | undefined): ShotDraft {
         title: shot?.title ?? "",
         description: shot?.description ?? "",
         difficultyTier: shot?.difficultyTier ?? DifficultyTier.Medium,
+        shotType: shot?.shotType ?? ShotType.Animation,
         seniorPriorityHours: "0"
     };
 }
@@ -122,6 +125,7 @@ function toInput(draft: ShotDraft): CreateShotInput | null {
         title,
         description: description.length === 0 ? null : description,
         difficultyTier: draft.difficultyTier,
+        shotType: draft.shotType,
         seniorPriorityHours
     };
 }
@@ -144,6 +148,25 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
 
     const input = toInput(draft);
     const problems = problemsOf(draft);
+
+    const { user } = useSession();
+    const departments = useQuery({
+        queryKey: queryKeys.departments,
+        queryFn: () => platformApi.departments(),
+        staleTime: 300_000
+    });
+
+    const allowedShotTypes = ((): readonly ShotType[] => {
+        if (hasAtLeast(user, Role.Admin)) {
+            return Object.values(ShotType);
+        }
+        if (departments.data === undefined) {
+            return Object.values(ShotType);
+        }
+        const userDepts = departments.data.filter((dept) => dept.supervisorSpecialties.some((s) => user?.specialties?.includes(s)));
+        const types = userDepts.flatMap((d) => d.shotTypes);
+        return types.length > 0 ? types : Object.values(ShotType);
+    })();
 
     const onOpenChange = (next: boolean): void => {
         if (save.isPending) {
@@ -243,6 +266,7 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
                 title: payload.title,
                 description: payload.description,
                 difficultyTier: payload.difficultyTier,
+                shotType: payload.shotType,
                 imageKeys: resolvedKeys
             });
         },
@@ -285,7 +309,7 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
                     <DialogTitle>{shot === undefined ? "New task" : `Edit ${shot.shotCode}`}</DialogTitle>
                 </DialogHeader>
                 <form id={formId} onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-4">
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 sm:col-span-2">
                         <Label htmlFor={`${formId}-scene`}>Scene</Label>
                         <Input
                             id={`${formId}-scene`}
@@ -300,7 +324,7 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
                             onChange={field("sceneNumber")}
                         />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 sm:col-span-2">
                         <Label htmlFor={`${formId}-code`}>Code</Label>
                         <Input
                             id={`${formId}-code`}
@@ -329,6 +353,26 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
                                 {Object.values(DifficultyTier).map((tier) => (
                                     <SelectItem key={tier} value={tier}>
                                         {difficultyLabels[tier]}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor={`${formId}-shot-type`}>Task type</Label>
+                        <Select
+                            value={draft.shotType}
+                            onValueChange={(value) => {
+                                setDraft((current) => ({ ...current, shotType: value as ShotType }));
+                            }}
+                        >
+                            <SelectTrigger id={`${formId}-shot-type`} className="w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {allowedShotTypes.map((type) => (
+                                    <SelectItem key={type} value={type}>
+                                        {shotTypeLabels[type]}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -589,6 +633,7 @@ function ConfirmDialog({ title, description, confirmLabel, destructive, onConfir
 
 function TasksTable(): ReactNode {
     const siteConfig = useSiteConfig();
+    const [shotType, setShotType] = useState<ShotType | typeof anyValue>(anyValue);
     const [status, setStatus] = useState<ShotStatus | typeof anyValue>(anyValue);
     const [difficulty, setDifficulty] = useState<DifficultyTier | typeof anyValue>(anyValue);
     const [page, setPage] = useState(1);
@@ -596,7 +641,8 @@ function TasksTable(): ReactNode {
         page,
         perPage: 25,
         status: status === anyValue ? undefined : status,
-        difficultyTier: difficulty === anyValue ? undefined : difficulty
+        difficultyTier: difficulty === anyValue ? undefined : difficulty,
+        shotType: shotType === anyValue ? undefined : shotType
     };
     const shots = useQuery({
         queryKey: queryKeys.shots(query),
@@ -615,6 +661,25 @@ function TasksTable(): ReactNode {
                     )
                 }
             >
+                <Select
+                    value={shotType}
+                    onValueChange={(value) => {
+                        setShotType(value as ShotType | typeof anyValue);
+                        setPage(1);
+                    }}
+                >
+                    <SelectTrigger size="sm" className="w-36" aria-label="Task type">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value={anyValue}>Any type</SelectItem>
+                        {Object.values(ShotType).map((item) => (
+                            <SelectItem key={item} value={item}>
+                                {shotTypeLabels[item]}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
                 <Select
                     value={status}
                     onValueChange={(value) => {
@@ -668,6 +733,7 @@ function TasksTable(): ReactNode {
                                 <TableRow>
                                     <TableHead className="w-28">Code</TableHead>
                                     <TableHead>Title</TableHead>
+                                    <TableHead className="w-28">Type</TableHead>
                                     <TableHead className="w-16">Scene</TableHead>
                                     <TableHead className="w-24">Difficulty</TableHead>
                                     <TableHead className="w-28">Status</TableHead>
@@ -694,13 +760,14 @@ function TasksTable(): ReactNode {
                                                 </div>
                                             </TableCell>
                                             <TableCell className="max-w-80 truncate font-medium">{shot.title}</TableCell>
+                                            <TableCell className="text-muted-foreground text-xs">{shotTypeLabels[shot.shotType]}</TableCell>
                                             <TableCell className="tabular-nums">{shot.sceneNumber}</TableCell>
                                             <TableCell>{difficultyLabels[shot.difficultyTier]}</TableCell>
                                             <TableCell>
                                                 <ShotStatusBadge status={shot.status} />
                                             </TableCell>
                                             <TableCell className="text-muted-foreground max-w-36 truncate">
-                                                {shot.claimer?.username ?? "–"}
+                                                {shot.claimer?.username ?? "-"}
                                             </TableCell>
                                             <TableCell>
                                                 <TaskRowActions

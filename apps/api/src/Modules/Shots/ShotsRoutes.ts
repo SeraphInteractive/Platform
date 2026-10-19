@@ -1,4 +1,4 @@
-import { fieldRules, reviewQueueItemSchema, shotDetailSchema, shotSchema, submissionSchema } from "@platform/contracts";
+import { fieldRules, reviewQueueItemSchema, shotDetailSchema, shotSchema, ShotType, submissionSchema } from "@platform/contracts";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { dataEnvelope, errorResponses, pageEnvelope, paginationQuerySchema, toIso, uuidSchema } from "../../Common/Http/Schemas.js";
@@ -32,6 +32,8 @@ function toShotCore(
         description: shot.description,
         difficultyTier: shot.difficultyTier,
         tierDays: tierDaysOf(shot.difficultyTier),
+        shotType: shot.shotType,
+        departmentId: shot.departmentId,
         status: shot.status,
         claimedAt: toIso(shot.claimedAt),
         deadlineAt: toIso(shot.deadlineAt),
@@ -93,7 +95,9 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
                 querystring: paginationQuerySchema.extend({
                     sceneNumber: z.coerce.number().int().positive().optional(),
                     difficultyTier: z.enum(DifficultyTier).optional(),
-                    status: z.enum(ShotStatus).optional()
+                    status: z.enum(ShotStatus).optional(),
+                    shotType: z.enum(ShotType).optional(),
+                    departmentId: uuidSchema.optional()
                 }),
                 response: { 200: pageEnvelope(shotSchema), ...errorResponses }
             }
@@ -159,13 +163,15 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
                     description: fieldRules.shotDescription.default(null),
                     difficultyTier: z.enum(DifficultyTier),
                     seniorPriorityHours: z.number().int().min(0).max(168).default(0),
+                    shotType: z.enum(ShotType).default(ShotType.Animation),
+                    departmentId: uuidSchema.nullable().optional(),
                     imageKeys: fieldRules.shotImageKeys.default([])
                 }),
                 response: { 201: dataEnvelope(shotSchema), ...errorResponses }
             }
         },
         async (request, reply) => {
-            const shot = await shotsService.create(request.body);
+            const shot = await shotsService.create(request.body, currentUser(request));
             return reply.status(201).send({
                 data: toShotResponse({ shot, claimer: null, latestSubmission: null, isSeniorLocked: false }, objectStorage)
             });
@@ -189,6 +195,8 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
                         title: fieldRules.shotTitle.optional(),
                         description: fieldRules.shotDescription.optional(),
                         difficultyTier: z.enum(DifficultyTier).optional(),
+                        shotType: z.enum(ShotType).optional(),
+                        departmentId: uuidSchema.nullable().optional(),
                         imageKeys: fieldRules.shotImageKeys.optional()
                     })
                     .refine((body) => Object.keys(body).length > 0, "at least one field is required"),
@@ -196,7 +204,7 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
             }
         },
         async (request) => {
-            await shotsService.update(request.params.shotId, request.body);
+            await shotsService.update(request.params.shotId, request.body, currentUser(request));
             return {
                 data: toShotResponse(await shotsService.getDetail(request.params.shotId, currentUser(request)), objectStorage)
             };

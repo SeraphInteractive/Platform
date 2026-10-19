@@ -31,5 +31,6 @@ export const queryKeys = {
     documentRevisions: (slug: string) => ["document", slug, "revisions"] as const,
     legalAcceptance: ["legal-acceptance"] as const,
     specialtyHolders: ["users", "specialty-holders"] as const,
-    automodRules: ["automod-rules"] as const
+    automodRules: ["automod-rules"] as const,
+    departments: ["departments"] as const
 };

@@ -1,4 +1,4 @@
-import { ShotStatus, type ShotDto, type ShotReference } from "@platform/contracts";
+import { ShotStatus, shotTypeToDepartment, type ShotDto, type ShotReference, type ShotType } from "@platform/contracts";
 import { ChannelType, type Client, type ForumChannel, type ThreadChannel } from "discord.js";
 import type { Logger } from "pino";
 import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
@@ -13,13 +13,18 @@ export interface SyncSummary {
     readonly failed: number;
 }
 
-export function referenceOf(shot: Pick<ShotDto, "id" | "shotCode" | "title" | "sceneNumber" | "difficultyTier">): ShotReference {
+export function referenceOf(
+    shot: Pick<ShotDto, "id" | "shotCode" | "title" | "sceneNumber" | "difficultyTier"> &
+        Partial<Pick<ShotDto, "shotType" | "departmentId">>
+): ShotReference {
     return {
         id: shot.id,
         code: shot.shotCode,
         title: shot.title,
         sceneNumber: shot.sceneNumber,
-        difficulty: shot.difficultyTier
+        difficulty: shot.difficultyTier,
+        shotType: shot.shotType,
+        departmentId: shot.departmentId ?? null
     };
 }
 
@@ -78,6 +83,25 @@ export class TaskForum {
         return channel !== null && channel.type === ChannelType.GuildForum && channel.guildId === this.guildId ? channel : null;
     }
 
+    public async forumFor(shotType?: ShotType): Promise<ForumChannel | null> {
+        if (shotType !== undefined) {
+            try {
+                const depts = await this.api.listDepartments();
+                const targetSlug = shotTypeToDepartment[shotType];
+                const dept = depts.find((d) => d.slug === targetSlug);
+                if (dept?.discordForumId) {
+                    const channel = await this.client.channels.fetch(dept.discordForumId).catch(() => null);
+                    if (channel !== null && channel.type === ChannelType.GuildForum && channel.guildId === this.guildId) {
+                        return channel;
+                    }
+                }
+            } catch {
+                // fallback to default task forum
+            }
+        }
+        return this.forum();
+    }
+
     public ensureThread(shot: ShotReference, description: string | null, status: ShotStatus): Promise<string | null> {
         const inFlight = this.pendingThreads.get(shot.id);
         if (inFlight !== undefined) {
@@ -98,7 +122,7 @@ export class TaskForum {
         if (existing !== null) {
             return existing.id;
         }
-        const forum = await this.forum();
+        const forum = await this.forumFor(shot.shotType);
         if (forum === null) {
             return null;
         }

@@ -25,6 +25,7 @@ import {
     RoundStatus,
     ScreenplayRole,
     ShotStatus,
+    ShotType,
     SubmissionStatus
 } from "../../Domain/Enums.js";
 import { Role, Specialty } from "../../Domain/Roles.js";
@@ -40,6 +41,7 @@ const timestamps = {
 
 export const roleEnum = pgEnum("user_role", enumValues(Role));
 export const specialtyEnum = pgEnum("user_specialty", enumValues(Specialty));
+export const shotTypeEnum = pgEnum("shot_type", enumValues(ShotType));
 export const roundStatusEnum = pgEnum("round_status", enumValues(RoundStatus));
 export const pollTypeEnum = pgEnum("poll_type", enumValues(PollType));
 export const entryStatusEnum = pgEnum("entry_status", enumValues(EntryStatus));
@@ -205,6 +207,35 @@ export const roundResults = pgTable("round_results", {
         .references(() => users.id)
 });
 
+export const departments = pgTable("departments", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 64 }).notNull().unique(),
+    slug: varchar("slug", { length: 32 }).notNull().unique(),
+    supervisorSpecialties: specialtyEnum("supervisor_specialties")
+        .array()
+        .notNull()
+        .default(sql`'{}'::user_specialty[]`),
+    contributorSpecialties: specialtyEnum("contributor_specialties")
+        .array()
+        .notNull()
+        .default(sql`'{}'::user_specialty[]`),
+    shotTypes: shotTypeEnum("shot_types")
+        .array()
+        .notNull()
+        .default(sql`'{}'::shot_type[]`),
+    ...timestamps
+});
+
+export const departmentDiscordMaps = pgTable("department_discord_maps", {
+    departmentId: uuid("department_id")
+        .primaryKey()
+        .references(() => departments.id, { onDelete: "cascade" }),
+    discordCategoryId: varchar("discord_category_id", { length: 20 }).notNull().unique(),
+    discordForumId: varchar("discord_forum_id", { length: 20 }).notNull().unique(),
+    discordChatChannelId: varchar("discord_chat_channel_id", { length: 20 }).unique(),
+    ...timestamps
+});
+
 export const shots = pgTable(
     "shots",
     {
@@ -215,6 +246,8 @@ export const shots = pgTable(
         title: varchar("title", { length: 255 }).notNull(),
         description: varchar("description", { length: 5000 }),
         difficultyTier: difficultyTierEnum("difficulty_tier").notNull(),
+        shotType: shotTypeEnum("shot_type").notNull().default(ShotType.Animation),
+        departmentId: uuid("department_id").references(() => departments.id, { onDelete: "restrict" }),
         status: shotStatusEnum("status").notNull().default(ShotStatus.Available),
         claimedBy: uuid("claimed_by").references(() => users.id, { onDelete: "set null" }),
         claimedAt: timestamp("claimed_at", { withTimezone: true }),
@@ -506,3 +539,5 @@ export type ScreenplayShelfRecord = typeof screenplayShelves.$inferSelect;
 export type ScreenplayRecord = typeof screenplays.$inferSelect;
 export type ScreenplayCollaboratorRecord = typeof screenplayCollaborators.$inferSelect;
 export type ScreenplayVersionRecord = typeof screenplayVersions.$inferSelect;
+export type DepartmentRecord = typeof departments.$inferSelect;
+export type DepartmentDiscordMapRecord = typeof departmentDiscordMaps.$inferSelect;

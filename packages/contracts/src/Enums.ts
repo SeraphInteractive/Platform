@@ -49,6 +49,121 @@ export enum Specialty {
 export const maximumSpecialties = 2;
 export const maximumTotalSpecialties = 3;
 
+export enum ShotType {
+    // postgres enum order is append-only
+    Modelling3d = "3d_modelling",
+    Rigging = "rigging",
+    Animation = "animation",
+    Vfx = "vfx",
+    SurfaceTextureArt = "surface_texture_art",
+    Lighting = "lighting",
+    ConceptArt = "concept_art"
+}
+
+export enum DepartmentSlug {
+    ArtAndWriting = "art-and-writing",
+    Assets = "assets",
+    Animation = "animation",
+    LightingAndVfx = "lighting-and-vfx",
+    PostProduction = "post-production"
+}
+
+export interface DepartmentDefinition {
+    readonly slug: DepartmentSlug;
+    readonly name: string;
+    readonly supervisorSpecialties: readonly Specialty[];
+    readonly contributorSpecialties: readonly Specialty[];
+    readonly shotTypes: readonly ShotType[];
+}
+
+export const departmentDefinitions: readonly DepartmentDefinition[] = Object.freeze([
+    {
+        slug: DepartmentSlug.ArtAndWriting,
+        name: "Art and Writing",
+        supervisorSpecialties: [Specialty.ArtDirector],
+        contributorSpecialties: [Specialty.ConceptArtist, Specialty.Screenwriter],
+        shotTypes: [ShotType.ConceptArt]
+    },
+    {
+        slug: DepartmentSlug.Assets,
+        name: "Assets",
+        supervisorSpecialties: [
+            Specialty.ModelingAndSurfacingLead,
+            Specialty.ModellingSupervisor,
+            Specialty.RiggingSupervisor,
+            Specialty.SurfacingLookDevLead
+        ],
+        contributorSpecialties: [Specialty.Modeler3d, Specialty.SurfaceTextureArtist, Specialty.Rigger],
+        shotTypes: [ShotType.Modelling3d, ShotType.Rigging, ShotType.SurfaceTextureArt]
+    },
+    {
+        slug: DepartmentSlug.Animation,
+        name: "Animation",
+        supervisorSpecialties: [Specialty.LayoutPrevisLead, Specialty.AnimationSupervisor],
+        contributorSpecialties: [Specialty.LayoutArtist, Specialty.Animator],
+        shotTypes: [ShotType.Animation]
+    },
+    {
+        slug: DepartmentSlug.LightingAndVfx,
+        name: "Lighting and VFX",
+        supervisorSpecialties: [Specialty.LightingAndVfxLead, Specialty.CfxVfxSupervisor, Specialty.LightingCompositingSupervisor],
+        contributorSpecialties: [Specialty.LightingArtist, Specialty.VfxArtist],
+        shotTypes: [ShotType.Lighting, ShotType.Vfx]
+    },
+    {
+        slug: DepartmentSlug.PostProduction,
+        name: "Post-Production",
+        supervisorSpecialties: [Specialty.EditorialSupervisor, Specialty.SoundDirector],
+        contributorSpecialties: [Specialty.VideoEditor, Specialty.SoundDesigner, Specialty.VoiceActor],
+        shotTypes: []
+    }
+]);
+
+export const shotTypeToDepartment: Readonly<Record<ShotType, DepartmentSlug>> = Object.freeze({
+    [ShotType.ConceptArt]: DepartmentSlug.ArtAndWriting,
+    [ShotType.Modelling3d]: DepartmentSlug.Assets,
+    [ShotType.Rigging]: DepartmentSlug.Assets,
+    [ShotType.SurfaceTextureArt]: DepartmentSlug.Assets,
+    [ShotType.Animation]: DepartmentSlug.Animation,
+    [ShotType.Lighting]: DepartmentSlug.LightingAndVfx,
+    [ShotType.Vfx]: DepartmentSlug.LightingAndVfx
+});
+
+export const shotTypeRequiredSpecialty: Readonly<Record<ShotType, Specialty>> = Object.freeze({
+    [ShotType.ConceptArt]: Specialty.ConceptArtist,
+    [ShotType.Modelling3d]: Specialty.Modeler3d,
+    [ShotType.Rigging]: Specialty.Rigger,
+    [ShotType.SurfaceTextureArt]: Specialty.SurfaceTextureArtist,
+    [ShotType.Animation]: Specialty.Animator,
+    [ShotType.Lighting]: Specialty.LightingArtist,
+    [ShotType.Vfx]: Specialty.VfxArtist
+});
+
+export const shotTypeRequiredSpecialties: Readonly<Record<ShotType, readonly Specialty[]>> = Object.freeze({
+    [ShotType.ConceptArt]: [Specialty.ConceptArtist],
+    [ShotType.Modelling3d]: [Specialty.Modeler3d],
+    [ShotType.Rigging]: [Specialty.Rigger],
+    [ShotType.SurfaceTextureArt]: [Specialty.SurfaceTextureArtist],
+    [ShotType.Animation]: [Specialty.Animator, Specialty.LayoutArtist],
+    [ShotType.Lighting]: [Specialty.LightingArtist],
+    [ShotType.Vfx]: [Specialty.VfxArtist]
+});
+
+export const supervisorGrantableSpecialties: Readonly<Partial<Record<Specialty, readonly Specialty[]>>> = Object.freeze({
+    [Specialty.ArtDirector]: [Specialty.ConceptArtist, Specialty.Screenwriter],
+    [Specialty.ModelingAndSurfacingLead]: [Specialty.SurfaceTextureArtist, Specialty.Modeler3d],
+    [Specialty.ModellingSupervisor]: [Specialty.Modeler3d],
+    [Specialty.RiggingSupervisor]: [Specialty.Rigger],
+    [Specialty.SurfacingLookDevLead]: [Specialty.SurfaceTextureArtist, Specialty.Modeler3d, Specialty.Rigger],
+    [Specialty.LayoutPrevisLead]: [Specialty.LayoutArtist],
+    [Specialty.AnimationSupervisor]: [Specialty.Animator, Specialty.VideoEditor],
+    [Specialty.LightingAndVfxLead]: [Specialty.LightingArtist, Specialty.VfxArtist],
+    [Specialty.CfxVfxSupervisor]: [Specialty.VfxArtist],
+    [Specialty.LightingCompositingSupervisor]: [Specialty.LightingArtist, Specialty.VfxArtist],
+    [Specialty.EditorialSupervisor]: [Specialty.VideoEditor],
+    [Specialty.SoundDirector]: [Specialty.SoundDesigner, Specialty.VoiceActor]
+});
+
 export const initialTermsVersion = "2026-09-27";
 
 export enum DocumentSlug {

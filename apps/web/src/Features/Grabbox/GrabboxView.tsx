@@ -1,6 +1,6 @@
 "use client";
 
-import { DifficultyTier, Role, ShotStatus, type ShotDto } from "@platform/contracts";
+import { DifficultyTier, Role, ShotStatus, ShotType, type ShotDto } from "@platform/contracts";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Film, Images } from "lucide-react";
 import type { Route } from "next";
@@ -22,8 +22,9 @@ import { Button } from "@/Components/Ui/button";
 import { Input } from "@/Components/Ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/Ui/select";
 import { Skeleton } from "@/Components/Ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/Components/Ui/tabs";
 import { useSession } from "@/Hooks/UseSession";
-import { difficultyLabels, shotStatusLabels } from "@/Lib/Format";
+import { difficultyLabels, shotStatusLabels, shotTypeLabels } from "@/Lib/Format";
 import { hasAtLeast } from "@/Lib/Roles";
 import { safeHttpUrl } from "@/Lib/SafeUrl";
 import { SeniorLock } from "./ShotMeta";
@@ -103,9 +104,12 @@ function ShotCard({ shot }: { readonly shot: ShotDto }): ReactNode {
                         <span className="font-mono text-[11px] font-medium tracking-wide">Scene {shot.sceneNumber}</span>
                     </div>
                 )}
-                <div className="absolute top-2 left-2 flex items-center gap-1.5">
+                <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
                     <span className="bg-background/90 text-foreground shadow-xs backdrop-blur-xs rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold tracking-wide border border-border/50">
                         {shot.shotCode}
+                    </span>
+                    <span className="bg-background/80 text-muted-foreground shadow-xs backdrop-blur-xs rounded px-1.5 py-0.5 text-[10px] font-medium border border-border/40">
+                        {shotTypeLabels[shot.shotType]}
                     </span>
                 </div>
                 <div className="absolute top-2 right-2 flex items-center gap-1.5">
@@ -174,10 +178,22 @@ export function GrabboxView(): ReactNode {
         }
     }, [legacyShotId, router]);
 
+    const [departmentId, setDepartmentId] = useState<string>(anyValue);
+    const [shotType, setShotType] = useState<ShotType | typeof anyValue>(anyValue);
     const [status, setStatus] = useState<ShotStatus | typeof anyValue>(anyValue);
     const [difficulty, setDifficulty] = useState<DifficultyTier | typeof anyValue>(anyValue);
     const [scene, setScene] = useState("");
     const [page, setPage] = useState(1);
+
+    const departments = useQuery({
+        queryKey: queryKeys.departments,
+        queryFn: () => platformApi.departments(),
+        staleTime: 300_000
+    });
+
+    const activeDepartment = departmentId === anyValue ? undefined : departments.data?.find((d) => d.id === departmentId);
+    const availableShotTypes: readonly ShotType[] =
+        activeDepartment !== undefined && activeDepartment.shotTypes.length > 0 ? activeDepartment.shotTypes : Object.values(ShotType);
 
     const sceneNumber = /^\d{1,6}$/u.test(scene) && Number(scene) > 0 ? Number(scene) : undefined;
     const query: ShotQuery = {
@@ -185,7 +201,9 @@ export function GrabboxView(): ReactNode {
         perPage: 24,
         status: status === anyValue ? undefined : status,
         difficultyTier: difficulty === anyValue ? undefined : difficulty,
-        sceneNumber
+        sceneNumber,
+        departmentId: departmentId === anyValue ? undefined : departmentId,
+        shotType: shotType === anyValue ? undefined : shotType
     };
     const shots = useQuery({
         queryKey: queryKeys.shots(query),
@@ -204,6 +222,26 @@ export function GrabboxView(): ReactNode {
                 }
             />
             <ActiveClaimBanner />
+            {departments.data !== undefined && departments.data.length > 0 && (
+                <Tabs
+                    value={departmentId}
+                    onValueChange={(value) => {
+                        setDepartmentId(value);
+                        setShotType(anyValue);
+                        setPage(1);
+                    }}
+                    className="mb-4"
+                >
+                    <TabsList className="flex flex-wrap h-auto gap-1">
+                        <TabsTrigger value={anyValue}>All departments</TabsTrigger>
+                        {departments.data.map((dept) => (
+                            <TabsTrigger key={dept.id} value={dept.id}>
+                                {dept.name}
+                            </TabsTrigger>
+                        ))}
+                    </TabsList>
+                </Tabs>
+            )}
             <Toolbar
                 trailing={
                     shots.data === undefined ? undefined : (
@@ -211,6 +249,25 @@ export function GrabboxView(): ReactNode {
                     )
                 }
             >
+                <Select
+                    value={shotType}
+                    onValueChange={(value) => {
+                        setShotType(value as ShotType | typeof anyValue);
+                        setPage(1);
+                    }}
+                >
+                    <SelectTrigger size="sm" className="w-40" aria-label="Task type">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value={anyValue}>Any task type</SelectItem>
+                        {availableShotTypes.map((item) => (
+                            <SelectItem key={item} value={item}>
+                                {shotTypeLabels[item]}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
                 <Select
                     value={status}
                     onValueChange={(value) => {

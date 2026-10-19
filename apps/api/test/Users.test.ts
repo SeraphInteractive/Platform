@@ -116,13 +116,21 @@ describe("user management", () => {
             method: "PATCH",
             url: `/api/v1/users/${target.record.id}/role`,
             headers: supervisor.headers,
-            payload: { role: Role.Contributor, specialties: [Specialty.Animator, Specialty.Rigger] }
+            payload: { role: Role.Contributor, specialties: [Specialty.Animator, Specialty.VideoEditor] }
         });
         expect(promote.statusCode).toBe(200);
         expect(json<{ data: { role: string; specialties: string[] } }>(promote).data).toMatchObject({
             role: Role.Contributor,
-            specialties: [Specialty.Animator, Specialty.Rigger]
+            specialties: [Specialty.Animator, Specialty.VideoEditor]
         });
+
+        const crossDepartment = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${target.record.id}/role`,
+            headers: supervisor.headers,
+            payload: { role: Role.Contributor, specialties: [Specialty.Rigger] }
+        });
+        expect(crossDepartment.statusCode).toBe(403);
     });
 
     it("lets the bot service upsert roles below supervisor by Discord ID", async () => {
@@ -295,15 +303,15 @@ describe("user management", () => {
         });
         expect(supervisorPeer.statusCode).toBe(403);
 
-        // supervisor can change subordinate's secondary role
+        // supervisor can change subordinate's secondary role within their department
         const supervisorSubordinate = await context.application.inject({
             method: "PATCH",
             url: `/api/v1/users/${contributor.record.id}/role`,
             headers: supervisor1.headers,
-            payload: { role: Role.Contributor, specialties: [Specialty.LightingArtist] }
+            payload: { role: Role.Contributor, specialties: [Specialty.Animator] }
         });
         expect(supervisorSubordinate.statusCode).toBe(200);
-        expect(json<{ data: { specialties: string[] } }>(supervisorSubordinate).data.specialties).toEqual([Specialty.LightingArtist]);
+        expect(json<{ data: { specialties: string[] } }>(supervisorSubordinate).data.specialties).toEqual([Specialty.Animator]);
     });
 
     it("enforces 1-person exclusivity on supervisor/admin roles and supports atomic transfer", async () => {

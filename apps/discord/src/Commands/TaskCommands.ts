@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { DifficultyTier, ReviewDecision, Role, ShotStatus, type ShotDetailDto } from "@platform/contracts";
+import { DifficultyTier, ReviewDecision, Role, ShotStatus, ShotType, type ShotDetailDto } from "@platform/contracts";
 import {
     ChannelType,
     LabelBuilder,
@@ -76,6 +76,21 @@ export const createTaskCommand: SlashCommand = {
                     { name: "Complex (14 days)", value: DifficultyTier.Complex }
                 )
         )
+        .addStringOption((option) =>
+            option
+                .setName("type")
+                .setDescription("Task department discipline")
+                .setRequired(false)
+                .addChoices(
+                    { name: "Animation", value: ShotType.Animation },
+                    { name: "3D Modelling", value: ShotType.Modelling3d },
+                    { name: "Rigging", value: ShotType.Rigging },
+                    { name: "Surface / Texture Art", value: ShotType.SurfaceTextureArt },
+                    { name: "Lighting", value: ShotType.Lighting },
+                    { name: "VFX", value: ShotType.Vfx },
+                    { name: "Concept Art", value: ShotType.ConceptArt }
+                )
+        )
         .addStringOption((option) => option.setName("code").setDescription("Shot code, generated if empty").setMaxLength(50))
         .addStringOption((option) => option.setName("description").setDescription("Details for whoever takes it").setMaxLength(1500))
         .addIntegerOption((option) =>
@@ -93,13 +108,16 @@ export const createTaskCommand: SlashCommand = {
         const code =
             interaction.options.getString("code")?.trim() ??
             `SC${String(scene).padStart(2, "0")}_${randomBytes(2).toString("hex").toUpperCase()}`;
+        const rawShotType = interaction.options.getString("type");
+        const shotType = rawShotType ? (rawShotType as ShotType) : ShotType.Animation;
         const shot = await actingAs(interaction, context).createShot({
             title: interaction.options.getString("title", true).trim(),
             sceneNumber: scene,
             shotCode: code,
             difficultyTier: interaction.options.getString("difficulty", true) as DifficultyTier,
             description: interaction.options.getString("description")?.trim() ?? null,
-            seniorPriorityHours: interaction.options.getInteger("senior_hours") ?? 0
+            seniorPriorityHours: interaction.options.getInteger("senior_hours") ?? 0,
+            shotType
         });
         const threadId = await context.forum.ensureThread(referenceOf(shot), shot.description, shot.status);
         const where = threadId === null ? "Set up the task forum with /setup-forum to give it a post." : `Its post is <#${threadId}>.`;

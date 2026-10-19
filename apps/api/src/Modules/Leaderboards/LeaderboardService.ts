@@ -173,6 +173,7 @@ export class LeaderboardService {
                 const systemActor: UserActor = {
                     userId: round.createdBy,
                     role: Role.Admin,
+                    specialties: [],
                     displayName: "System",
                     discordId: "0"
                 };

@@ -1,4 +1,5 @@
 export {
+    DepartmentSlug,
     DeliverableKind,
     DifficultyTier,
     EntryStatus,
@@ -8,5 +9,7 @@ export {
     RoundStatus,
     ScreenplayRole,
     ShotStatus,
+    ShotType,
+    Specialty,
     SubmissionStatus
 } from "@platform/contracts";

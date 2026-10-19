@@ -9,6 +9,7 @@ import {
     ReviewDecision,
     Role,
     RoundStatus,
+    ShotType,
     Specialty
 } from "./Enums.js";
 import { snowflakeSchema, timestampSchema, uuidSchema } from "./Http.js";
@@ -56,7 +57,9 @@ const shotReference = z.object({
     code: z.string(),
     title: z.string(),
     sceneNumber: z.number().int(),
-    difficulty: z.enum(DifficultyTier)
+    difficulty: z.enum(DifficultyTier),
+    shotType: z.enum(ShotType).optional(),
+    departmentId: uuidSchema.nullable().optional()
 });
 
 function notification<T extends NotificationType, S extends z.ZodRawShape>(

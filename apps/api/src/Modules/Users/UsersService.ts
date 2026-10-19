@@ -14,7 +14,8 @@ import {
     selfSelectableSpecialties,
     settleRole,
     Specialty,
-    specialtyLabel
+    specialtyLabel,
+    supervisorGrantableSpecialties
 } from "../../Domain/Roles.js";
 import type { Database, Transaction } from "../../Infrastructure/Database/Database.js";
 import { users, type UserRecord } from "../../Infrastructure/Database/Schema.js";
@@ -125,11 +126,12 @@ export class UsersService {
             const { actor: current, target } = await this.lockParticipants(transaction, actor, reference);
             if (target === null) {
                 this.assertCanGrant(current, change.role);
+                const initialRole = settleRole(change.role, false, null);
+                const initialSpecialties = normalizeSpecialties(change.role, change.specialties ?? []);
+                this.assertCanGrantSpecialties(current, [], initialSpecialties);
                 if (!createIfMissing || reference.kind !== "discord") {
                     throw new NotFoundError("User");
                 }
-                const initialRole = settleRole(change.role, false, null);
-                const initialSpecialties = normalizeSpecialties(change.role, change.specialties ?? []);
                 await this.enforceSpecialtyExclusivity(transaction, null, initialSpecialties, change.transfer, transferredHolders);
                 const [created] = await transaction
                     .insert(users)
@@ -158,6 +160,7 @@ export class UsersService {
                 isDemoted = true;
             }
             const specialties = normalizeSpecialties(role, change.specialties ?? target.specialties);
+            this.assertCanGrantSpecialties(current, target.specialties, specialties);
             await this.enforceSpecialtyExclusivity(transaction, target.id, specialties, change.transfer, transferredHolders);
             const [updated] = await transaction
                 .update(users)
@@ -324,7 +327,7 @@ export class UsersService {
         if (actorRecord === undefined || actorRecord.isBlacklisted) {
             throw new ForbiddenError("Your account can no longer perform this action.");
         }
-        return { actor: { ...actor, role: actorRecord.role }, target };
+        return { actor: { ...actor, role: actorRecord.role, specialties: actorRecord.specialties }, target };
     }
 
     private assertCanGrant(actor: Actor, role: Role): void {
@@ -333,6 +336,26 @@ export class UsersService {
         }
         if (!hasAtLeast(actor.role, Role.Admin) && !isHigherThan(actor.role, role)) {
             throw new ForbiddenError("You can only grant roles below your own.");
+        }
+    }
+
+    private assertCanGrantSpecialties(
+        actor: Actor,
+        existingSpecialties: readonly Specialty[],
+        requestedSpecialties: readonly Specialty[]
+    ): void {
+        if (hasAtLeast(actor.role, Role.Admin) || actor.userId === null) {
+            return;
+        }
+        const addedSpecialties = requestedSpecialties.filter((s) => !existingSpecialties.includes(s));
+        if (addedSpecialties.length === 0) {
+            return;
+        }
+        const allowed = new Set(actor.specialties.flatMap((s) => supervisorGrantableSpecialties[s] ?? []));
+        for (const specialty of addedSpecialties) {
+            if (!allowed.has(specialty)) {
+                throw new ForbiddenError(`You are not authorized to grant the ${specialtyLabel(specialty)} specialty.`);
+            }
         }
     }
 

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
     DifficultyTier,
+    DepartmentSlug,
     DocumentSlug,
     documentLimits,
     EntryStatus,
@@ -13,6 +14,7 @@ import {
     SeparationAction,
     SeparationStatus,
     ShotStatus,
+    ShotType,
     Specialty,
     SubmissionStatus
 } from "./Enums.js";
@@ -218,6 +220,22 @@ export const raidTelemetrySchema = z
     })
     .meta({ id: "RaidTelemetry" });
 
+export const departmentSchema = z
+    .object({
+        id: uuidSchema,
+        name: z.string(),
+        slug: z.enum(DepartmentSlug),
+        supervisorSpecialties: z.array(z.enum(Specialty)),
+        contributorSpecialties: z.array(z.enum(Specialty)),
+        shotTypes: z.array(z.enum(ShotType)),
+        discordCategoryId: snowflakeSchema.nullable().optional(),
+        discordForumId: snowflakeSchema.nullable().optional(),
+        discordChatChannelId: snowflakeSchema.nullable().optional(),
+        createdAt: timestampSchema,
+        updatedAt: timestampSchema
+    })
+    .meta({ id: "Department" });
+
 export const shotSchema = z
     .object({
         id: uuidSchema,
@@ -228,6 +246,8 @@ export const shotSchema = z
         description: z.string().nullable(),
         difficultyTier: z.enum(DifficultyTier),
         tierDays: z.number().int(),
+        shotType: z.enum(ShotType),
+        departmentId: uuidSchema.nullable().optional(),
         status: z.enum(ShotStatus),
         claimer: userSummarySchema.nullable(),
         claimedAt: timestampSchema.nullable(),
@@ -315,6 +335,7 @@ export type LeaderboardDto = z.infer<typeof leaderboardSchema>;
 export type SeparationDto = z.infer<typeof separationSchema>;
 export type RoundResultDto = z.infer<typeof roundResultSchema>;
 export type RaidTelemetryDto = z.infer<typeof raidTelemetrySchema>;
+export type DepartmentDto = z.infer<typeof departmentSchema>;
 export type ShotDto = z.infer<typeof shotSchema>;
 export type SubmissionDto = z.infer<typeof submissionSchema>;
 export type ShotDetailDto = z.infer<typeof shotDetailSchema>;

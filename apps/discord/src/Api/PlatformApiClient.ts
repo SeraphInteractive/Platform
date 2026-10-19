@@ -3,6 +3,8 @@ import {
     autoModRuleSchema,
     ballotSchema,
     dataEnvelope,
+    departmentSchema,
+    type DepartmentDto,
     documentSchema,
     entrySchema,
     leaderboardSchema,
@@ -42,6 +44,7 @@ import {
     type ShotDetailDto,
     type ShotDto,
     type ShotThreadMapDto,
+    type ShotType,
     type Specialty,
     type SubmissionDto,
     type UserDto,
@@ -215,6 +218,26 @@ export class PlatformApiClient {
         ).data;
     }
 
+    public async listDepartments(): Promise<readonly DepartmentDto[]> {
+        return (await this.send("/departments", dataEnvelope(z.array(departmentSchema)))).data;
+    }
+
+    public async getDepartment(idOrSlug: string): Promise<DepartmentDto> {
+        return (await this.send(`/departments/${encodeURIComponent(idOrSlug)}`, dataEnvelope(departmentSchema))).data;
+    }
+
+    public async bindDepartmentDiscordMap(
+        departmentId: string,
+        map: { discordCategoryId: string; discordForumId: string; discordChatChannelId?: string | null }
+    ): Promise<DepartmentDto> {
+        return (
+            await this.send(`/departments/${departmentId}/discord-map`, dataEnvelope(departmentSchema), {
+                method: "PUT",
+                body: map
+            })
+        ).data;
+    }
+
     public async listModerationRecords(query?: {
         offenceLevel?: number;
         apologyStatus?: string;
@@ -381,6 +404,7 @@ export class ActingApiClient {
         difficultyTier: DifficultyTier;
         description: string | null;
         seniorPriorityHours: number;
+        shotType?: ShotType;
     }): Promise<ShotDto> {
         return (await this.request("/shots", dataEnvelope(shotSchema), { method: "POST", body: input })).data;
     }

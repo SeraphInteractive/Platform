@@ -39,6 +39,7 @@ import { autoModRoutes } from "./Modules/AutoMod/AutoModRoutes.js";
 import { scriptsRoutes } from "./Modules/Scripts/ScriptsRoutes.js";
 import { discordSettingsRoutes } from "./Modules/DiscordSettings/DiscordSettingsRoutes.js";
 import { discordModerationRoutes } from "./Modules/DiscordModeration/DiscordModerationRoutes.js";
+import { departmentsRoutes } from "./Modules/Departments/DepartmentsRoutes.js";
 
 export const apiPrefix = "/api/v1";
 
@@ -235,6 +236,7 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
             await api.register(scriptsRoutes, { prefix: "/scripts", services });
             await api.register(discordSettingsRoutes, { services });
             await api.register(discordModerationRoutes, { services });
+            await api.register(departmentsRoutes, { services });
         },
 
         { prefix: apiPrefix }

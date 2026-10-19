@@ -134,6 +134,13 @@
       "when": 1792345000000,
       "tag": "0018_remap_moderator_to_supervisor",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792346000000,
+      "tag": "0019_add_departments_and_shot_types",
+      "breakpoints": true
     }
   ]
 }

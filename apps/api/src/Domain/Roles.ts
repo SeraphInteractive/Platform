@@ -10,6 +10,7 @@ export {
     selfSelectableSpecialties,
     Specialty,
     specialtyLabel,
+    supervisorGrantableSpecialties,
     supervisorSpecialties,
     teamSpecialties
 } from "@platform/contracts";

@@ -401,6 +401,57 @@ export class ServerProvisioner {
         await this.ensureForumPermissions(forum, isExistingForum);
         const tagged = await this.ensureForumTags(forum);
 
+        if (this.api !== undefined) {
+            try {
+                const depts = await this.api.listDepartments();
+                for (const dept of depts) {
+                    const category = await ensureCategory(dept.name, []);
+                    const tasksForumName = `${dept.slug}-tasks`;
+                    let deptForum = find(tasksForumName, ChannelType.GuildForum) as ForumChannel | undefined;
+                    const isExistingDeptForum = deptForum !== undefined;
+                    if (deptForum === undefined) {
+                        deptForum = await guild.channels.create({
+                            name: tasksForumName,
+                            type: ChannelType.GuildForum,
+                            parent: category.id,
+                            topic: `Tasks for ${dept.name}.`,
+                            reason: "Studio department setup"
+                        });
+                        createdChannels.push(tasksForumName);
+                    } else {
+                        boundChannels.push(deptForum.name);
+                    }
+                    await this.ensureForumPermissions(deptForum, isExistingDeptForum);
+                    await this.ensureForumTags(deptForum, false);
+
+                    const chatChannelName = dept.slug;
+                    const existingChat = find(chatChannelName, ChannelType.GuildText) as TextChannel | undefined;
+                    let deptChat: TextChannel;
+                    if (existingChat === undefined) {
+                        deptChat = await guild.channels.create({
+                            name: chatChannelName,
+                            type: ChannelType.GuildText,
+                            parent: category.id,
+                            topic: `${dept.name} department discussion.`,
+                            reason: "Studio department setup"
+                        });
+                        createdChannels.push(`#${chatChannelName}`);
+                    } else {
+                        deptChat = existingChat;
+                        boundChannels.push(`#${deptChat.name}`);
+                    }
+
+                    await this.api.bindDepartmentDiscordMap(dept.id, {
+                        discordCategoryId: category.id,
+                        discordForumId: deptForum.id,
+                        discordChatChannelId: deptChat.id
+                    });
+                }
+            } catch (err: unknown) {
+                this.logger.warn({ err }, "failed to provision department channels");
+            }
+        }
+
         let rulesContent = studioRules;
         if (this.api !== undefined) {
             try {
@@ -480,7 +531,7 @@ export class ServerProvisioner {
         return { createdRoles, createdChannels, boundChannels };
     }
 
-    public async ensureForumTags(forum: ForumChannel): Promise<ForumChannel> {
+    public async ensureForumTags(forum: ForumChannel, isDefaultTaskForum = true): Promise<ForumChannel> {
         const missing = Object.values(ShotStatus).filter(
             (status) => !forum.availableTags.some((tag) => tag.name === forumTagNames[status])
         );
@@ -491,15 +542,17 @@ export class ServerProvisioner {
                       [...forum.availableTags, ...missing.map((status) => ({ name: forumTagNames[status], moderated: true }))],
                       "Task status tags"
                   );
-        await this.settings.update((settings) => {
-            settings.channels[ChannelPurpose.TaskForum] = updated.id;
-            for (const status of Object.values(ShotStatus)) {
-                const tag = updated.availableTags.find((candidate) => candidate.name === forumTagNames[status]);
-                if (tag !== undefined) {
-                    settings.forumTags[status] = tag.id;
+        if (isDefaultTaskForum) {
+            await this.settings.update((settings) => {
+                settings.channels[ChannelPurpose.TaskForum] = updated.id;
+                for (const status of Object.values(ShotStatus)) {
+                    const tag = updated.availableTags.find((candidate) => candidate.name === forumTagNames[status]);
+                    if (tag !== undefined) {
+                        settings.forumTags[status] = tag.id;
+                    }
                 }
-            }
-        });
+            });
+        }
         return updated;
     }
 

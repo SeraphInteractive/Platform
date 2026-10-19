@@ -4,6 +4,8 @@ import {
     PresenceStatus,
     shotThreadMapSchema,
     dataEnvelope,
+    departmentSchema,
+    type DepartmentDto,
     documentRevisionSchema,
     documentRevisionSummarySchema,
     documentSchema,
@@ -59,6 +61,7 @@ import {
     type ShotDetailDto,
     type ShotDto,
     type ShotStatus,
+    type ShotType,
     type Specialty,
     type SubmissionDto,
     type ShotThreadMapDto,
@@ -132,6 +135,8 @@ export interface CreateShotInput {
     readonly description: string | null;
     readonly difficultyTier: DifficultyTier;
     readonly seniorPriorityHours: number;
+    readonly shotType?: ShotType;
+    readonly departmentId?: string | null;
     readonly imageKeys?: readonly string[];
 }
 
@@ -139,6 +144,8 @@ export interface ShotQuery extends PageQuery {
     readonly status?: ShotStatus;
     readonly difficultyTier?: DifficultyTier;
     readonly sceneNumber?: number;
+    readonly shotType?: ShotType;
+    readonly departmentId?: string;
 }
 
 export interface SubmitWorkInput {
@@ -252,6 +259,10 @@ export class PlatformApi {
     public async requestMediaUpload(contentType: MediaContentType, sizeBytes: number): Promise<PresignedUploadDto> {
         return (await request("/uploads/media", dataEnvelope(presignedUploadSchema), { method: "POST", body: { contentType, sizeBytes } }))
             .data;
+    }
+
+    public async departments(): Promise<readonly DepartmentDto[]> {
+        return (await request("/departments", dataEnvelope(z.array(departmentSchema)))).data;
     }
 
     public async shots(query: ShotQuery): Promise<Page<ShotDto>> {

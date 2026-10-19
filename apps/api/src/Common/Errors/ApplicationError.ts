@@ -26,6 +26,8 @@ export enum ErrorCode {
     AccountNotLinked = "ACCOUNT_NOT_LINKED",
     PayloadTooLarge = "PAYLOAD_TOO_LARGE",
     UnsupportedMediaType = "UNSUPPORTED_MEDIA_TYPE",
+    SpecialtyRequired = "SPECIALTY_REQUIRED",
+    UnauthorizedDepartment = "UNAUTHORIZED_DEPARTMENT",
     TooManyRequests = "TOO_MANY_REQUESTS",
     ServiceUnavailable = "SERVICE_UNAVAILABLE",
     InternalError = "INTERNAL_ERROR"
