@@ -66,7 +66,6 @@ export const statusCommand: SlashCommand = {
             `Telemetry: ${context.configuration.telemetryWebhookUrl ? "webhook configured" : channel(ChannelPurpose.Telemetry)}`,
             `Task forum: ${channel(ChannelPurpose.TaskForum)}`,
             `Task submissions: ${channel(ChannelPurpose.TaskSubmissions)}`,
-            `Task log: ${context.configuration.taskLogsWebhookUrl ? "webhook configured" : channel(ChannelPurpose.TaskLogs)}`,
             `Moderation logs: ${context.configuration.moderationLogsWebhookUrl ? "webhook configured" : channel(ChannelPurpose.ModerationLogs)}`
         ];
         await interaction.editReply({

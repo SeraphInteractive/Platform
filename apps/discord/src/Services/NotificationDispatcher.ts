@@ -5,12 +5,15 @@ import {
     ReviewDecision,
     Role,
     ShotStatus,
+    type ShotType,
+    shotTypeToDepartment,
     type PlatformNotification
 } from "@platform/contracts";
 import { WebhookClient, type Client, type SendableChannels } from "discord.js";
 import type { Logger } from "pino";
+import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
-import { Accent, message, panel, person, plain } from "../Discord/Ui.js";
+import { Accent, capitalize, message, panel, person, plain, when } from "../Discord/Ui.js";
 import { renderNotification, renderRulesMessage } from "../Views/NotificationViews.js";
 import { reviewCard, threadUpdate } from "../Views/TaskViews.js";
 import { syncMemberStudioRoles } from "./StudioRoles.js";
@@ -18,7 +21,6 @@ import type { TaskForum } from "./TaskForum.js";
 
 export interface WebhookEndpoints {
     readonly telemetry?: string;
-    readonly taskLogs?: string;
     readonly moderationLogs?: string;
     readonly rules?: string;
 }
@@ -37,6 +39,8 @@ function collectDiscordIds(notification: PlatformNotification): string[] {
 
 export class NotificationDispatcher {
     private readonly webhookClients: Partial<Record<ChannelPurpose, WebhookClient>> = {};
+    private readonly departmentLogsWebhooks = new Map<string, WebhookClient>();
+    private lastDeptSync = 0;
 
     public constructor(
         private readonly client: Client,
@@ -44,13 +48,11 @@ export class NotificationDispatcher {
         private readonly settings: SettingsStore,
         private readonly forum: TaskForum,
         private readonly logger: Logger,
-        webhooks: WebhookEndpoints = {}
+        webhooks: WebhookEndpoints = {},
+        private readonly api?: PlatformApiClient
     ) {
         if (webhooks.telemetry) {
             this.webhookClients[ChannelPurpose.Telemetry] = new WebhookClient({ url: webhooks.telemetry });
-        }
-        if (webhooks.taskLogs) {
-            this.webhookClients[ChannelPurpose.TaskLogs] = new WebhookClient({ url: webhooks.taskLogs });
         }
         if (webhooks.moderationLogs) {
             this.webhookClients[ChannelPurpose.ModerationLogs] = new WebhookClient({ url: webhooks.moderationLogs });
@@ -58,6 +60,35 @@ export class NotificationDispatcher {
         if (webhooks.rules) {
             this.webhookClients[ChannelPurpose.Rules] = new WebhookClient({ url: webhooks.rules });
         }
+    }
+
+    private async getLogsWebhookForShotType(shotType?: ShotType | null): Promise<WebhookClient | null> {
+        if (!shotType) {
+            return null;
+        }
+        const deptSlug = shotTypeToDepartment[shotType];
+        if (!deptSlug) {
+            return null;
+        }
+        const cached = this.departmentLogsWebhooks.get(deptSlug);
+        if (cached !== undefined && Date.now() - this.lastDeptSync < 60_000) {
+            return cached;
+        }
+        if (this.api !== undefined) {
+            try {
+                const depts = await this.api.listDepartments();
+                for (const dept of depts) {
+                    if (dept.discordLogsWebhookUrl) {
+                        this.departmentLogsWebhooks.set(dept.slug, new WebhookClient({ url: dept.discordLogsWebhookUrl }));
+                    }
+                }
+                this.lastDeptSync = Date.now();
+                return this.departmentLogsWebhooks.get(deptSlug) ?? null;
+            } catch (err: unknown) {
+                this.logger.warn({ err }, "failed to fetch department webhooks for task notification");
+            }
+        }
+        return null;
     }
 
     public async handle(notification: PlatformNotification): Promise<void> {
@@ -117,35 +148,141 @@ export class NotificationDispatcher {
 
     private async applySideEffects(notification: PlatformNotification): Promise<void> {
         switch (notification.type) {
-            case NotificationType.ShotCreated:
+            case NotificationType.ShotCreated: {
                 await this.forum.ensureThreadFor(notification.shot.id);
+                const hook = await this.getLogsWebhookForShotType(notification.shot.shotType);
+                if (hook !== null) {
+                    await hook
+                        .send(
+                            message(
+                                panel(
+                                    Accent.Info,
+                                    "**Task Created**",
+                                    `**${plain(notification.shot.code)} - ${plain(notification.shot.title)}**\nDifficulty: ${capitalize(notification.shot.difficulty)} | Scene: ${notification.shot.sceneNumber}`
+                                )
+                            )
+                        )
+                        .catch((err: unknown) => {
+                            this.logger.warn({ err }, "failed to post task created to department logs");
+                        });
+                }
                 return;
+            }
             case NotificationType.ShotUpdated:
                 await this.forum.rename(notification.shot);
                 return;
             case NotificationType.ShotDeleted:
                 await this.forum.remove(notification.shot);
                 return;
-            case NotificationType.ShotClaimed:
+            case NotificationType.ShotClaimed: {
                 await this.forum.setStatus(notification.shot.id, ShotStatus.Claimed);
                 await this.forum.post(notification.shot.id, threadUpdate(notification));
+                const hook = await this.getLogsWebhookForShotType(notification.shot.shotType);
+                if (hook !== null) {
+                    await hook
+                        .send(
+                            message(
+                                panel(
+                                    Accent.Info,
+                                    "**Task Claimed**",
+                                    `**${plain(notification.shot.code)} - ${plain(notification.shot.title)}**\nClaimed by ${person(notification.claimant)}.\nDue: ${when(notification.deadlineAt, "f")} (${when(notification.deadlineAt)}).`
+                                )
+                            )
+                        )
+                        .catch((err: unknown) => {
+                            this.logger.warn({ err }, "failed to post task claimed to department logs");
+                        });
+                }
                 return;
-            case NotificationType.ShotReleased:
-            case NotificationType.ShotExpired:
+            }
+            case NotificationType.ShotReleased: {
                 await this.forum.setStatus(notification.shot.id, ShotStatus.Available);
                 await this.forum.post(notification.shot.id, threadUpdate(notification));
+                const hook = await this.getLogsWebhookForShotType(notification.shot.shotType);
+                if (hook !== null) {
+                    const reasonLine = notification.reason ? `\n> ${plain(notification.reason)}` : "";
+                    await hook
+                        .send(
+                            message(
+                                panel(
+                                    Accent.Warning,
+                                    "**Task Released**",
+                                    `**${plain(notification.shot.code)} - ${plain(notification.shot.title)}**\nReleased by ${person(notification.actor)}. The task is open again.${reasonLine}`
+                                )
+                            )
+                        )
+                        .catch((err: unknown) => {
+                            this.logger.warn({ err }, "failed to post task released to department logs");
+                        });
+                }
                 return;
+            }
+            case NotificationType.ShotExpired: {
+                await this.forum.setStatus(notification.shot.id, ShotStatus.Available);
+                await this.forum.post(notification.shot.id, threadUpdate(notification));
+                const hook = await this.getLogsWebhookForShotType(notification.shot.shotType);
+                if (hook !== null) {
+                    const who = notification.claimant ? ` Claim by ${person(notification.claimant)} expired.` : "";
+                    await hook
+                        .send(
+                            message(
+                                panel(
+                                    Accent.Warning,
+                                    "**Task Claim Expired**",
+                                    `**${plain(notification.shot.code)} - ${plain(notification.shot.title)}**\n${who} The task is open again.`
+                                )
+                            )
+                        )
+                        .catch((err: unknown) => {
+                            this.logger.warn({ err }, "failed to post task expired to department logs");
+                        });
+                }
+                return;
+            }
             case NotificationType.SubmissionCreated: {
                 await this.forum.setStatus(notification.shot.id, ShotStatus.Submitted);
                 await this.forum.post(notification.shot.id, threadUpdate(notification));
                 const reviews = await this.channel(ChannelPurpose.TaskSubmissions);
                 await reviews?.send(reviewCard(notification, this.forum.threadFor(notification.shot.id)));
+                const hook = await this.getLogsWebhookForShotType(notification.shot.shotType);
+                if (hook !== null) {
+                    await hook
+                        .send(
+                            message(
+                                panel(
+                                    Accent.Info,
+                                    "**Deliverable Submitted**",
+                                    `**${plain(notification.shot.code)} - ${plain(notification.shot.title)}** (v${notification.version})\nSubmitted by ${person(notification.contributor)} for supervisor review.`
+                                )
+                            )
+                        )
+                        .catch((err: unknown) => {
+                            this.logger.warn({ err }, "failed to post submission created to department logs");
+                        });
+                }
                 return;
             }
             case NotificationType.SubmissionReviewed: {
                 const approved = notification.decision === ReviewDecision.Approved;
                 await this.forum.post(notification.shot.id, threadUpdate(notification));
                 await this.forum.setStatus(notification.shot.id, approved ? ShotStatus.Approved : ShotStatus.Claimed);
+                const hook = await this.getLogsWebhookForShotType(notification.shot.shotType);
+                if (hook !== null) {
+                    const noteLine = notification.notes ? `\n> ${plain(notification.notes)}` : "";
+                    await hook
+                        .send(
+                            message(
+                                panel(
+                                    approved ? Accent.Success : Accent.Warning,
+                                    approved ? "**Deliverable Approved**" : "**Changes Requested**",
+                                    `**${plain(notification.shot.code)} - ${plain(notification.shot.title)}** (v${notification.version})\nReviewed by ${person(notification.reviewer)}.${noteLine}`
+                                )
+                            )
+                        )
+                        .catch((err: unknown) => {
+                            this.logger.warn({ err }, "failed to post submission review to department logs");
+                        });
+                }
                 if (notification.contributor.discordId !== null) {
                     try {
                         const user = await this.client.users.fetch(notification.contributor.discordId);
@@ -155,7 +292,7 @@ export class NotificationDispatcher {
                                 message(
                                     panel(
                                         Accent.Success,
-                                        `🎉 **Your deliverable has been approved!**`,
+                                        `**Your deliverable has been approved!**`,
                                         `Your submission for **${plain(notification.shot.code)} - ${plain(notification.shot.title)}** (v${notification.version}) was approved by ${person(notification.reviewer, false)}.${note}`
                                     )
                                 )
@@ -165,7 +302,7 @@ export class NotificationDispatcher {
                                 message(
                                     panel(
                                         Accent.Warning,
-                                        `⚠️ **Changes requested on your deliverable**`,
+                                        `**Changes requested on your deliverable**`,
                                         `Your submission for **${plain(notification.shot.code)} - ${plain(notification.shot.title)}** (v${notification.version}) was reviewed by ${person(notification.reviewer, false)} with changes requested.${note}\n\n-# Upload a new version with /submit-task when ready.`
                                     )
                                 )
@@ -260,7 +397,7 @@ export class NotificationDispatcher {
                             message(
                                 panel(
                                     Accent.Success,
-                                    `🎉 **Your entry has been approved!**`,
+                                    `**Your entry has been approved!**`,
                                     `Your submission **${plain(notification.entry.title)}** for **${plain(notification.round.title)}** has been approved and is now on the ballot.`
                                 )
                             )

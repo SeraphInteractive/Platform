@@ -17,15 +17,50 @@ export const botSetupCommand: SlashCommand = {
         }
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const summary = await context.provisioner.provision(interaction.guild);
-        const lines = [
-            "## Server set up",
-            summary.createdRoles.length === 0
-                ? "All studio roles already existed."
-                : `Created ${pluralize(summary.createdRoles.length, "role")}: ${summary.createdRoles.join(", ")}`,
-            summary.createdChannels.length === 0 ? "No new channels were needed." : `Created ${summary.createdChannels.join(", ")}`,
-            summary.boundChannels.length === 0 ? null : `Using existing ${summary.boundChannels.join(", ")}`
-        ].filter((line): line is string => line !== null);
-        await interaction.editReply(asEdit(ephemeral(panel(null, lines.join("\n")))));
+        const lines: string[] = ["### Server Setup", ""];
+
+        lines.push("**Roles**");
+        if (summary.createdRoles.length === 0) {
+            lines.push("- All studio roles already configured.");
+        } else {
+            lines.push(`- Created ${pluralize(summary.createdRoles.length, "role")}: ${summary.createdRoles.join(", ")}`);
+        }
+        lines.push("");
+
+        if (summary.departments && summary.departments.length > 0) {
+            lines.push("**Department Channels**");
+            for (const dept of summary.departments) {
+                lines.push(`- **${dept.departmentName}:** ${dept.forumName}, ${dept.channels.join(", ")}`);
+            }
+            lines.push("");
+        }
+
+        const deptItems = new Set<string>();
+        if (summary.departments) {
+            for (const dept of summary.departments) {
+                deptItems.add(dept.categoryName);
+                deptItems.add(dept.forumName);
+                for (const ch of dept.channels) {
+                    deptItems.add(ch);
+                    deptItems.add(ch.replace(/^#/u, ""));
+                }
+            }
+        }
+
+        const nonDeptCreated = summary.createdChannels.filter((c) => !deptItems.has(c) && !deptItems.has(c.replace(/^#/u, "")));
+        if (nonDeptCreated.length > 0) {
+            lines.push("**Created Core Channels**");
+            lines.push(`- ${nonDeptCreated.join(", ")}`);
+            lines.push("");
+        }
+
+        const nonDeptBound = summary.boundChannels.filter((c) => !deptItems.has(c) && !deptItems.has(c.replace(/^#/u, "")));
+        if (nonDeptBound.length > 0) {
+            lines.push("**Existing Channels Bound**");
+            lines.push(`- ${nonDeptBound.join(", ")}`);
+        }
+
+        await interaction.editReply(asEdit(ephemeral(panel(null, lines.join("\n").trim()))));
     }
 };
 

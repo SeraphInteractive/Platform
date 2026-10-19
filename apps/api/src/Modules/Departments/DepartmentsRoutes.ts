@@ -25,6 +25,11 @@ function toDepartmentResponse(dept: DepartmentRecord, map?: DepartmentDiscordMap
         discordCategoryId: map?.discordCategoryId ?? null,
         discordForumId: map?.discordForumId ?? null,
         discordChatChannelId: map?.discordChatChannelId ?? null,
+        discordInfoChannelId: map?.discordInfoChannelId ?? null,
+        discordInfoWebhookUrl: map?.discordInfoWebhookUrl ?? null,
+        discordLogsChannelId: map?.discordLogsChannelId ?? null,
+        discordLogsWebhookUrl: map?.discordLogsWebhookUrl ?? null,
+        discordApplyChannelId: map?.discordApplyChannelId ?? null,
         createdAt: toIso(dept.createdAt),
         updatedAt: toIso(dept.updatedAt)
     };
@@ -106,14 +111,28 @@ export const departmentsRoutes: FastifyPluginAsyncZod<{ services: ServiceContain
                 body: z.object({
                     discordCategoryId: snowflakeSchema,
                     discordForumId: snowflakeSchema,
-                    discordChatChannelId: snowflakeSchema.nullable().optional()
+                    discordChatChannelId: snowflakeSchema.nullable().optional(),
+                    discordInfoChannelId: snowflakeSchema.nullable().optional(),
+                    discordInfoWebhookUrl: z.string().nullable().optional(),
+                    discordLogsChannelId: snowflakeSchema.nullable().optional(),
+                    discordLogsWebhookUrl: z.string().nullable().optional(),
+                    discordApplyChannelId: snowflakeSchema.nullable().optional()
                 }),
                 response: { 200: dataEnvelope(departmentSchema), ...errorResponses }
             }
         },
         async (request) => {
             const { departmentId } = request.params;
-            const { discordCategoryId, discordForumId, discordChatChannelId } = request.body;
+            const {
+                discordCategoryId,
+                discordForumId,
+                discordChatChannelId,
+                discordInfoChannelId,
+                discordInfoWebhookUrl,
+                discordLogsChannelId,
+                discordLogsWebhookUrl,
+                discordApplyChannelId
+            } = request.body;
 
             const [dept] = await database.select().from(departments).where(eq(departments.id, departmentId)).limit(1);
 
@@ -127,7 +146,12 @@ export const departmentsRoutes: FastifyPluginAsyncZod<{ services: ServiceContain
                     departmentId,
                     discordCategoryId,
                     discordForumId,
-                    discordChatChannelId: discordChatChannelId ?? null
+                    discordChatChannelId: discordChatChannelId ?? null,
+                    discordInfoChannelId: discordInfoChannelId ?? null,
+                    discordInfoWebhookUrl: discordInfoWebhookUrl ?? null,
+                    discordLogsChannelId: discordLogsChannelId ?? null,
+                    discordLogsWebhookUrl: discordLogsWebhookUrl ?? null,
+                    discordApplyChannelId: discordApplyChannelId ?? null
                 })
                 .onConflictDoUpdate({
                     target: departmentDiscordMaps.departmentId,
@@ -135,6 +159,11 @@ export const departmentsRoutes: FastifyPluginAsyncZod<{ services: ServiceContain
                         discordCategoryId,
                         discordForumId,
                         discordChatChannelId: discordChatChannelId ?? null,
+                        discordInfoChannelId: discordInfoChannelId ?? null,
+                        discordInfoWebhookUrl: discordInfoWebhookUrl ?? null,
+                        discordLogsChannelId: discordLogsChannelId ?? null,
+                        discordLogsWebhookUrl: discordLogsWebhookUrl ?? null,
+                        discordApplyChannelId: discordApplyChannelId ?? null,
                         updatedAt: new Date()
                     }
                 })

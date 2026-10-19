@@ -52,6 +52,7 @@ export interface ShotListQuery extends PaginationQuery {
 export interface ShotListItem {
     readonly shot: ShotRecord;
     readonly claimer: UserSummaryRecord | null;
+    readonly creator?: UserSummaryRecord | null;
     readonly latestSubmission: Pick<SubmissionRecord, "version" | "status"> | null;
     readonly isSeniorLocked: boolean;
 }
@@ -119,6 +120,14 @@ const userSummaryColumns = {
     discordAvatar: users.discordAvatar
 };
 
+const creators = alias(users, "creators");
+const creatorSummaryColumns = {
+    id: creators.id,
+    discordId: creators.discordId,
+    discordUsername: creators.discordUsername,
+    discordAvatar: creators.discordAvatar
+};
+
 const revisionGraceDays = 3;
 
 export class ShotsService {
@@ -150,9 +159,10 @@ export class ShotsService {
 
         const [rows, totals] = await Promise.all([
             this.database
-                .select({ shot: shots, claimer: userSummaryColumns })
+                .select({ shot: shots, claimer: userSummaryColumns, creator: creatorSummaryColumns })
                 .from(shots)
                 .leftJoin(users, eq(users.id, shots.claimedBy))
+                .leftJoin(creators, eq(creators.id, shots.createdBy))
                 .where(filter)
                 .orderBy(asc(shots.sceneNumber), asc(shots.shotCode))
                 .limit(query.perPage)
@@ -180,6 +190,7 @@ export class ShotsService {
             rows.map((row) => ({
                 shot: row.shot,
                 claimer: row.claimer,
+                creator: row.creator?.id === null ? null : row.creator,
                 latestSubmission: latestByShot.get(row.shot.id) ?? null,
                 isSeniorLocked: this.isSeniorLocked(row.shot, viewer, now)
             })),
@@ -190,9 +201,10 @@ export class ShotsService {
 
     public async getDetail(shotId: string, viewer: AuthenticatedUser | null): Promise<ShotDetail> {
         const [row] = await this.database
-            .select({ shot: shots, claimer: userSummaryColumns })
+            .select({ shot: shots, claimer: userSummaryColumns, creator: creatorSummaryColumns })
             .from(shots)
             .leftJoin(users, eq(users.id, shots.claimedBy))
+            .leftJoin(creators, eq(creators.id, shots.createdBy))
             .where(eq(shots.id, shotId))
             .limit(1);
         if (row === undefined) {
@@ -233,6 +245,7 @@ export class ShotsService {
         return {
             shot: row.shot,
             claimer: row.claimer,
+            creator: row.creator?.id === null ? null : row.creator,
             latestSubmission:
                 submissionRows[0] === undefined
                     ? null
@@ -244,9 +257,10 @@ export class ShotsService {
 
     public async getByCode(shotCode: string, viewer: AuthenticatedUser | null): Promise<ShotListItem> {
         const [row] = await this.database
-            .select({ shot: shots, claimer: userSummaryColumns })
+            .select({ shot: shots, claimer: userSummaryColumns, creator: creatorSummaryColumns })
             .from(shots)
             .leftJoin(users, eq(users.id, shots.claimedBy))
+            .leftJoin(creators, eq(creators.id, shots.createdBy))
             .where(eq(shots.shotCode, shotCode))
             .limit(1);
         if (row === undefined) {
@@ -256,6 +270,7 @@ export class ShotsService {
         return {
             shot: row.shot,
             claimer: row.claimer,
+            creator: row.creator?.id === null ? null : row.creator,
             latestSubmission: null,
             isSeniorLocked: this.isSeniorLocked(row.shot, viewer, new Date())
         };
@@ -289,6 +304,7 @@ export class ShotsService {
                     difficultyTier: input.difficultyTier,
                     shotType,
                     departmentId,
+                    createdBy: creator?.id ?? null,
                     seniorPriorityUntil,
                     imageKeys: input.imageKeys === undefined ? [] : [...input.imageKeys]
                 })

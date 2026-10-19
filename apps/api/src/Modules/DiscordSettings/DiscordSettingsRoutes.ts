@@ -12,6 +12,7 @@ function toSettingsResponse(record: DiscordSettingsRecord): DiscordSettingsDto {
     return {
         guildId: record.guildId,
         channels: record.channels ?? {},
+        webhooks: record.webhooks ?? {},
         roles: record.roles ?? {},
         forumTags: record.forumTags ?? {},
         notificationCursor: record.notificationCursor ?? null,
@@ -51,6 +52,7 @@ export const discordSettingsRoutes: FastifyPluginAsyncZod<{ services: ServiceCon
                     data: {
                         guildId: request.params.guildId,
                         channels: {},
+                        webhooks: {},
                         roles: {},
                         forumTags: {},
                         notificationCursor: null,
@@ -83,6 +85,9 @@ export const discordSettingsRoutes: FastifyPluginAsyncZod<{ services: ServiceCon
             if (request.body.channels !== undefined) {
                 updateSet.channels = request.body.channels;
             }
+            if (request.body.webhooks !== undefined) {
+                updateSet.webhooks = request.body.webhooks;
+            }
             if (request.body.roles !== undefined) {
                 updateSet.roles = request.body.roles;
             }
@@ -101,6 +106,7 @@ export const discordSettingsRoutes: FastifyPluginAsyncZod<{ services: ServiceCon
                 .values({
                     guildId: request.params.guildId,
                     channels: request.body.channels ?? {},
+                    webhooks: request.body.webhooks ?? {},
                     roles: request.body.roles ?? {},
                     forumTags: request.body.forumTags ?? {},
                     notificationCursor: request.body.notificationCursor ?? null,

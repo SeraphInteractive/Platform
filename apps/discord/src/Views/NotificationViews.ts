@@ -3,11 +3,9 @@ import {
     NotificationType,
     PollType,
     RaidFlag,
-    ReviewDecision,
     RoundStatus,
     type NotificationOf,
-    type PlatformNotification,
-    type ShotReference
+    type PlatformNotification
 } from "@platform/contracts";
 import type { MediaGalleryBuilder } from "discord.js";
 import { ChannelPurpose } from "../State/SettingsStore.js";
@@ -49,15 +47,6 @@ function preview(url: string | null | undefined, title: string): MediaGalleryBui
 
 function reason(value: string | null): string | null {
     return value === null || value.trim().length === 0 ? null : `-# Reason: ${plain(value, 300)}`;
-}
-
-function shotName(shot: ShotReference): string {
-    return `${plain(shot.code, 50)} - ${plain(shot.title, 120)}`;
-}
-
-function shotLink(shot: ShotReference, context: NotificationContext): string {
-    const thread = context.threadFor(shot.id);
-    return thread === undefined ? shotName(shot) : `${shotName(shot)} (<#${thread}>)`;
 }
 
 function describeBallot(notification: NotificationOf<NotificationType.BallotSubmitted>, context: NotificationContext): string {
@@ -111,7 +100,6 @@ export function describeWinner(notification: NotificationOf<NotificationType.Rou
 
 export function renderNotification(notification: PlatformNotification, context: NotificationContext): RenderedNotification[] {
     const telemetry = ChannelPurpose.Telemetry;
-    const taskLogs = ChannelPurpose.TaskLogs;
     const isMember = context.isMember;
     switch (notification.type) {
         case NotificationType.BallotSubmitted:
@@ -294,63 +282,14 @@ export function renderNotification(notification: PlatformNotification, context: 
                 )
             ];
         case NotificationType.ShotCreated:
-            return [post(taskLogs, null, `**Task created:** ${shotLink(notification.shot, context)}`)];
         case NotificationType.ShotUpdated:
-            return [post(taskLogs, null, `**Task updated:** ${shotLink(notification.shot, context)}`)];
         case NotificationType.ShotDeleted:
-            return [post(taskLogs, Accent.Warning, `**Task deleted:** ${shotName(notification.shot)}`)];
         case NotificationType.ShotClaimed:
-            return [
-                post(
-                    taskLogs,
-                    null,
-                    `**Claimed:** ${shotLink(notification.shot, context)}`,
-                    `${person(notification.claimant, isMember)}, due ${when(notification.deadlineAt)}`
-                )
-            ];
         case NotificationType.ShotReleased:
-            return [
-                post(
-                    taskLogs,
-                    null,
-                    `**Released:** ${shotLink(notification.shot, context)}`,
-                    `By ${person(notification.actor, isMember)}`,
-                    reason(notification.reason)
-                )
-            ];
         case NotificationType.ShotExpired:
-            return [
-                post(
-                    taskLogs,
-                    Accent.Warning,
-                    `**Claim expired:** ${shotLink(notification.shot, context)}`,
-                    notification.claimant === null
-                        ? "The task is open again."
-                        : `${person(notification.claimant, isMember)} ran out of time. The task is open again.`
-                )
-            ];
         case NotificationType.SubmissionCreated:
-            return [
-                post(
-                    taskLogs,
-                    null,
-                    `**Submitted:** ${shotLink(notification.shot, context)}, version ${notification.version}`,
-                    `By ${person(notification.contributor, isMember)}`,
-                    notification.notes === null ? null : quote(notification.notes, 500)
-                )
-            ];
-        case NotificationType.SubmissionReviewed: {
-            const approved = notification.decision === ReviewDecision.Approved;
-            return [
-                post(
-                    taskLogs,
-                    approved ? Accent.Success : Accent.Warning,
-                    `**${approved ? "Approved" : "Changes requested"}:** ${shotLink(notification.shot, context)}, version ${notification.version}`,
-                    `Reviewed by ${person(notification.reviewer, isMember)}`,
-                    notification.notes === null ? null : quote(notification.notes, 600)
-                )
-            ];
-        }
+        case NotificationType.SubmissionReviewed:
+            return [];
         case NotificationType.PipelineUpdated: {
             if (notification.isPhaseTransition) {
                 return [
@@ -435,7 +374,7 @@ export function renderRulesMessage(notification: NotificationOf<NotificationType
         lines.push("");
     }
 
-    lines.push(`-# Revision ${notification.revision} • Project Stairway Studio`);
+    lines.push(`-# Revision ${notification.revision} - Project Stairway Studio`);
 
     return message(panel(null, lines.join("\n").trim()));
 }

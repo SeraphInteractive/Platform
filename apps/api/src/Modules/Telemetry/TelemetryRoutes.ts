@@ -1,4 +1,4 @@
-import { raidTelemetrySchema as telemetrySchema } from "@platform/contracts";
+import { activityEntrySchema, platformNotificationSchema, raidTelemetrySchema as telemetrySchema } from "@platform/contracts";
 import { and, desc, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -187,6 +187,139 @@ export const telemetryRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer
             stream.write("retry: 5000\n\n");
             session.streaming = true;
             session.heartbeat = setInterval(() => stream.write(": keep-alive\n\n"), heartbeatMs);
+        }
+    );
+
+    application.get(
+        "/telemetry/activity",
+        {
+            preHandler: supervisor,
+            schema: {
+                tags: ["Telemetry"],
+                summary: "Recent platform activity and telemetry entries.",
+                security,
+                querystring: z.object({
+                    limit: z.coerce.number().int().min(1).max(200).default(50)
+                }),
+                response: { 200: dataEnvelope(z.array(activityEntrySchema)), ...errorResponses }
+            }
+        },
+        async (request) => {
+            const limit = request.query.limit;
+            const entries = await services.notificationLog.recent(limit);
+            const items: z.infer<typeof activityEntrySchema>[] = [];
+            for (const entry of entries) {
+                try {
+                    const parsed = platformNotificationSchema.safeParse(JSON.parse(entry.payload));
+                    if (parsed.success) {
+                        items.push({ id: entry.id, notification: parsed.data });
+                    }
+                } catch {
+                    // skip malformed entries
+                }
+            }
+            return { data: items };
+        }
+    );
+
+    application.get(
+        "/telemetry/activity/stream",
+        {
+            preHandler: supervisor,
+            schema: {
+                tags: ["Telemetry"],
+                summary: "Server-sent event stream of all platform activities and telemetry.",
+                security,
+                response: { 200: z.string().describe("text/event-stream"), ...errorResponses }
+            }
+        },
+        async (request, reply) => {
+            const userId = currentUser(request).id;
+            if ((openStreams.get(userId) ?? 0) >= maximumStreamsPerUser) {
+                throw new ApplicationError(429, ErrorCode.TooManyRequests, "Too many open event streams.");
+            }
+
+            const origin = request.headers.origin;
+            const headers: Record<string, string> = {
+                "Content-Type": "text/event-stream; charset=utf-8",
+                "Cache-Control": "no-cache, no-transform",
+                Connection: "keep-alive",
+                "X-Accel-Buffering": "no",
+                "X-Content-Type-Options": "nosniff",
+                "X-Request-Id": request.id
+            };
+            if (origin !== undefined && configuration.security.corsOrigins.includes(origin)) {
+                headers["Access-Control-Allow-Origin"] = origin;
+                headers.Vary = "Origin";
+            }
+
+            const reader = services.notificationLog.openReader();
+            const stream = reply.raw;
+            let closed = false;
+            let latestId = await services.notificationLog.latestId();
+
+            const close = (): void => {
+                if (closed) {
+                    return;
+                }
+                closed = true;
+                shutdownHandlers.delete(terminate);
+                clearInterval(heartbeat);
+                const remaining = (openStreams.get(userId) ?? 1) - 1;
+                if (remaining <= 0) {
+                    openStreams.delete(userId);
+                } else {
+                    openStreams.set(userId, remaining);
+                }
+                void reader.close();
+            };
+            const terminate = (): void => {
+                close();
+                stream.end();
+            };
+
+            openStreams.set(userId, (openStreams.get(userId) ?? 0) + 1);
+            shutdownHandlers.add(terminate);
+            stream.on("close", close);
+            stream.on("error", close);
+
+            reply.hijack();
+            stream.writeHead(200, headers);
+            stream.write("retry: 5000\n\n");
+
+            const heartbeat = setInterval(() => {
+                if (!closed) {
+                    stream.write(": keep-alive\n\n");
+                }
+            }, heartbeatMs);
+
+            (async () => {
+                while (!closed) {
+                    try {
+                        const entries = await reader.read(latestId, 25, 10_000);
+                        if (closed) {
+                            break;
+                        }
+                        for (const entry of entries) {
+                            latestId = entry.id;
+                            try {
+                                const parsed = platformNotificationSchema.safeParse(JSON.parse(entry.payload));
+                                if (parsed.success) {
+                                    const eventPayload = JSON.stringify({ id: entry.id, notification: parsed.data });
+                                    stream.write(`id: ${entry.id}\nevent: activity\ndata: ${eventPayload}\n\n`);
+                                }
+                            } catch {
+                                // skip malformed entries
+                            }
+                        }
+                    } catch (err: unknown) {
+                        if (!closed) {
+                            request.log.warn({ err }, "activity stream reader error");
+                        }
+                        break;
+                    }
+                }
+            })().catch(() => undefined);
         }
     );
 };

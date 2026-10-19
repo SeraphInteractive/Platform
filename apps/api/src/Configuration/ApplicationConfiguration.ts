@@ -131,7 +131,7 @@ export function createConfiguration(environment: Environment): ApplicationConfig
         roleAssignments: {
             superAdmins: environment.SUPER_ADMIN_DISCORD_IDS,
             admins: environment.ADMIN_DISCORD_IDS,
-            supervisors: [...new Set([...environment.SUPERVISOR_DISCORD_IDS, ...environment.MODERATOR_DISCORD_IDS])],
+            supervisors: environment.SUPERVISOR_DISCORD_IDS,
             seniorContributors: environment.SENIOR_DISCORD_IDS
         },
         storage: {

@@ -141,6 +141,20 @@
       "when": 1792346000000,
       "tag": "0019_add_departments_and_shot_types",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792430115114,
+      "tag": "0020_add_created_by_to_shots",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792434847763,
+      "tag": "0021_department_discord_webhooks",
+      "breakpoints": true
     }
   ]
 }

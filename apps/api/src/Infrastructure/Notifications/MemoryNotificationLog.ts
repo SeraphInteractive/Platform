@@ -61,6 +61,10 @@ export class MemoryNotificationLog implements NotificationLog {
         return Promise.resolve(this.entries.at(-1)?.id ?? "0-0");
     }
 
+    public recent(count: number): Promise<NotificationLogEntry[]> {
+        return Promise.resolve(this.entries.slice(-count).reverse());
+    }
+
     public openReader(): NotificationReader {
         return new MemoryNotificationReader(this.entries, this.appended);
     }

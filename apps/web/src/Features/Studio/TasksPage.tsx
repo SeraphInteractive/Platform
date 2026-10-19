@@ -827,6 +827,7 @@ function TasksTable(): ReactNode {
                                     <TableHead className="w-16">Scene</TableHead>
                                     <TableHead className="w-24">Difficulty</TableHead>
                                     <TableHead className="w-28">Status</TableHead>
+                                    <TableHead className="w-36">Created by</TableHead>
                                     <TableHead className="w-36">Claimant</TableHead>
                                     <TableHead className="w-24" />
                                 </TableRow>
@@ -855,6 +856,9 @@ function TasksTable(): ReactNode {
                                             <TableCell>{difficultyLabels[shot.difficultyTier]}</TableCell>
                                             <TableCell>
                                                 <ShotStatusBadge status={shot.status} />
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground max-w-36 truncate">
+                                                {shot.creator?.username ?? "Studio"}
                                             </TableCell>
                                             <TableCell className="text-muted-foreground max-w-36 truncate">
                                                 {shot.claimer?.username ?? "-"}

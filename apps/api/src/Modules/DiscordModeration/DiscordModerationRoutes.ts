@@ -8,7 +8,7 @@ import { and, desc, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { dataEnvelope, errorResponses, snowflakeSchema, toIso } from "../../Common/Http/Schemas.js";
-import { requireRoleOrService } from "../../Common/Security/Authorization.js";
+import { currentUser, requireRoleOrService, requireUser } from "../../Common/Security/Authorization.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
 import { Role } from "../../Domain/Roles.js";
 import { discordModerationRecords, type DiscordModerationRecord } from "../../Infrastructure/Database/Schema.js";
@@ -37,6 +37,53 @@ export const discordModerationRoutes: FastifyPluginAsyncZod<{ services: ServiceC
     const security = [{ bearer: [] }];
     // allow service token or supervisors to read and record infractions
     const supervisorOrService = requireRoleOrService(Role.Supervisor);
+
+    application.get(
+        "/discord/moderation/me",
+        {
+            preHandler: requireUser(),
+            schema: {
+                tags: ["Discord"],
+                summary: "Get current user moderation record and warning levels.",
+                security,
+                response: { 200: dataEnvelope(userModerationRecordSchema), ...errorResponses }
+            }
+        },
+        async (request) => {
+            const user = currentUser(request);
+            if (!user.discordId) {
+                const defaultRecord: UserModerationRecordDto = {
+                    userId: "",
+                    offenceLevel: 0,
+                    stageWarnings: 0,
+                    infractions: [],
+                    timeouts: [],
+                    apology: { status: "none", text: null, submittedAt: null }
+                };
+                return { data: defaultRecord };
+            }
+
+            const [record] = await database
+                .select()
+                .from(discordModerationRecords)
+                .where(eq(discordModerationRecords.userId, user.discordId))
+                .limit(1);
+
+            if (record === undefined) {
+                const defaultRecord: UserModerationRecordDto = {
+                    userId: user.discordId,
+                    offenceLevel: 0,
+                    stageWarnings: 0,
+                    infractions: [],
+                    timeouts: [],
+                    apology: { status: "none", text: null, submittedAt: null }
+                };
+                return { data: defaultRecord };
+            }
+
+            return { data: toRecordResponse(record) };
+        }
+    );
 
     application.get(
         "/discord/moderation",

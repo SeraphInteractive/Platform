@@ -101,7 +101,11 @@ export const legacyStudioRoleNames: readonly string[] = Object.freeze([
     "CFX and VFX Supervisor",
     "cfx and vfx supervisor",
     "Lighting and Compositing Supervisor",
-    "lighting and compositing supervisor"
+    "lighting and compositing supervisor",
+    "Moderator",
+    "moderator",
+    "Mod",
+    "mod"
 ]);
 
 export const roleAliases: Readonly<Record<string, string>> = {

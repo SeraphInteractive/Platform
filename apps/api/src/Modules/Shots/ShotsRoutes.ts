@@ -41,6 +41,7 @@ function toShotCore(
         imageUrls: (shot.imageKeys ?? [])
             .map((key) => storage.getPublicUrl(StorageBucket.Media, key))
             .filter((url): url is string => url !== null),
+        creator: null,
         createdAt: toIso(shot.createdAt),
         updatedAt: toIso(shot.updatedAt)
     };
@@ -50,6 +51,7 @@ function toShotResponse(item: ShotListItem, storage: ObjectStorage): z.infer<typ
     return {
         ...toShotCore(item.shot, storage),
         claimer: item.claimer === null ? null : toUserSummary(item.claimer),
+        creator: item.creator === null || item.creator === undefined ? null : toUserSummary(item.creator),
         isSeniorLocked: item.isSeniorLocked,
         latestSubmission: item.latestSubmission
     };

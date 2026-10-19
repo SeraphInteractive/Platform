@@ -32,5 +32,7 @@ export const queryKeys = {
     legalAcceptance: ["legal-acceptance"] as const,
     specialtyHolders: ["users", "specialty-holders"] as const,
     automodRules: ["automod-rules"] as const,
-    departments: ["departments"] as const
+    departments: ["departments"] as const,
+    activity: (limit?: number) => ["telemetry", "activity", limit ?? 50] as const,
+    myModeration: ["users", "me", "moderation"] as const
 };

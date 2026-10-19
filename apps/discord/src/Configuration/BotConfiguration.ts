@@ -14,7 +14,6 @@ const environmentSchema = z
         DISCORD_GUILD_ID: snowflake,
         DISCORD_ANNOUNCEMENTS_CHANNEL_ID: optionalSnowflake,
         DISCORD_TELEMETRY_WEBHOOK_URL: optionalUrl,
-        DISCORD_TASK_LOGS_WEBHOOK_URL: optionalUrl,
         DISCORD_MODERATION_LOGS_WEBHOOK_URL: optionalUrl,
         DISCORD_RULES_WEBHOOK_URL: optionalUrl,
         API_BASE_URL: z.url({ protocol: /^https?$/u }).transform((value) => value.replace(/\/+$/u, "")),
@@ -41,7 +40,6 @@ export interface BotConfiguration {
     readonly guildId: string;
     readonly announcementsChannelId?: string;
     readonly telemetryWebhookUrl?: string;
-    readonly taskLogsWebhookUrl?: string;
     readonly moderationLogsWebhookUrl?: string;
     readonly rulesWebhookUrl?: string;
     readonly apiBaseUrl: string;
@@ -72,7 +70,6 @@ export function loadBotConfiguration(source: NodeJS.ProcessEnv = process.env): B
         guildId: environment.DISCORD_GUILD_ID,
         announcementsChannelId: environment.DISCORD_ANNOUNCEMENTS_CHANNEL_ID,
         telemetryWebhookUrl: environment.DISCORD_TELEMETRY_WEBHOOK_URL,
-        taskLogsWebhookUrl: environment.DISCORD_TASK_LOGS_WEBHOOK_URL,
         moderationLogsWebhookUrl: environment.DISCORD_MODERATION_LOGS_WEBHOOK_URL,
         rulesWebhookUrl: environment.DISCORD_RULES_WEBHOOK_URL,
         apiBaseUrl: environment.API_BASE_URL,

@@ -231,6 +231,11 @@ export const departmentSchema = z
         discordCategoryId: snowflakeSchema.nullable().optional(),
         discordForumId: snowflakeSchema.nullable().optional(),
         discordChatChannelId: snowflakeSchema.nullable().optional(),
+        discordInfoChannelId: snowflakeSchema.nullable().optional(),
+        discordInfoWebhookUrl: z.string().nullable().optional(),
+        discordLogsChannelId: snowflakeSchema.nullable().optional(),
+        discordLogsWebhookUrl: z.string().nullable().optional(),
+        discordApplyChannelId: snowflakeSchema.nullable().optional(),
         createdAt: timestampSchema,
         updatedAt: timestampSchema
     })
@@ -250,6 +255,7 @@ export const shotSchema = z
         departmentId: uuidSchema.nullable().optional(),
         status: z.enum(ShotStatus),
         claimer: userSummarySchema.nullable(),
+        creator: userSummarySchema.nullable().default(null),
         claimedAt: timestampSchema.nullable(),
         deadlineAt: timestampSchema.nullable(),
         seniorPriorityUntil: timestampSchema.nullable(),
@@ -578,6 +584,7 @@ export const discordSettingsSchema = z
     .object({
         guildId: snowflakeSchema,
         channels: z.record(z.string(), snowflakeSchema).default({}),
+        webhooks: z.record(z.string(), z.string()).default({}),
         roles: z.record(z.string(), snowflakeSchema).default({}),
         forumTags: z.record(z.string(), snowflakeSchema).default({}),
         notificationCursor: z.string().nullable().default(null),
@@ -590,6 +597,7 @@ export const discordSettingsSchema = z
 export const updateDiscordSettingsSchema = z
     .object({
         channels: z.record(z.string(), snowflakeSchema).optional(),
+        webhooks: z.record(z.string(), z.string()).optional(),
         roles: z.record(z.string(), snowflakeSchema).optional(),
         forumTags: z.record(z.string(), snowflakeSchema).optional(),
         notificationCursor: z.string().nullable().optional(),
@@ -658,3 +666,23 @@ export type TimeoutRecordDto = z.infer<typeof timeoutRecordSchema>;
 export type ApologyRecordDto = z.infer<typeof apologyRecordSchema>;
 export type UserModerationRecordDto = z.infer<typeof userModerationRecordSchema>;
 export type UpdateUserModerationRecordDto = z.input<typeof updateUserModerationRecordSchema>;
+
+export const publishAnnouncementSchema = z
+    .object({
+        target: z.string().min(1).max(64),
+        title: z.string().min(1).max(256),
+        content: z.string().min(1).max(4000)
+    })
+    .meta({ id: "PublishAnnouncement" });
+
+export type PublishAnnouncementDto = z.infer<typeof publishAnnouncementSchema>;
+
+export const announcementPublishResultSchema = z
+    .object({
+        target: z.string(),
+        dispatchedCount: z.number().int(),
+        channels: z.array(z.string())
+    })
+    .meta({ id: "AnnouncementPublishResult" });
+
+export type AnnouncementPublishResultDto = z.infer<typeof announcementPublishResultSchema>;

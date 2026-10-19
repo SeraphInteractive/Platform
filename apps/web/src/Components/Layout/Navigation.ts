@@ -41,7 +41,13 @@ export const navigationGroups: readonly NavigationGroup[] = [
             { href: "/voting", label: "Vote", description: "Pitch ideas and rank your favourites", icon: Vote },
             { href: "/grabbox", label: "Grab-box", description: "Claim a production task and deliver it", icon: Hammer },
             { href: "/roadmap", label: "Roadmap", description: "The road from pitch to final mix", icon: Map },
-            { href: "/me", label: "My work", description: "Your role, claims and submissions", icon: UserRound, requiresSession: true }
+            {
+                href: "/profile",
+                label: "Profile",
+                description: "Your profile, tasks, submissions and standing",
+                icon: UserRound,
+                requiresSession: true
+            }
         ]
     },
     {

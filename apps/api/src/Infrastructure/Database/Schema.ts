@@ -233,6 +233,11 @@ export const departmentDiscordMaps = pgTable("department_discord_maps", {
     discordCategoryId: varchar("discord_category_id", { length: 20 }).notNull().unique(),
     discordForumId: varchar("discord_forum_id", { length: 20 }).notNull().unique(),
     discordChatChannelId: varchar("discord_chat_channel_id", { length: 20 }).unique(),
+    discordInfoChannelId: varchar("discord_info_channel_id", { length: 20 }),
+    discordInfoWebhookUrl: text("discord_info_webhook_url"),
+    discordLogsChannelId: varchar("discord_logs_channel_id", { length: 20 }),
+    discordLogsWebhookUrl: text("discord_logs_webhook_url"),
+    discordApplyChannelId: varchar("discord_apply_channel_id", { length: 20 }),
     ...timestamps
 });
 
@@ -248,6 +253,7 @@ export const shots = pgTable(
         difficultyTier: difficultyTierEnum("difficulty_tier").notNull(),
         shotType: shotTypeEnum("shot_type").notNull().default(ShotType.Animation),
         departmentId: uuid("department_id").references(() => departments.id, { onDelete: "restrict" }),
+        createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
         status: shotStatusEnum("status").notNull().default(ShotStatus.Available),
         claimedBy: uuid("claimed_by").references(() => users.id, { onDelete: "set null" }),
         claimedAt: timestamp("claimed_at", { withTimezone: true }),
@@ -316,6 +322,10 @@ export const shotThreadMaps = pgTable("shot_thread_maps", {
 export const discordSettings = pgTable("discord_settings", {
     guildId: varchar("guild_id", { length: 20 }).primaryKey(),
     channels: jsonb("channels")
+        .$type<Record<string, string>>()
+        .notNull()
+        .default(sql`'{}'::jsonb`),
+    webhooks: jsonb("webhooks")
         .$type<Record<string, string>>()
         .notNull()
         .default(sql`'{}'::jsonb`),

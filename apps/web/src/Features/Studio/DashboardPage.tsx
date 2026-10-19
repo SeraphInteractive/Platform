@@ -21,7 +21,9 @@ import { Progress } from "@/Components/Ui/progress";
 import { useNow } from "@/Hooks/UseNow";
 import { useSession } from "@/Hooks/UseSession";
 import { hasAtLeast } from "@/Lib/Roles";
+import { AnnouncementPublisher } from "./AnnouncementPublisher";
 import { AutoModDialog } from "./AutoModDialog";
+import { GlobalActivityLog } from "./GlobalActivityLog";
 
 function useActiveRounds(): { readonly rounds: readonly RoundDto[]; readonly isPending: boolean } {
     const results = useQueries({
@@ -258,6 +260,8 @@ function Dashboard(): ReactNode {
                     </Section>
                 )}
             </div>
+            <AnnouncementPublisher />
+            <GlobalActivityLog />
         </div>
     );
 }

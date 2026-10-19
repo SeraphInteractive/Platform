@@ -1,11 +1,14 @@
 import {
+    announcementPublishResultSchema,
     autoModRuleSchema,
     ballotSchema,
     PresenceStatus,
     shotThreadMapSchema,
     dataEnvelope,
     departmentSchema,
+    type AnnouncementPublishResultDto,
     type DepartmentDto,
+    type PublishAnnouncementDto,
     documentRevisionSchema,
     documentRevisionSummarySchema,
     documentSchema,
@@ -29,6 +32,10 @@ import {
     specialtyHoldersSchema,
     submissionSchema,
     userSchema,
+    activityEntrySchema,
+    userModerationRecordSchema,
+    type ActivityEntryDto,
+    type UserModerationRecordDto,
     type SpecialtyHolderDto,
     type BallotDto,
     type DeliverableKind,
@@ -434,6 +441,27 @@ export class PlatformApi {
 
     public async deleteAutomodRule(id: string): Promise<void> {
         await requestNoContent(`/automod/${segment(id)}`, { method: "DELETE" });
+    }
+
+    public async activity(limit = 50): Promise<readonly ActivityEntryDto[]> {
+        return (
+            await request("/telemetry/activity", dataEnvelope(z.array(activityEntrySchema)), {
+                query: { limit }
+            })
+        ).data;
+    }
+
+    public async myModerationRecord(): Promise<UserModerationRecordDto> {
+        return (await request("/discord/moderation/me", dataEnvelope(userModerationRecordSchema))).data;
+    }
+
+    public async publishAnnouncement(input: PublishAnnouncementDto): Promise<AnnouncementPublishResultDto> {
+        return (
+            await request("/announcements", dataEnvelope(announcementPublishResultSchema), {
+                method: "POST",
+                body: input
+            })
+        ).data;
     }
 }
 

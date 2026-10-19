@@ -85,7 +85,6 @@ const environmentObject = z.object({
     ),
     ADMIN_DISCORD_IDS: snowflakeList,
     SUPERVISOR_DISCORD_IDS: snowflakeList,
-    MODERATOR_DISCORD_IDS: snowflakeList.default([]),
     SENIOR_DISCORD_IDS: snowflakeList,
 
     S3_ENDPOINT: z

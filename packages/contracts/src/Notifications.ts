@@ -230,3 +230,12 @@ export type ShotReference = z.infer<typeof shotReference>;
 export type RoundReference = z.infer<typeof roundReference>;
 
 export const notificationStreamIdPattern = /^\d{1,20}-\d{1,20}$/u;
+
+export const activityEntrySchema = z
+    .object({
+        id: z.string(),
+        notification: platformNotificationSchema
+    })
+    .meta({ id: "ActivityEntry" });
+
+export type ActivityEntryDto = z.infer<typeof activityEntrySchema>;

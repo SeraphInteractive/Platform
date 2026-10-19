@@ -228,7 +228,16 @@ export class PlatformApiClient {
 
     public async bindDepartmentDiscordMap(
         departmentId: string,
-        map: { discordCategoryId: string; discordForumId: string; discordChatChannelId?: string | null }
+        map: {
+            discordCategoryId: string;
+            discordForumId: string;
+            discordChatChannelId?: string | null;
+            discordInfoChannelId?: string | null;
+            discordInfoWebhookUrl?: string | null;
+            discordLogsChannelId?: string | null;
+            discordLogsWebhookUrl?: string | null;
+            discordApplyChannelId?: string | null;
+        }
     ): Promise<DepartmentDto> {
         return (
             await this.send(`/departments/${departmentId}/discord-map`, dataEnvelope(departmentSchema), {
