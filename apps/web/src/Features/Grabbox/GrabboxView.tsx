@@ -178,7 +178,9 @@ export function GrabboxView(): ReactNode {
         }
     }, [legacyShotId, router]);
 
+    const { user } = useSession();
     const [departmentId, setDepartmentId] = useState<string>(anyValue);
+    const [hasSelectedDept, setHasSelectedDept] = useState(false);
     const [shotType, setShotType] = useState<ShotType | typeof anyValue>(anyValue);
     const [status, setStatus] = useState<ShotStatus | typeof anyValue>(anyValue);
     const [difficulty, setDifficulty] = useState<DifficultyTier | typeof anyValue>(anyValue);
@@ -190,6 +192,19 @@ export function GrabboxView(): ReactNode {
         queryFn: () => platformApi.departments(),
         staleTime: 300_000
     });
+
+    const recommendedDepartment = departments.data?.find(
+        (dept) =>
+            dept.contributorSpecialties.some((s) => user?.specialties?.includes(s)) ||
+            dept.supervisorSpecialties.some((s) => user?.specialties?.includes(s))
+    );
+
+    // auto-default to contributor's department tab on initial data arrival unless manually changed
+    useEffect(() => {
+        if (!hasSelectedDept && recommendedDepartment !== undefined && departmentId === anyValue) {
+            setDepartmentId(recommendedDepartment.id);
+        }
+    }, [hasSelectedDept, recommendedDepartment, departmentId]);
 
     const activeDepartment = departmentId === anyValue ? undefined : departments.data?.find((d) => d.id === departmentId);
     const availableShotTypes: readonly ShotType[] =
@@ -226,6 +241,7 @@ export function GrabboxView(): ReactNode {
                 <Tabs
                     value={departmentId}
                     onValueChange={(value) => {
+                        setHasSelectedDept(true);
                         setDepartmentId(value);
                         setShotType(anyValue);
                         setPage(1);
@@ -234,11 +250,19 @@ export function GrabboxView(): ReactNode {
                 >
                     <TabsList className="flex flex-wrap h-auto gap-1">
                         <TabsTrigger value={anyValue}>All departments</TabsTrigger>
-                        {departments.data.map((dept) => (
-                            <TabsTrigger key={dept.id} value={dept.id}>
-                                {dept.name}
-                            </TabsTrigger>
-                        ))}
+                        {departments.data.map((dept) => {
+                            const isRecommended = recommendedDepartment?.id === dept.id;
+                            return (
+                                <TabsTrigger key={dept.id} value={dept.id} className="gap-1.5">
+                                    <span>{dept.name}</span>
+                                    {isRecommended && (
+                                        <span className="rounded-full bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-medium leading-none">
+                                            For you
+                                        </span>
+                                    )}
+                                </TabsTrigger>
+                            );
+                        })}
                     </TabsList>
                 </Tabs>
             )}

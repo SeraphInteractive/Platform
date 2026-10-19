@@ -172,6 +172,45 @@ export class ServerProvisioner {
                 }
             }
         });
+
+        if (this.api !== undefined) {
+            try {
+                const depts = await this.api.listDepartments();
+                for (const dept of depts) {
+                    const category = channels.find(
+                        (channel) =>
+                            channel !== null &&
+                            channel.type === ChannelType.GuildCategory &&
+                            normalizeName(channel.name) === normalizeName(dept.name)
+                    );
+                    const tasksForumName = `${dept.slug}-tasks`;
+                    const deptForum = channels.find(
+                        (channel) =>
+                            channel !== null &&
+                            channel.type === ChannelType.GuildForum &&
+                            normalizeName(channel.name) === normalizeName(tasksForumName)
+                    );
+                    const chatChannelName = dept.slug;
+                    const deptChat = channels.find(
+                        (channel) =>
+                            channel !== null &&
+                            channel.type === ChannelType.GuildText &&
+                            normalizeName(channel.name) === normalizeName(chatChannelName)
+                    );
+
+                    if (category !== undefined && category !== null && deptForum !== undefined && deptForum !== null) {
+                        await this.api.bindDepartmentDiscordMap(dept.id, {
+                            discordCategoryId: category.id,
+                            discordForumId: deptForum.id,
+                            discordChatChannelId: deptChat?.id ?? null
+                        });
+                    }
+                }
+            } catch (err: unknown) {
+                this.logger.warn({ err }, "failed to bind existing department channels");
+            }
+        }
+
         this.logger.info({ guild: guild.id }, "bound existing server structure");
     }
 
@@ -440,6 +479,18 @@ export class ServerProvisioner {
                         deptChat = existingChat;
                         boundChannels.push(`#${deptChat.name}`);
                     }
+
+                    await deptChat.permissionOverwrites
+                        .create(
+                            botId,
+                            {
+                                ViewChannel: true,
+                                SendMessages: true,
+                                ReadMessageHistory: true
+                            },
+                            { reason: "Ensure bot access to department chat channel" }
+                        )
+                        .catch(() => undefined);
 
                     await this.api.bindDepartmentDiscordMap(dept.id, {
                         discordCategoryId: category.id,
