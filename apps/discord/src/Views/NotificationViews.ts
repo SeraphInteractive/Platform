@@ -338,6 +338,9 @@ export function renderNotification(notification: PlatformNotification, context: 
                 )
             ];
         }
+        case NotificationType.AnnouncementPublished:
+            // announcements are delivered directly via webhook in api
+            return [];
     }
 }
 

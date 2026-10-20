@@ -100,7 +100,7 @@ describe("announcements API", () => {
             expect(payload.target).toBe("department:animation");
             expect(payload.dispatchedCount).toBe(1);
             expect(mockFetch).toHaveBeenCalledWith(
-                "https://discord.com/api/webhooks/test/anim-info",
+                "https://discord.com/api/webhooks/test/anim-info?with_components=true",
                 expect.objectContaining({
                     method: "POST"
                 })

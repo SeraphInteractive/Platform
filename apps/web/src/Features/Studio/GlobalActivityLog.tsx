@@ -19,10 +19,11 @@ import { Tone, ToneBadge } from "@/Components/Common/StatusBadge";
 import { Button } from "@/Components/Ui/button";
 import { cn } from "@/Lib/Utils";
 
-type ActivityCategory = "all" | "tasks" | "rounds" | "users" | "security" | "system";
+type ActivityCategory = "all" | "announcements" | "tasks" | "rounds" | "users" | "security" | "system";
 
 const categoryFilters: readonly { readonly id: ActivityCategory; readonly label: string }[] = [
     { id: "all", label: "All" },
+    { id: "announcements", label: "Announcements" },
     { id: "tasks", label: "Tasks" },
     { id: "rounds", label: "Voting" },
     { id: "users", label: "Users" },
@@ -32,6 +33,9 @@ const categoryFilters: readonly { readonly id: ActivityCategory; readonly label:
 
 function categoryOf(type: NotificationType): ActivityCategory {
     switch (type) {
+        case NotificationType.AnnouncementPublished:
+            return "announcements";
+
         case NotificationType.ShotCreated:
         case NotificationType.ShotUpdated:
         case NotificationType.ShotDeleted:
@@ -260,6 +264,14 @@ function describeNotification(notification: PlatformNotification): ActivityPrese
                 href: "/guidelines" as Route
             };
 
+        case NotificationType.AnnouncementPublished:
+            return {
+                tag: "Announcement",
+                tone: Tone.Info,
+                title: `${notification.author.username} published: ${notification.title}`,
+                detail: `Target: ${notification.target}${notification.channels && notification.channels.length > 0 ? ` (${notification.channels.join(", ")})` : ""}`
+            };
+
         default:
             return {
                 tag: "Event",
@@ -354,7 +366,7 @@ export function GlobalActivityLog(): ReactNode {
         <div className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h2 className="text-base font-semibold">Global Activity & Telemetry</h2>
+                    <h2 className="text-base font-semibold">Global Logs</h2>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1.5 px-2 py-1 text-xs">

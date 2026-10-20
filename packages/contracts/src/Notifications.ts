@@ -42,7 +42,8 @@ export enum NotificationType {
     SubmissionReviewed = "submission.reviewed",
     PipelineUpdated = "pipeline.updated",
     MediaFlaggedAi = "media.flagged_ai",
-    DocumentUpdated = "document.updated"
+    DocumentUpdated = "document.updated",
+    AnnouncementPublished = "announcement.published"
 }
 
 export const notificationPersonSchema = z.object({
@@ -216,6 +217,12 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
         sections: z.array(z.object({ id: z.string(), title: z.string(), html: z.string() })),
         actor: notificationPersonSchema,
         note: z.string().nullable()
+    }),
+    notification(NotificationType.AnnouncementPublished, {
+        title: z.string(),
+        target: z.string(),
+        author: notificationPersonSchema,
+        channels: z.array(z.string()).optional()
     })
 ]);
 

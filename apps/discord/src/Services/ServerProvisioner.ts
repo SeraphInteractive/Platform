@@ -56,7 +56,7 @@ function loadBotAvatar(): Buffer | undefined {
     return undefined;
 }
 
-const botAvatarBuffer = loadBotAvatar();
+export const botAvatarBuffer = loadBotAvatar();
 
 async function ensureWebhookOnChannel(
     channel: TextChannel,
@@ -68,6 +68,9 @@ async function ensureWebhookOnChannel(
         const webhooks = await channel.fetchWebhooks();
         const existing = webhooks.find((hook) => hook.name.toLowerCase() === name.toLowerCase());
         if (existing?.url) {
+            if (avatar && !existing.avatar) {
+                await existing.edit({ avatar }).catch(() => undefined);
+            }
             return existing.url;
         }
         const created = await channel.createWebhook({
@@ -246,53 +249,93 @@ export class ServerProvisioner {
                                 normalizeName(channel.name) === normalizeName(dept.slug))
                     );
                     const grabboxName = departmentGrabBoxName[dept.slug] ?? `${prefix}-grabbox`;
+                    const extraAliases: readonly string[] =
+                        dept.slug === DepartmentSlug.LightingAndVfx
+                            ? ["lighting-vfx-grabbox", "lighting-vfx-tasks"]
+                            : dept.slug === DepartmentSlug.ArtAndWriting
+                              ? ["art-and-writing-grabbox", "art-and-writing-tasks"]
+                              : [];
                     const forumAliases = [
                         grabboxName,
                         `${dept.name}-GrabBox`,
                         `${dept.slug}-grabbox`,
                         `${prefix}-grabbox`,
-                        "lighting-vfx-grabbox",
-                        "art-and-writing-grabbox",
                         `${prefix}-tasks`,
-                        `${dept.slug}-tasks`
+                        `${dept.slug}-tasks`,
+                        ...extraAliases
                     ];
-                    const deptForum = channels.find(
+                    let deptForum = channels.find(
+                        (channel) =>
+                            channel !== null &&
+                            channel.parentId === category?.id &&
+                            channel.type === ChannelType.GuildForum &&
+                            forumAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
+                    );
+                    deptForum ??= channels.find(
                         (channel) =>
                             channel !== null &&
                             channel.type === ChannelType.GuildForum &&
                             forumAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
                     );
                     const chatAliases = [`${prefix}-general`, dept.slug, `${prefix}-chat`, `${dept.slug}-chat`];
-                    const deptChat = channels.find(
+                    const deptChat = (channels.find(
                         (channel) =>
                             channel !== null &&
+                            channel.parentId === category?.id &&
                             channel.type === ChannelType.GuildText &&
                             chatAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
-                    ) as TextChannel | undefined;
+                    ) ??
+                        channels.find(
+                            (channel) =>
+                                channel !== null &&
+                                channel.type === ChannelType.GuildText &&
+                                chatAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
+                        )) as TextChannel | undefined;
 
                     const infoAliases = [`${prefix}-info`, `${dept.slug}-info`, `${prefix}-announcements`, `${dept.slug}-announcements`];
-                    const deptInfo = channels.find(
+                    const deptInfo = (channels.find(
                         (channel) =>
                             channel !== null &&
+                            channel.parentId === category?.id &&
                             channel.type === ChannelType.GuildText &&
                             infoAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
-                    ) as TextChannel | undefined;
+                    ) ??
+                        channels.find(
+                            (channel) =>
+                                channel !== null &&
+                                channel.type === ChannelType.GuildText &&
+                                infoAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
+                        )) as TextChannel | undefined;
 
                     const logsAliases = [`${prefix}-logs`, `${dept.slug}-logs`, `${prefix}-task-logs`, `${dept.slug}-task-logs`];
-                    const deptLogs = channels.find(
+                    const deptLogs = (channels.find(
                         (channel) =>
                             channel !== null &&
+                            channel.parentId === category?.id &&
                             channel.type === ChannelType.GuildText &&
                             logsAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
-                    ) as TextChannel | undefined;
+                    ) ??
+                        channels.find(
+                            (channel) =>
+                                channel !== null &&
+                                channel.type === ChannelType.GuildText &&
+                                logsAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
+                        )) as TextChannel | undefined;
 
                     const applyAliases = [`${prefix}-apply`, `${dept.slug}-apply`, `${prefix}-tickets`, `${dept.slug}-tickets`];
-                    const deptApply = channels.find(
+                    const deptApply = (channels.find(
                         (channel) =>
                             channel !== null &&
+                            channel.parentId === category?.id &&
                             channel.type === ChannelType.GuildText &&
                             applyAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
-                    ) as TextChannel | undefined;
+                    ) ??
+                        channels.find(
+                            (channel) =>
+                                channel !== null &&
+                                channel.type === ChannelType.GuildText &&
+                                applyAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
+                        )) as TextChannel | undefined;
 
                     if (category !== undefined && category !== null && deptForum !== undefined && deptForum !== null) {
                         let infoWebhookUrl = dept.discordInfoWebhookUrl ?? null;
@@ -372,6 +415,11 @@ export class ServerProvisioner {
             .map((role) => roleIds.get(role.name))
             .filter((role): role is DiscordRole => role !== undefined);
         const botId = guild.client.user.id;
+        if (botAvatarBuffer && !guild.client.user.avatar) {
+            await guild.client.user.setAvatar(botAvatarBuffer).catch((err: unknown) => {
+                this.logger.warn({ err }, "failed to update bot user avatar");
+            });
+        }
         const everyone = guild.roles.everyone.id;
         const channels = await guild.channels.fetch();
 
@@ -400,7 +448,15 @@ export class ServerProvisioner {
             topic: string,
             overwrites: OverwriteResolvable[]
         ): Promise<TextChannel> => {
-            const existing = channels.find((channel) => {
+            let existing = channels.find((channel) => {
+                if (channel === null || channel.type !== ChannelType.GuildText || channel.parentId !== parent.id) {
+                    return false;
+                }
+                const normalized = normalizeName(channel.name);
+                return aliases.some((alias) => normalizeName(alias) === normalized);
+            }) as TextChannel | undefined;
+
+            existing ??= channels.find((channel) => {
                 if (channel === null || channel.type !== ChannelType.GuildText) {
                     return false;
                 }
@@ -409,6 +465,12 @@ export class ServerProvisioner {
             }) as TextChannel | undefined;
 
             if (existing !== undefined) {
+                if (existing.parentId !== parent.id) {
+                    await existing.setParent(parent.id, { lockPermissions: false }).catch(() => undefined);
+                }
+                if (existing.name !== name) {
+                    await existing.setName(name, "Normalize channel name").catch(() => undefined);
+                }
                 boundChannels.push(`#${existing.name}`);
                 await existing.permissionOverwrites
                     .create(
@@ -440,7 +502,15 @@ export class ServerProvisioner {
             parent: CategoryChannel,
             overwrites: OverwriteResolvable[]
         ): Promise<VoiceChannel> => {
-            const existing = channels.find((channel) => {
+            let existing = channels.find((channel) => {
+                if (channel === null || channel.type !== ChannelType.GuildVoice || channel.parentId !== parent.id) {
+                    return false;
+                }
+                const normalized = normalizeName(channel.name);
+                return aliases.some((alias) => normalizeName(alias) === normalized);
+            }) as VoiceChannel | undefined;
+
+            existing ??= channels.find((channel) => {
                 if (channel === null || channel.type !== ChannelType.GuildVoice) {
                     return false;
                 }
@@ -449,6 +519,12 @@ export class ServerProvisioner {
             }) as VoiceChannel | undefined;
 
             if (existing !== undefined) {
+                if (existing.parentId !== parent.id) {
+                    await existing.setParent(parent.id, { lockPermissions: false }).catch(() => undefined);
+                }
+                if (existing.name !== name) {
+                    await existing.setName(name, "Normalize voice channel name").catch(() => undefined);
+                }
                 boundChannels.push(existing.name);
                 await existing.permissionOverwrites
                     .create(
@@ -759,22 +835,41 @@ export class ServerProvisioner {
 
                     // 3. Grab-box forum (<dept>-grabbox)
                     const tasksForumName = departmentGrabBoxName[dept.slug] ?? `${prefix}-grabbox`;
+                    const extraAliases: readonly string[] =
+                        dept.slug === DepartmentSlug.LightingAndVfx
+                            ? ["lighting-vfx-grabbox", "lighting-vfx-tasks"]
+                            : dept.slug === DepartmentSlug.ArtAndWriting
+                              ? ["art-and-writing-grabbox", "art-and-writing-tasks"]
+                              : [];
                     const forumAliases = [
                         tasksForumName,
                         `${dept.name}-GrabBox`,
                         `${dept.slug}-grabbox`,
                         `${prefix}-grabbox`,
-                        "lighting-vfx-grabbox",
-                        "art-and-writing-grabbox",
                         `${prefix}-tasks`,
-                        `${dept.slug}-tasks`
+                        `${dept.slug}-tasks`,
+                        ...extraAliases
                     ];
                     let deptForum = channels.find(
                         (channel) =>
                             channel !== null &&
+                            channel.parentId === category.id &&
                             channel.type === ChannelType.GuildForum &&
                             forumAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
                     ) as ForumChannel | undefined;
+
+                    if (deptForum === undefined) {
+                        deptForum = channels.find(
+                            (channel) =>
+                                channel !== null &&
+                                channel.type === ChannelType.GuildForum &&
+                                forumAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
+                        ) as ForumChannel | undefined;
+                        if (deptForum !== undefined) {
+                            await deptForum.setParent(category.id, { lockPermissions: false }).catch(() => undefined);
+                        }
+                    }
+
                     const isExistingDeptForum = deptForum !== undefined;
                     if (deptForum === undefined) {
                         deptForum = await guild.channels.create({
@@ -786,6 +881,9 @@ export class ServerProvisioner {
                         });
                         createdChannels.push(tasksForumName);
                     } else {
+                        if (deptForum.parentId !== category.id) {
+                            await deptForum.setParent(category.id, { lockPermissions: false }).catch(() => undefined);
+                        }
                         if (deptForum.name !== tasksForumName) {
                             await deptForum.setName(tasksForumName, "Rename to department grabbox").catch(() => undefined);
                         }
@@ -793,6 +891,53 @@ export class ServerProvisioner {
                     }
                     await this.ensureForumPermissions(deptForum, isExistingDeptForum);
                     await this.ensureForumTags(deptForum, true);
+
+                    // clean up duplicate or stray forum channels inside category
+                    const strayForums = channels.filter(
+                        (channel): channel is ForumChannel =>
+                            channel !== null &&
+                            channel.type === ChannelType.GuildForum &&
+                            channel.parentId === category.id &&
+                            channel.id !== deptForum.id
+                    );
+                    for (const stray of strayForums.values()) {
+                        const activeThreads = await stray.threads.fetchActive().catch(() => null);
+                        const archivedThreads = await stray.threads.fetchArchived().catch(() => null);
+                        const threadCount = (activeThreads?.threads.size ?? 0) + (archivedThreads?.threads.size ?? 0);
+                        if (threadCount === 0) {
+                            this.logger.info({ stray: stray.name, category: category.name }, "deleted duplicate empty forum");
+                            await stray.delete("Duplicate department forum").catch(() => undefined);
+                        } else {
+                            const targetDept = depts.find((other) => {
+                                const p = departmentChannelPrefix[other.slug] ?? other.slug;
+                                const aliases = [
+                                    departmentGrabBoxName[other.slug] ?? `${p}-grabbox`,
+                                    `${other.name}-GrabBox`,
+                                    `${other.slug}-grabbox`,
+                                    `${p}-grabbox`,
+                                    `${p}-tasks`,
+                                    `${other.slug}-tasks`
+                                ];
+                                return aliases.some((a) => normalizeName(a) === normalizeName(stray.name));
+                            });
+                            if (targetDept) {
+                                const targetCat = channels.find(
+                                    (c) =>
+                                        c !== null &&
+                                        c.type === ChannelType.GuildCategory &&
+                                        (normalizeName(c.name) === normalizeName(targetDept.name) ||
+                                            normalizeName(c.name) === normalizeName(targetDept.slug))
+                                );
+                                if (targetCat && targetCat.id !== category.id) {
+                                    this.logger.info(
+                                        { stray: stray.name, targetCategory: targetCat.name },
+                                        "moved stray forum to target category"
+                                    );
+                                    await stray.setParent(targetCat.id, { lockPermissions: false }).catch(() => undefined);
+                                }
+                            }
+                        }
+                    }
 
                     // 4. General discussion (<prefix>-general) - department-gated chat
                     const generalName = `${prefix}-general`;
@@ -921,9 +1066,10 @@ export class ServerProvisioner {
                     // 6. <dep> General (5) [Voice]
                     const orderedChannels = [deptInfo, deptApply, deptForum, deptChat, deptLogs, deptVoice];
                     for (const [index, ch] of orderedChannels.entries()) {
-                        if (ch.parentId === category.id || !ch.parentId) {
-                            await ch.setPosition(index).catch(() => undefined);
+                        if (ch.parentId !== category.id) {
+                            await ch.setParent(category.id, { lockPermissions: false }).catch(() => undefined);
                         }
+                        await ch.setPosition(index).catch(() => undefined);
                     }
 
                     await this.api.bindDepartmentDiscordMap(dept.id, {

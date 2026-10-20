@@ -12,7 +12,7 @@ import { ReminderScheduler } from "./Services/ReminderScheduler.js";
 import { RoleReconciliationService } from "./Services/RoleReconciliationService.js";
 import { RoleSyncScheduler } from "./Services/RoleSyncScheduler.js";
 import { ProfanityFilter } from "./Services/ProfanityFilter.js";
-import { ServerProvisioner } from "./Services/ServerProvisioner.js";
+import { ServerProvisioner, botAvatarBuffer } from "./Services/ServerProvisioner.js";
 import { syncMemberStudioRoles } from "./Services/StudioRoles.js";
 import { TaskForum } from "./Services/TaskForum.js";
 import { ReminderStore } from "./State/ReminderStore.js";
@@ -80,6 +80,11 @@ async function main(): Promise<void> {
         void (async (): Promise<void> => {
             logger.info({ user: ready.user.tag }, "connected to discord");
             ready.user.setPresence({ activities: [{ name: "voting rounds", type: ActivityType.Watching }], status: "online" });
+            if (botAvatarBuffer && !ready.user.avatar) {
+                await ready.user.setAvatar(botAvatarBuffer).catch((err: unknown) => {
+                    logger.warn({ err }, "failed to update bot user avatar on ready");
+                });
+            }
             const guild = await ready.guilds.fetch(configuration.guildId).catch(() => null);
             if (guild === null) {
                 logger.error({ guild: configuration.guildId }, "the bot is not a member of its configured server");

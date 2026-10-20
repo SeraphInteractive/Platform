@@ -1,4 +1,9 @@
-import { announcementPublishResultSchema, publishAnnouncementSchema, type AnnouncementPublishResultDto } from "@platform/contracts";
+import {
+    NotificationType,
+    announcementPublishResultSchema,
+    publishAnnouncementSchema,
+    type AnnouncementPublishResultDto
+} from "@platform/contracts";
 import { eq, isNotNull } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { ApplicationError, ErrorCode, NotFoundError } from "../../Common/Errors/ApplicationError.js";
@@ -28,23 +33,43 @@ export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceConta
         },
         async (request): Promise<{ data: AnnouncementPublishResultDto }> => {
             const { target, title, content } = request.body;
-            const authorName = optionalUser(request)?.discordUsername ?? "Studio";
-            const botAvatarUrl = `${configuration.security.appUrl.replace(/\/+$/, "")}/branding/bot-pfp-temp.png`;
+            const author = optionalUser(request);
+            const authorName = author?.discordUsername ?? "Supervisor";
 
+            // fallback to public dev endpoint if app url is local or cloudflare ssl 526 on apex domain
+            const baseAppUrl =
+                configuration.security.appUrl.includes("projectstairway.net") &&
+                !configuration.security.appUrl.includes("dev-app.projectstairway.net")
+                    ? "https://dev-app.projectstairway.net"
+                    : configuration.security.appUrl.replace(/\/+$/, "");
+            const botAvatarUrl =
+                baseAppUrl.startsWith("http://localhost") || baseAppUrl.startsWith("http://127.0.0.1")
+                    ? "https://dev-app.projectstairway.net/branding/bot-pfp-temp.png"
+                    : `${baseAppUrl}/branding/bot-pfp-temp.png`;
+
+            // discord components v2 layout using container with stairway blue accent bar and text displays
             const webhookPayload = {
                 username: "Project Stairway",
                 avatar_url: botAvatarUrl,
-                content: null,
-                embeds: [
+                flags: 32768, // IS_COMPONENTS_V2
+                components: [
                     {
-                        title: title.trim(),
-                        description: content.trim(),
-                        color: embedColor,
-                        footer: {
-                            text: `Published by ${authorName} - Project Stairway`,
-                            icon_url: botAvatarUrl
-                        },
-                        timestamp: new Date().toISOString()
+                        type: 17, // container
+                        accent_color: embedColor,
+                        components: [
+                            {
+                                type: 10, // text display
+                                content: `# ${title.trim()}`
+                            },
+                            {
+                                type: 10, // text display
+                                content: content.trim()
+                            },
+                            {
+                                type: 10, // text display
+                                content: `-# Published by ${authorName} - Project Stairway`
+                            }
+                        ]
                     }
                 ]
             };
@@ -110,7 +135,8 @@ export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceConta
             await Promise.all(
                 webhookTargets.map(async (item) => {
                     try {
-                        const response = await fetch(item.url, {
+                        const targetUrl = item.url.includes("?") ? `${item.url}&with_components=true` : `${item.url}?with_components=true`;
+                        const response = await fetch(targetUrl, {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify(webhookPayload)
@@ -139,6 +165,17 @@ export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceConta
                     `Failed to publish announcement to any channels: ${errors.join(", ")}`
                 );
             }
+
+            services.notifier.notify({
+                type: NotificationType.AnnouncementPublished,
+                title: title.trim(),
+                target,
+                author: {
+                    discordId: author?.discordId ?? null,
+                    username: authorName
+                },
+                channels: dispatchedChannels
+            });
 
             return {
                 data: {

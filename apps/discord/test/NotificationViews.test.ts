@@ -360,6 +360,14 @@ describe("every notification", () => {
             ],
             actor: admin,
             note: "Updated Borda point conservation invariants"
+        },
+        {
+            type: NotificationType.AnnouncementPublished,
+            occurredAt,
+            title: "Production Update",
+            target: "general",
+            author: admin,
+            channels: ["1100000000000000001"]
         }
     ];
 
