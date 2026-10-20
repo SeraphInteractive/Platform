@@ -144,6 +144,9 @@ export const environmentSchema = environmentObject.superRefine((value, context) 
     if (insecure.length > 0) {
         context.addIssue({ code: "custom", path: ["APP_URL"], message: `production URLs must use https: ${insecure.join(", ")}` });
     }
+    if (value.REDIS_HOST === "memory") {
+        context.addIssue({ code: "custom", path: ["REDIS_HOST"], message: "in-memory state is for development only" });
+    }
     for (const key of ["REDIS_PASSWORD", "RESEND_API_KEY", "EMAIL_FROM", "TURNSTILE_SECRET_KEY"] as const) {
         if (value[key] === undefined) {
             context.addIssue({ code: "custom", path: [key], message: "is required in production" });

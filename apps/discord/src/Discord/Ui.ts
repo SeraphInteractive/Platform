@@ -44,7 +44,7 @@ export function divider(): SeparatorBuilder {
     return new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small);
 }
 
-export function panel(accent: Accent | null, ...blocks: readonly Block[]): ContainerBuilder {
+export function panel(accent: Accent | number | null, ...blocks: readonly Block[]): ContainerBuilder {
     const container = new ContainerBuilder();
     if (accent !== null) {
         container.setAccentColor(accent);

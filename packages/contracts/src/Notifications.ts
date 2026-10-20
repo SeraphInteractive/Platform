@@ -13,6 +13,7 @@ import {
     Specialty
 } from "./Enums.js";
 import { snowflakeSchema, timestampSchema, uuidSchema } from "./Http.js";
+import { ApplicationStage, TicketEventKind } from "./Tickets.js";
 
 export enum NotificationType {
     BallotSubmitted = "ballot.submitted",
@@ -43,7 +44,12 @@ export enum NotificationType {
     PipelineUpdated = "pipeline.updated",
     MediaFlaggedAi = "media.flagged_ai",
     DocumentUpdated = "document.updated",
-    AnnouncementPublished = "announcement.published"
+    AnnouncementPublished = "announcement.published",
+    TicketConfigUpdated = "ticket.config_updated",
+    TicketActivity = "ticket.activity",
+    FeedbackSurveyOpened = "feedback.survey_opened",
+    FeedbackSurveyClosed = "feedback.survey_closed",
+    FeedbackOutcomeRecorded = "feedback.outcome_recorded"
 }
 
 export const notificationPersonSchema = z.object({
@@ -223,7 +229,24 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
         target: z.string(),
         author: notificationPersonSchema,
         channels: z.array(z.string()).optional()
-    })
+    }),
+    notification(NotificationType.TicketConfigUpdated, {
+        actor: notificationPersonSchema,
+        removedHubs: z.array(z.object({ channelId: snowflakeSchema, messageId: snowflakeSchema })).default([])
+    }),
+    notification(NotificationType.TicketActivity, {
+        ticketId: uuidSchema,
+        eventId: uuidSchema,
+        kind: z.enum(TicketEventKind),
+        actor: notificationPersonSchema,
+        stage: z.enum(ApplicationStage).nullable(),
+        target: notificationPersonSchema.nullable(),
+        note: z.string().nullable(),
+        reply: z.object({ messageId: uuidSchema, content: z.string(), avatarUrl: z.string().nullable() }).nullable()
+    }),
+    notification(NotificationType.FeedbackSurveyOpened, { surveyId: uuidSchema }),
+    notification(NotificationType.FeedbackSurveyClosed, { surveyId: uuidSchema }),
+    notification(NotificationType.FeedbackOutcomeRecorded, { surveyId: uuidSchema })
 ]);
 
 export type PlatformNotification = z.infer<typeof platformNotificationSchema>;

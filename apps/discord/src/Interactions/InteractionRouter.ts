@@ -26,6 +26,18 @@ import {
     banApologyCommand
 } from "../Commands/ApologyReviewHandlers.js";
 import { modResetButtonHandler, modStatusCommand, modStepDownButtonHandler } from "../Commands/ModStatusCommands.js";
+import { feedbackAnswerHandler, feedbackFormHandler } from "../Commands/FeedbackHandlers.js";
+import {
+    ticketActionHandler,
+    ticketApplyHandler,
+    ticketCategoryHandler,
+    ticketCommand,
+    ticketFormHandler,
+    ticketHubHandler,
+    ticketJoinHandler,
+    ticketNoteHandler,
+    ticketTypeHandler
+} from "../Commands/TicketHandlers.js";
 
 export const slashCommands: readonly SlashCommand[] = [
     helpCommand,
@@ -45,7 +57,8 @@ export const slashCommands: readonly SlashCommand[] = [
     statusCommand,
     reminderCommand,
     banApologyCommand,
-    modStatusCommand
+    modStatusCommand,
+    ticketCommand
 ];
 
 const componentHandlers: readonly ComponentHandler[] = [
@@ -59,7 +72,17 @@ const componentHandlers: readonly ComponentHandler[] = [
     apologyModalHandler,
     apologyDecisionButtonHandler,
     modStepDownButtonHandler,
-    modResetButtonHandler
+    modResetButtonHandler,
+    ticketCategoryHandler,
+    ticketTypeHandler,
+    ticketHubHandler,
+    ticketApplyHandler,
+    ticketFormHandler,
+    ticketJoinHandler,
+    ticketActionHandler,
+    ticketNoteHandler,
+    feedbackAnswerHandler,
+    feedbackFormHandler
 ];
 
 export class InteractionRouter {

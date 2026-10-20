@@ -6,12 +6,17 @@ import type { EmailSender } from "../Infrastructure/Email/EmailSender.js";
 import { LogEmailSender } from "../Infrastructure/Email/LogEmailSender.js";
 import { DnsMailDomainChecker } from "../Infrastructure/Email/MailDomainChecker.js";
 import { ResendEmailSender } from "../Infrastructure/Email/ResendEmailSender.js";
+import type { KeyValueStore } from "../Infrastructure/Cache/KeyValueStore.js";
+import { MemoryKeyValueStore } from "../Infrastructure/Cache/MemoryKeyValueStore.js";
 import { RedisKeyValueStore } from "../Infrastructure/Cache/RedisKeyValueStore.js";
 import { createPostgresConnection } from "../Infrastructure/Database/Database.js";
 import { HttpDiscordOAuthClient } from "../Infrastructure/Discord/DiscordOAuthClient.js";
 import { LanyardPresenceProvider } from "../Infrastructure/Discord/PresenceProvider.js";
+import type { EventBus } from "../Infrastructure/Events/EventBus.js";
+import { MemoryEventBus } from "../Infrastructure/Events/MemoryEventBus.js";
 import { RedisEventBus } from "../Infrastructure/Events/RedisEventBus.js";
-import { StreamNotifier } from "../Infrastructure/Notifications/NotificationLog.js";
+import { MemoryNotificationLog } from "../Infrastructure/Notifications/MemoryNotificationLog.js";
+import { StreamNotifier, type NotificationLog } from "../Infrastructure/Notifications/NotificationLog.js";
 import { RedisNotificationLog } from "../Infrastructure/Notifications/RedisNotificationLog.js";
 import { S3ObjectStorage } from "../Infrastructure/Storage/S3ObjectStorage.js";
 import { NextcloudWebDAVStorage } from "../Infrastructure/Storage/NextcloudWebDAVStorage.js";
@@ -23,8 +28,32 @@ function createEmailSender(configuration: ApplicationConfiguration, logger: Fast
     return resend.isEnabled() || configuration.environment === "production" ? resend : new LogEmailSender(logger);
 }
 
-export function createProductionInfrastructure(configuration: ApplicationConfiguration, logger: FastifyBaseLogger): Infrastructure {
-    const connection = createPostgresConnection(configuration.database);
+export const inMemoryRedisHost = "memory";
+
+interface StateParts {
+    readonly keyValueStore: KeyValueStore;
+    readonly eventBus: EventBus;
+    readonly notificationLog: NotificationLog;
+    readonly rateLimitRedis: Redis | undefined;
+    readonly close: () => Promise<void>;
+}
+
+function createInMemoryState(configuration: ApplicationConfiguration, logger: FastifyBaseLogger): StateParts {
+    if (configuration.environment === "production") {
+        throw new Error("REDIS_HOST=memory is only allowed outside production.");
+    }
+    logger.warn("using in-memory state instead of Redis; run a single API process and expect caches to reset on restart");
+    const eventBus = new MemoryEventBus();
+    return {
+        keyValueStore: new MemoryKeyValueStore(),
+        eventBus,
+        notificationLog: new MemoryNotificationLog(Date.now()),
+        rateLimitRedis: undefined,
+        close: () => eventBus.close()
+    };
+}
+
+function createRedisState(configuration: ApplicationConfiguration, logger: FastifyBaseLogger): StateParts {
     const redisOptions: RedisOptions = {
         host: configuration.redis.host,
         port: configuration.redis.port,
@@ -49,9 +78,26 @@ export function createProductionInfrastructure(configuration: ApplicationConfigu
         });
     }
 
-    const keyValueStore = new RedisKeyValueStore(redis);
     const eventBus = new RedisEventBus(redis, subscriber);
-    const notificationLog = new RedisNotificationLog(redis);
+    return {
+        keyValueStore: new RedisKeyValueStore(redis),
+        eventBus,
+        notificationLog: new RedisNotificationLog(redis),
+        rateLimitRedis: redis,
+        close: async (): Promise<void> => {
+            await eventBus.close();
+            await redis.quit();
+        }
+    };
+}
+
+export function createProductionInfrastructure(configuration: ApplicationConfiguration, logger: FastifyBaseLogger): Infrastructure {
+    const connection = createPostgresConnection(configuration.database);
+    const state =
+        configuration.redis.host === inMemoryRedisHost
+            ? createInMemoryState(configuration, logger)
+            : createRedisState(configuration, logger);
+    const { keyValueStore, eventBus, notificationLog } = state;
 
     const s3Storage = new S3ObjectStorage(configuration.storage);
     const nextcloudStorage = new NextcloudWebDAVStorage({
@@ -75,7 +121,7 @@ export function createProductionInfrastructure(configuration: ApplicationConfigu
         presenceProvider: new LanyardPresenceProvider(keyValueStore),
         notifier: new StreamNotifier(notificationLog, logger),
         notificationLog,
-        rateLimitRedis: redis,
+        rateLimitRedis: state.rateLimitRedis,
         emailSender: createEmailSender(configuration, logger),
         captchaVerifier:
             configuration.verification.turnstileSecretKey === undefined
@@ -87,8 +133,7 @@ export function createProductionInfrastructure(configuration: ApplicationConfigu
                   ),
         mailDomainChecker: new DnsMailDomainChecker(),
         dispose: async (): Promise<void> => {
-            await eventBus.close();
-            await redis.quit();
+            await state.close();
             await connection.close();
         }
     };

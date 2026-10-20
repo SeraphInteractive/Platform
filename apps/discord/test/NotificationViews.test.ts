@@ -11,6 +11,7 @@ import {
     Role,
     RoundStatus,
     Specialty,
+    TicketEventKind,
     type PlatformNotification
 } from "@platform/contracts";
 import { MessageFlags } from "discord.js";
@@ -368,6 +369,22 @@ describe("every notification", () => {
             target: "general",
             author: admin,
             channels: ["1100000000000000001"]
+        },
+        { type: NotificationType.TicketConfigUpdated, occurredAt, actor: admin, removedHubs: [] },
+        { type: NotificationType.FeedbackSurveyOpened, occurredAt, surveyId: round.id },
+        { type: NotificationType.FeedbackSurveyClosed, occurredAt, surveyId: round.id },
+        { type: NotificationType.FeedbackOutcomeRecorded, occurredAt, surveyId: round.id },
+        {
+            type: NotificationType.TicketActivity,
+            occurredAt,
+            ticketId: round.id,
+            eventId: round.id,
+            kind: TicketEventKind.Closed,
+            actor: admin,
+            stage: null,
+            target: null,
+            note: null,
+            reply: null
         }
     ];
 

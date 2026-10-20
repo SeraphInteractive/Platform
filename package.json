@@ -27,6 +27,7 @@
         "db:migrate": "npm run db:migrate -w @platform/api",
         "token:issue": "npm run token:issue -w @platform/api --",
         "dev:web": "tsc -b packages/scoring packages/contracts && npm run dev -w @platform/web",
+        "dev:web:local": "tsc -b packages/scoring packages/contracts && node scripts/WithEnv.ts node_modules/next/dist/bin/next dev apps/web --port 3000",
         "build:web": "tsc -b packages/scoring packages/contracts && npm run build -w @platform/web",
         "dev:script": "tsc -b packages/scoring packages/contracts && npm run dev -w @platform/script",
         "build:script": "tsc -b packages/scoring packages/contracts && npm run build -w @platform/script",

@@ -16,7 +16,7 @@ import { departmentDiscordMaps, departments, discordSettings } from "../../Infra
 const embedColor = 0x3498db; // clean stairway blue accent
 
 export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
-    const { database, configuration } = services;
+    const { database } = services;
     const security = [{ bearer: [] }];
 
     application.post(
@@ -36,21 +36,9 @@ export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceConta
             const author = optionalUser(request);
             const authorName = author?.discordUsername ?? "Supervisor";
 
-            // fallback to public dev endpoint if app url is local or cloudflare ssl 526 on apex domain
-            const baseAppUrl =
-                configuration.security.appUrl.includes("projectstairway.net") &&
-                !configuration.security.appUrl.includes("dev-app.projectstairway.net")
-                    ? "https://dev-app.projectstairway.net"
-                    : configuration.security.appUrl.replace(/\/+$/, "");
-            const botAvatarUrl =
-                baseAppUrl.startsWith("http://localhost") || baseAppUrl.startsWith("http://127.0.0.1")
-                    ? "https://dev-app.projectstairway.net/branding/bot-pfp-temp.png"
-                    : `${baseAppUrl}/branding/bot-pfp-temp.png`;
-
             // discord components v2 layout using container with stairway blue accent bar and text displays
             const webhookPayload = {
                 username: "Project Stairway",
-                avatar_url: botAvatarUrl,
                 flags: 32768, // IS_COMPONENTS_V2
                 components: [
                     {
@@ -67,7 +55,7 @@ export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceConta
                             },
                             {
                                 type: 10, // text display
-                                content: `-# Published by ${authorName} - Project Stairway`
+                                content: `-# ~ ${authorName}`
                             }
                         ]
                     }

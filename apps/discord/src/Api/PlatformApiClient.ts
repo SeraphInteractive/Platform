@@ -54,7 +54,29 @@ import {
     type UpdateDiscordSettingsDto,
     userModerationRecordSchema,
     type UserModerationRecordDto,
-    type UpdateUserModerationRecordDto
+    type UpdateUserModerationRecordDto,
+    departmentDeskSchema,
+    discordDirectorySchema,
+    type DepartmentDeskDto,
+    type EnsureDepartmentDeskDto,
+    feedbackSurveySchema,
+    type FeedbackResponseInputDto,
+    type FeedbackSurveyDto,
+    ticketConfigSchema,
+    ticketSchema,
+    ticketHubSchema,
+    ticketLimits,
+    TicketStatus,
+    type BindTicketDto,
+    type CloseTicketDto,
+    type OpenTicketDto,
+    type TicketConfigDto,
+    type TicketDto,
+    type AddTicketMemberDto,
+    type AssignTicketDto,
+    type RecordTicketMessageDto,
+    type TicketStageInputDto,
+    type UpdateDiscordDirectoryDto
 } from "@platform/contracts";
 
 import type { Logger } from "pino";
@@ -282,6 +304,113 @@ export class PlatformApiClient {
                 method: "DELETE"
             })
         ).data.deleted;
+    }
+
+    public async getTicketConfig(): Promise<TicketConfigDto> {
+        return (await this.send("/tickets/config", dataEnvelope(ticketConfigSchema))).data;
+    }
+
+    public async ensureDepartmentDesk(departmentId: string, input: EnsureDepartmentDeskDto): Promise<DepartmentDeskDto> {
+        return (
+            await this.send(`/tickets/departments/${departmentId}/desk`, dataEnvelope(departmentDeskSchema), { method: "PUT", body: input })
+        ).data;
+    }
+
+    public async bindTicketHub(hubId: string, messageId: string | null): Promise<void> {
+        await this.send(`/tickets/hubs/${hubId}/message`, dataEnvelope(ticketHubSchema), { method: "PUT", body: { messageId } });
+    }
+
+    public async openTicket(input: OpenTicketDto): Promise<TicketDto> {
+        return (await this.send("/tickets", dataEnvelope(ticketSchema), { method: "POST", body: input })).data;
+    }
+
+    public async getTicket(ticketId: string): Promise<TicketDto> {
+        return (await this.send(`/tickets/${ticketId}`, dataEnvelope(ticketSchema))).data;
+    }
+
+    public async getTicketByThread(threadId: string): Promise<TicketDto | null> {
+        try {
+            return (await this.send(`/tickets/by-thread/${threadId}`, dataEnvelope(ticketSchema))).data;
+        } catch (error: unknown) {
+            if (error instanceof PlatformApiError && error.status === 404) {
+                return null;
+            }
+            throw error;
+        }
+    }
+
+    public async findOpenTicket(typeId: string, openerDiscordId: string): Promise<TicketDto | null> {
+        const page = await this.send("/tickets", pageEnvelope(ticketSchema), {
+            query: { typeId, openerDiscordId, status: TicketStatus.Open, perPage: 1 }
+        });
+        return page.data[0] ?? null;
+    }
+
+    public async openTicketThreads(): Promise<readonly { ticketId: string; threadId: string }[]> {
+        return (await this.send("/tickets/open-threads", dataEnvelope(z.array(z.object({ ticketId: z.string(), threadId: z.string() })))))
+            .data;
+    }
+
+    public async bindTicket(ticketId: string, input: BindTicketDto): Promise<TicketDto> {
+        return (await this.send(`/tickets/${ticketId}`, dataEnvelope(ticketSchema), { method: "PATCH", body: input })).data;
+    }
+
+    public async setTicketStage(ticketId: string, input: TicketStageInputDto): Promise<TicketDto> {
+        return (await this.send(`/tickets/${ticketId}/stage`, dataEnvelope(ticketSchema), { method: "POST", body: input })).data;
+    }
+
+    public async closeTicket(ticketId: string, input: CloseTicketDto): Promise<TicketDto> {
+        return (await this.send(`/tickets/${ticketId}/close`, dataEnvelope(ticketSchema), { method: "POST", body: input })).data;
+    }
+
+    public async assignTicket(ticketId: string, input: AssignTicketDto): Promise<TicketDto> {
+        return (await this.send(`/tickets/${ticketId}/assign`, dataEnvelope(ticketSchema), { method: "POST", body: input })).data;
+    }
+
+    public async addTicketMember(ticketId: string, input: AddTicketMemberDto): Promise<TicketDto> {
+        return (await this.send(`/tickets/${ticketId}/members`, dataEnvelope(ticketSchema), { method: "POST", body: input })).data;
+    }
+
+    public async recordTicketMessages(ticketId: string, messages: readonly RecordTicketMessageDto[]): Promise<void> {
+        for (let index = 0; index < messages.length; index += ticketLimits.messageBatch) {
+            await this.send(`/tickets/${ticketId}/messages`, dataEnvelope(z.object({ recorded: z.number() })), {
+                method: "PUT",
+                body: { messages: messages.slice(index, index + ticketLimits.messageBatch) }
+            });
+        }
+    }
+
+    public async deleteTicketMessage(ticketId: string, discordMessageId: string): Promise<void> {
+        await this.send(`/tickets/${ticketId}/messages/${discordMessageId}`, emptySchema, { method: "DELETE" });
+    }
+
+    public async linkTicketReply(ticketId: string, messageId: string, discordMessageId: string): Promise<void> {
+        await this.send(`/tickets/${ticketId}/replies/${messageId}/link`, emptySchema, { method: "PUT", body: { discordMessageId } });
+    }
+
+    public async getFeedbackSurvey(surveyId: string): Promise<FeedbackSurveyDto> {
+        return (await this.send(`/feedback/surveys/${surveyId}`, dataEnvelope(feedbackSurveySchema))).data;
+    }
+
+    public async openFeedbackSurveys(): Promise<readonly FeedbackSurveyDto[]> {
+        return (await this.send("/feedback/open-surveys", dataEnvelope(z.array(feedbackSurveySchema)))).data;
+    }
+
+    public async recordFeedbackResponse(surveyId: string, input: FeedbackResponseInputDto): Promise<{ updated: boolean }> {
+        return (
+            await this.send(`/feedback/surveys/${surveyId}/responses`, dataEnvelope(z.object({ updated: z.boolean() })), {
+                method: "PUT",
+                body: input
+            })
+        ).data;
+    }
+
+    public async bindFeedbackSurvey(surveyId: string, messageId: string | null): Promise<void> {
+        await this.send(`/feedback/surveys/${surveyId}/message`, emptySchema, { method: "PUT", body: { messageId } });
+    }
+
+    public async replaceDirectory(input: UpdateDiscordDirectoryDto): Promise<void> {
+        await this.send("/discord/directory", dataEnvelope(discordDirectorySchema), { method: "PUT", body: input });
     }
 
     public async isHealthy(): Promise<{ healthy: boolean; latencyMs: number }> {

@@ -125,7 +125,9 @@ export function AnnouncementPublisher(): ReactNode {
                         </div>
                         <div className="rounded-lg border bg-neutral-950 p-4 font-sans text-neutral-100">
                             <div className="flex items-center gap-2 mb-3">
-                                <img src="/branding/bot-pfp-temp.png" alt="" className="h-6 w-6 rounded-full object-cover shrink-0" />
+                                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#5865F2] text-[10px] font-bold text-white">
+                                    PS
+                                </div>
                                 <div>
                                     <span className="text-xs font-semibold text-white">Project Stairway</span>
                                     <span className="ml-1.5 text-[10px] bg-[#5865F2] text-white px-1 py-0.5 rounded font-mono font-bold">
@@ -141,7 +143,7 @@ export function AnnouncementPublisher(): ReactNode {
                                     {content.trim().length > 0 ? content : "Announcement content will appear here in Discord embed format."}
                                 </div>
                                 <div className="pt-2 border-t border-neutral-800 text-[10px] text-neutral-400">
-                                    Published by {user?.username ?? "Studio"} - Project Stairway
+                                    ~ {user?.username ?? "Studio"}
                                 </div>
                             </div>
                         </div>

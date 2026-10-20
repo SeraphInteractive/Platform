@@ -2,6 +2,7 @@ import { Role } from "@platform/contracts";
 import {
     Activity,
     BookOpen,
+    BriefcaseBusiness,
     Clapperboard,
     ClipboardCheck,
     FileText,
@@ -10,7 +11,9 @@ import {
     Home,
     LayoutDashboard,
     ListChecks,
+    LifeBuoy,
     Map,
+    MessageSquareHeart,
     UserRound,
     Users,
     Vote,
@@ -41,6 +44,12 @@ export const navigationGroups: readonly NavigationGroup[] = [
             { href: "/voting", label: "Vote", description: "Pitch ideas and rank your favourites", icon: Vote },
             { href: "/grabbox", label: "Grab-box", description: "Claim a production task and deliver it", icon: Hammer },
             { href: "/roadmap", label: "Roadmap", description: "The road from pitch to final mix", icon: Map },
+            {
+                href: "/positions" as Route,
+                label: "Positions",
+                description: "Open roles on the project and how to apply",
+                icon: BriefcaseBusiness
+            },
             {
                 href: "/profile",
                 label: "Profile",
@@ -108,6 +117,20 @@ export const navigationGroups: readonly NavigationGroup[] = [
                 minimumRole: Role.Supervisor
             },
             {
+                href: "/studio/tickets" as Route,
+                label: "Tickets",
+                description: "Tickets, applications and the Discord hubs",
+                icon: LifeBuoy,
+                minimumRole: Role.Supervisor
+            },
+            {
+                href: "/studio/feedback" as Route,
+                label: "Crew feedback",
+                description: "Private crew check-ins on department supervisors",
+                icon: MessageSquareHeart,
+                minimumRole: Role.Admin
+            },
+            {
                 href: "/studio/content",
                 label: "Content",
                 description: "Edit the guidelines and legal pages",
@@ -131,6 +154,9 @@ export const segmentLabels: Readonly<Record<string, string>> = {
     telemetry: "Telemetry",
     reviews: "Reviews",
     tasks: "Tasks",
+    tickets: "Tickets",
+    feedback: "Crew feedback",
+    positions: "Positions",
     people: "People",
     auth: "Sign in",
     callback: "Signing in",

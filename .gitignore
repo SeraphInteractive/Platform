@@ -11,6 +11,7 @@ npm-debug.log*
 .fleet/
 .DS_Store
 .next/
+.data/
 next-env.d.ts
 AGENTS.md
 GEMINI.md

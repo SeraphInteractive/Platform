@@ -72,6 +72,11 @@ function categoryOf(type: NotificationType): ActivityCategory {
 
         case NotificationType.PipelineUpdated:
         case NotificationType.DocumentUpdated:
+        case NotificationType.TicketConfigUpdated:
+        case NotificationType.TicketActivity:
+        case NotificationType.FeedbackSurveyOpened:
+        case NotificationType.FeedbackSurveyClosed:
+        case NotificationType.FeedbackOutcomeRecorded:
             return "system";
     }
 }

@@ -326,6 +326,12 @@ export function renderNotification(notification: PlatformNotification, context: 
                 )
             ];
         }
+        case NotificationType.TicketConfigUpdated:
+        case NotificationType.TicketActivity:
+        case NotificationType.FeedbackSurveyOpened:
+        case NotificationType.FeedbackSurveyClosed:
+        case NotificationType.FeedbackOutcomeRecorded:
+            return [];
         case NotificationType.DocumentUpdated: {
             const noteText =
                 notification.note !== null && notification.note.trim().length > 0 ? `\n-# Note: ${plain(notification.note, 200)}` : "";

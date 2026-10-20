@@ -16,7 +16,28 @@ import {
     varchar
 } from "drizzle-orm/pg-core";
 import { RaidSeverity, type PairwiseSeparation, type RaidFlag } from "@platform/scoring";
-import type { InfractionDto, TimeoutRecordDto } from "@platform/contracts";
+import {
+    ApplicationStage,
+    FeedbackOutcome,
+    FeedbackSurveyStatus,
+    PositionStatus,
+    TicketEventKind,
+    TicketHubStyle,
+    TicketKind,
+    TicketMessageSource,
+    TicketStatus,
+    type DiscordDirectoryChannelDto,
+    type FeedbackQuestionDto,
+    type DiscordDirectoryMemberDto,
+    type DiscordDirectoryRoleDto,
+    type InfractionDto,
+    type TicketAnswerDto,
+    type TicketAttachmentDto,
+    type TicketListingDto,
+    type TicketMessagesDto,
+    type TicketQuestionDto,
+    type TimeoutRecordDto
+} from "@platform/contracts";
 import {
     DifficultyTier,
     EntryStatus,
@@ -529,6 +550,315 @@ export const screenplayVersions = pgTable(
     ]
 );
 
+export const ticketKindEnum = pgEnum("ticket_kind", enumValues(TicketKind));
+export const ticketStatusEnum = pgEnum("ticket_status", enumValues(TicketStatus));
+export const applicationStageEnum = pgEnum("application_stage", enumValues(ApplicationStage));
+export const positionStatusEnum = pgEnum("position_status", enumValues(PositionStatus));
+export const ticketHubStyleEnum = pgEnum("ticket_hub_style", enumValues(TicketHubStyle));
+export const ticketEventKindEnum = pgEnum("ticket_event_kind", enumValues(TicketEventKind));
+export const ticketMessageSourceEnum = pgEnum("ticket_message_source", enumValues(TicketMessageSource));
+
+export const ticketSettings = pgTable(
+    "ticket_settings",
+    {
+        id: integer("id").primaryKey().default(1),
+        guildId: varchar("guild_id", { length: 20 }),
+        logChannelId: varchar("log_channel_id", { length: 20 }),
+        logEvents: text("log_events")
+            .array()
+            .$type<TicketEventKind[]>()
+            .notNull()
+            .default(sql`'{opened,stage_changed,closed,reopened}'`),
+        transcriptOnClose: boolean("transcript_on_close").notNull().default(true),
+        dmApplicants: boolean("dm_applicants").notNull().default(true),
+        maxOpenPerUser: integer("max_open_per_user").notNull().default(3),
+        ...timestamps
+    },
+    (table) => [
+        check("ticket_settings_singleton", sql`${table.id} = 1`),
+        check("ticket_settings_max_open_range", sql`${table.maxOpenPerUser} BETWEEN 1 AND 25`)
+    ]
+);
+
+export const ticketCategories = pgTable(
+    "ticket_categories",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        name: varchar("name", { length: 80 }).notNull(),
+        description: varchar("description", { length: 300 }),
+        emoji: varchar("emoji", { length: 64 }),
+        position: integer("position").notNull().default(0),
+        isEnabled: boolean("is_enabled").notNull().default(true),
+        threadChannelId: varchar("thread_channel_id", { length: 20 }),
+        notificationChannelId: varchar("notification_channel_id", { length: 20 }),
+        logChannelId: varchar("log_channel_id", { length: 20 }),
+        staffRoleIds: text("staff_role_ids")
+            .array()
+            .notNull()
+            .default(sql`'{}'`),
+        mentionStaff: boolean("mention_staff").notNull().default(true),
+        departmentId: uuid("department_id")
+            .references(() => departments.id, { onDelete: "set null" })
+            .unique(),
+        ...timestamps
+    },
+    (table) => [index("ticket_categories_position_idx").on(table.position, table.createdAt)]
+);
+
+export const ticketTypes = pgTable(
+    "ticket_types",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        categoryId: uuid("category_id")
+            .notNull()
+            .references(() => ticketCategories.id, { onDelete: "cascade" }),
+        name: varchar("name", { length: 80 }).notNull(),
+        description: varchar("description", { length: 100 }),
+        emoji: varchar("emoji", { length: 64 }),
+        kind: ticketKindEnum("kind").notNull(),
+        position: integer("position").notNull().default(0),
+        isEnabled: boolean("is_enabled").notNull().default(true),
+        staffRoleIds: text("staff_role_ids")
+            .array()
+            .notNull()
+            .default(sql`'{}'`),
+        threadChannelId: varchar("thread_channel_id", { length: 20 }),
+        mentionStaff: boolean("mention_staff").notNull().default(true),
+        questions: jsonb("questions").$type<TicketQuestionDto[]>().notNull().default([]),
+        positionStatus: positionStatusEnum("position_status").notNull().default(PositionStatus.Open),
+        openings: integer("openings"),
+        filledCount: integer("filled_count").notNull().default(0),
+        opensAt: timestamp("opens_at", { withTimezone: true }),
+        closesAt: timestamp("closes_at", { withTimezone: true }),
+        listing: jsonb("listing").$type<TicketListingDto>(),
+        messages: jsonb("messages").$type<TicketMessagesDto>().notNull().default({ interview: null, accepted: null, rejected: null }),
+        ...timestamps
+    },
+    (table) => [
+        index("ticket_types_category_position_idx").on(table.categoryId, table.position, table.createdAt),
+        check("ticket_types_openings_positive", sql`${table.openings} IS NULL OR ${table.openings} > 0`),
+        check("ticket_types_filled_count_non_negative", sql`${table.filledCount} >= 0`),
+        check("ticket_types_window", sql`${table.opensAt} IS NULL OR ${table.closesAt} IS NULL OR ${table.closesAt} > ${table.opensAt}`)
+    ]
+);
+
+export const ticketHubs = pgTable(
+    "ticket_hubs",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        name: varchar("name", { length: 80 }).notNull(),
+        channelId: varchar("channel_id", { length: 20 }),
+        messageId: varchar("message_id", { length: 20 }),
+        title: varchar("title", { length: 100 }).notNull(),
+        description: varchar("description", { length: 2000 }).notNull().default(""),
+        color: integer("color"),
+        style: ticketHubStyleEnum("style").notNull().default(TicketHubStyle.Buttons),
+        categoryIds: uuid("category_ids")
+            .array()
+            .notNull()
+            .default(sql`'{}'`),
+        isEnabled: boolean("is_enabled").notNull().default(true),
+        departmentId: uuid("department_id")
+            .references(() => departments.id, { onDelete: "set null" })
+            .unique(),
+        ...timestamps
+    },
+    (table) => [
+        index("ticket_hubs_created_idx").on(table.createdAt),
+        check("ticket_hubs_color_range", sql`${table.color} IS NULL OR ${table.color} BETWEEN 0 AND 16777215`)
+    ]
+);
+
+export const tickets = pgTable(
+    "tickets",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        number: integer("number").generatedAlwaysAsIdentity().notNull().unique(),
+        typeId: uuid("type_id").references(() => ticketTypes.id, { onDelete: "set null" }),
+        categoryId: uuid("category_id").references(() => ticketCategories.id, { onDelete: "set null" }),
+        typeName: varchar("type_name", { length: 80 }).notNull(),
+        categoryName: varchar("category_name", { length: 80 }).notNull(),
+        kind: ticketKindEnum("kind").notNull(),
+        status: ticketStatusEnum("status").notNull().default(TicketStatus.Open),
+        stage: applicationStageEnum("stage"),
+        openerDiscordId: varchar("opener_discord_id", { length: 20 }).notNull(),
+        openerUsername: varchar("opener_username", { length: 64 }).notNull(),
+        assigneeDiscordId: varchar("assignee_discord_id", { length: 20 }),
+        assigneeUsername: varchar("assignee_username", { length: 64 }),
+        threadId: varchar("thread_id", { length: 20 }).unique(),
+        introMessageId: varchar("intro_message_id", { length: 20 }),
+        notificationChannelId: varchar("notification_channel_id", { length: 20 }),
+        notificationMessageId: varchar("notification_message_id", { length: 20 }),
+        answers: jsonb("answers").$type<TicketAnswerDto[]>().notNull().default([]),
+        decidedByDiscordId: varchar("decided_by_discord_id", { length: 20 }),
+        decidedByUsername: varchar("decided_by_username", { length: 64 }),
+        decidedAt: timestamp("decided_at", { withTimezone: true }),
+        decisionNote: varchar("decision_note", { length: 1000 }),
+        closedByDiscordId: varchar("closed_by_discord_id", { length: 20 }),
+        closedByUsername: varchar("closed_by_username", { length: 64 }),
+        closedAt: timestamp("closed_at", { withTimezone: true }),
+        closeReason: varchar("close_reason", { length: 1000 }),
+        lastActivityAt: timestamp("last_activity_at", { withTimezone: true }).notNull().defaultNow(),
+        ...timestamps
+    },
+    (table) => [
+        index("tickets_status_activity_idx").on(table.status, table.lastActivityAt),
+        index("tickets_type_status_idx").on(table.typeId, table.status),
+        index("tickets_category_created_idx").on(table.categoryId, table.createdAt),
+        index("tickets_opener_idx").on(table.openerDiscordId, table.status),
+        index("tickets_assignee_idx").on(table.assigneeDiscordId, table.status),
+        uniqueIndex("tickets_one_open_per_opener_type")
+            .on(table.typeId, table.openerDiscordId)
+            .where(sql`${table.status} = 'open'`),
+        check("tickets_stage_matches_kind", sql`(${table.kind} = 'application') = (${table.stage} IS NOT NULL)`)
+    ]
+);
+
+export const ticketEvents = pgTable(
+    "ticket_events",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        ticketId: uuid("ticket_id")
+            .notNull()
+            .references(() => tickets.id, { onDelete: "cascade" }),
+        kind: ticketEventKindEnum("kind").notNull(),
+        actorDiscordId: varchar("actor_discord_id", { length: 20 }),
+        actorUsername: varchar("actor_username", { length: 64 }),
+        stage: applicationStageEnum("stage"),
+        targetDiscordId: varchar("target_discord_id", { length: 20 }),
+        targetUsername: varchar("target_username", { length: 64 }),
+        note: varchar("note", { length: 2000 }),
+        createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+    },
+    (table) => [index("ticket_events_ticket_created_idx").on(table.ticketId, table.createdAt)]
+);
+
+export const ticketMessages = pgTable(
+    "ticket_messages",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        ticketId: uuid("ticket_id")
+            .notNull()
+            .references(() => tickets.id, { onDelete: "cascade" }),
+        discordMessageId: varchar("discord_message_id", { length: 20 }).unique(),
+        source: ticketMessageSourceEnum("source").notNull(),
+        authorDiscordId: varchar("author_discord_id", { length: 20 }).notNull(),
+        authorUsername: varchar("author_username", { length: 64 }).notNull(),
+        authorAvatarUrl: varchar("author_avatar_url", { length: 512 }),
+        content: text("content").notNull().default(""),
+        attachments: jsonb("attachments").$type<TicketAttachmentDto[]>().notNull().default([]),
+        editedAt: timestamp("edited_at", { withTimezone: true }),
+        deletedAt: timestamp("deleted_at", { withTimezone: true }),
+        createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+    },
+    (table) => [index("ticket_messages_ticket_created_idx").on(table.ticketId, table.createdAt)]
+);
+
+export const discordDirectory = pgTable(
+    "discord_directory",
+    {
+        id: integer("id").primaryKey().default(1),
+        guildId: varchar("guild_id", { length: 20 }).notNull(),
+        channels: jsonb("channels").$type<DiscordDirectoryChannelDto[]>().notNull().default([]),
+        roles: jsonb("roles").$type<DiscordDirectoryRoleDto[]>().notNull().default([]),
+        members: jsonb("members").$type<DiscordDirectoryMemberDto[]>().notNull().default([]),
+        ...timestamps
+    },
+    (table) => [check("discord_directory_singleton", sql`${table.id} = 1`)]
+);
+
+export const feedbackSurveyStatusEnum = pgEnum("feedback_survey_status", enumValues(FeedbackSurveyStatus));
+export const feedbackOutcomeEnum = pgEnum("feedback_outcome", enumValues(FeedbackOutcome));
+
+export const feedbackSettings = pgTable(
+    "feedback_settings",
+    {
+        id: integer("id").primaryKey().default(1),
+        questions: jsonb("questions").$type<FeedbackQuestionDto[]>().notNull(),
+        firstAfterDays: integer("first_after_days").notNull().default(30),
+        intervalDays: integer("interval_days").notNull().default(90),
+        openDays: integer("open_days").notNull().default(14),
+        intro: varchar("intro", { length: 1000 }).notNull().default(""),
+        pingCrew: boolean("ping_crew").notNull().default(true),
+        ...timestamps
+    },
+    (table) => [check("feedback_settings_singleton", sql`${table.id} = 1`)]
+);
+
+export const feedbackSubjects = pgTable(
+    "feedback_subjects",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        supervisorDiscordId: varchar("supervisor_discord_id", { length: 20 }).notNull(),
+        supervisorUsername: varchar("supervisor_username", { length: 64 }).notNull(),
+        title: varchar("title", { length: 80 }).notNull(),
+        channelId: varchar("channel_id", { length: 20 }),
+        crewRoleIds: text("crew_role_ids")
+            .array()
+            .notNull()
+            .default(sql`'{}'`),
+        startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+        firstAfterDays: integer("first_after_days").notNull(),
+        intervalDays: integer("interval_days").notNull(),
+        isActive: boolean("is_active").notNull().default(true),
+        endedAt: timestamp("ended_at", { withTimezone: true }),
+        nextSurveyAt: timestamp("next_survey_at", { withTimezone: true }),
+        sourceTicketId: uuid("source_ticket_id").references(() => tickets.id, { onDelete: "set null" }),
+        ...timestamps
+    },
+    (table) => [
+        index("feedback_subjects_due_idx").on(table.isActive, table.nextSurveyAt),
+        check("feedback_subjects_days_positive", sql`${table.firstAfterDays} > 0 AND ${table.intervalDays} > 0`)
+    ]
+);
+
+export const feedbackSurveys = pgTable(
+    "feedback_surveys",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        subjectId: uuid("subject_id")
+            .notNull()
+            .references(() => feedbackSubjects.id, { onDelete: "cascade" }),
+        sequence: integer("sequence").notNull(),
+        status: feedbackSurveyStatusEnum("status").notNull().default(FeedbackSurveyStatus.Open),
+        opensAt: timestamp("opens_at", { withTimezone: true }).notNull(),
+        closesAt: timestamp("closes_at", { withTimezone: true }).notNull(),
+        closedAt: timestamp("closed_at", { withTimezone: true }),
+        questions: jsonb("questions").$type<FeedbackQuestionDto[]>().notNull(),
+        intro: varchar("intro", { length: 1000 }).notNull().default(""),
+        channelId: varchar("channel_id", { length: 20 }),
+        messageId: varchar("message_id", { length: 20 }),
+        outcome: feedbackOutcomeEnum("outcome"),
+        outcomeMessage: text("outcome_message"),
+        internalNote: text("internal_note"),
+        outcomeByDiscordId: varchar("outcome_by_discord_id", { length: 20 }),
+        outcomeByUsername: varchar("outcome_by_username", { length: 64 }),
+        outcomeAt: timestamp("outcome_at", { withTimezone: true }),
+        createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+    },
+    (table) => [
+        unique("feedback_surveys_subject_sequence_unique").on(table.subjectId, table.sequence),
+        uniqueIndex("feedback_surveys_one_open_per_subject")
+            .on(table.subjectId)
+            .where(sql`${table.status} = 'open'`),
+        index("feedback_surveys_status_closes_idx").on(table.status, table.closesAt)
+    ]
+);
+
+export const feedbackResponses = pgTable(
+    "feedback_responses",
+    {
+        id: uuid("id").primaryKey().defaultRandom(),
+        surveyId: uuid("survey_id")
+            .notNull()
+            .references(() => feedbackSurveys.id, { onDelete: "cascade" }),
+        respondentHash: varchar("respondent_hash", { length: 64 }).notNull(),
+        answers: jsonb("answers").$type<{ questionId: string; value: string }[]>().notNull(),
+        ...timestamps
+    },
+    (table) => [unique("feedback_responses_survey_respondent_unique").on(table.surveyId, table.respondentHash)]
+);
+
 export type UserRecord = typeof users.$inferSelect;
 export type DocumentRecord = typeof documents.$inferSelect;
 export type DocumentRevisionRecord = typeof documentRevisions.$inferSelect;
@@ -551,3 +881,15 @@ export type ScreenplayCollaboratorRecord = typeof screenplayCollaborators.$infer
 export type ScreenplayVersionRecord = typeof screenplayVersions.$inferSelect;
 export type DepartmentRecord = typeof departments.$inferSelect;
 export type DepartmentDiscordMapRecord = typeof departmentDiscordMaps.$inferSelect;
+export type TicketSettingsRecord = typeof ticketSettings.$inferSelect;
+export type TicketCategoryRecord = typeof ticketCategories.$inferSelect;
+export type TicketTypeRecord = typeof ticketTypes.$inferSelect;
+export type TicketRecord = typeof tickets.$inferSelect;
+export type DiscordDirectoryRecord = typeof discordDirectory.$inferSelect;
+export type TicketHubRecord = typeof ticketHubs.$inferSelect;
+export type TicketEventRecord = typeof ticketEvents.$inferSelect;
+export type TicketMessageRecord = typeof ticketMessages.$inferSelect;
+export type FeedbackSettingsRecord = typeof feedbackSettings.$inferSelect;
+export type FeedbackSubjectRecord = typeof feedbackSubjects.$inferSelect;
+export type FeedbackSurveyRecord = typeof feedbackSurveys.$inferSelect;
+export type FeedbackResponseRecord = typeof feedbackResponses.$inferSelect;

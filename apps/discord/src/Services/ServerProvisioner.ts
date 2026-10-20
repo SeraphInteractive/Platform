@@ -1,5 +1,3 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { DepartmentSlug, DocumentSlug, ShotStatus } from "@platform/contracts";
 import {
     ChannelType,
@@ -19,6 +17,7 @@ import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
 import { message, panel, plain } from "../Discord/Ui.js";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
 import { htmlToDiscordMarkdown } from "../Views/NotificationViews.js";
+import { setUpDepartmentDesk } from "./DepartmentDesks.js";
 import { contributorRoleName, findStudioRole, normalizeName, permissionsForRole, studioRoles, StudioTier } from "./StudioRoles.js";
 
 export const departmentChannelPrefix: Readonly<Record<DepartmentSlug, string>> = Object.freeze({
@@ -37,45 +36,15 @@ export const departmentGrabBoxName: Readonly<Record<DepartmentSlug, string>> = O
     [DepartmentSlug.PostProduction]: "Post-Production-GrabBox"
 });
 
-function loadBotAvatar(): Buffer | undefined {
-    const candidates = [
-        join(process.cwd(), "assets", "bot-pfp-temp.png"),
-        join(process.cwd(), "apps", "discord", "assets", "bot-pfp-temp.png"),
-        join(process.cwd(), "apps", "web", "public", "branding", "bot-pfp-temp.png"),
-        "/home/yierke/mnt/extra/BACKUP!!!/Videos/bot-pfp.png"
-    ];
-    for (const candidate of candidates) {
-        if (existsSync(candidate)) {
-            try {
-                return readFileSync(candidate);
-            } catch {
-                // ignore unreadable avatar file
-            }
-        }
-    }
-    return undefined;
-}
-
-export const botAvatarBuffer = loadBotAvatar();
-
-async function ensureWebhookOnChannel(
-    channel: TextChannel,
-    name: string,
-    logger: Logger,
-    avatar: Buffer | undefined = botAvatarBuffer
-): Promise<string | null> {
+async function ensureWebhookOnChannel(channel: TextChannel, name: string, logger: Logger): Promise<string | null> {
     try {
         const webhooks = await channel.fetchWebhooks();
         const existing = webhooks.find((hook) => hook.name.toLowerCase() === name.toLowerCase());
         if (existing?.url) {
-            if (avatar && !existing.avatar) {
-                await existing.edit({ avatar }).catch(() => undefined);
-            }
             return existing.url;
         }
         const created = await channel.createWebhook({
             name,
-            avatar,
             reason: "Studio department webhook setup"
         });
         return created.url;
@@ -357,6 +326,9 @@ export class ServerProvisioner {
                             discordLogsWebhookUrl: logsWebhookUrl,
                             discordApplyChannelId: deptApply?.id ?? null
                         });
+                        if (deptApply !== undefined) {
+                            await setUpDepartmentDesk(this.api, dept, deptApply, deptLogs?.id ?? null, roles.values(), this.logger);
+                        }
 
                         if (deptForum.type === ChannelType.GuildForum && Array.isArray(deptForum.availableTags)) {
                             await this.settings.update((settings) => {
@@ -415,11 +387,6 @@ export class ServerProvisioner {
             .map((role) => roleIds.get(role.name))
             .filter((role): role is DiscordRole => role !== undefined);
         const botId = guild.client.user.id;
-        if (botAvatarBuffer && !guild.client.user.avatar) {
-            await guild.client.user.setAvatar(botAvatarBuffer).catch((err: unknown) => {
-                this.logger.warn({ err }, "failed to update bot user avatar");
-            });
-        }
         const everyone = guild.roles.everyone.id;
         const channels = await guild.channels.fetch();
 
@@ -1082,6 +1049,7 @@ export class ServerProvisioner {
                         discordLogsWebhookUrl: logsWebhookUrl,
                         discordApplyChannelId: deptApply.id
                     });
+                    await setUpDepartmentDesk(this.api, dept, deptApply, deptLogs.id, guild.roles.cache.values(), this.logger);
 
                     departmentSummaries.push({
                         departmentName: dept.name,

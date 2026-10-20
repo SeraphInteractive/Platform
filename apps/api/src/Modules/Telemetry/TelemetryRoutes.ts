@@ -1,4 +1,9 @@
-import { activityEntrySchema, platformNotificationSchema, raidTelemetrySchema as telemetrySchema } from "@platform/contracts";
+import {
+    activityEntrySchema,
+    NotificationType,
+    platformNotificationSchema,
+    raidTelemetrySchema as telemetrySchema
+} from "@platform/contracts";
 import { and, desc, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -11,6 +16,14 @@ import { raidTelemetry, votingRounds, type RaidTelemetryRecord } from "../../Inf
 import type { RoundEvent, Unsubscribe } from "../../Infrastructure/Events/EventBus.js";
 
 const heartbeatMs = 25_000;
+
+const privateActivityTypes: ReadonlySet<NotificationType> = new Set([
+    NotificationType.TicketConfigUpdated,
+    NotificationType.TicketActivity,
+    NotificationType.FeedbackSurveyOpened,
+    NotificationType.FeedbackSurveyClosed,
+    NotificationType.FeedbackOutcomeRecorded
+]);
 
 interface StreamSession {
     unsubscribe: Unsubscribe | null;
@@ -211,7 +224,7 @@ export const telemetryRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer
             for (const entry of entries) {
                 try {
                     const parsed = platformNotificationSchema.safeParse(JSON.parse(entry.payload));
-                    if (parsed.success) {
+                    if (parsed.success && !privateActivityTypes.has(parsed.data.type)) {
                         items.push({ id: entry.id, notification: parsed.data });
                     }
                 } catch {

@@ -20,6 +20,7 @@ import type { RoleSyncScheduler } from "../Services/RoleSyncScheduler.js";
 import type { ProfanityFilter } from "../Services/ProfanityFilter.js";
 import type { ServerProvisioner } from "../Services/ServerProvisioner.js";
 import type { TaskForum } from "../Services/TaskForum.js";
+import type { TicketDesk } from "../Services/TicketDesk.js";
 import type { ReminderStore } from "../State/ReminderStore.js";
 import type { SettingsStore } from "../State/SettingsStore.js";
 import type { WarningStore } from "../State/WarningStore.js";
@@ -37,6 +38,7 @@ export interface BotContext {
     readonly roleScheduler: RoleSyncScheduler;
     readonly warnings: WarningStore;
     readonly profanityFilter: ProfanityFilter;
+    readonly tickets: TicketDesk;
     readonly logger: Logger;
 }
 

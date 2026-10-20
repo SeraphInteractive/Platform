@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger } from "fastify";
 import type { KeyValueStore } from "../Infrastructure/Cache/KeyValueStore.js";
 import type { TokenService } from "../Modules/Auth/TokenService.js";
+import type { FeedbackService } from "../Modules/CrewFeedback/FeedbackService.js";
 import type { ShotsService } from "../Modules/Shots/ShotsService.js";
 import type { LeaderboardService } from "../Modules/Leaderboards/LeaderboardService.js";
 
@@ -18,6 +19,7 @@ export class MaintenanceScheduler {
         shotsService: ShotsService,
         tokenService: TokenService,
         leaderboardService: LeaderboardService,
+        feedbackService: FeedbackService,
         private readonly store: KeyValueStore,
         private readonly logger: FastifyBaseLogger
     ) {
@@ -37,6 +39,17 @@ export class MaintenanceScheduler {
                 intervalMs: 60 * 60 * 1000,
                 run: async (): Promise<void> => {
                     await tokenService.purgeExpired();
+                }
+            },
+            {
+                name: "crew-feedback-check-ins",
+                intervalMs: 5 * 60 * 1000,
+                run: async (): Promise<void> => {
+                    const closed = await feedbackService.closeExpired();
+                    const opened = await feedbackService.openDue();
+                    if (closed > 0 || opened > 0) {
+                        this.logger.info({ closed, opened }, "updated crew feedback check-ins");
+                    }
                 }
             },
             {

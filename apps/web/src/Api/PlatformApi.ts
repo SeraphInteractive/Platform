@@ -74,7 +74,58 @@ import {
     type ShotThreadMapDto,
     type UserDto,
     type AutoModRuleDto,
-    type CreateAutoModRuleDto
+    type CreateAutoModRuleDto,
+    discordDirectorySchema,
+    feedbackSettingsSchema,
+    feedbackSubjectSchema,
+    feedbackSurveyDetailSchema,
+    feedbackSurveySchema,
+    type CreateFeedbackSubjectDto,
+    type FeedbackSettingsDto,
+    type FeedbackSubjectDto,
+    type FeedbackSurveyDetailDto,
+    type FeedbackSurveyDto,
+    type RecordFeedbackOutcomeDto,
+    type UpdateFeedbackSettingsDto,
+    type UpdateFeedbackSubjectDto,
+    publicPositionsSchema,
+    ticketCategorySchema,
+    ticketConfigSchema,
+    ticketSchema,
+    ticketSettingsSchema,
+    ticketTypeSchema,
+    ticketAccessSchema,
+    ticketDetailSchema,
+    ticketEventSchema,
+    ticketHubSchema,
+    ticketMessageSchema,
+    ticketSummarySchema,
+    type AddTicketMemberDto,
+    type AssignTicketDto,
+    type CloseTicketDto,
+    type CreateTicketHubDto,
+    type ReopenTicketDto,
+    type TicketAccessDto,
+    type TicketDetailDto,
+    type TicketEventDto,
+    type TicketHubDto,
+    type TicketMessageDto,
+    type TicketStageInputDto,
+    type TicketSummaryDto,
+    type UpdateTicketHubDto,
+    type CreateTicketCategoryDto,
+    type CreateTicketTypeDto,
+    type DiscordDirectoryDto,
+    type PublicPositionsDto,
+    type TicketCategoryDto,
+    type TicketConfigDto,
+    type TicketDto,
+    type TicketListQuery,
+    type TicketSettingsDto,
+    type TicketTypeDto,
+    type UpdateTicketCategoryDto,
+    type UpdateTicketSettingsDto,
+    type UpdateTicketTypeDto
 } from "@platform/contracts";
 
 import { z } from "zod";
@@ -462,6 +513,159 @@ export class PlatformApi {
                 body: input
             })
         ).data;
+    }
+
+    public async ticketConfig(): Promise<TicketConfigDto> {
+        return (await request("/tickets/config", dataEnvelope(ticketConfigSchema))).data;
+    }
+
+    public async ticketAccess(): Promise<TicketAccessDto> {
+        return (await request("/tickets/access", dataEnvelope(ticketAccessSchema))).data;
+    }
+
+    public async ticketSummary(): Promise<TicketSummaryDto> {
+        return (await request("/tickets/summary", dataEnvelope(ticketSummarySchema))).data;
+    }
+
+    public async updateTicketSettings(input: UpdateTicketSettingsDto): Promise<TicketSettingsDto> {
+        return (await request("/tickets/settings", dataEnvelope(ticketSettingsSchema), { method: "PUT", body: input })).data;
+    }
+
+    public async createTicketHub(input: CreateTicketHubDto): Promise<TicketHubDto> {
+        return (await request("/tickets/hubs", dataEnvelope(ticketHubSchema), { method: "POST", body: input })).data;
+    }
+
+    public async updateTicketHub(id: string, input: UpdateTicketHubDto): Promise<TicketHubDto> {
+        return (await request(`/tickets/hubs/${segment(id)}`, dataEnvelope(ticketHubSchema), { method: "PATCH", body: input })).data;
+    }
+
+    public async deleteTicketHub(id: string): Promise<void> {
+        await requestNoContent(`/tickets/hubs/${segment(id)}`, { method: "DELETE" });
+    }
+
+    public async createTicketCategory(input: CreateTicketCategoryDto): Promise<TicketCategoryDto> {
+        return (await request("/tickets/categories", dataEnvelope(ticketCategorySchema), { method: "POST", body: input })).data;
+    }
+
+    public async updateTicketCategory(id: string, input: UpdateTicketCategoryDto): Promise<TicketCategoryDto> {
+        return (await request(`/tickets/categories/${segment(id)}`, dataEnvelope(ticketCategorySchema), { method: "PATCH", body: input }))
+            .data;
+    }
+
+    public async deleteTicketCategory(id: string): Promise<void> {
+        await requestNoContent(`/tickets/categories/${segment(id)}`, { method: "DELETE" });
+    }
+
+    public async createTicketType(input: CreateTicketTypeDto): Promise<TicketTypeDto> {
+        return (await request("/tickets/types", dataEnvelope(ticketTypeSchema), { method: "POST", body: input })).data;
+    }
+
+    public async updateTicketType(id: string, input: UpdateTicketTypeDto): Promise<TicketTypeDto> {
+        return (await request(`/tickets/types/${segment(id)}`, dataEnvelope(ticketTypeSchema), { method: "PATCH", body: input })).data;
+    }
+
+    public async deleteTicketType(id: string): Promise<void> {
+        await requestNoContent(`/tickets/types/${segment(id)}`, { method: "DELETE" });
+    }
+
+    public async tickets(query: TicketListQuery): Promise<Page<TicketDto>> {
+        const { unassigned, ...rest } = query;
+        return request("/tickets", pageEnvelope(ticketSchema), {
+            query: { ...rest, unassigned: unassigned === true ? "true" : undefined }
+        });
+    }
+
+    public async ticketDetail(id: string): Promise<TicketDetailDto> {
+        return (await request(`/tickets/${segment(id)}/detail`, dataEnvelope(ticketDetailSchema))).data;
+    }
+
+    public async setTicketStage(id: string, input: TicketStageInputDto): Promise<TicketDto> {
+        return (await request(`/tickets/${segment(id)}/stage`, dataEnvelope(ticketSchema), { method: "POST", body: input })).data;
+    }
+
+    public async closeTicket(id: string, input: CloseTicketDto): Promise<TicketDto> {
+        return (await request(`/tickets/${segment(id)}/close`, dataEnvelope(ticketSchema), { method: "POST", body: input })).data;
+    }
+
+    public async reopenTicket(id: string, input: ReopenTicketDto): Promise<TicketDto> {
+        return (await request(`/tickets/${segment(id)}/reopen`, dataEnvelope(ticketSchema), { method: "POST", body: input })).data;
+    }
+
+    public async assignTicket(id: string, input: AssignTicketDto): Promise<TicketDto> {
+        return (await request(`/tickets/${segment(id)}/assign`, dataEnvelope(ticketSchema), { method: "POST", body: input })).data;
+    }
+
+    public async addTicketMember(id: string, input: AddTicketMemberDto): Promise<TicketDto> {
+        return (await request(`/tickets/${segment(id)}/members`, dataEnvelope(ticketSchema), { method: "POST", body: input })).data;
+    }
+
+    public async addTicketNote(id: string, content: string): Promise<TicketEventDto> {
+        return (await request(`/tickets/${segment(id)}/notes`, dataEnvelope(ticketEventSchema), { method: "POST", body: { content } }))
+            .data;
+    }
+
+    public async replyToTicket(id: string, content: string): Promise<TicketMessageDto> {
+        return (await request(`/tickets/${segment(id)}/replies`, dataEnvelope(ticketMessageSchema), { method: "POST", body: { content } }))
+            .data;
+    }
+
+    public async feedbackSettings(): Promise<FeedbackSettingsDto> {
+        return (await request("/feedback/settings", dataEnvelope(feedbackSettingsSchema))).data;
+    }
+
+    public async updateFeedbackSettings(input: UpdateFeedbackSettingsDto): Promise<FeedbackSettingsDto> {
+        return (await request("/feedback/settings", dataEnvelope(feedbackSettingsSchema), { method: "PUT", body: input })).data;
+    }
+
+    public async feedbackSubjects(): Promise<FeedbackSubjectDto[]> {
+        return (await request("/feedback/subjects", dataEnvelope(z.array(feedbackSubjectSchema)))).data;
+    }
+
+    public async createFeedbackSubject(input: CreateFeedbackSubjectDto): Promise<FeedbackSubjectDto> {
+        return (await request("/feedback/subjects", dataEnvelope(feedbackSubjectSchema), { method: "POST", body: input })).data;
+    }
+
+    public async updateFeedbackSubject(id: string, input: UpdateFeedbackSubjectDto): Promise<FeedbackSubjectDto> {
+        return (await request(`/feedback/subjects/${segment(id)}`, dataEnvelope(feedbackSubjectSchema), { method: "PATCH", body: input }))
+            .data;
+    }
+
+    public async deleteFeedbackSubject(id: string): Promise<void> {
+        await requestNoContent(`/feedback/subjects/${segment(id)}`, { method: "DELETE" });
+    }
+
+    public async feedbackSurveys(subjectId: string): Promise<FeedbackSurveyDto[]> {
+        return (await request(`/feedback/subjects/${segment(subjectId)}/surveys`, dataEnvelope(z.array(feedbackSurveySchema)))).data;
+    }
+
+    public async sendFeedbackSurvey(subjectId: string): Promise<FeedbackSurveyDto> {
+        return (await request(`/feedback/subjects/${segment(subjectId)}/surveys`, dataEnvelope(feedbackSurveySchema), { method: "POST" }))
+            .data;
+    }
+
+    public async feedbackResults(surveyId: string): Promise<FeedbackSurveyDetailDto> {
+        return (await request(`/feedback/surveys/${segment(surveyId)}/results`, dataEnvelope(feedbackSurveyDetailSchema))).data;
+    }
+
+    public async closeFeedbackSurvey(surveyId: string): Promise<FeedbackSurveyDto> {
+        return (await request(`/feedback/surveys/${segment(surveyId)}/close`, dataEnvelope(feedbackSurveySchema), { method: "POST" })).data;
+    }
+
+    public async recordFeedbackOutcome(surveyId: string, input: RecordFeedbackOutcomeDto): Promise<FeedbackSurveyDto> {
+        return (
+            await request(`/feedback/surveys/${segment(surveyId)}/outcome`, dataEnvelope(feedbackSurveySchema), {
+                method: "POST",
+                body: input
+            })
+        ).data;
+    }
+
+    public async discordDirectory(): Promise<DiscordDirectoryDto> {
+        return (await request("/discord/directory", dataEnvelope(discordDirectorySchema))).data;
+    }
+
+    public async positions(): Promise<PublicPositionsDto> {
+        return (await request("/positions", dataEnvelope(publicPositionsSchema))).data;
     }
 }
 

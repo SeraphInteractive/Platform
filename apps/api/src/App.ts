@@ -41,6 +41,9 @@ import { discordSettingsRoutes } from "./Modules/DiscordSettings/DiscordSettings
 import { discordModerationRoutes } from "./Modules/DiscordModeration/DiscordModerationRoutes.js";
 import { departmentsRoutes } from "./Modules/Departments/DepartmentsRoutes.js";
 import { announcementsRoutes } from "./Modules/Announcements/AnnouncementsRoutes.js";
+import { ticketConfigRoutes } from "./Modules/Tickets/TicketConfigRoutes.js";
+import { ticketsRoutes } from "./Modules/Tickets/TicketsRoutes.js";
+import { feedbackRoutes } from "./Modules/CrewFeedback/FeedbackRoutes.js";
 
 export const apiPrefix = "/api/v1";
 
@@ -239,6 +242,9 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
             await api.register(discordModerationRoutes, { services });
             await api.register(departmentsRoutes, { services });
             await api.register(announcementsRoutes, { services });
+            await api.register(ticketConfigRoutes, { services });
+            await api.register(ticketsRoutes, { services });
+            await api.register(feedbackRoutes, { services });
         },
 
         { prefix: apiPrefix }
