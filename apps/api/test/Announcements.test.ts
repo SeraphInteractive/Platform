@@ -59,7 +59,7 @@ describe("announcements API", () => {
 
     it("publishes to department webhook when configured", async () => {
         const globalFetch = globalThis.fetch;
-        const mockFetch = vi.fn(async () => new Response(null, { status: 204 }));
+        const mockFetch = vi.fn<typeof globalThis.fetch>(async () => new Response(null, { status: 204 }));
         globalThis.fetch = mockFetch;
 
         try {
@@ -105,6 +105,36 @@ describe("announcements API", () => {
                     method: "POST"
                 })
             );
+
+            const publishWithPings = await context.application.inject({
+                method: "POST",
+                url: "/api/v1/announcements",
+                headers: supervisor.headers,
+                payload: {
+                    target: "department:animation",
+                    title: "Urgent Review Needed",
+                    content: "Please check scene 3.",
+                    pings: {
+                        everyone: true,
+                        roleIds: ["100000000000000014"],
+                        userIds: ["100000000000000015"]
+                    }
+                }
+            });
+
+            expect(publishWithPings.statusCode).toBe(200);
+            const lastCallArgs = mockFetch.mock.lastCall;
+            expect(lastCallArgs).toBeDefined();
+            const init = lastCallArgs?.[1];
+            expect(typeof init?.body).toBe("string");
+            const sentPayload = JSON.parse(init!.body as string) as {
+                content?: string;
+                allowed_mentions?: { parse?: string[]; roles?: string[]; users?: string[] };
+            };
+            expect(sentPayload.content).toBe("@everyone <@&100000000000000014> <@100000000000000015>");
+            expect(sentPayload.allowed_mentions?.parse).toContain("everyone");
+            expect(sentPayload.allowed_mentions?.roles).toContain("100000000000000014");
+            expect(sentPayload.allowed_mentions?.users).toContain("100000000000000015");
         } finally {
             globalThis.fetch = globalFetch;
         }

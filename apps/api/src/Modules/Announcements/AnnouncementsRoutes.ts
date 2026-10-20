@@ -32,14 +32,48 @@ export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceConta
             }
         },
         async (request): Promise<{ data: AnnouncementPublishResultDto }> => {
-            const { target, title, content } = request.body;
+            const { target, title, content, pings } = request.body;
             const author = optionalUser(request);
             const authorName = author?.discordUsername ?? "Supervisor";
+
+            const pingParts: string[] = [];
+            if (pings?.everyone) {
+                pingParts.push("@everyone");
+            }
+            if (pings?.here) {
+                pingParts.push("@here");
+            }
+            for (const roleId of pings?.roleIds ?? []) {
+                pingParts.push(`<@&${roleId}>`);
+            }
+            for (const userId of pings?.userIds ?? []) {
+                pingParts.push(`<@${userId}>`);
+            }
+            const pingText = pingParts.join(" ");
+
+            const parseMentions: ("everyone" | "roles" | "users")[] = [];
+            if (pings?.everyone || pings?.here) {
+                parseMentions.push("everyone");
+            }
+            if (pings?.roleIds && pings.roleIds.length > 0) {
+                parseMentions.push("roles");
+            }
+            if (pings?.userIds && pings.userIds.length > 0) {
+                parseMentions.push("users");
+            }
+
+            const allowedMentions = {
+                parse: parseMentions,
+                roles: pings?.roleIds ?? [],
+                users: pings?.userIds ?? []
+            };
 
             // discord components v2 layout using container with stairway blue accent bar and text displays
             const webhookPayload = {
                 username: "Project Stairway",
                 flags: 32768, // IS_COMPONENTS_V2
+                ...(pingText.length > 0 ? { content: pingText } : {}),
+                allowed_mentions: allowedMentions,
                 components: [
                     {
                         type: 17, // container

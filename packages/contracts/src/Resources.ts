@@ -667,11 +667,23 @@ export type ApologyRecordDto = z.infer<typeof apologyRecordSchema>;
 export type UserModerationRecordDto = z.infer<typeof userModerationRecordSchema>;
 export type UpdateUserModerationRecordDto = z.input<typeof updateUserModerationRecordSchema>;
 
+export const announcementPingsSchema = z
+    .object({
+        everyone: z.boolean().optional(),
+        here: z.boolean().optional(),
+        roleIds: z.array(snowflakeSchema).max(20).optional(),
+        userIds: z.array(snowflakeSchema).max(50).optional()
+    })
+    .meta({ id: "AnnouncementPings" });
+
+export type AnnouncementPingsDto = z.infer<typeof announcementPingsSchema>;
+
 export const publishAnnouncementSchema = z
     .object({
         target: z.string().min(1).max(64),
         title: z.string().min(1).max(256),
-        content: z.string().min(1).max(4000)
+        content: z.string().min(1).max(4000),
+        pings: announcementPingsSchema.optional()
     })
     .meta({ id: "PublishAnnouncement" });
 
