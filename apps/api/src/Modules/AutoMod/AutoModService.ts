@@ -93,10 +93,17 @@ export class AutoModService {
 
     public async create(pattern: string, isRegex: boolean, actorId: string): Promise<AutomodRuleRecord> {
         const trimmed = pattern.trim();
+        if (trimmed.length === 0 || trimmed.length > 250) {
+            throw new BadRequestError("Pattern length must be between 1 and 250 characters.");
+        }
         if (isRegex) {
+            // reject nested quantifiers that cause catastrophic exponential backtracking
+            if (/(?:[+*]|\{\d+,?\d*\})\s*(?:[+*]|\{\d+,?\d*\})|\([^)]{1,50}[+*][^)]{0,50}\)[+*]/u.test(trimmed)) {
+                throw new BadRequestError("Regular expression contains potentially unsafe nested quantifiers.");
+            }
             try {
                 // validate regex pattern syntax
-                new RegExp(trimmed);
+                new RegExp(trimmed, "u");
             } catch (err) {
                 throw new BadRequestError(`Invalid regular expression: ${err instanceof Error ? err.message : String(err)}`);
             }

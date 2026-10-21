@@ -25,7 +25,8 @@ describe("b21 reproducer: upload proxy 50mb ceiling discrepancy", () => {
             method: "POST",
             body: smallPayload,
             headers: {
-                "content-type": "application/octet-stream"
+                "content-type": "application/octet-stream",
+                origin: "http://localhost:3000"
             }
         });
 
@@ -44,7 +45,8 @@ describe("b21 reproducer: upload proxy 50mb ceiling discrepancy", () => {
             method: "POST",
             body: deliverablePayload,
             headers: {
-                "content-type": "application/octet-stream"
+                "content-type": "application/octet-stream",
+                origin: "http://localhost:3000"
             }
         });
 

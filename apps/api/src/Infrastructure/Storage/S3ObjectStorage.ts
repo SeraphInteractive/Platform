@@ -13,7 +13,8 @@ import type { StorageConfiguration } from "../../Configuration/ApplicationConfig
 import { ServiceUnavailableError } from "../../Common/Errors/ApplicationError.js";
 import { StorageBucket, type ObjectStorage, type PresignedUpload, type StoredObjectMetadata } from "./ObjectStorage.js";
 
-const uploadUrlTtlSeconds = 15 * 60;
+// reduce presigned upload ttl to 2 minutes to limit interception/replay window
+const uploadUrlTtlSeconds = 120;
 const downloadUrlTtlSeconds = 60 * 60;
 
 export class S3ObjectStorage implements ObjectStorage {

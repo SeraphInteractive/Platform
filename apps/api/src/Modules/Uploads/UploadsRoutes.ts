@@ -61,6 +61,7 @@ export const uploadsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
         "/uploads/stream",
         {
             preHandler: requireUser(),
+            bodyLimit: configuration.storage.deliverableMaxBytes,
             config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
             schema: {
                 tags: ["Uploads"],
@@ -74,6 +75,7 @@ export const uploadsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
         },
         async (request, reply) => {
             const user = currentUser(request);
+            await consumeUploadQuota(services.keyValueStore, UploadQuota.Media, user.id);
             const { key } = request.query;
             const contentType = (request.headers["content-type"] ?? "application/octet-stream").split(";")[0]!.trim();
             const buffer = request.body as Buffer;

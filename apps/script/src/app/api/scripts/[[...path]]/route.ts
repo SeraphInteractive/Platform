@@ -9,6 +9,14 @@ interface RouteContext {
 
 async function forward(request: NextRequest, context: RouteContext): Promise<NextResponse> {
     const { path } = await context.params;
+    if (path) {
+        for (const segment of path) {
+            // block path traversal escapes and directory manipulation
+            if (segment === ".." || segment === "." || !/^[a-zA-Z0-9_\-.~]+$/u.test(segment)) {
+                return NextResponse.json({ error: "Invalid path segment." }, { status: 400 });
+            }
+        }
+    }
     const subpath = path && path.length > 0 ? path.join("/") : "";
     const token = readSessionToken(request);
     if (!token) {

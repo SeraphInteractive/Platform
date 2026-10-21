@@ -188,8 +188,7 @@ export const releaseTaskCommand: SlashCommand = {
         const isClaimant = shot.claimer?.id === me.id;
         const isAdmin = hasAtLeast(me.role, Role.Admin);
         const isDeptSupervisor =
-            me.role === Role.Supervisor &&
-            (me.departmentId === undefined || me.departmentId === null || me.departmentId === shot.departmentId);
+            hasAtLeast(me.role, Role.Supervisor) && Boolean(me.departmentId && shot.departmentId && me.departmentId === shot.departmentId);
         if (!isClaimant && !isAdmin && !isDeptSupervisor) {
             throw new UserFacingError("Only the task claimant, department supervisors, or admins can release this task.");
         }
@@ -391,10 +390,12 @@ export const reviewModalHandler: ComponentHandler = {
             return;
         }
         const notes = modal.fields.getTextInputValue("notes").trim();
-        await actingAs(modal, context).reviewSubmission(submissionId, decision, notes.length === 0 ? null : notes);
         if (modal.isFromMessage()) {
+            // acknowledge interaction immediately to avoid 3-second discord 10062 timeout
+            await modal.deferUpdate();
+            await actingAs(modal, context).reviewSubmission(submissionId, decision, notes.length === 0 ? null : notes);
             const card = modal.message.components[0];
-            await modal.update({
+            await modal.editReply({
                 components:
                     card === undefined
                         ? [text(reviewOutcome(decision, modal.user.id))]
@@ -404,7 +405,10 @@ export const reviewModalHandler: ComponentHandler = {
             });
             return;
         }
-        await modal.reply(ephemeral(panel(null, "Review saved.")));
+        // acknowledge interaction immediately to avoid 3-second discord 10062 timeout
+        await modal.deferReply({ flags: MessageFlags.Ephemeral });
+        await actingAs(modal, context).reviewSubmission(submissionId, decision, notes.length === 0 ? null : notes);
+        await modal.editReply(asEdit(ephemeral(panel(null, "Review saved."))));
     }
 };
 

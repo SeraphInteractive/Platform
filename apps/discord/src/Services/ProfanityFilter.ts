@@ -87,10 +87,18 @@ export function normalizeContent(raw: string): string {
 
 export function compileAutoModRule(pattern: string, isRegex: boolean): RegExp | null {
     try {
-        if (isRegex) {
-            return new RegExp(pattern, "iu");
+        const trimmed = pattern.trim();
+        if (trimmed.length === 0 || trimmed.length > 250) {
+            return null;
         }
-        const escaped = pattern.trim().replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+        if (isRegex) {
+            // reject nested quantifiers that cause catastrophic exponential backtracking
+            if (/(?:[+*]|\{\d+,?\d*\})\s*(?:[+*]|\{\d+,?\d*\})|\([^)]{1,50}[+*][^)]{0,50}\)[+*]/u.test(trimmed)) {
+                return null;
+            }
+            return new RegExp(trimmed, "iu");
+        }
+        const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
         if (!escaped) {
             return null;
         }

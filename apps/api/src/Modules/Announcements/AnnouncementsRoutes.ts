@@ -7,7 +7,7 @@ import {
 import { eq, isNotNull } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { ApplicationError, ErrorCode, NotFoundError } from "../../Common/Errors/ApplicationError.js";
-import { dataEnvelope, errorResponses } from "../../Common/Http/Schemas.js";
+import { dataEnvelope, errorResponses, isSafeDiscordWebhookUrl } from "../../Common/Http/Schemas.js";
 import { optionalUser, requireRole } from "../../Common/Security/Authorization.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
 import { Role } from "../../Domain/Roles.js";
@@ -157,21 +157,23 @@ export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceConta
             await Promise.all(
                 webhookTargets.map(async (item) => {
                     try {
+                        if (!isSafeDiscordWebhookUrl(item.url)) {
+                            request.log.warn({ target: item.name }, "blocked unsafe announcement webhook URL");
+                            errors.push(item.name);
+                            return;
+                        }
                         const targetUrl = item.url.includes("?") ? `${item.url}&with_components=true` : `${item.url}?with_components=true`;
                         const response = await fetch(targetUrl, {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify(webhookPayload)
+                            body: JSON.stringify(webhookPayload),
+                            signal: AbortSignal.timeout(10_000)
                         });
                         if (response.ok || response.status === 204) {
                             dispatchedChannels.push(item.name);
                         } else {
-                            const errorText = await response.text().catch(() => "");
-                            request.log.warn(
-                                { target: item.name, status: response.status, errorText },
-                                "failed to dispatch announcement webhook"
-                            );
-                            errors.push(`${item.name} (status ${response.status})`);
+                            request.log.warn({ target: item.name, status: response.status }, "failed to dispatch announcement webhook");
+                            errors.push(item.name);
                         }
                     } catch (err: unknown) {
                         request.log.warn({ target: item.name, err }, "exception dispatching announcement webhook");

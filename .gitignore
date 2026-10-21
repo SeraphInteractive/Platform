@@ -20,3 +20,5 @@ gemini.md
 .agents/
 .gemini/
 apps/script/data/
+SECURITY_AUDIT_REPORT.md
+*AUDIT*.md

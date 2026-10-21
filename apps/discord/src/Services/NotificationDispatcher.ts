@@ -25,6 +25,21 @@ export interface WebhookEndpoints {
     readonly rules?: string;
 }
 
+const allowedDiscordWebhookHosts = new Set(["discord.com", "discordapp.com", "canary.discord.com", "ptb.discord.com"]);
+
+function isSafeDiscordWebhookUrl(value: string): boolean {
+    try {
+        const url = new URL(value);
+        if (url.protocol !== "https:") {
+            return false;
+        }
+        const host = url.hostname.toLowerCase();
+        return allowedDiscordWebhookHosts.has(host) && url.pathname.startsWith("/api/webhooks/");
+    } catch {
+        return false;
+    }
+}
+
 function collectDiscordIds(notification: PlatformNotification): string[] {
     const ids: (string | null | undefined)[] = [];
     const record = notification as Record<string, unknown>;
@@ -51,13 +66,13 @@ export class NotificationDispatcher {
         webhooks: WebhookEndpoints = {},
         private readonly api?: PlatformApiClient
     ) {
-        if (webhooks.telemetry) {
+        if (webhooks.telemetry && isSafeDiscordWebhookUrl(webhooks.telemetry)) {
             this.webhookClients[ChannelPurpose.Telemetry] = new WebhookClient({ url: webhooks.telemetry });
         }
-        if (webhooks.moderationLogs) {
+        if (webhooks.moderationLogs && isSafeDiscordWebhookUrl(webhooks.moderationLogs)) {
             this.webhookClients[ChannelPurpose.ModerationLogs] = new WebhookClient({ url: webhooks.moderationLogs });
         }
-        if (webhooks.rules) {
+        if (webhooks.rules && isSafeDiscordWebhookUrl(webhooks.rules)) {
             this.webhookClients[ChannelPurpose.Rules] = new WebhookClient({ url: webhooks.rules });
         }
     }
@@ -78,7 +93,7 @@ export class NotificationDispatcher {
             try {
                 const depts = await this.api.listDepartments();
                 for (const dept of depts) {
-                    if (dept.discordLogsWebhookUrl) {
+                    if (dept.discordLogsWebhookUrl && isSafeDiscordWebhookUrl(dept.discordLogsWebhookUrl)) {
                         this.departmentLogsWebhooks.set(dept.slug, new WebhookClient({ url: dept.discordLogsWebhookUrl }));
                     }
                 }
@@ -103,7 +118,7 @@ export class NotificationDispatcher {
         if (typeof ch.fetchWebhooks === "function") {
             try {
                 const webhooks = await ch.fetchWebhooks();
-                const existing = webhooks.find((w) => typeof w.url === "string" && w.url.length > 0);
+                const existing = webhooks.find((w) => typeof w.url === "string" && isSafeDiscordWebhookUrl(w.url));
                 if (existing?.url) {
                     const client = new WebhookClient({ url: existing.url });
                     this.webhookClients[purpose] = client;
@@ -111,7 +126,7 @@ export class NotificationDispatcher {
                 }
                 if (typeof ch.createWebhook === "function") {
                     const created = await ch.createWebhook({ name: "Project Stairway Alerts" });
-                    if (created?.url) {
+                    if (created?.url && isSafeDiscordWebhookUrl(created.url)) {
                         const client = new WebhookClient({ url: created.url });
                         this.webhookClients[purpose] = client;
                         return client;

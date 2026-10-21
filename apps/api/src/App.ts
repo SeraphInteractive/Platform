@@ -24,7 +24,7 @@ import { Role } from "./Domain/Roles.js";
 import { authRoutes } from "./Modules/Auth/AuthRoutes.js";
 import { ballotsRoutes } from "./Modules/Ballots/BallotsRoutes.js";
 import { entriesRoutes } from "./Modules/Entries/EntriesRoutes.js";
-import { healthRoutes } from "./Modules/Health/HealthRoutes.js";
+import { healthRoutes, probeRoutes } from "./Modules/Health/HealthRoutes.js";
 import { notificationRoutes } from "./Modules/Notifications/NotificationRoutes.js";
 import { pipelineRoutes } from "./Modules/Pipeline/PipelineRoutes.js";
 import { roundsRoutes } from "./Modules/Rounds/RoundsRoutes.js";
@@ -133,7 +133,7 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
             "video/quicktime",
             "application/x-blender"
         ],
-        { parseAs: "buffer", bodyLimit: configuration.storage.deliverableMaxBytes },
+        { parseAs: "buffer", bodyLimit: configuration.storage.mediaMaxBytes },
         (_request, body, done) => {
             done(null, body);
         }
@@ -143,6 +143,11 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
     application.addHook("onRequest", async (request, reply) => {
         void reply.header("X-Request-Id", request.id);
         const header = request.headers.authorization;
+        const contentLength = Number(request.headers["content-length"]);
+        // reject oversized anonymous payloads before body parser buffers into memory
+        if (header === undefined && Number.isFinite(contentLength) && contentLength > 64 * 1024) {
+            throw new ApplicationError(413, ErrorCode.ValidationFailed, "Request payload too large.");
+        }
         if (header === undefined) {
             return;
         }
@@ -215,7 +220,7 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
         transformObject: jsonSchemaTransformObject
     });
 
-    await application.register(healthRoutes, { services });
+    await application.register(probeRoutes, { services });
 
     await application.register(
         async (api) => {

@@ -307,30 +307,35 @@ export const telemetryRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer
             }, heartbeatMs);
 
             (async () => {
-                while (!closed) {
-                    try {
-                        const entries = await reader.read(latestId, 25, 10_000);
-                        if (closed) {
+                try {
+                    while (!closed) {
+                        try {
+                            const entries = await reader.read(latestId, 25, 10_000);
+                            if (closed) {
+                                break;
+                            }
+                            for (const entry of entries) {
+                                latestId = entry.id;
+                                try {
+                                    const parsed = platformNotificationSchema.safeParse(JSON.parse(entry.payload));
+                                    if (parsed.success && !privateActivityTypes.has(parsed.data.type)) {
+                                        const eventPayload = JSON.stringify({ id: entry.id, notification: parsed.data });
+                                        stream.write(`id: ${entry.id}\nevent: activity\ndata: ${eventPayload}\n\n`);
+                                    }
+                                } catch {
+                                    // skip malformed entries
+                                }
+                            }
+                        } catch (err: unknown) {
+                            if (!closed) {
+                                request.log.warn({ err }, "activity stream reader error");
+                            }
                             break;
                         }
-                        for (const entry of entries) {
-                            latestId = entry.id;
-                            try {
-                                const parsed = platformNotificationSchema.safeParse(JSON.parse(entry.payload));
-                                if (parsed.success && !privateActivityTypes.has(parsed.data.type)) {
-                                    const eventPayload = JSON.stringify({ id: entry.id, notification: parsed.data });
-                                    stream.write(`id: ${entry.id}\nevent: activity\ndata: ${eventPayload}\n\n`);
-                                }
-                            } catch {
-                                // skip malformed entries
-                            }
-                        }
-                    } catch (err: unknown) {
-                        if (!closed) {
-                            request.log.warn({ err }, "activity stream reader error");
-                        }
-                        break;
                     }
+                } finally {
+                    // guarantee resource cleanup so stream counters never lock out users
+                    close();
                 }
             })().catch(() => undefined);
         }

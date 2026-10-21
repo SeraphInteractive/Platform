@@ -49,11 +49,15 @@ async function forward(request: NextRequest, context: RouteContext): Promise<Nex
             return problem(403, "FORBIDDEN", "Cross-origin request rejected.");
         }
         if (isUploadStream) {
-            const buffer = await request.arrayBuffer();
-            if (buffer.byteLength > maximumUploadStreamBytes) {
-                return problem(413, "PAYLOAD_TOO_LARGE", "The upload is too large.");
+            const contentLengthHeader = request.headers.get("content-length");
+            if (contentLengthHeader !== null) {
+                const contentLength = Number(contentLengthHeader);
+                if (!Number.isFinite(contentLength) || contentLength > maximumUploadStreamBytes) {
+                    return problem(413, "PAYLOAD_TOO_LARGE", "The upload is too large.");
+                }
             }
-            body = buffer;
+            // stream request body directly to prevent in-memory buffer exhaustion
+            body = request.body ?? undefined;
             contentType = request.headers.get("content-type") ?? "application/octet-stream";
         } else {
             const text = await request.text();

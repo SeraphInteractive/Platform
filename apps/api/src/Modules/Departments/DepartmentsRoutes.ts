@@ -3,10 +3,10 @@ import { asc, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { NotFoundError } from "../../Common/Errors/ApplicationError.js";
-import { dataEnvelope, errorResponses, snowflakeSchema, toIso, uuidSchema } from "../../Common/Http/Schemas.js";
+import { dataEnvelope, discordWebhookUrlSchema, errorResponses, snowflakeSchema, toIso, uuidSchema } from "../../Common/Http/Schemas.js";
 import { requireRoleOrService } from "../../Common/Security/Authorization.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
-import { Role } from "../../Domain/Roles.js";
+import { hasAtLeast, Role } from "../../Domain/Roles.js";
 import {
     departmentDiscordMaps,
     departments,
@@ -14,7 +14,21 @@ import {
     type DepartmentRecord
 } from "../../Infrastructure/Database/Schema.js";
 
-function toDepartmentResponse(dept: DepartmentRecord, map?: DepartmentDiscordMapRecord | null): z.infer<typeof departmentSchema> {
+function canReadWebhooks(request: { principal: { kind: string; user?: { role: Role } } | null }): boolean {
+    if (request.principal?.kind === "service") {
+        return true;
+    }
+    if (request.principal?.kind === "user" && request.principal.user) {
+        return hasAtLeast(request.principal.user.role, Role.Supervisor);
+    }
+    return false;
+}
+
+function toDepartmentResponse(
+    dept: DepartmentRecord,
+    map?: DepartmentDiscordMapRecord | null,
+    includeWebhooks = false
+): z.infer<typeof departmentSchema> {
     return {
         id: dept.id,
         name: dept.name,
@@ -26,9 +40,11 @@ function toDepartmentResponse(dept: DepartmentRecord, map?: DepartmentDiscordMap
         discordForumId: map?.discordForumId ?? null,
         discordChatChannelId: map?.discordChatChannelId ?? null,
         discordInfoChannelId: map?.discordInfoChannelId ?? null,
-        discordInfoWebhookUrl: map?.discordInfoWebhookUrl ?? null,
+        // redact webhook credentials from unauthenticated/contributor responses
+        discordInfoWebhookUrl: includeWebhooks ? (map?.discordInfoWebhookUrl ?? null) : null,
         discordLogsChannelId: map?.discordLogsChannelId ?? null,
-        discordLogsWebhookUrl: map?.discordLogsWebhookUrl ?? null,
+        // redact webhook credentials from unauthenticated/contributor responses
+        discordLogsWebhookUrl: includeWebhooks ? (map?.discordLogsWebhookUrl ?? null) : null,
         discordApplyChannelId: map?.discordApplyChannelId ?? null,
         createdAt: toIso(dept.createdAt),
         updatedAt: toIso(dept.updatedAt)
@@ -49,7 +65,8 @@ export const departmentsRoutes: FastifyPluginAsyncZod<{ services: ServiceContain
                 response: { 200: dataEnvelope(z.array(departmentSchema)), ...errorResponses }
             }
         },
-        async () => {
+        async (request) => {
+            const includeWebhooks = canReadWebhooks(request);
             const rows = await database
                 .select({
                     dept: departments,
@@ -60,7 +77,7 @@ export const departmentsRoutes: FastifyPluginAsyncZod<{ services: ServiceContain
                 .orderBy(asc(departments.name));
 
             return {
-                data: rows.map((row) => toDepartmentResponse(row.dept, row.map))
+                data: rows.map((row) => toDepartmentResponse(row.dept, row.map, includeWebhooks))
             };
         }
     );
@@ -76,6 +93,7 @@ export const departmentsRoutes: FastifyPluginAsyncZod<{ services: ServiceContain
             }
         },
         async (request) => {
+            const includeWebhooks = canReadWebhooks(request);
             const identifier = request.params.idOrSlug.trim();
             const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(identifier);
 
@@ -94,7 +112,7 @@ export const departmentsRoutes: FastifyPluginAsyncZod<{ services: ServiceContain
             }
 
             return {
-                data: toDepartmentResponse(row.dept, row.map)
+                data: toDepartmentResponse(row.dept, row.map, includeWebhooks)
             };
         }
     );
@@ -113,9 +131,9 @@ export const departmentsRoutes: FastifyPluginAsyncZod<{ services: ServiceContain
                     discordForumId: snowflakeSchema,
                     discordChatChannelId: snowflakeSchema.nullable().optional(),
                     discordInfoChannelId: snowflakeSchema.nullable().optional(),
-                    discordInfoWebhookUrl: z.string().nullable().optional(),
+                    discordInfoWebhookUrl: discordWebhookUrlSchema.nullable().optional(),
                     discordLogsChannelId: snowflakeSchema.nullable().optional(),
-                    discordLogsWebhookUrl: z.string().nullable().optional(),
+                    discordLogsWebhookUrl: discordWebhookUrlSchema.nullable().optional(),
                     discordApplyChannelId: snowflakeSchema.nullable().optional()
                 }),
                 response: { 200: dataEnvelope(departmentSchema), ...errorResponses }
@@ -170,7 +188,7 @@ export const departmentsRoutes: FastifyPluginAsyncZod<{ services: ServiceContain
                 .returning();
 
             return {
-                data: toDepartmentResponse(dept, map)
+                data: toDepartmentResponse(dept, map, true)
             };
         }
     );
