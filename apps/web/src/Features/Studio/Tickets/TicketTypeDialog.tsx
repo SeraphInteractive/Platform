@@ -368,7 +368,7 @@ export function TicketTypeDialog({ category, type, defaultKind = TicketKind.Supp
                                         id={`${formId}-emoji`}
                                         value={draft.emoji}
                                         maxLength={ticketLimits.emoji}
-                                        placeholder="🎬"
+                                        placeholder=""
                                         onChange={(event) => update({ emoji: event.target.value })}
                                     />
                                 </Field>

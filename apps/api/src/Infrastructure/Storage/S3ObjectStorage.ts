@@ -1,4 +1,5 @@
 import {
+    CopyObjectCommand,
     DeleteObjectCommand,
     GetObjectCommand,
     HeadObjectCommand,
@@ -125,6 +126,23 @@ export class S3ObjectStorage implements ObjectStorage {
         }
         const base = this.configuration.mediaPublicUrl.replace(/\/+$/u, "");
         return `${base}/${key.split("/").map(encodeURIComponent).join("/")}`;
+    }
+
+    public async moveObject(bucket: StorageBucket, sourceKey: string, destinationKey: string): Promise<void> {
+        if (!this.isEnabled(bucket)) {
+            return;
+        }
+        const { client, name } = this.resolve(bucket);
+        // url-encode copy source key to prevent s3 rejecting spaces or nested paths
+        const copySource = `${name}/${sourceKey.split("/").map(encodeURIComponent).join("/")}`;
+        await client.send(
+            new CopyObjectCommand({
+                Bucket: name,
+                Key: destinationKey,
+                CopySource: copySource
+            })
+        );
+        await client.send(new DeleteObjectCommand({ Bucket: name, Key: sourceKey }));
     }
 
     public async deleteObject(bucket: StorageBucket, key: string): Promise<void> {

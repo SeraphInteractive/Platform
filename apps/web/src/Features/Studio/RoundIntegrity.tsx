@@ -222,7 +222,7 @@ export function RoundIntegrity({ roundId, live, defaultTab = "raid", activeTab, 
                                                         {formatPercent(row.breakdown.topRankShare * 100)}
                                                     </TableCell>
                                                     <TableCell className="text-muted-foreground text-xs">
-                                                        {row.flags.map((flag) => flagLabels[flag]).join(", ") || "–"}
+                                                        {row.flags.map((flag) => flagLabels[flag]).join(", ") || "-"}
                                                     </TableCell>
                                                     <TableCell className="text-muted-foreground text-right text-xs whitespace-nowrap">
                                                         <RelativeTime value={row.createdAt} />

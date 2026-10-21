@@ -55,7 +55,7 @@ export const scriptsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
     application.get(
         "/",
         {
-            preHandler: userOnly,
+            preHandler: adminOrService,
             schema: {
                 tags: ["Scripts"],
                 summary: "List screenplays accessible to the authenticated user.",
@@ -72,7 +72,7 @@ export const scriptsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
     application.post(
         "/",
         {
-            preHandler: userOnly,
+            preHandler: adminOrService,
             bodyLimit: screenplayBodyLimit,
             schema: {
                 tags: ["Scripts"],
@@ -93,7 +93,7 @@ export const scriptsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
     application.get(
         "/shelves",
         {
-            preHandler: userOnly,
+            preHandler: adminOrService,
             schema: {
                 tags: ["Scripts"],
                 summary: "List custom script shelves for the user.",
@@ -110,7 +110,7 @@ export const scriptsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
     application.post(
         "/shelves",
         {
-            preHandler: userOnly,
+            preHandler: adminOrService,
             schema: {
                 tags: ["Scripts"],
                 summary: "Create a new script shelf.",
@@ -130,7 +130,7 @@ export const scriptsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
     application.delete(
         "/shelves/:id",
         {
-            preHandler: userOnly,
+            preHandler: adminOrService,
             schema: {
                 tags: ["Scripts"],
                 summary: "Delete a script shelf.",
@@ -278,7 +278,7 @@ export const scriptsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
     application.delete(
         "/:id",
         {
-            preHandler: userOnly,
+            preHandler: adminOrService,
             schema: {
                 tags: ["Scripts"],
                 summary: "Delete a screenplay.",
@@ -298,7 +298,7 @@ export const scriptsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
     application.post(
         "/:id/duplicate",
         {
-            preHandler: userOnly,
+            preHandler: adminOrService,
             schema: {
                 tags: ["Scripts"],
                 summary: "Duplicate a screenplay.",

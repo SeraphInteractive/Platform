@@ -60,9 +60,9 @@ const mineValue = "mine";
 const unassignedValue = "unassigned";
 
 const starterCategories = [
-    { name: "Production", emoji: "🎬", description: "Apply to a department or reach its supervisors." },
-    { name: "Project", emoji: "🏗️", description: "Project and production leadership roles, HR and project management." },
-    { name: "Server", emoji: "🛡️", description: "Moderation applications, reports and server help." }
+    { name: "Production", emoji: null, description: "Apply to a department or reach its supervisors." },
+    { name: "Project", emoji: null, description: "Project and production leadership roles, HR and project management." },
+    { name: "Server", emoji: null, description: "Moderation applications, reports and server help." }
 ] as const;
 
 function ticketHref(ticketId: string): Route {
@@ -76,7 +76,7 @@ function Summary(): ReactNode {
         refetchInterval: 30_000
     });
     const summary = summaryQuery.data;
-    const value = (count: number | undefined): ReactNode => (count === undefined ? "–" : count);
+    const value = (count: number | undefined): ReactNode => (count === undefined ? "-" : count);
     return (
         <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
             <StatTile label="Open" value={value(summary?.open)} />

@@ -36,7 +36,7 @@ const textDisplayLimit = 4000;
 const markdownEscapes = { heading: true, bulletedList: true, numberedList: true, maskedLink: true } as const;
 
 export function text(content: string): TextDisplayBuilder {
-    const trimmed = content.length > textDisplayLimit ? `${content.slice(0, textDisplayLimit - 1)}…` : content;
+    const trimmed = content.length > textDisplayLimit ? `${content.slice(0, textDisplayLimit - 3)}...` : content;
     return new TextDisplayBuilder().setContent(trimmed);
 }
 
@@ -51,7 +51,13 @@ export function panel(accent: Accent | number | null, ...blocks: readonly Block[
     }
     for (const block of blocks) {
         if (typeof block === "string") {
-            container.addTextDisplayComponents(text(block));
+            if (block.length <= textDisplayLimit) {
+                container.addTextDisplayComponents(text(block));
+            } else {
+                for (let i = 0; i < block.length; i += textDisplayLimit) {
+                    container.addTextDisplayComponents(text(block.slice(i, i + textDisplayLimit)));
+                }
+            }
         } else if (block instanceof SeparatorBuilder) {
             container.addSeparatorComponents(block);
         } else if (block instanceof MediaGalleryBuilder) {

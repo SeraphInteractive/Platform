@@ -1448,14 +1448,14 @@ export function NetworkMonitor(): ReactNode {
                                         {service.state.currentLatency !== null ? (
                                             <span className={statusColor}>{service.state.currentLatency} ms</span>
                                         ) : (
-                                            <span className="text-muted-foreground">–</span>
+                                            <span className="text-muted-foreground">-</span>
                                         )}
                                     </TableCell>
                                     <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">
-                                        {avg !== null ? `${avg} ms` : "–"}
+                                        {avg !== null ? `${avg} ms` : "-"}
                                     </TableCell>
                                     <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">
-                                        {min !== null && max !== null ? `${min} / ${max} ms` : "–"}
+                                        {min !== null && max !== null ? `${min} / ${max} ms` : "-"}
                                     </TableCell>
                                 </TableRow>
                             );

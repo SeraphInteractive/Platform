@@ -333,7 +333,7 @@ function Settings({ settings }: { readonly settings: FeedbackSettingsDto }): Rea
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value={FeedbackQuestionKind.Rating}>Rating 1–5</SelectItem>
+                                    <SelectItem value={FeedbackQuestionKind.Rating}>Rating 1-5</SelectItem>
                                     <SelectItem value={FeedbackQuestionKind.Text}>Written</SelectItem>
                                 </SelectContent>
                             </Select>

@@ -19,8 +19,6 @@ import { MemoryNotificationLog } from "../Infrastructure/Notifications/MemoryNot
 import { StreamNotifier, type NotificationLog } from "../Infrastructure/Notifications/NotificationLog.js";
 import { RedisNotificationLog } from "../Infrastructure/Notifications/RedisNotificationLog.js";
 import { S3ObjectStorage } from "../Infrastructure/Storage/S3ObjectStorage.js";
-import { NextcloudWebDAVStorage } from "../Infrastructure/Storage/NextcloudWebDAVStorage.js";
-import { HybridObjectStorage } from "../Infrastructure/Storage/HybridObjectStorage.js";
 import type { Infrastructure } from "./ServiceContainer.js";
 
 function createEmailSender(configuration: ApplicationConfiguration, logger: FastifyBaseLogger): EmailSender {
@@ -99,17 +97,7 @@ export function createProductionInfrastructure(configuration: ApplicationConfigu
             : createRedisState(configuration, logger);
     const { keyValueStore, eventBus, notificationLog } = state;
 
-    const s3Storage = new S3ObjectStorage(configuration.storage);
-    const nextcloudStorage = new NextcloudWebDAVStorage({
-        url: configuration.storage.nextcloudUrl,
-        username: configuration.storage.nextcloudUsername,
-        password: configuration.storage.nextcloudPassword,
-        basePath: configuration.storage.nextcloudBasePath,
-        publicUrl: configuration.storage.nextcloudPublicUrl
-    });
-    // deliverables route strictly to nextcloud storage vault, never s3
-    const deliverablesStorage = nextcloudStorage;
-    const objectStorage = new HybridObjectStorage(deliverablesStorage, s3Storage);
+    const objectStorage = new S3ObjectStorage(configuration.storage);
 
     return {
         database: connection.database,

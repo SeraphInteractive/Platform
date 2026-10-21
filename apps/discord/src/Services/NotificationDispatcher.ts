@@ -9,7 +9,7 @@ import {
     shotTypeToDepartment,
     type PlatformNotification
 } from "@platform/contracts";
-import { WebhookClient, type Client, type SendableChannels } from "discord.js";
+import { WebhookClient, type Client, type Collection, type SendableChannels, type Webhook } from "discord.js";
 import type { Logger } from "pino";
 import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
@@ -91,6 +91,39 @@ export class NotificationDispatcher {
         return null;
     }
 
+    private async getOrCreateWebhook(channel: unknown, purpose: ChannelPurpose): Promise<WebhookClient | null> {
+        const cached = this.webhookClients[purpose];
+        if (cached !== undefined) {
+            return cached;
+        }
+        const ch = channel as {
+            fetchWebhooks?: () => Promise<Collection<string, Webhook>>;
+            createWebhook?: (options: { name: string }) => Promise<Webhook>;
+        };
+        if (typeof ch.fetchWebhooks === "function") {
+            try {
+                const webhooks = await ch.fetchWebhooks();
+                const existing = webhooks.find((w) => typeof w.url === "string" && w.url.length > 0);
+                if (existing?.url) {
+                    const client = new WebhookClient({ url: existing.url });
+                    this.webhookClients[purpose] = client;
+                    return client;
+                }
+                if (typeof ch.createWebhook === "function") {
+                    const created = await ch.createWebhook({ name: "Project Stairway Alerts" });
+                    if (created?.url) {
+                        const client = new WebhookClient({ url: created.url });
+                        this.webhookClients[purpose] = client;
+                        return client;
+                    }
+                }
+            } catch (err: unknown) {
+                this.logger.warn({ err, purpose }, "failed to auto-discover or create webhook for channel");
+            }
+        }
+        return null;
+    }
+
     public async handle(notification: PlatformNotification): Promise<void> {
         await this.applySideEffects(notification).catch((error: unknown) => {
             this.logger.warn({ err: error, type: notification.type }, "discord side effect failed");
@@ -101,7 +134,11 @@ export class NotificationDispatcher {
             isMember: (discordId: string) => memberIds.has(discordId)
         };
         for (const rendered of renderNotification(notification, context)) {
-            const webhook = this.webhookClients[rendered.purpose];
+            let webhook = this.webhookClients[rendered.purpose];
+            const channel = await this.channel(rendered.purpose);
+            if (webhook === undefined && channel !== null) {
+                webhook = (await this.getOrCreateWebhook(channel, rendered.purpose)) ?? undefined;
+            }
             if (webhook !== undefined) {
                 try {
                     await webhook.send({
@@ -111,12 +148,14 @@ export class NotificationDispatcher {
                     });
                     continue;
                 } catch (error: unknown) {
-                    this.logger.warn({ err: error, purpose: rendered.purpose }, "webhook dispatch failed, falling back to channel");
+                    this.logger.warn({ err: error, purpose: rendered.purpose }, "webhook dispatch failed");
                 }
-            }
-            const channel = await this.channel(rendered.purpose);
-            if (channel !== null) {
-                await channel.send(rendered.message);
+            } else if (channel !== null) {
+                // telemetry, moderation logs, and rules must never post under bot user identity
+                const webhookOnlyPurposes = new Set([ChannelPurpose.Telemetry, ChannelPurpose.ModerationLogs, ChannelPurpose.Rules]);
+                if (!webhookOnlyPurposes.has(rendered.purpose)) {
+                    await channel.send(rendered.message);
+                }
             }
         }
     }

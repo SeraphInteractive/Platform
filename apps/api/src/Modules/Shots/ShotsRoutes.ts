@@ -1,4 +1,12 @@
-import { fieldRules, reviewQueueItemSchema, shotDetailSchema, shotSchema, ShotType, submissionSchema } from "@platform/contracts";
+import {
+    fieldRules,
+    reviewQueueItemSchema,
+    shotCodeSchema,
+    shotDetailSchema,
+    shotSchema,
+    ShotType,
+    submissionSchema
+} from "@platform/contracts";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { dataEnvelope, errorResponses, pageEnvelope, paginationQuerySchema, toIso, uuidSchema } from "../../Common/Http/Schemas.js";
@@ -16,7 +24,7 @@ import { StorageBucket, type ObjectStorage } from "../../Infrastructure/Storage/
 import type { ShotListItem, SubmissionView } from "./ShotsService.js";
 import type { ReviewQueueItem } from "./ReviewsService.js";
 
-const shotParams = z.object({ shotId: uuidSchema });
+const shotParams = z.object({ shotId: z.union([uuidSchema, shotCodeSchema]) });
 const allDeliverableTypes = [...new Set(Object.values(deliverableContentTypes).flat())] as [string, ...string[]];
 
 function toShotCore(

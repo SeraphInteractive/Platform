@@ -317,7 +317,7 @@ export const telemetryRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer
                             latestId = entry.id;
                             try {
                                 const parsed = platformNotificationSchema.safeParse(JSON.parse(entry.payload));
-                                if (parsed.success) {
+                                if (parsed.success && !privateActivityTypes.has(parsed.data.type)) {
                                     const eventPayload = JSON.stringify({ id: entry.id, notification: parsed.data });
                                     stream.write(`id: ${entry.id}\nevent: activity\ndata: ${eventPayload}\n\n`);
                                 }

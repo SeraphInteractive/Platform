@@ -14,8 +14,7 @@ import {
 import { StorageBucket, type PresignedUpload } from "../../Infrastructure/Storage/ObjectStorage.js";
 import { createMediaKey, MediaContentType } from "./MediaPolicy.js";
 import { consumeUploadQuota, UploadQuota } from "./UploadQuota.js";
-import { matchesContentType, matchesDeliverableKind } from "./MagicBytes.js";
-import { deliverableVaultPendingPrefix } from "../Shots/DeliverablePolicy.js";
+import { matchesContentType } from "./MagicBytes.js";
 
 export function toPresignedUploadResponse(upload: PresignedUpload): z.infer<typeof presignedUploadSchema> {
     return {
@@ -83,39 +82,25 @@ export const uploadsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }
                 throw new BadRequestError("Upload payload is empty.", ErrorCode.ValidationFailed);
             }
 
-            let bucket: StorageBucket;
-            if (key.startsWith(`media/${user.id}/`)) {
-                bucket = StorageBucket.Media;
-                if (!objectStorage.isEnabled(bucket)) {
-                    throw new ServiceUnavailableError("Media storage is not configured.");
-                }
-                if (buffer.length > configuration.storage.mediaMaxBytes) {
-                    throw new PayloadTooLargeError("The uploaded file exceeds the media size limit.");
-                }
-                if (!matchesContentType(buffer, contentType)) {
-                    throw new BadRequestError("The uploaded file signature does not match its content type.", ErrorCode.ValidationFailed);
-                }
-            } else if (
-                key.startsWith(deliverableVaultPendingPrefix) ||
-                key.startsWith("Pending/") ||
-                ((key.startsWith("shots/") || key.includes("/shots/")) && key.includes(`/${user.id}/`))
-            ) {
-                bucket = StorageBucket.Deliverables;
-                if (!objectStorage.isEnabled(bucket)) {
-                    throw new ServiceUnavailableError("Deliverables storage is not configured.");
-                }
-                if (buffer.length > configuration.storage.deliverableMaxBytes) {
-                    throw new PayloadTooLargeError("The uploaded file exceeds the deliverable size limit.");
-                }
-                const kind = key.endsWith(".blend") ? "blend" : "video";
-                if (!matchesDeliverableKind(buffer, kind)) {
-                    throw new BadRequestError(
-                        `The uploaded file signature does not match required ${kind} format.`,
-                        ErrorCode.ValidationFailed
-                    );
-                }
-            } else {
+            // reject path traversal sequences attempting directory escapes
+            if (key.includes("..") || key.includes("\\") || key.startsWith("/")) {
+                throw new ForbiddenError("Path traversal is not permitted.");
+            }
+
+            // stream uploads are restricted to personal media; deliverables must use shot upload workflow
+            if (!key.startsWith(`media/${user.id}/`)) {
                 throw new ForbiddenError("You are not authorized to upload to this key destination.");
+            }
+
+            const bucket = StorageBucket.Media;
+            if (!objectStorage.isEnabled(bucket)) {
+                throw new ServiceUnavailableError("Media storage is not configured.");
+            }
+            if (buffer.length > configuration.storage.mediaMaxBytes) {
+                throw new PayloadTooLargeError("The uploaded file exceeds the media size limit.");
+            }
+            if (!matchesContentType(buffer, contentType)) {
+                throw new BadRequestError("The uploaded file signature does not match its content type.", ErrorCode.ValidationFailed);
             }
 
             await objectStorage.putObject(bucket, key, buffer, contentType);

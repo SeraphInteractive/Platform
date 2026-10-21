@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { DifficultyTier, ReviewDecision, Role, ShotStatus, ShotType, type ShotDetailDto } from "@platform/contracts";
+import { DifficultyTier, ReviewDecision, Role, ShotStatus, ShotType, type ShotDetailDto, type UserDto } from "@platform/contracts";
 import {
     ChannelType,
     LabelBuilder,
@@ -150,8 +150,8 @@ export const takeTaskCommand: SlashCommand = {
     async autocomplete(interaction: AutocompleteInteraction, context: BotContext): Promise<void> {
         const focused = interaction.options.getFocused().toLowerCase();
         try {
-            const all = await context.api.listAllShots();
-            const matches = all
+            const shots = typeof context.api.searchShots === "function" ? await context.api.searchShots({ q: focused, limit: 10 }) : [];
+            const matches = shots
                 .filter((s) => s.shotCode.toLowerCase().includes(focused) || s.title.toLowerCase().includes(focused))
                 .slice(0, 10)
                 .map((s) => ({ name: `[${s.shotCode}] ${s.title}`.slice(0, 100), value: s.id }));
@@ -184,10 +184,13 @@ export const releaseTaskCommand: SlashCommand = {
         if (shot.status !== ShotStatus.Claimed) {
             throw new UserFacingError("Only claimed tasks can be released.");
         }
-        const me = await actingAs(interaction, context).me();
-        const isStaff = hasAtLeast(me.role, Role.Supervisor);
+        const me = (await actingAs(interaction, context).me()) as UserDto & { departmentId?: string | null };
         const isClaimant = shot.claimer?.id === me.id;
-        if (!isStaff && !isClaimant) {
+        const isAdmin = hasAtLeast(me.role, Role.Admin);
+        const isDeptSupervisor =
+            me.role === Role.Supervisor &&
+            (me.departmentId === undefined || me.departmentId === null || me.departmentId === shot.departmentId);
+        if (!isClaimant && !isAdmin && !isDeptSupervisor) {
             throw new UserFacingError("Only the task claimant, department supervisors, or admins can release this task.");
         }
         await actingAs(interaction, context).releaseShot(shot.id, interaction.options.getString("reason")?.trim() ?? null);
@@ -196,8 +199,8 @@ export const releaseTaskCommand: SlashCommand = {
     async autocomplete(interaction: AutocompleteInteraction, context: BotContext): Promise<void> {
         const focused = interaction.options.getFocused().toLowerCase();
         try {
-            const all = await context.api.listAllShots();
-            const matches = all
+            const shots = typeof context.api.searchShots === "function" ? await context.api.searchShots({ q: focused, limit: 10 }) : [];
+            const matches = shots
                 .filter((s) => s.shotCode.toLowerCase().includes(focused) || s.title.toLowerCase().includes(focused))
                 .slice(0, 10)
                 .map((s) => ({ name: `[${s.shotCode}] ${s.title}`.slice(0, 100), value: s.id }));
@@ -230,11 +233,11 @@ export const submitTaskCommand: SlashCommand = {
             throw new UserFacingError("Only claimed tasks can accept submissions.");
         }
         const me = await actingAs(interaction, context).me();
-        const isStaff = hasAtLeast(me.role, Role.Supervisor);
         const isClaimant = shot.claimer?.id === me.id;
-        if (!isStaff && !isClaimant) {
+        if (!isClaimant) {
             throw new UserFacingError("Only the contributor who claimed this task can submit work for it.");
         }
+        const claimantDiscordId = interaction.user.id;
         const grabboxUrl = `${context.configuration.webAppUrl}/grabbox?shotId=${shot.id}`;
         await interaction.editReply(
             asEdit(
@@ -243,9 +246,9 @@ export const submitTaskCommand: SlashCommand = {
                         Accent.Info,
                         `### Deliverable Submission: **${plain(shot.shotCode, 50)}**\n` +
                             `To prevent Discord file size limits and relay failures, submit full video renders and Blender project files directly through the Grab-Box UI.\n\n` +
-                            `• **Task:** ${plain(shot.title, 100)}\n` +
-                            `• **Status:** ${capitalize(shot.status)}\n` +
-                            `• **Claimant:** <@${interaction.user.id}>`,
+                            `- **Task:** ${plain(shot.title, 100)}\n` +
+                            `- **Status:** ${capitalize(shot.status)}\n` +
+                            `- **Claimant:** <@${claimantDiscordId}>`,
                         divider(),
                         buttons(linkButton("Open Grab-Box & Submit", grabboxUrl))
                     )
@@ -256,8 +259,8 @@ export const submitTaskCommand: SlashCommand = {
     async autocomplete(interaction: AutocompleteInteraction, context: BotContext): Promise<void> {
         const focused = interaction.options.getFocused().toLowerCase();
         try {
-            const all = await context.api.listAllShots();
-            const matches = all
+            const shots = typeof context.api.searchShots === "function" ? await context.api.searchShots({ q: focused, limit: 10 }) : [];
+            const matches = shots
                 .filter((s) => s.shotCode.toLowerCase().includes(focused) || s.title.toLowerCase().includes(focused))
                 .slice(0, 10)
                 .map((s) => ({ name: `[${s.shotCode}] ${s.title}`.slice(0, 100), value: s.id }));
@@ -315,7 +318,7 @@ export const availableTasksCommand: SlashCommand = {
             return `• **${plain(shot.shotCode, 50)}** - ${plain(shot.title, 80)} (${capitalize(shot.difficultyTier)})\n  ↳ ${destination}`;
         });
 
-        const overflow = available.length > 15 ? `\n\n-# …and ${available.length - 15} more available tasks.` : "";
+        const overflow = available.length > 15 ? `\n\n-# ...and ${available.length - 15} more available tasks.` : "";
         const body = `### Available Tasks (${available.length})\n${lines.join("\n")}${overflow}\n\n-# Use \`/take-task\` in a task post to claim it.`;
         await interaction.editReply(asEdit(ephemeral(panel(Accent.Info, body))));
     }

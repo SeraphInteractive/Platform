@@ -130,7 +130,7 @@ export function TicketCategoryDialog({
                             <Input
                                 id={`${formId}-emoji`}
                                 value={draft.emoji}
-                                placeholder="🎬"
+                                placeholder=""
                                 maxLength={ticketLimits.emoji}
                                 onChange={(event) => update({ emoji: event.target.value })}
                             />

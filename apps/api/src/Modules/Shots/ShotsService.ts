@@ -200,12 +200,13 @@ export class ShotsService {
     }
 
     public async getDetail(shotId: string, viewer: AuthenticatedUser | null): Promise<ShotDetail> {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(shotId);
         const [row] = await this.database
             .select({ shot: shots, claimer: userSummaryColumns, creator: creatorSummaryColumns })
             .from(shots)
             .leftJoin(users, eq(users.id, shots.claimedBy))
             .leftJoin(creators, eq(creators.id, shots.createdBy))
-            .where(eq(shots.id, shotId))
+            .where(isUuid ? eq(shots.id, shotId) : eq(shots.shotCode, shotId))
             .limit(1);
         if (row === undefined) {
             throw new NotFoundError("Shot");
@@ -226,7 +227,7 @@ export class ShotsService {
             .from(submissions)
             .leftJoin(users, eq(users.id, submissions.contributorId))
             .leftJoin(reviewers, eq(reviewers.id, submissions.reviewedBy))
-            .where(eq(submissions.shotId, shotId))
+            .where(eq(submissions.shotId, row.shot.id))
             .orderBy(desc(submissions.version));
 
         const isStaff = viewer !== null && hasAtLeast(viewer.role, Role.Supervisor);

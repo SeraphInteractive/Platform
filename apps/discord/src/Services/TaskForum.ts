@@ -166,6 +166,18 @@ export class TaskForum {
         } else if (thread.locked === true) {
             await thread.setLocked(false, "Task reopened");
         }
+
+        // remove claim buttons from starter post once claimed or completed
+        if (status === ShotStatus.Claimed || status === ShotStatus.Submitted || status === ShotStatus.Approved) {
+            try {
+                const starter = await thread.fetchStarterMessage().catch(() => null);
+                if (starter !== null && starter.components.length > 0) {
+                    await starter.edit({ components: [] }).catch(() => undefined);
+                }
+            } catch {
+                // ignore transient starter message edit failure
+            }
+        }
     }
 
     public async post(shotId: string, content: V2Message): Promise<void> {

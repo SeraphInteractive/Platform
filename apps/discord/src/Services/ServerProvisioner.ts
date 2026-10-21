@@ -8,6 +8,7 @@ import {
     type Guild,
     type GuildBasedChannel,
     type OverwriteResolvable,
+    type PermissionOverwriteOptions,
     type Role as DiscordRole,
     type TextChannel,
     type VoiceChannel
@@ -432,9 +433,7 @@ export class ServerProvisioner {
             }) as TextChannel | undefined;
 
             if (existing !== undefined) {
-                if (existing.parentId !== parent.id) {
-                    await existing.setParent(parent.id, { lockPermissions: false }).catch(() => undefined);
-                }
+                // leave parent intact to preserve existing channel hierarchy
                 if (existing.name !== name) {
                     await existing.setName(name, "Normalize channel name").catch(() => undefined);
                 }
@@ -486,9 +485,7 @@ export class ServerProvisioner {
             }) as VoiceChannel | undefined;
 
             if (existing !== undefined) {
-                if (existing.parentId !== parent.id) {
-                    await existing.setParent(parent.id, { lockPermissions: false }).catch(() => undefined);
-                }
+                // leave parent intact to preserve existing channel hierarchy
                 if (existing.name !== name) {
                     await existing.setName(name, "Normalize voice channel name").catch(() => undefined);
                 }
@@ -569,47 +566,7 @@ export class ServerProvisioner {
             botAccess
         ];
 
-        // clean up legacy global task pipeline channels if present
-        const legacyForumId = this.settings.channel(ChannelPurpose.TaskForum);
-        const legacyTasksForums = channels.filter(
-            (channel) =>
-                channel !== null &&
-                channel.type === ChannelType.GuildForum &&
-                (channel.id === legacyForumId || normalizeName(channel.name) === "tasks" || normalizeName(channel.name) === "taskpipeline")
-        );
-        for (const [, forumCh] of legacyTasksForums) {
-            if (forumCh !== null) {
-                await forumCh.delete("Remove legacy global task forum").catch(() => undefined);
-                channels.delete(forumCh.id);
-            }
-        }
-
-        const legacySubmissionsId = this.settings.channel(ChannelPurpose.TaskSubmissions);
-        const legacySubmissionChannels = channels.filter(
-            (channel) =>
-                channel !== null &&
-                channel.type === ChannelType.GuildText &&
-                (channel.id === legacySubmissionsId ||
-                    normalizeName(channel.name) === "tasksubmissions" ||
-                    normalizeName(channel.name) === "submissions")
-        );
-        for (const [, subCh] of legacySubmissionChannels) {
-            if (subCh !== null) {
-                await subCh.delete("Remove legacy task submissions channel").catch(() => undefined);
-                channels.delete(subCh.id);
-            }
-        }
-
-        const legacyPipelineCategory = channels.find(
-            (channel) =>
-                channel !== null &&
-                channel.type === ChannelType.GuildCategory &&
-                normalizeName(channel.name) === normalizeName("Task pipeline")
-        );
-        if (legacyPipelineCategory !== undefined && legacyPipelineCategory !== null) {
-            await legacyPipelineCategory.delete("Remove legacy task pipeline category").catch(() => undefined);
-            channels.delete(legacyPipelineCategory.id);
-        }
+        // retain legacy channels to prevent destructive loss during setup
 
         const platform = await ensureCategory("Platform", []);
         const staff = await ensureCategory("Staff", privateOverwrites);
@@ -825,17 +782,12 @@ export class ServerProvisioner {
                             forumAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
                     ) as ForumChannel | undefined;
 
-                    if (deptForum === undefined) {
-                        deptForum = channels.find(
-                            (channel) =>
-                                channel !== null &&
-                                channel.type === ChannelType.GuildForum &&
-                                forumAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
-                        ) as ForumChannel | undefined;
-                        if (deptForum !== undefined) {
-                            await deptForum.setParent(category.id, { lockPermissions: false }).catch(() => undefined);
-                        }
-                    }
+                    deptForum ??= channels.find(
+                        (channel) =>
+                            channel !== null &&
+                            channel.type === ChannelType.GuildForum &&
+                            forumAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
+                    ) as ForumChannel | undefined;
 
                     const isExistingDeptForum = deptForum !== undefined;
                     if (deptForum === undefined) {
@@ -848,9 +800,6 @@ export class ServerProvisioner {
                         });
                         createdChannels.push(tasksForumName);
                     } else {
-                        if (deptForum.parentId !== category.id) {
-                            await deptForum.setParent(category.id, { lockPermissions: false }).catch(() => undefined);
-                        }
                         if (deptForum.name !== tasksForumName) {
                             await deptForum.setName(tasksForumName, "Rename to department grabbox").catch(() => undefined);
                         }
@@ -858,53 +807,6 @@ export class ServerProvisioner {
                     }
                     await this.ensureForumPermissions(deptForum, isExistingDeptForum);
                     await this.ensureForumTags(deptForum, true);
-
-                    // clean up duplicate or stray forum channels inside category
-                    const strayForums = channels.filter(
-                        (channel): channel is ForumChannel =>
-                            channel !== null &&
-                            channel.type === ChannelType.GuildForum &&
-                            channel.parentId === category.id &&
-                            channel.id !== deptForum.id
-                    );
-                    for (const stray of strayForums.values()) {
-                        const activeThreads = await stray.threads.fetchActive().catch(() => null);
-                        const archivedThreads = await stray.threads.fetchArchived().catch(() => null);
-                        const threadCount = (activeThreads?.threads.size ?? 0) + (archivedThreads?.threads.size ?? 0);
-                        if (threadCount === 0) {
-                            this.logger.info({ stray: stray.name, category: category.name }, "deleted duplicate empty forum");
-                            await stray.delete("Duplicate department forum").catch(() => undefined);
-                        } else {
-                            const targetDept = depts.find((other) => {
-                                const p = departmentChannelPrefix[other.slug] ?? other.slug;
-                                const aliases = [
-                                    departmentGrabBoxName[other.slug] ?? `${p}-grabbox`,
-                                    `${other.name}-GrabBox`,
-                                    `${other.slug}-grabbox`,
-                                    `${p}-grabbox`,
-                                    `${p}-tasks`,
-                                    `${other.slug}-tasks`
-                                ];
-                                return aliases.some((a) => normalizeName(a) === normalizeName(stray.name));
-                            });
-                            if (targetDept) {
-                                const targetCat = channels.find(
-                                    (c) =>
-                                        c !== null &&
-                                        c.type === ChannelType.GuildCategory &&
-                                        (normalizeName(c.name) === normalizeName(targetDept.name) ||
-                                            normalizeName(c.name) === normalizeName(targetDept.slug))
-                                );
-                                if (targetCat && targetCat.id !== category.id) {
-                                    this.logger.info(
-                                        { stray: stray.name, targetCategory: targetCat.name },
-                                        "moved stray forum to target category"
-                                    );
-                                    await stray.setParent(targetCat.id, { lockPermissions: false }).catch(() => undefined);
-                                }
-                            }
-                        }
-                    }
 
                     // 4. General discussion (<prefix>-general) - department-gated chat
                     const generalName = `${prefix}-general`;
@@ -1024,20 +926,7 @@ export class ServerProvisioner {
                     ];
                     const deptVoice = await ensureNamedVoice(voiceName, voiceAliases, category, deptVoiceOverwrites);
 
-                    // enforce requested department channel hierarchy within the category:
-                    // 1. <prefix>-info (0)
-                    // 2. <prefix>-apply (1)
-                    // 3. <dept>-grabbox (2)
-                    // 4. <prefix>-general (3)
-                    // 5. <prefix>-logs (4)
-                    // 6. <dep> General (5) [Voice]
-                    const orderedChannels = [deptInfo, deptApply, deptForum, deptChat, deptLogs, deptVoice];
-                    for (const [index, ch] of orderedChannels.entries()) {
-                        if (ch.parentId !== category.id) {
-                            await ch.setParent(category.id, { lockPermissions: false }).catch(() => undefined);
-                        }
-                        await ch.setPosition(index).catch(() => undefined);
-                    }
+                    // retain natural channel ordering without altering existing sidebar positions
 
                     await this.api.bindDepartmentDiscordMap(dept.id, {
                         discordCategoryId: category.id,
@@ -1194,58 +1083,59 @@ export class ServerProvisioner {
             .map((def) => existingRoles.find((role) => findStudioRole(role.name)?.name === def.name))
             .filter((role): role is DiscordRole => role !== undefined);
 
-        // allow thread replies while locking root creation to staff
-        await forum.permissionOverwrites.set(
-            [
-                {
-                    id: everyone,
-                    allow: [
-                        PermissionFlagsBits.ViewChannel,
-                        PermissionFlagsBits.ReadMessageHistory,
-                        PermissionFlagsBits.SendMessagesInThreads,
-                        PermissionFlagsBits.UseApplicationCommands
-                    ],
-                    deny: [
-                        PermissionFlagsBits.SendMessages,
-                        PermissionFlagsBits.CreatePublicThreads,
-                        PermissionFlagsBits.CreatePrivateThreads
-                    ]
-                },
-                ...contributorRoles.map((role) => ({
-                    id: role.id,
-                    allow: [
-                        PermissionFlagsBits.ViewChannel,
-                        PermissionFlagsBits.ReadMessageHistory,
-                        PermissionFlagsBits.SendMessagesInThreads,
-                        PermissionFlagsBits.UseApplicationCommands,
-                        PermissionFlagsBits.AttachFiles
-                    ]
-                })),
-                ...staffRoles.map((role) => ({
-                    id: role.id,
-                    allow: [
-                        PermissionFlagsBits.ViewChannel,
-                        PermissionFlagsBits.ReadMessageHistory,
-                        PermissionFlagsBits.SendMessages,
-                        PermissionFlagsBits.SendMessagesInThreads,
-                        PermissionFlagsBits.CreatePublicThreads,
-                        PermissionFlagsBits.ManageThreads
-                    ]
-                })),
-                {
-                    id: botId,
-                    allow: [
-                        PermissionFlagsBits.ViewChannel,
-                        PermissionFlagsBits.ReadMessageHistory,
-                        PermissionFlagsBits.SendMessages,
-                        PermissionFlagsBits.SendMessagesInThreads,
-                        PermissionFlagsBits.CreatePublicThreads,
-                        PermissionFlagsBits.ManageThreads
-                    ]
+        const overwrites: { id: string; options: PermissionOverwriteOptions }[] = [
+            {
+                id: everyone,
+                options: {
+                    ViewChannel: true,
+                    ReadMessageHistory: true,
+                    SendMessagesInThreads: true,
+                    UseApplicationCommands: true,
+                    SendMessages: false,
+                    CreatePublicThreads: false,
+                    CreatePrivateThreads: false
                 }
-            ],
-            "Configure task forum permissions"
-        );
+            },
+            ...contributorRoles.map((role) => ({
+                id: role.id,
+                options: {
+                    ViewChannel: true,
+                    ReadMessageHistory: true,
+                    SendMessagesInThreads: true,
+                    UseApplicationCommands: true,
+                    AttachFiles: true
+                }
+            })),
+            ...staffRoles.map((role) => ({
+                id: role.id,
+                options: {
+                    ViewChannel: true,
+                    ReadMessageHistory: true,
+                    SendMessages: true,
+                    SendMessagesInThreads: true,
+                    CreatePublicThreads: true,
+                    ManageThreads: true
+                }
+            })),
+            {
+                id: botId,
+                options: {
+                    ViewChannel: true,
+                    ReadMessageHistory: true,
+                    SendMessages: true,
+                    SendMessagesInThreads: true,
+                    CreatePublicThreads: true,
+                    ManageThreads: true
+                }
+            }
+        ];
+
+        // apply role overwrites without wiping existing custom overwrites
+        for (const item of overwrites) {
+            await forum.permissionOverwrites
+                .create(item.id, item.options, { reason: "Configure task forum permissions" })
+                .catch(() => undefined);
+        }
     }
 
     public async enforceRoleHierarchy(guild: Guild): Promise<number> {

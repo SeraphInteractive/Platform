@@ -189,6 +189,21 @@ export class PlatformApiClient {
         return shots;
     }
 
+    public async searchShots(params?: { q?: string; status?: string; departmentId?: string; limit?: number }): Promise<readonly ShotDto[]> {
+        const query: Record<string, string | number> = { page: 1, perPage: params?.limit ?? 25 };
+        if (params?.q) {
+            query.search = params.q;
+        }
+        if (params?.status) {
+            query.status = params.status;
+        }
+        if (params?.departmentId) {
+            query.departmentId = params.departmentId;
+        }
+        const result = await this.send("/shots", pageEnvelope(shotSchema), { query });
+        return result.data;
+    }
+
     public async listAllUsers(): Promise<readonly ModeratedUserDto[]> {
         const users: ModeratedUserDto[] = [];
         for (let page = 1; page <= 100; page++) {

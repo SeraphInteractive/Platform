@@ -33,7 +33,7 @@ import { BallotPanel } from "./BallotPanel";
 import { EntryMedia } from "./EntryMedia";
 import { Standings } from "./Standings";
 import { SubmitEntryDialog } from "./SubmitEntryDialog";
-import { useApprovedEntries } from "./UseApprovedEntries";
+import { hasSubmittedEntry, useApprovedEntries } from "./UseApprovedEntries";
 
 function EntryDetailDialog({
     entry,
@@ -324,6 +324,11 @@ function Ledger({ roundId, entries }: { readonly roundId: string; readonly entri
 function RoundDetail({ round }: { readonly round: RoundDetailDto }): ReactNode {
     const { user } = useSession();
     const entries = useApprovedEntries(round.id);
+    const myEntries = useQuery({
+        queryKey: queryKeys.myEntries,
+        queryFn: () => platformApi.myEntries(),
+        enabled: user !== null
+    });
     useBreadcrumbLabel(round.id, round.title);
     const canPropose = user !== null && round.status === RoundStatus.Open && round.pollType !== PollType.Binary;
     const isSupervisor = hasAtLeast(user, Role.Supervisor);
@@ -335,8 +340,7 @@ function RoundDetail({ round }: { readonly round: RoundDetailDto }): ReactNode {
         setTab("entries");
     };
 
-    const isAdmin = user !== null && hasAtLeast(user, Role.Admin);
-    const hasAlreadySubmitted = !isAdmin && user !== null && (entries.data?.some((e) => e.submittedBy === user.id) ?? false);
+    const hasAlreadySubmitted = hasSubmittedEntry(user, round.id, entries.data, myEntries.data);
 
     return (
         <>

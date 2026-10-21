@@ -1,9 +1,10 @@
 "use client";
 
-import { EntryStatus, PollType, type EntryDto } from "@platform/contracts";
+import { EntryStatus, PollType, Role, type EntryDto, type UserDto } from "@platform/contracts";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
+import { hasAtLeast } from "@/Lib/Roles";
 
 const maximumPages = 20;
 
@@ -26,6 +27,22 @@ async function fetchApprovedEntries(roundId: string): Promise<EntryDto[]> {
 
 export function isEligible(entry: EntryDto): boolean {
     return entry.status === EntryStatus.Approved && !entry.isQuarantined;
+}
+
+export function hasSubmittedEntry(
+    user: UserDto | null,
+    roundId: string,
+    approvedEntries?: readonly EntryDto[],
+    myEntries?: readonly EntryDto[]
+): boolean {
+    if (user === null || hasAtLeast(user, Role.Admin)) {
+        return false;
+    }
+    const hasApproved = approvedEntries?.some((e) => e.submittedBy === user.id) ?? false;
+    const hasPendingOrApproved =
+        myEntries?.some((e) => e.roundId === roundId && (e.status === EntryStatus.PendingReview || e.status === EntryStatus.Approved)) ??
+        false;
+    return hasApproved || hasPendingOrApproved;
 }
 
 export function useApprovedEntries(roundId: string): UseQueryResult<EntryDto[]> {

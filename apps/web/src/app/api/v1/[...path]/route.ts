@@ -10,6 +10,7 @@ interface RouteContext {
 }
 
 const maximumBodyBytes = 64 * 1024;
+const maximumUploadStreamBytes = 2 * 1024 * 1024 * 1024;
 const maximumQueryLength = 2048;
 const forwardedResponseHeaders = [
     "content-type",
@@ -49,7 +50,7 @@ async function forward(request: NextRequest, context: RouteContext): Promise<Nex
         }
         if (isUploadStream) {
             const buffer = await request.arrayBuffer();
-            if (buffer.byteLength > 50 * 1024 * 1024) {
+            if (buffer.byteLength > maximumUploadStreamBytes) {
                 return problem(413, "PAYLOAD_TOO_LARGE", "The upload is too large.");
             }
             body = buffer;
