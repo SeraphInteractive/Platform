@@ -168,7 +168,7 @@ describe("telemetry alerts", () => {
             actor: admin
         });
         expect(text).toBe(
-            ["**User role updated**", "<@215537065863938049> is now contributor (animator, rigger), by <@212401207694721024>"].join("\n")
+            ["**User role updated**", "<@215537065863938049> is now Contributor (Animator, Rigger), by <@212401207694721024>"].join("\n")
         );
     });
 

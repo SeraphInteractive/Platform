@@ -29,6 +29,7 @@ export interface V2Message {
     readonly flags: number;
     readonly components: TopLevelComponent[];
     readonly allowedMentions: { readonly parse: [] };
+    readonly withComponents?: boolean;
 }
 
 const textDisplayLimit = 4000;
@@ -70,11 +71,21 @@ export function panel(accent: Accent | number | null, ...blocks: readonly Block[
 }
 
 export function message(...components: readonly TopLevelComponent[]): V2Message {
-    return { flags: MessageFlags.IsComponentsV2, components: [...components], allowedMentions: { parse: [] } };
+    return {
+        flags: MessageFlags.IsComponentsV2,
+        components: [...components],
+        allowedMentions: { parse: [] },
+        withComponents: true
+    };
 }
 
 export function ephemeral(...components: readonly TopLevelComponent[]): V2Message {
-    return { flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral, components: [...components], allowedMentions: { parse: [] } };
+    return {
+        flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+        components: [...components],
+        allowedMentions: { parse: [] },
+        withComponents: true
+    };
 }
 
 export function notice(content: string, accent: Accent | null = null): V2Message {

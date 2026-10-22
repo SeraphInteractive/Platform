@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { NotificationType, type PlatformNotification } from "@platform/contracts";
-import { ChannelType, Collection, type Client } from "discord.js";
+import { ChannelType, Collection, WebhookClient, type Client } from "discord.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NotificationDispatcher } from "../../src/Services/NotificationDispatcher.js";
 import type { TaskForum } from "../../src/Services/TaskForum.js";
@@ -151,5 +151,55 @@ describe("b13: Webhook auto-discovery and bot user fallback", () => {
 
         // invariant: telemetry alerts must not post under the bot user identity
         expect(mockTelemetryChannel.send).not.toHaveBeenCalled();
+    });
+
+    it("must pass withComponents: true when dispatching via webhook", async () => {
+        const sendSpy = vi.spyOn(WebhookClient.prototype, "send").mockResolvedValue({ id: "mock-msg-id" } as never);
+        const mockTelemetryChannel = {
+            id: "telemetry-channel-id",
+            name: "telemetry-alerts",
+            type: ChannelType.GuildText,
+            guildId: "guild-1",
+            isSendable: () => true,
+            isDMBased: () => false,
+            fetchWebhooks: vi.fn().mockResolvedValue(new Collection()),
+            createWebhook: vi.fn().mockResolvedValue({ url: "https://discord.com/api/webhooks/discovered/token" }),
+            send: vi.fn()
+        };
+
+        const mockClient = {
+            channels: { fetch: vi.fn().mockResolvedValue(mockTelemetryChannel) },
+            guilds: {
+                fetch: vi.fn().mockResolvedValue({
+                    members: { fetch: vi.fn().mockResolvedValue(new Collection()) }
+                })
+            }
+        } as unknown as Client;
+
+        const mockForum = { threadFor: vi.fn().mockReturnValue(undefined) } as unknown as TaskForum;
+        const mockLogger = { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() };
+
+        const dispatcher = new NotificationDispatcher(mockClient, "guild-1", settings, mockForum, mockLogger as never, {
+            telemetry:
+                "https://discord.com/api/webhooks/1559537699273179156/3Dn7dB6u4d2sjjfy8NQ1-cuPyDrvrakRWnXUeBXZ5RQuAjC_BfHOdQMW94emdzDlNJ9A"
+        });
+
+        const sampleNotification: PlatformNotification = {
+            type: NotificationType.RoundCreated,
+            occurredAt: new Date().toISOString(),
+            round: { id: "round-1", title: "Character Design Final", pollType: 0 },
+            actor: { discordId: "100000000000000001", username: "admin" },
+            opensAt: null,
+            closesAt: new Date().toISOString()
+        } as unknown as PlatformNotification;
+
+        await dispatcher.handle(sampleNotification);
+
+        expect(sendSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                withComponents: true
+            })
+        );
+        sendSpy.mockRestore();
     });
 });

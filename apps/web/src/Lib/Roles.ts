@@ -1,4 +1,6 @@
-import { Role, type UserDto } from "@platform/contracts";
+import { Role, roleLabel, roleLabels, type UserDto } from "@platform/contracts";
+
+export { roleLabel, roleLabels };
 
 const roleRanks: Readonly<Record<Role, number>> = {
     [Role.Member]: 0,
@@ -8,16 +10,6 @@ const roleRanks: Readonly<Record<Role, number>> = {
     [Role.Supervisor]: 4,
     [Role.Admin]: 5,
     [Role.SuperAdmin]: 6
-};
-
-export const roleLabels: Readonly<Record<Role, string>> = {
-    [Role.Member]: "Member",
-    [Role.Voter]: "Voter",
-    [Role.Contributor]: "Contributor",
-    [Role.SeniorContributor]: "Senior Contributor",
-    [Role.Supervisor]: "Supervisor",
-    [Role.Admin]: "Admin",
-    [Role.SuperAdmin]: "Super admin"
 };
 
 export const rolesByRank: readonly Role[] = [

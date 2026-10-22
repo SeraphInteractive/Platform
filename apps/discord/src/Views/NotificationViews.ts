@@ -4,6 +4,8 @@ import {
     PollType,
     RaidFlag,
     RoundStatus,
+    roleLabel,
+    specialtyLabel,
     type NotificationOf,
     type PlatformNotification
 } from "@platform/contracts";
@@ -133,15 +135,18 @@ export function renderNotification(notification: PlatformNotification, context: 
                     `${person(notification.user, isMember)}, by ${person(notification.actor, isMember)}`
                 )
             ];
-        case NotificationType.UserRoleChanged:
+        case NotificationType.UserRoleChanged: {
+            const role = roleLabel(notification.role);
+            const specialties = notification.specialties.length > 0 ? ` (${notification.specialties.map(specialtyLabel).join(", ")})` : "";
             return [
                 post(
                     telemetry,
                     Accent.Info,
                     "**User role updated**",
-                    `${person(notification.user, isMember)} is now ${notification.role}${notification.specialties.length > 0 ? ` (${notification.specialties.join(", ")})` : ""}, by ${person(notification.actor, isMember)}`
+                    `${person(notification.user, isMember)} is now ${role}${specialties}, by ${person(notification.actor, isMember)}`
                 )
             ];
+        }
         case NotificationType.ContributorPromoted:
             return [post(telemetry, Accent.Success, `${person(notification.user, isMember)} is now a senior contributor.`)];
         case NotificationType.RaidAlert:

@@ -11,6 +11,20 @@ export enum Role {
     Member = "member"
 }
 
+export const roleLabels: Readonly<Record<Role, string>> = {
+    [Role.Member]: "Member",
+    [Role.Voter]: "Voter",
+    [Role.Contributor]: "Contributor",
+    [Role.SeniorContributor]: "Senior Contributor",
+    [Role.Supervisor]: "Supervisor",
+    [Role.Admin]: "Admin",
+    [Role.SuperAdmin]: "Super admin"
+};
+
+export function roleLabel(role: Role): string {
+    return roleLabels[role] ?? role;
+}
+
 export enum Specialty {
     // Postgres enum order is append-only: add new values at the end.
     Animator = "animator",

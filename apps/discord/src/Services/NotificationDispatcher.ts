@@ -159,7 +159,8 @@ export class NotificationDispatcher {
                     await webhook.send({
                         flags: rendered.message.flags,
                         components: rendered.message.components,
-                        allowedMentions: rendered.message.allowedMentions
+                        allowedMentions: rendered.message.allowedMentions,
+                        withComponents: true
                     });
                     continue;
                 } catch (error: unknown) {
@@ -468,7 +469,8 @@ export class NotificationDispatcher {
                     const rulesPayload = {
                         flags: rendered.flags,
                         components: rendered.components as never,
-                        allowedMentions: rendered.allowedMentions
+                        allowedMentions: rendered.allowedMentions,
+                        withComponents: true
                     };
 
                     if (rulesWebhook !== undefined) {
