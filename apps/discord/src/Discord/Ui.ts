@@ -30,6 +30,8 @@ export interface V2Message {
     readonly components: TopLevelComponent[];
     readonly allowedMentions: { readonly parse: [] };
     readonly withComponents?: boolean;
+    readonly username?: string;
+    readonly avatarURL?: string;
 }
 
 const textDisplayLimit = 4000;

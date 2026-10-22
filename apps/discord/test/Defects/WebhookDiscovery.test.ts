@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { NotificationType, type PlatformNotification } from "@platform/contracts";
+import { DifficultyTier, NotificationType, ShotType, type PlatformNotification } from "@platform/contracts";
 import { ChannelType, Collection, WebhookClient, type Client } from "discord.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NotificationDispatcher } from "../../src/Services/NotificationDispatcher.js";
@@ -153,7 +153,7 @@ describe("b13: Webhook auto-discovery and bot user fallback", () => {
         expect(mockTelemetryChannel.send).not.toHaveBeenCalled();
     });
 
-    it("must pass withComponents: true when dispatching via webhook", async () => {
+    it("must pass withComponents: true, channel display name, and bot avatar when dispatching via webhook", async () => {
         const sendSpy = vi.spyOn(WebhookClient.prototype, "send").mockResolvedValue({ id: "mock-msg-id" } as never);
         const mockTelemetryChannel = {
             id: "telemetry-channel-id",
@@ -168,6 +168,9 @@ describe("b13: Webhook auto-discovery and bot user fallback", () => {
         };
 
         const mockClient = {
+            user: {
+                displayAvatarURL: vi.fn().mockReturnValue("https://cdn.discordapp.com/avatars/bot/avatar.png")
+            },
             channels: { fetch: vi.fn().mockResolvedValue(mockTelemetryChannel) },
             guilds: {
                 fetch: vi.fn().mockResolvedValue({
@@ -197,7 +200,137 @@ describe("b13: Webhook auto-discovery and bot user fallback", () => {
 
         expect(sendSpy).toHaveBeenCalledWith(
             expect.objectContaining({
-                withComponents: true
+                withComponents: true,
+                username: "Project Stairway Telemetry",
+                avatarURL: "https://cdn.discordapp.com/avatars/bot/avatar.png"
+            })
+        );
+        sendSpy.mockRestore();
+    });
+
+    it("must rename pre-existing webhook entity to target display name when auto-discovered", async () => {
+        const telemetryChannelId = "telemetry-channel-id";
+        await settings.update((s) => {
+            s.channels[ChannelPurpose.Telemetry] = telemetryChannelId;
+        });
+
+        const mockExistingWebhook = {
+            name: "Spidey Bot",
+            url: "https://discord.com/api/webhooks/discovered/token",
+            edit: vi.fn().mockResolvedValue(undefined)
+        };
+        const mockWebhooksCollection = new Collection();
+        mockWebhooksCollection.set("webhook-1", mockExistingWebhook);
+
+        const mockTelemetryChannel = {
+            id: telemetryChannelId,
+            name: "telemetry-alerts",
+            type: ChannelType.GuildText,
+            guildId: "guild-1",
+            isSendable: () => true,
+            isDMBased: () => false,
+            fetchWebhooks: vi.fn().mockResolvedValue(mockWebhooksCollection),
+            createWebhook: vi.fn().mockResolvedValue(mockExistingWebhook),
+            send: vi.fn()
+        };
+
+        const mockClient = {
+            channels: { fetch: vi.fn().mockResolvedValue(mockTelemetryChannel) },
+            guilds: {
+                fetch: vi.fn().mockResolvedValue({
+                    members: { fetch: vi.fn().mockResolvedValue(new Collection()) }
+                })
+            }
+        } as unknown as Client;
+
+        const mockForum = { threadFor: vi.fn().mockReturnValue(undefined) } as unknown as TaskForum;
+        const mockLogger = { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() };
+
+        const dispatcher = new NotificationDispatcher(mockClient, "guild-1", settings, mockForum, mockLogger as never, {});
+
+        const sampleNotification: PlatformNotification = {
+            type: NotificationType.RoundCreated,
+            occurredAt: new Date().toISOString(),
+            round: { id: "round-1", title: "Character Design Final", pollType: 0 },
+            actor: { discordId: "100000000000000001", username: "admin" },
+            opensAt: null,
+            closesAt: new Date().toISOString()
+        } as unknown as PlatformNotification;
+
+        const sendSpy = vi.spyOn(WebhookClient.prototype, "send").mockResolvedValue({ id: "mock-msg-id" } as never);
+        await dispatcher.handle(sampleNotification);
+
+        expect(mockExistingWebhook.edit).toHaveBeenCalledWith({
+            name: "Project Stairway Telemetry"
+        });
+        sendSpy.mockRestore();
+    });
+
+    it("must dispatch department task logs with department-specific display name and bot avatar", async () => {
+        const sendSpy = vi.spyOn(WebhookClient.prototype, "send").mockResolvedValue({ id: "mock-msg-id" } as never);
+
+        const mockClient = {
+            user: {
+                displayAvatarURL: vi.fn().mockReturnValue("https://cdn.discordapp.com/avatars/bot/avatar.png")
+            },
+            channels: { fetch: vi.fn().mockResolvedValue(null) },
+            guilds: {
+                fetch: vi.fn().mockResolvedValue({
+                    members: { fetch: vi.fn().mockResolvedValue(new Collection()) }
+                })
+            }
+        } as unknown as Client;
+
+        const mockForum = {
+            ensureThreadFor: vi.fn().mockResolvedValue(undefined),
+            setStatus: vi.fn().mockResolvedValue(undefined),
+            post: vi.fn().mockResolvedValue(undefined),
+            threadFor: vi.fn().mockReturnValue(undefined)
+        } as unknown as TaskForum;
+        const mockLogger = { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() };
+
+        const mockApi = {
+            listDepartments: vi.fn().mockResolvedValue([
+                {
+                    id: "dept-1",
+                    name: "Assets",
+                    slug: "assets",
+                    discordLogsWebhookUrl:
+                        "https://discord.com/api/webhooks/1559537699273179157/3Dn7dB6u4d2sjjfy8NQ1-cuPyDrvrakRWnXUeBXZ5RQuAjC_BfHOdQMW94emdzDlNJ9B"
+                }
+            ])
+        };
+
+        const dispatcher = new NotificationDispatcher(
+            mockClient,
+            "guild-1",
+            settings,
+            mockForum,
+            mockLogger as never,
+            {},
+            mockApi as never
+        );
+
+        const taskNotification: PlatformNotification = {
+            type: NotificationType.ShotCreated,
+            occurredAt: new Date().toISOString(),
+            shot: {
+                id: "shot-1",
+                code: "SH001",
+                title: "Character Rig",
+                difficulty: DifficultyTier.Easy,
+                sceneNumber: 1,
+                shotType: ShotType.Modelling3d
+            },
+            actor: { discordId: "100000000000000001", username: "supervisor" }
+        } as unknown as PlatformNotification;
+
+        await dispatcher.handle(taskNotification);
+
+        expect(sendSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                username: "Project Stairway Assets",
+                avatarURL: "https://cdn.discordapp.com/avatars/bot/avatar.png"
             })
         );
         sendSpy.mockRestore();

@@ -1,4 +1,5 @@
 import {
+    departmentDefinitions,
     DocumentSlug,
     EntryStatus,
     NotificationType,
@@ -9,7 +10,7 @@ import {
     shotTypeToDepartment,
     type PlatformNotification
 } from "@platform/contracts";
-import { WebhookClient, type Client, type Collection, type SendableChannels, type Webhook } from "discord.js";
+import { WebhookClient, type Client, type Collection, type ContainerBuilder, type SendableChannels, type Webhook } from "discord.js";
 import type { Logger } from "pino";
 import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
@@ -106,11 +107,61 @@ export class NotificationDispatcher {
         return null;
     }
 
+    private displayNameFor(purpose: ChannelPurpose): string {
+        switch (purpose) {
+            case ChannelPurpose.Telemetry:
+                return "Project Stairway Telemetry";
+            case ChannelPurpose.ModerationLogs:
+                return "Project Stairway Moderation";
+            case ChannelPurpose.Rules:
+                return "Project Stairway Guidelines";
+            default:
+                return "Project Stairway";
+        }
+    }
+
+    private departmentWebhookName(shotType?: ShotType | null): string {
+        if (!shotType) {
+            return "Project Stairway Tasks";
+        }
+        const deptSlug = shotTypeToDepartment[shotType];
+        if (!deptSlug) {
+            return "Project Stairway Tasks";
+        }
+        const dept = departmentDefinitions.find((d) => d.slug === deptSlug);
+        return dept !== undefined ? `Project Stairway ${dept.name}` : "Project Stairway Tasks";
+    }
+
+    private avatarUrl(): string | undefined {
+        return this.client.user?.displayAvatarURL({ size: 256 }) ?? undefined;
+    }
+
+    private async sendDepartmentLog(
+        shotType: ShotType | null | undefined,
+        panelContent: ContainerBuilder,
+        failureMessage: string
+    ): Promise<void> {
+        const hook = await this.getLogsWebhookForShotType(shotType);
+        if (hook === null) {
+            return;
+        }
+        await hook
+            .send({
+                ...message(panelContent),
+                username: this.departmentWebhookName(shotType),
+                avatarURL: this.avatarUrl()
+            })
+            .catch((err: unknown) => {
+                this.logger.warn({ err }, failureMessage);
+            });
+    }
+
     private async getOrCreateWebhook(channel: unknown, purpose: ChannelPurpose): Promise<WebhookClient | null> {
         const cached = this.webhookClients[purpose];
         if (cached !== undefined) {
             return cached;
         }
+        const targetName = this.displayNameFor(purpose);
         const ch = channel as {
             fetchWebhooks?: () => Promise<Collection<string, Webhook>>;
             createWebhook?: (options: { name: string }) => Promise<Webhook>;
@@ -120,12 +171,16 @@ export class NotificationDispatcher {
                 const webhooks = await ch.fetchWebhooks();
                 const existing = webhooks.find((w) => typeof w.url === "string" && isSafeDiscordWebhookUrl(w.url));
                 if (existing?.url) {
+                    if (existing.name !== targetName && typeof existing.edit === "function") {
+                        // align existing webhook entity label with stairway channel purpose
+                        existing.edit({ name: targetName }).catch(() => undefined);
+                    }
                     const client = new WebhookClient({ url: existing.url });
                     this.webhookClients[purpose] = client;
                     return client;
                 }
                 if (typeof ch.createWebhook === "function") {
-                    const created = await ch.createWebhook({ name: "Project Stairway Alerts" });
+                    const created = await ch.createWebhook({ name: targetName });
                     if (created?.url && isSafeDiscordWebhookUrl(created.url)) {
                         const client = new WebhookClient({ url: created.url });
                         this.webhookClients[purpose] = client;
@@ -160,7 +215,9 @@ export class NotificationDispatcher {
                         flags: rendered.message.flags,
                         components: rendered.message.components,
                         allowedMentions: rendered.message.allowedMentions,
-                        withComponents: true
+                        withComponents: true,
+                        username: this.displayNameFor(rendered.purpose),
+                        avatarURL: this.avatarUrl()
                     });
                     continue;
                 } catch (error: unknown) {
@@ -205,22 +262,15 @@ export class NotificationDispatcher {
         switch (notification.type) {
             case NotificationType.ShotCreated: {
                 await this.forum.ensureThreadFor(notification.shot.id);
-                const hook = await this.getLogsWebhookForShotType(notification.shot.shotType);
-                if (hook !== null) {
-                    await hook
-                        .send(
-                            message(
-                                panel(
-                                    Accent.Info,
-                                    "**Task Created**",
-                                    `**${plain(notification.shot.code)} - ${plain(notification.shot.title)}**\nDifficulty: ${capitalize(notification.shot.difficulty)} | Scene: ${notification.shot.sceneNumber}`
-                                )
-                            )
-                        )
-                        .catch((err: unknown) => {
-                            this.logger.warn({ err }, "failed to post task created to department logs");
-                        });
-                }
+                await this.sendDepartmentLog(
+                    notification.shot.shotType,
+                    panel(
+                        Accent.Info,
+                        "**Task Created**",
+                        `**${plain(notification.shot.code)} - ${plain(notification.shot.title)}**\nDifficulty: ${capitalize(notification.shot.difficulty)} | Scene: ${notification.shot.sceneNumber}`
+                    ),
+                    "failed to post task created to department logs"
+                );
                 return;
             }
             case NotificationType.ShotUpdated:
@@ -232,66 +282,45 @@ export class NotificationDispatcher {
             case NotificationType.ShotClaimed: {
                 await this.forum.setStatus(notification.shot.id, ShotStatus.Claimed);
                 await this.forum.post(notification.shot.id, threadUpdate(notification));
-                const hook = await this.getLogsWebhookForShotType(notification.shot.shotType);
-                if (hook !== null) {
-                    await hook
-                        .send(
-                            message(
-                                panel(
-                                    Accent.Info,
-                                    "**Task Claimed**",
-                                    `**${plain(notification.shot.code)} - ${plain(notification.shot.title)}**\nClaimed by ${person(notification.claimant)}.\nDue: ${when(notification.deadlineAt, "f")} (${when(notification.deadlineAt)}).`
-                                )
-                            )
-                        )
-                        .catch((err: unknown) => {
-                            this.logger.warn({ err }, "failed to post task claimed to department logs");
-                        });
-                }
+                await this.sendDepartmentLog(
+                    notification.shot.shotType,
+                    panel(
+                        Accent.Info,
+                        "**Task Claimed**",
+                        `**${plain(notification.shot.code)} - ${plain(notification.shot.title)}**\nClaimed by ${person(notification.claimant)}.\nDue: ${when(notification.deadlineAt, "f")} (${when(notification.deadlineAt)}).`
+                    ),
+                    "failed to post task claimed to department logs"
+                );
                 return;
             }
             case NotificationType.ShotReleased: {
                 await this.forum.setStatus(notification.shot.id, ShotStatus.Available);
                 await this.forum.post(notification.shot.id, threadUpdate(notification));
-                const hook = await this.getLogsWebhookForShotType(notification.shot.shotType);
-                if (hook !== null) {
-                    const reasonLine = notification.reason ? `\n> ${plain(notification.reason)}` : "";
-                    await hook
-                        .send(
-                            message(
-                                panel(
-                                    Accent.Warning,
-                                    "**Task Released**",
-                                    `**${plain(notification.shot.code)} - ${plain(notification.shot.title)}**\nReleased by ${person(notification.actor)}. The task is open again.${reasonLine}`
-                                )
-                            )
-                        )
-                        .catch((err: unknown) => {
-                            this.logger.warn({ err }, "failed to post task released to department logs");
-                        });
-                }
+                const reasonLine = notification.reason ? `\n> ${plain(notification.reason)}` : "";
+                await this.sendDepartmentLog(
+                    notification.shot.shotType,
+                    panel(
+                        Accent.Warning,
+                        "**Task Released**",
+                        `**${plain(notification.shot.code)} - ${plain(notification.shot.title)}**\nReleased by ${person(notification.actor)}. The task is open again.${reasonLine}`
+                    ),
+                    "failed to post task released to department logs"
+                );
                 return;
             }
             case NotificationType.ShotExpired: {
                 await this.forum.setStatus(notification.shot.id, ShotStatus.Available);
                 await this.forum.post(notification.shot.id, threadUpdate(notification));
-                const hook = await this.getLogsWebhookForShotType(notification.shot.shotType);
-                if (hook !== null) {
-                    const who = notification.claimant ? ` Claim by ${person(notification.claimant)} expired.` : "";
-                    await hook
-                        .send(
-                            message(
-                                panel(
-                                    Accent.Warning,
-                                    "**Task Claim Expired**",
-                                    `**${plain(notification.shot.code)} - ${plain(notification.shot.title)}**\n${who} The task is open again.`
-                                )
-                            )
-                        )
-                        .catch((err: unknown) => {
-                            this.logger.warn({ err }, "failed to post task expired to department logs");
-                        });
-                }
+                const who = notification.claimant ? ` Claim by ${person(notification.claimant)} expired.` : "";
+                await this.sendDepartmentLog(
+                    notification.shot.shotType,
+                    panel(
+                        Accent.Warning,
+                        "**Task Claim Expired**",
+                        `**${plain(notification.shot.code)} - ${plain(notification.shot.title)}**\n${who} The task is open again.`
+                    ),
+                    "failed to post task expired to department logs"
+                );
                 return;
             }
             case NotificationType.SubmissionCreated: {
@@ -299,45 +328,31 @@ export class NotificationDispatcher {
                 await this.forum.post(notification.shot.id, threadUpdate(notification));
                 const reviews = await this.channel(ChannelPurpose.TaskSubmissions);
                 await reviews?.send(reviewCard(notification, this.forum.threadFor(notification.shot.id)));
-                const hook = await this.getLogsWebhookForShotType(notification.shot.shotType);
-                if (hook !== null) {
-                    await hook
-                        .send(
-                            message(
-                                panel(
-                                    Accent.Info,
-                                    "**Deliverable Submitted**",
-                                    `**${plain(notification.shot.code)} - ${plain(notification.shot.title)}** (v${notification.version})\nSubmitted by ${person(notification.contributor)} for supervisor review.`
-                                )
-                            )
-                        )
-                        .catch((err: unknown) => {
-                            this.logger.warn({ err }, "failed to post submission created to department logs");
-                        });
-                }
+                await this.sendDepartmentLog(
+                    notification.shot.shotType,
+                    panel(
+                        Accent.Info,
+                        "**Deliverable Submitted**",
+                        `**${plain(notification.shot.code)} - ${plain(notification.shot.title)}** (v${notification.version})\nSubmitted by ${person(notification.contributor)} for supervisor review.`
+                    ),
+                    "failed to post submission created to department logs"
+                );
                 return;
             }
             case NotificationType.SubmissionReviewed: {
                 const approved = notification.decision === ReviewDecision.Approved;
                 await this.forum.post(notification.shot.id, threadUpdate(notification));
                 await this.forum.setStatus(notification.shot.id, approved ? ShotStatus.Approved : ShotStatus.Claimed);
-                const hook = await this.getLogsWebhookForShotType(notification.shot.shotType);
-                if (hook !== null) {
-                    const noteLine = notification.notes ? `\n> ${plain(notification.notes)}` : "";
-                    await hook
-                        .send(
-                            message(
-                                panel(
-                                    approved ? Accent.Success : Accent.Warning,
-                                    approved ? "**Deliverable Approved**" : "**Changes Requested**",
-                                    `**${plain(notification.shot.code)} - ${plain(notification.shot.title)}** (v${notification.version})\nReviewed by ${person(notification.reviewer)}.${noteLine}`
-                                )
-                            )
-                        )
-                        .catch((err: unknown) => {
-                            this.logger.warn({ err }, "failed to post submission review to department logs");
-                        });
-                }
+                const noteLine = notification.notes ? `\n> ${plain(notification.notes)}` : "";
+                await this.sendDepartmentLog(
+                    notification.shot.shotType,
+                    panel(
+                        approved ? Accent.Success : Accent.Warning,
+                        approved ? "**Deliverable Approved**" : "**Changes Requested**",
+                        `**${plain(notification.shot.code)} - ${plain(notification.shot.title)}** (v${notification.version})\nReviewed by ${person(notification.reviewer)}.${noteLine}`
+                    ),
+                    "failed to post submission review to department logs"
+                );
                 if (notification.contributor.discordId !== null) {
                     try {
                         const user = await this.client.users.fetch(notification.contributor.discordId);
@@ -464,7 +479,13 @@ export class NotificationDispatcher {
                 return;
             case NotificationType.DocumentUpdated: {
                 if (notification.slug === DocumentSlug.Rules || notification.slug === DocumentSlug.Guidelines) {
-                    const rulesWebhook = this.webhookClients[ChannelPurpose.Rules];
+                    let rulesWebhook = this.webhookClients[ChannelPurpose.Rules];
+                    if (rulesWebhook === undefined) {
+                        const rulesChannel = await this.channel(ChannelPurpose.Rules);
+                        if (rulesChannel !== null) {
+                            rulesWebhook = (await this.getOrCreateWebhook(rulesChannel, ChannelPurpose.Rules)) ?? undefined;
+                        }
+                    }
                     const rendered = renderRulesMessage(notification);
                     const rulesPayload = {
                         flags: rendered.flags,
@@ -490,7 +511,11 @@ export class NotificationDispatcher {
                         }
                         if (!edited) {
                             try {
-                                const posted = await rulesWebhook.send(rulesPayload);
+                                const posted = await rulesWebhook.send({
+                                    ...rulesPayload,
+                                    username: this.displayNameFor(ChannelPurpose.Rules),
+                                    avatarURL: this.avatarUrl()
+                                });
                                 await this.settings.update((settings) => {
                                     settings.rulesMessageId = posted.id;
                                 });
