@@ -15,6 +15,7 @@ import {
 } from "discord.js";
 import type { Logger } from "pino";
 import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
+import { botAvatarBuffer } from "../Discord/BotAvatar.js";
 import { message, panel, plain } from "../Discord/Ui.js";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
 import { htmlToDiscordMarkdown } from "../Views/NotificationViews.js";
@@ -42,10 +43,14 @@ async function ensureWebhookOnChannel(channel: TextChannel, name: string, logger
         const webhooks = await channel.fetchWebhooks();
         const existing = webhooks.find((hook) => hook.name.toLowerCase() === name.toLowerCase());
         if (existing?.url) {
+            if (!existing.avatar && botAvatarBuffer !== undefined) {
+                await existing.edit({ avatar: botAvatarBuffer }).catch(() => undefined);
+            }
             return existing.url;
         }
         const created = await channel.createWebhook({
             name,
+            avatar: botAvatarBuffer,
             reason: "Studio department webhook setup"
         });
         return created.url;
@@ -224,7 +229,9 @@ export class ServerProvisioner {
                             ? ["lighting-vfx-grabbox", "lighting-vfx-tasks"]
                             : dept.slug === DepartmentSlug.ArtAndWriting
                               ? ["art-and-writing-grabbox", "art-and-writing-tasks"]
-                              : [];
+                              : dept.slug === DepartmentSlug.PostProduction
+                                ? ["post-production-grabbox", "post-production-tasks", "post-grabbox", "post-tasks"]
+                                : [];
                     const forumAliases = [
                         grabboxName,
                         `${dept.name}-GrabBox`,
@@ -764,7 +771,9 @@ export class ServerProvisioner {
                             ? ["lighting-vfx-grabbox", "lighting-vfx-tasks"]
                             : dept.slug === DepartmentSlug.ArtAndWriting
                               ? ["art-and-writing-grabbox", "art-and-writing-tasks"]
-                              : [];
+                              : dept.slug === DepartmentSlug.PostProduction
+                                ? ["post-production-grabbox", "post-production-tasks", "post-grabbox", "post-tasks"]
+                                : [];
                     const forumAliases = [
                         tasksForumName,
                         `${dept.name}-GrabBox`,

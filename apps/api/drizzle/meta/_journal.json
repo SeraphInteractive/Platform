@@ -162,6 +162,13 @@
       "when": 1792514696555,
       "tag": "0022_tickets_and_crew_feedback",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792600000000,
+      "tag": "0023_add_post_production_shot_types",
+      "breakpoints": true
     }
   ]
 }

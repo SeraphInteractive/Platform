@@ -14,6 +14,7 @@ import { WebhookClient, type Client, type Collection, type ContainerBuilder, typ
 import type { Logger } from "pino";
 import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
+import { botAvatarBuffer, resolveBotAvatarUrl } from "../Discord/BotAvatar.js";
 import { Accent, capitalize, message, panel, person, plain, when } from "../Discord/Ui.js";
 import { renderNotification, renderRulesMessage } from "../Views/NotificationViews.js";
 import { reviewCard, threadUpdate } from "../Views/TaskViews.js";
@@ -65,7 +66,8 @@ export class NotificationDispatcher {
         private readonly forum: TaskForum,
         private readonly logger: Logger,
         webhooks: WebhookEndpoints = {},
-        private readonly api?: PlatformApiClient
+        private readonly api?: PlatformApiClient,
+        private readonly webAppUrl?: string
     ) {
         if (webhooks.telemetry && isSafeDiscordWebhookUrl(webhooks.telemetry)) {
             this.webhookClients[ChannelPurpose.Telemetry] = new WebhookClient({ url: webhooks.telemetry });
@@ -133,7 +135,7 @@ export class NotificationDispatcher {
     }
 
     private avatarUrl(): string | undefined {
-        return this.client.user?.displayAvatarURL({ size: 256 }) ?? undefined;
+        return resolveBotAvatarUrl(this.client, this.webAppUrl);
     }
 
     private async sendDepartmentLog(
@@ -162,25 +164,29 @@ export class NotificationDispatcher {
             return cached;
         }
         const targetName = this.displayNameFor(purpose);
+        const editPayload: { name: string; avatar?: Buffer } = { name: targetName };
+        if (botAvatarBuffer) {
+            editPayload.avatar = botAvatarBuffer;
+        }
         const ch = channel as {
             fetchWebhooks?: () => Promise<Collection<string, Webhook>>;
-            createWebhook?: (options: { name: string }) => Promise<Webhook>;
+            createWebhook?: (options: { name: string; avatar?: Buffer }) => Promise<Webhook>;
         };
         if (typeof ch.fetchWebhooks === "function") {
             try {
                 const webhooks = await ch.fetchWebhooks();
                 const existing = webhooks.find((w) => typeof w.url === "string" && isSafeDiscordWebhookUrl(w.url));
                 if (existing?.url) {
-                    if (existing.name !== targetName && typeof existing.edit === "function") {
-                        // align existing webhook entity label with stairway channel purpose
-                        existing.edit({ name: targetName }).catch(() => undefined);
+                    if (typeof existing.edit === "function") {
+                        // align existing webhook entity label and avatar with stairway brand
+                        existing.edit(editPayload).catch(() => undefined);
                     }
                     const client = new WebhookClient({ url: existing.url });
                     this.webhookClients[purpose] = client;
                     return client;
                 }
                 if (typeof ch.createWebhook === "function") {
-                    const created = await ch.createWebhook({ name: targetName });
+                    const created = await ch.createWebhook(editPayload);
                     if (created?.url && isSafeDiscordWebhookUrl(created.url)) {
                         const client = new WebhookClient({ url: created.url });
                         this.webhookClients[purpose] = client;

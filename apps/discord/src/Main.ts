@@ -6,6 +6,7 @@ import type { BotContext } from "./Commands/Command.js";
 import { createLogger } from "./Common/Logger.js";
 import { ConfigurationError, loadBotConfiguration } from "./Configuration/BotConfiguration.js";
 import { Accent, message, panel } from "./Discord/Ui.js";
+import { botAvatarBuffer } from "./Discord/BotAvatar.js";
 import { InteractionRouter, slashCommands } from "./Interactions/InteractionRouter.js";
 import { NotificationDispatcher } from "./Services/NotificationDispatcher.js";
 import { ReminderScheduler } from "./Services/ReminderScheduler.js";
@@ -45,7 +46,16 @@ async function main(): Promise<void> {
         moderationLogs: configuration.moderationLogsWebhookUrl,
         rules: configuration.rulesWebhookUrl
     };
-    const dispatcher = new NotificationDispatcher(client, configuration.guildId, settings, forum, logger, webhookUrls, api);
+    const dispatcher = new NotificationDispatcher(
+        client,
+        configuration.guildId,
+        settings,
+        forum,
+        logger,
+        webhookUrls,
+        api,
+        configuration.webAppUrl
+    );
     const tickets = new TicketDesk(client, configuration.guildId, api, logger, configuration.webAppUrl);
     const checkIns = new CrewCheckIns(client, configuration.guildId, api, logger);
     const consumer = new NotificationConsumer(
@@ -107,6 +117,12 @@ async function main(): Promise<void> {
         void (async (): Promise<void> => {
             logger.info({ user: ready.user.tag }, "connected to discord");
             ready.user.setPresence({ activities: [{ name: "voting rounds", type: ActivityType.Watching }], status: "online" });
+            if (ready.user.avatar === null && botAvatarBuffer !== undefined) {
+                // upload brand avatar to bot user profile on boot if unset
+                await ready.user.setAvatar(botAvatarBuffer).catch((err: unknown) => {
+                    logger.warn({ err }, "failed to set bot avatar on discord");
+                });
+            }
             const guild = await ready.guilds.fetch(configuration.guildId).catch(() => null);
             if (guild === null) {
                 logger.error({ guild: configuration.guildId }, "the bot is not a member of its configured server");

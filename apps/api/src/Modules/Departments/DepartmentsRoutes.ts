@@ -1,4 +1,4 @@
-import { departmentSchema, type DepartmentSlug } from "@platform/contracts";
+import { departmentDefinitions, departmentSchema, type DepartmentSlug } from "@platform/contracts";
 import { asc, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -29,13 +29,15 @@ function toDepartmentResponse(
     map?: DepartmentDiscordMapRecord | null,
     includeWebhooks = false
 ): z.infer<typeof departmentSchema> {
+    const def = departmentDefinitions.find((d) => d.slug === (dept.slug as DepartmentSlug));
+    const shotTypes = dept.shotTypes.length > 0 ? dept.shotTypes : (def?.shotTypes ?? []);
     return {
         id: dept.id,
         name: dept.name,
         slug: dept.slug as DepartmentSlug,
         supervisorSpecialties: dept.supervisorSpecialties,
         contributorSpecialties: dept.contributorSpecialties,
-        shotTypes: dept.shotTypes,
+        shotTypes: [...shotTypes],
         discordCategoryId: map?.discordCategoryId ?? null,
         discordForumId: map?.discordForumId ?? null,
         discordChatChannelId: map?.discordChatChannelId ?? null,

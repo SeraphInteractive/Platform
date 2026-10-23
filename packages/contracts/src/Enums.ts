@@ -71,7 +71,10 @@ export enum ShotType {
     Vfx = "vfx",
     SurfaceTextureArt = "surface_texture_art",
     Lighting = "lighting",
-    ConceptArt = "concept_art"
+    ConceptArt = "concept_art",
+    VideoEditing = "video_editing",
+    SoundDesign = "sound_design",
+    VoiceActing = "voice_acting"
 }
 
 export enum DepartmentSlug {
@@ -129,7 +132,7 @@ export const departmentDefinitions: readonly DepartmentDefinition[] = Object.fre
         name: "Post-Production",
         supervisorSpecialties: [Specialty.EditorialSupervisor, Specialty.SoundDirector],
         contributorSpecialties: [Specialty.VideoEditor, Specialty.SoundDesigner, Specialty.VoiceActor],
-        shotTypes: []
+        shotTypes: [ShotType.VideoEditing, ShotType.SoundDesign, ShotType.VoiceActing]
     }
 ]);
 
@@ -140,7 +143,10 @@ export const shotTypeToDepartment: Readonly<Record<ShotType, DepartmentSlug>> = 
     [ShotType.SurfaceTextureArt]: DepartmentSlug.Assets,
     [ShotType.Animation]: DepartmentSlug.Animation,
     [ShotType.Lighting]: DepartmentSlug.LightingAndVfx,
-    [ShotType.Vfx]: DepartmentSlug.LightingAndVfx
+    [ShotType.Vfx]: DepartmentSlug.LightingAndVfx,
+    [ShotType.VideoEditing]: DepartmentSlug.PostProduction,
+    [ShotType.SoundDesign]: DepartmentSlug.PostProduction,
+    [ShotType.VoiceActing]: DepartmentSlug.PostProduction
 });
 
 export const shotTypeRequiredSpecialty: Readonly<Record<ShotType, Specialty>> = Object.freeze({
@@ -150,7 +156,10 @@ export const shotTypeRequiredSpecialty: Readonly<Record<ShotType, Specialty>> = 
     [ShotType.SurfaceTextureArt]: Specialty.SurfaceTextureArtist,
     [ShotType.Animation]: Specialty.Animator,
     [ShotType.Lighting]: Specialty.LightingArtist,
-    [ShotType.Vfx]: Specialty.VfxArtist
+    [ShotType.Vfx]: Specialty.VfxArtist,
+    [ShotType.VideoEditing]: Specialty.VideoEditor,
+    [ShotType.SoundDesign]: Specialty.SoundDesigner,
+    [ShotType.VoiceActing]: Specialty.VoiceActor
 });
 
 export const shotTypeRequiredSpecialties: Readonly<Record<ShotType, readonly Specialty[]>> = Object.freeze({
@@ -160,7 +169,10 @@ export const shotTypeRequiredSpecialties: Readonly<Record<ShotType, readonly Spe
     [ShotType.SurfaceTextureArt]: [Specialty.SurfaceTextureArtist],
     [ShotType.Animation]: [Specialty.Animator, Specialty.LayoutArtist],
     [ShotType.Lighting]: [Specialty.LightingArtist],
-    [ShotType.Vfx]: [Specialty.VfxArtist]
+    [ShotType.Vfx]: [Specialty.VfxArtist],
+    [ShotType.VideoEditing]: [Specialty.VideoEditor],
+    [ShotType.SoundDesign]: [Specialty.SoundDesigner],
+    [ShotType.VoiceActing]: [Specialty.VoiceActor]
 });
 
 export const supervisorGrantableSpecialties: Readonly<Partial<Record<Specialty, readonly Specialty[]>>> = Object.freeze({

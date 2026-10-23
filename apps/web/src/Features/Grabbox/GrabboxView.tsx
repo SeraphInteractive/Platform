@@ -1,6 +1,6 @@
 "use client";
 
-import { DifficultyTier, Role, ShotStatus, ShotType, type ShotDto } from "@platform/contracts";
+import { departmentDefinitions, DifficultyTier, Role, ShotStatus, ShotType, type ShotDto } from "@platform/contracts";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Film, Images } from "lucide-react";
 import type { Route } from "next";
@@ -207,8 +207,12 @@ export function GrabboxView(): ReactNode {
     }, [hasSelectedDept, recommendedDepartment, departmentId]);
 
     const activeDepartment = departmentId === anyValue ? undefined : departments.data?.find((d) => d.id === departmentId);
+    const activeDeptShotTypes =
+        activeDepartment?.shotTypes && activeDepartment.shotTypes.length > 0
+            ? activeDepartment.shotTypes
+            : departmentDefinitions.find((def) => def.slug === activeDepartment?.slug)?.shotTypes;
     const availableShotTypes: readonly ShotType[] =
-        activeDepartment !== undefined && activeDepartment.shotTypes.length > 0 ? activeDepartment.shotTypes : Object.values(ShotType);
+        activeDeptShotTypes && activeDeptShotTypes.length > 0 ? activeDeptShotTypes : Object.values(ShotType);
 
     const sceneNumber = /^\d{1,6}$/u.test(scene) && Number(scene) > 0 ? Number(scene) : undefined;
     const query: ShotQuery = {

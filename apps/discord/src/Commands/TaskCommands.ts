@@ -88,7 +88,10 @@ export const createTaskCommand: SlashCommand = {
                     { name: "Surface / Texture Art", value: ShotType.SurfaceTextureArt },
                     { name: "Lighting", value: ShotType.Lighting },
                     { name: "VFX", value: ShotType.Vfx },
-                    { name: "Concept Art", value: ShotType.ConceptArt }
+                    { name: "Concept Art", value: ShotType.ConceptArt },
+                    { name: "Video Editing", value: ShotType.VideoEditing },
+                    { name: "Sound Design", value: ShotType.SoundDesign },
+                    { name: "Voice Acting", value: ShotType.VoiceActing }
                 )
         )
         .addStringOption((option) => option.setName("code").setDescription("Shot code, generated if empty").setMaxLength(50))

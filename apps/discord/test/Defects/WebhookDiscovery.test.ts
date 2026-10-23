@@ -169,6 +169,7 @@ describe("b13: Webhook auto-discovery and bot user fallback", () => {
 
         const mockClient = {
             user: {
+                avatar: "custom_avatar_hash",
                 displayAvatarURL: vi.fn().mockReturnValue("https://cdn.discordapp.com/avatars/bot/avatar.png")
             },
             channels: { fetch: vi.fn().mockResolvedValue(mockTelemetryChannel) },
@@ -260,9 +261,11 @@ describe("b13: Webhook auto-discovery and bot user fallback", () => {
         const sendSpy = vi.spyOn(WebhookClient.prototype, "send").mockResolvedValue({ id: "mock-msg-id" } as never);
         await dispatcher.handle(sampleNotification);
 
-        expect(mockExistingWebhook.edit).toHaveBeenCalledWith({
-            name: "Project Stairway Telemetry"
-        });
+        expect(mockExistingWebhook.edit).toHaveBeenCalledWith(
+            expect.objectContaining({
+                name: "Project Stairway Telemetry"
+            })
+        );
         sendSpy.mockRestore();
     });
 
@@ -271,6 +274,7 @@ describe("b13: Webhook auto-discovery and bot user fallback", () => {
 
         const mockClient = {
             user: {
+                avatar: "custom_avatar_hash",
                 displayAvatarURL: vi.fn().mockReturnValue("https://cdn.discordapp.com/avatars/bot/avatar.png")
             },
             channels: { fetch: vi.fn().mockResolvedValue(null) },
@@ -331,6 +335,78 @@ describe("b13: Webhook auto-discovery and bot user fallback", () => {
             expect.objectContaining({
                 username: "Project Stairway Assets",
                 avatarURL: "https://cdn.discordapp.com/avatars/bot/avatar.png"
+            })
+        );
+        sendSpy.mockRestore();
+    });
+
+    it("must fall back to webAppUrl brand avatar when client user avatar is null or unset", async () => {
+        const sendSpy = vi.spyOn(WebhookClient.prototype, "send").mockResolvedValue({ id: "mock-msg-id" } as never);
+
+        const mockClient = {
+            user: {
+                avatar: null,
+                displayAvatarURL: vi.fn().mockReturnValue("https://cdn.discordapp.com/embed/avatars/0.png")
+            },
+            channels: { fetch: vi.fn().mockResolvedValue(null) },
+            guilds: {
+                fetch: vi.fn().mockResolvedValue({
+                    members: { fetch: vi.fn().mockResolvedValue(new Collection()) }
+                })
+            }
+        } as unknown as Client;
+
+        const mockForum = {
+            ensureThreadFor: vi.fn().mockResolvedValue(undefined),
+            setStatus: vi.fn().mockResolvedValue(undefined),
+            post: vi.fn().mockResolvedValue(undefined),
+            threadFor: vi.fn().mockReturnValue(undefined)
+        } as unknown as TaskForum;
+        const mockLogger = { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() };
+
+        const mockApi = {
+            listDepartments: vi.fn().mockResolvedValue([
+                {
+                    id: "dept-1",
+                    name: "Assets",
+                    slug: "assets",
+                    discordLogsWebhookUrl:
+                        "https://discord.com/api/webhooks/1559537699273179157/3Dn7dB6u4d2sjjfy8NQ1-cuPyDrvrakRWnXUeBXZ5RQuAjC_BfHOdQMW94emdzDlNJ9B"
+                }
+            ])
+        };
+
+        const dispatcher = new NotificationDispatcher(
+            mockClient,
+            "guild-1",
+            settings,
+            mockForum,
+            mockLogger as never,
+            {},
+            mockApi as never,
+            "https://dev-app.projectstairway.net"
+        );
+
+        const taskNotification: PlatformNotification = {
+            type: NotificationType.ShotCreated,
+            occurredAt: new Date().toISOString(),
+            shot: {
+                id: "shot-1",
+                code: "SH001",
+                title: "Character Rig",
+                difficulty: DifficultyTier.Easy,
+                sceneNumber: 1,
+                shotType: ShotType.Modelling3d
+            },
+            actor: { discordId: "100000000000000001", username: "supervisor" }
+        } as unknown as PlatformNotification;
+
+        await dispatcher.handle(taskNotification);
+
+        expect(sendSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                username: "Project Stairway Assets",
+                avatarURL: "https://dev-app.projectstairway.net/branding/bot-pfp.png"
             })
         );
         sendSpy.mockRestore();

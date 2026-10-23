@@ -16,7 +16,7 @@ import { departmentDiscordMaps, departments, discordSettings } from "../../Infra
 const embedColor = 0x3498db; // clean stairway blue accent
 
 export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
-    const { database } = services;
+    const { database, configuration } = services;
     const security = [{ bearer: [] }];
 
     application.post(
@@ -68,9 +68,21 @@ export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceConta
                 users: pings?.userIds ?? []
             };
 
+            // fallback to public dev endpoint if app url is local or cloudflare ssl 526 on apex domain
+            const baseAppUrl =
+                configuration.security.appUrl.includes("projectstairway.net") &&
+                !configuration.security.appUrl.includes("dev-app.projectstairway.net")
+                    ? "https://dev-app.projectstairway.net"
+                    : configuration.security.appUrl.replace(/\/+$/u, "");
+            const botAvatarUrl =
+                baseAppUrl.startsWith("http://localhost") || baseAppUrl.startsWith("http://127.0.0.1")
+                    ? "https://dev-app.projectstairway.net/branding/bot-pfp.png"
+                    : `${baseAppUrl}/branding/bot-pfp.png`;
+
             // discord components v2 layout using container with stairway blue accent bar and text displays
             const webhookPayload = {
                 username: "Project Stairway",
+                avatar_url: botAvatarUrl,
                 flags: 32768, // IS_COMPONENTS_V2
                 ...(pingText.length > 0 ? { content: pingText } : {}),
                 allowed_mentions: allowedMentions,

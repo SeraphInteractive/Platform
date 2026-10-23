@@ -156,7 +156,10 @@ export const shotTypeLabels: Readonly<Record<ShotType, string>> = {
     [ShotType.SurfaceTextureArt]: "Surface / Texture Art",
     [ShotType.Animation]: "Animation",
     [ShotType.Lighting]: "Lighting",
-    [ShotType.Vfx]: "VFX"
+    [ShotType.Vfx]: "VFX",
+    [ShotType.VideoEditing]: "Video Editing",
+    [ShotType.SoundDesign]: "Sound Design",
+    [ShotType.VoiceActing]: "Voice Acting"
 };
 
 export const departmentSlugLabels: Readonly<Record<DepartmentSlug, string>> = {

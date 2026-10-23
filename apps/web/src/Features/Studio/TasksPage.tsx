@@ -1,6 +1,7 @@
 "use client";
 
 import {
+    departmentDefinitions,
     DifficultyTier,
     fieldRules,
     type MediaContentType,
@@ -161,10 +162,18 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
         if (departments.data === undefined) {
             return [];
         }
+        // ensure effective shotTypes resolves even if remote backend hasn't run migration yet
+        const effective = departments.data.map((dept) => {
+            if (dept.shotTypes.length > 0) {
+                return dept;
+            }
+            const def = departmentDefinitions.find((d) => d.slug === dept.slug);
+            return def && def.shotTypes.length > 0 ? { ...dept, shotTypes: [...def.shotTypes] } : dept;
+        });
         if (hasAtLeast(user, Role.Admin)) {
-            return departments.data.filter((d) => d.shotTypes.length > 0);
+            return effective.filter((d) => d.shotTypes.length > 0);
         }
-        return departments.data.filter(
+        return effective.filter(
             (dept) => dept.shotTypes.length > 0 && dept.supervisorSpecialties.some((s) => user?.specialties?.includes(s))
         );
     })();
@@ -701,8 +710,11 @@ function TasksTable(): ReactNode {
     });
 
     const activeDepartment = departmentId === anyValue ? undefined : departments.data?.find((d) => d.id === departmentId);
-    const availableShotTypes =
-        activeDepartment !== undefined && activeDepartment.shotTypes.length > 0 ? activeDepartment.shotTypes : Object.values(ShotType);
+    const activeDeptShotTypes =
+        activeDepartment?.shotTypes && activeDepartment.shotTypes.length > 0
+            ? activeDepartment.shotTypes
+            : departmentDefinitions.find((def) => def.slug === activeDepartment?.slug)?.shotTypes;
+    const availableShotTypes = activeDeptShotTypes && activeDeptShotTypes.length > 0 ? activeDeptShotTypes : Object.values(ShotType);
 
     const query = {
         page,

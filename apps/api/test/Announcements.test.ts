@@ -128,9 +128,13 @@ describe("announcements API", () => {
             const init = lastCallArgs?.[1];
             expect(typeof init?.body).toBe("string");
             const sentPayload = JSON.parse(init!.body as string) as {
+                username?: string;
+                avatar_url?: string;
                 content?: string;
                 allowed_mentions?: { parse?: string[]; roles?: string[]; users?: string[] };
             };
+            expect(sentPayload.username).toBe("Project Stairway");
+            expect(sentPayload.avatar_url).toMatch(/\/branding\/bot-pfp\.png$/u);
             expect(sentPayload.content).toBe("@everyone <@&100000000000000014> <@100000000000000015>");
             expect(sentPayload.allowed_mentions?.parse).toContain("everyone");
             expect(sentPayload.allowed_mentions?.roles).toContain("100000000000000014");

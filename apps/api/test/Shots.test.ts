@@ -570,4 +570,50 @@ describe("shot grab-box", () => {
         });
         expect(assetsReview.statusCode).toBe(200);
     });
+
+    it("enforces grab-box pipeline for post-production department", async () => {
+        const editorialSupervisor = await context.createUser(Role.Supervisor, {
+            specialties: [Specialty.EditorialSupervisor]
+        });
+
+        // editorial supervisor can create video editing task
+        const createVideoShot = await context.application.inject({
+            method: "POST",
+            url: "/api/v1/shots",
+            headers: editorialSupervisor.headers,
+            payload: {
+                sceneNumber: 2,
+                shotCode: "SC02-POST-01",
+                title: "Scene Assembly & Rough Cut",
+                shotType: ShotType.VideoEditing,
+                difficultyTier: DifficultyTier.Medium
+            }
+        });
+        expect(createVideoShot.statusCode).toBe(201);
+        const postShotId = json<Envelope<{ id: string; departmentId: string }>>(createVideoShot).data.id;
+
+        // animator cannot claim video editing task
+        const animator = await context.createUser(Role.Contributor, {
+            specialties: [Specialty.Animator]
+        });
+        const invalidClaim = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${postShotId}/claim`,
+            headers: animator.headers
+        });
+        expect(invalidClaim.statusCode).toBe(403);
+        expect(json(invalidClaim).code).toBe("SPECIALTY_REQUIRED");
+
+        // video editor can claim video editing task
+        const videoEditor = await context.createUser(Role.Contributor, {
+            specialties: [Specialty.VideoEditor]
+        });
+        const validClaim = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${postShotId}/claim`,
+            headers: videoEditor.headers
+        });
+        expect(validClaim.statusCode).toBe(200);
+        expect(json<Envelope<{ status: string }>>(validClaim).data.status).toBe(ShotStatus.Claimed);
+    });
 });

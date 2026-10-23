@@ -84,21 +84,22 @@ export class TaskForum {
         return channel !== null && channel.type === ChannelType.GuildForum && channel.guildId === this.guildId ? channel : null;
     }
 
-    public async forumFor(shotType?: ShotType): Promise<ForumChannel | null> {
-        if (shotType !== undefined) {
-            try {
-                const depts = await this.api.listDepartments();
+    public async forumFor(shotType?: ShotType, departmentId?: string | null): Promise<ForumChannel | null> {
+        try {
+            const depts = await this.api.listDepartments();
+            let dept = departmentId ? depts.find((d) => d.id === departmentId) : undefined;
+            if (dept === undefined && shotType !== undefined) {
                 const targetSlug = shotTypeToDepartment[shotType];
-                const dept = depts.find((d) => d.slug === targetSlug);
-                if (dept?.discordForumId) {
-                    const channel = await this.client.channels.fetch(dept.discordForumId).catch(() => null);
-                    if (channel !== null && channel.type === ChannelType.GuildForum && channel.guildId === this.guildId) {
-                        return channel;
-                    }
-                }
-            } catch {
-                // fallback to default task forum
+                dept = depts.find((d) => d.slug === targetSlug);
             }
+            if (dept?.discordForumId) {
+                const channel = await this.client.channels.fetch(dept.discordForumId).catch(() => null);
+                if (channel !== null && channel.type === ChannelType.GuildForum && channel.guildId === this.guildId) {
+                    return channel;
+                }
+            }
+        } catch {
+            // fallback to default task forum
         }
         return this.forum();
     }
@@ -123,7 +124,7 @@ export class TaskForum {
         if (existing !== null) {
             return existing.id;
         }
-        const forum = await this.forumFor(shot.shotType);
+        const forum = await this.forumFor(shot.shotType, shot.departmentId);
         if (forum === null) {
             return null;
         }
