@@ -14,6 +14,7 @@ COPY packages/contracts/package.json packages/contracts/
 COPY apps/api/package.json apps/api/
 COPY apps/discord/package.json apps/discord/
 COPY apps/web/package.json apps/web/
+COPY apps/script/package.json apps/script/
 
 FROM base AS build
 RUN npm ci --ignore-scripts
@@ -29,9 +30,17 @@ COPY apps/discord/src apps/discord/src
 RUN npx tsc -b
 
 FROM build AS web-build
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NODE_ENV=production \
+    SCRIPT_INTERNAL_URL=http://script:3000
 COPY apps/web apps/web
 RUN npm run build -w @platform/web
+
+FROM build AS script-build
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NODE_ENV=production
+COPY apps/script apps/script
+RUN npm run build -w @platform/script
 
 FROM base AS api-dependencies
 RUN npm ci --omit=dev --ignore-scripts --workspace @platform/api
@@ -56,6 +65,7 @@ COPY --from=discord-dependencies /app/package.json ./
 COPY --from=discord-dependencies /app/node_modules ./node_modules
 COPY --from=build /app/apps/discord/package.json apps/discord/
 COPY --from=build /app/apps/discord/dist apps/discord/dist
+COPY apps/discord/assets apps/discord/assets
 RUN mkdir -p /app/data && chown node:node /app/data && chmod 700 /app/data
 ENV DATA_DIRECTORY=/app/data
 USER node
@@ -85,3 +95,19 @@ USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --start-interval=2s --retries=3     CMD ["node", "-e", "fetch(`http://127.0.0.1:${process.env.PORT}/docs`).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
 CMD ["node", "apps/web/server.js"]
+
+FROM runtime AS script
+ENV HOSTNAME=0.0.0.0 \
+    PORT=3000 \
+    NEXT_TELEMETRY_DISABLED=1
+COPY --from=script-build /app/apps/script/.next/standalone ./
+COPY --from=script-build /app/apps/script/public apps/script/public
+COPY --from=script-build /app/apps/script/.next/static apps/script/.next/static
+RUN mkdir -p /app/data && chown node:node /app/data && chmod 700 /app/data
+ENV DATA_DIRECTORY=/app/data
+USER node
+VOLUME ["/app/data"]
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --start-interval=2s --retries=3 \
+    CMD ["node", "-e", "fetch(`http://127.0.0.1:${process.env.PORT}/studio/script`).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+CMD ["node", "apps/script/server.js"]

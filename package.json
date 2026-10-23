@@ -13,7 +13,7 @@
     "scripts": {
         "build": "tsc -b",
         "clean": "tsc -b --clean",
-        "typecheck": "tsc -b && tsc -p tsconfig.eslint.json && npm run typecheck -w @platform/web",
+        "typecheck": "tsc -b && tsc -p tsconfig.eslint.json && npm run typecheck -w @platform/web && npm run typecheck -w @platform/script",
         "lint": "tsc -b packages/scoring packages/contracts && eslint . && npm run lint -w @platform/web",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
@@ -24,7 +24,10 @@
         "db:migrate": "npm run db:migrate -w @platform/api",
         "token:issue": "npm run token:issue -w @platform/api --",
         "dev:web": "tsc -b packages/scoring packages/contracts && npm run dev -w @platform/web",
+        "dev:web:local": "tsc -b packages/scoring packages/contracts && node scripts/WithEnv.ts node_modules/next/dist/bin/next dev apps/web --port 3000",
         "build:web": "tsc -b packages/scoring packages/contracts && npm run build -w @platform/web",
+        "dev:script": "tsc -b packages/scoring packages/contracts && npm run dev -w @platform/script",
+        "build:script": "tsc -b packages/scoring packages/contracts && npm run build -w @platform/script",
         "dev:discord": "tsc -b packages/scoring packages/contracts && npm run dev -w @platform/discord"
     },
     "devDependencies": {
@@ -43,6 +46,13 @@
         "source-map-js": ">=1.2.2",
         "next": {
             "sharp": "0.35.5"
-        }
+        },
+        "@tiptap/core": "^3.31.4",
+        "@tiptap/pm": "^3.31.4",
+        "@tiptap/react": "^3.31.4",
+        "@tiptap/starter-kit": "^3.31.4",
+        "@tiptap/extension-placeholder": "^3.31.4",
+        "@tiptap/extension-character-count": "^3.31.4",
+        "ip-address": ">=10.7.4"
     }
 }

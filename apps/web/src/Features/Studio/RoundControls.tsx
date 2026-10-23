@@ -15,7 +15,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { Pencil } from "lucide-react";
-import { useEffect, useId, useState, type ReactNode, type SubmitEvent } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type SubmitEvent } from "react";
 import { toast } from "sonner";
 import { platformApi, type BinaryChoiceInput, type CreateRoundInput, type UpdateRoundInput } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
@@ -75,37 +75,48 @@ export function RoundFormDialog({ round, trigger }: RoundFormDialogProps): React
         enabled: round !== undefined && round.pollType === PollType.Binary && open
     });
 
+    const initialRoundKeyRef = useRef<string | null>(null);
+
     useEffect(() => {
-        if (open) {
+        if (!open) {
+            initialRoundKeyRef.current = null;
+            return;
+        }
+
+        const isInitialOpen = initialRoundKeyRef.current !== (round?.id ?? "new");
+        if (isInitialOpen) {
+            initialRoundKeyRef.current = round?.id ?? "new";
             setTitle(round?.title ?? "");
             setPollType(round?.pollType ?? PollType.RankedChoice);
             setOpensAt(toLocalInputValue(round?.opensAt ?? null));
             setClosesAt(toLocalInputValue(round?.closesAt ?? null));
-            if (round?.pollType === PollType.Binary && existingEntries.data?.data && existingEntries.data.data.length >= 2) {
-                const [first, second] = existingEntries.data.data;
-                if (first) {
-                    setChoiceA({
-                        id: first.id,
-                        title: first.title,
-                        description: first.description ?? "",
-                        file: null,
-                        existingMediaUrl: first.mediaUrl,
-                        mediaKey: null
-                    });
-                }
-                if (second) {
-                    setChoiceB({
-                        id: second.id,
-                        title: second.title,
-                        description: second.description ?? "",
-                        file: null,
-                        existingMediaUrl: second.mediaUrl,
-                        mediaKey: null
-                    });
-                }
-            } else if (round === undefined) {
+            if (round === undefined) {
                 setChoiceA({ title: "", description: "", file: null });
                 setChoiceB({ title: "", description: "", file: null });
+            }
+        }
+
+        if (round?.pollType === PollType.Binary && existingEntries.data?.data && existingEntries.data.data.length >= 2) {
+            const [first, second] = existingEntries.data.data;
+            if (first) {
+                setChoiceA((prev) => ({
+                    id: first.id,
+                    title: prev.id ? prev.title : first.title,
+                    description: prev.id ? prev.description : (first.description ?? ""),
+                    file: prev.file,
+                    existingMediaUrl: first.mediaUrl,
+                    mediaKey: prev.mediaKey
+                }));
+            }
+            if (second) {
+                setChoiceB((prev) => ({
+                    id: second.id,
+                    title: prev.id ? prev.title : second.title,
+                    description: prev.id ? prev.description : (second.description ?? ""),
+                    file: prev.file,
+                    existingMediaUrl: second.mediaUrl,
+                    mediaKey: prev.mediaKey
+                }));
             }
         }
     }, [open, round, existingEntries.data]);
@@ -404,6 +415,8 @@ export function RoundStatusSelect({ round }: { readonly round: RoundDto }): Reac
     const refresh = (): void => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.roundsAll });
         void queryClient.invalidateQueries({ queryKey: queryKeys.round(round.id) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.leaderboard(round.id) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.results(round.id) });
     };
 
     const update = useMutation({
@@ -465,6 +478,8 @@ export function RoundActions({ round, compact = false }: { readonly round: Round
     const refresh = (): void => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.roundsAll });
         void queryClient.invalidateQueries({ queryKey: queryKeys.round(round.id) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.leaderboard(round.id) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.results(round.id) });
     };
     const update = useMutation({
         mutationFn: (status: RoundStatus.Open | RoundStatus.Voting) => platformApi.updateRound(round.id, { status }),

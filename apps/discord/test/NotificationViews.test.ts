@@ -11,6 +11,7 @@ import {
     Role,
     RoundStatus,
     Specialty,
+    TicketEventKind,
     type PlatformNotification
 } from "@platform/contracts";
 import { MessageFlags } from "discord.js";
@@ -167,7 +168,7 @@ describe("telemetry alerts", () => {
             actor: admin
         });
         expect(text).toBe(
-            ["**User role updated**", "<@215537065863938049> is now contributor (animator, rigger), by <@212401207694721024>"].join("\n")
+            ["**User role updated**", "<@215537065863938049> is now Contributor (Animator, Rigger), by <@212401207694721024>"].join("\n")
         );
     });
 
@@ -360,6 +361,30 @@ describe("every notification", () => {
             ],
             actor: admin,
             note: "Updated Borda point conservation invariants"
+        },
+        {
+            type: NotificationType.AnnouncementPublished,
+            occurredAt,
+            title: "Production Update",
+            target: "general",
+            author: admin,
+            channels: ["1100000000000000001"]
+        },
+        { type: NotificationType.TicketConfigUpdated, occurredAt, actor: admin, removedHubs: [] },
+        { type: NotificationType.FeedbackSurveyOpened, occurredAt, surveyId: round.id },
+        { type: NotificationType.FeedbackSurveyClosed, occurredAt, surveyId: round.id },
+        { type: NotificationType.FeedbackOutcomeRecorded, occurredAt, surveyId: round.id },
+        {
+            type: NotificationType.TicketActivity,
+            occurredAt,
+            ticketId: round.id,
+            eventId: round.id,
+            kind: TicketEventKind.Closed,
+            actor: admin,
+            stage: null,
+            target: null,
+            note: null,
+            reply: null
         }
     ];
 
@@ -410,7 +435,7 @@ describe("every notification", () => {
         );
     });
 
-    it("announces phase unlocks and step progress to announcements channel", () => {
+    it("announces phase unlocks to announcements and routes step progress to telemetry", () => {
         const phaseUnlock = only({
             type: NotificationType.PipelineUpdated,
             occurredAt,
@@ -438,7 +463,7 @@ describe("every notification", () => {
             isPhaseTransition: false,
             actor: supervisor
         });
-        expect(stepProgress.purpose).toBe(ChannelPurpose.Announcements);
+        expect(stepProgress.purpose).toBe(ChannelPurpose.Telemetry);
         expect(stepProgress.text).toContain("Rigging and Deformation");
         expect(stepProgress.text).toContain("Phase 2: LookDev");
         expect(stepProgress.text).toContain("41% completed");

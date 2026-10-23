@@ -24,7 +24,7 @@ import { Role } from "./Domain/Roles.js";
 import { authRoutes } from "./Modules/Auth/AuthRoutes.js";
 import { ballotsRoutes } from "./Modules/Ballots/BallotsRoutes.js";
 import { entriesRoutes } from "./Modules/Entries/EntriesRoutes.js";
-import { healthRoutes } from "./Modules/Health/HealthRoutes.js";
+import { healthRoutes, probeRoutes } from "./Modules/Health/HealthRoutes.js";
 import { notificationRoutes } from "./Modules/Notifications/NotificationRoutes.js";
 import { pipelineRoutes } from "./Modules/Pipeline/PipelineRoutes.js";
 import { roundsRoutes } from "./Modules/Rounds/RoundsRoutes.js";
@@ -36,6 +36,14 @@ import { documentsRoutes } from "./Modules/Documents/DocumentsRoutes.js";
 import { verificationRoutes } from "./Modules/Verification/VerificationRoutes.js";
 import { usersRoutes } from "./Modules/Users/UsersRoutes.js";
 import { autoModRoutes } from "./Modules/AutoMod/AutoModRoutes.js";
+import { scriptsRoutes } from "./Modules/Scripts/ScriptsRoutes.js";
+import { discordSettingsRoutes } from "./Modules/DiscordSettings/DiscordSettingsRoutes.js";
+import { discordModerationRoutes } from "./Modules/DiscordModeration/DiscordModerationRoutes.js";
+import { departmentsRoutes } from "./Modules/Departments/DepartmentsRoutes.js";
+import { announcementsRoutes } from "./Modules/Announcements/AnnouncementsRoutes.js";
+import { ticketConfigRoutes } from "./Modules/Tickets/TicketConfigRoutes.js";
+import { ticketsRoutes } from "./Modules/Tickets/TicketsRoutes.js";
+import { feedbackRoutes } from "./Modules/CrewFeedback/FeedbackRoutes.js";
 
 export const apiPrefix = "/api/v1";
 
@@ -50,7 +58,6 @@ const perMinuteLimits: Readonly<Record<Role | "service" | "anonymous", number>> 
     [Role.Voter]: 120,
     [Role.Contributor]: 300,
     [Role.SeniorContributor]: 300,
-    [Role.Moderator]: 500,
     [Role.Supervisor]: 500,
     [Role.Admin]: 1000,
     [Role.SuperAdmin]: 1000,
@@ -126,7 +133,7 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
             "video/quicktime",
             "application/x-blender"
         ],
-        { parseAs: "buffer", bodyLimit: configuration.storage.deliverableMaxBytes },
+        { parseAs: "buffer", bodyLimit: configuration.storage.mediaMaxBytes },
         (_request, body, done) => {
             done(null, body);
         }
@@ -136,6 +143,11 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
     application.addHook("onRequest", async (request, reply) => {
         void reply.header("X-Request-Id", request.id);
         const header = request.headers.authorization;
+        const contentLength = Number(request.headers["content-length"]);
+        // reject oversized anonymous payloads before body parser buffers into memory
+        if (header === undefined && Number.isFinite(contentLength) && contentLength > 64 * 1024) {
+            throw new ApplicationError(413, ErrorCode.ValidationFailed, "Request payload too large.");
+        }
         if (header === undefined) {
             return;
         }
@@ -208,11 +220,11 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
         transformObject: jsonSchemaTransformObject
     });
 
-    await application.register(healthRoutes, { services });
+    await application.register(probeRoutes, { services });
 
     await application.register(
         async (api) => {
-            api.get("/openapi.json", { schema: { hide: true }, preHandler: requireRole(Role.Moderator) }, async () =>
+            api.get("/openapi.json", { schema: { hide: true }, preHandler: requireRole(Role.Supervisor) }, async () =>
                 application.swagger()
             );
             await api.register(healthRoutes, { services });
@@ -230,6 +242,14 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
             await api.register(verificationRoutes, { services });
             await api.register(documentsRoutes, { services });
             await api.register(autoModRoutes, { prefix: "/automod", services });
+            await api.register(scriptsRoutes, { prefix: "/scripts", services });
+            await api.register(discordSettingsRoutes, { services });
+            await api.register(discordModerationRoutes, { services });
+            await api.register(departmentsRoutes, { services });
+            await api.register(announcementsRoutes, { services });
+            await api.register(ticketConfigRoutes, { services });
+            await api.register(ticketsRoutes, { services });
+            await api.register(feedbackRoutes, { services });
         },
 
         { prefix: apiPrefix }

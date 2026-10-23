@@ -11,4 +11,14 @@ npm-debug.log*
 .fleet/
 .DS_Store
 .next/
+.data/
 next-env.d.ts
+AGENTS.md
+GEMINI.md
+gemini.md
+.agent/
+.agents/
+.gemini/
+apps/script/data/
+SECURITY_AUDIT_REPORT.md
+*AUDIT*.md

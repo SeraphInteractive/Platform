@@ -6,15 +6,15 @@ import { requireManageGuild, type BotContext, type SlashCommand } from "./Comman
 const helpText = [
     "## Commands",
     "**Voting**",
-    "`/rounds` • `/round` • `/vote` • `/ballot` • `/results` • `/telemetry`",
+    "`/rounds` - `/round` - `/results` - `/telemetry`",
     "**Tasks & Grab-Box**",
-    "`/available-tasks` • `/take-task` • `/release-task` • `/submit-task`",
+    "`/available-tasks` - `/take-task` - `/release-task` - `/submit-task`",
     "**Staff & Production**",
-    "`/create-task` • `/sync-task` • `/assign-role` • `/blacklist`",
+    "`/create-task` - `/sync-task` - `/assign-role` - `/blacklist`",
     "**Personal**",
-    "`/reminder set` • `/reminder list` • `/reminder cancel`",
+    "`/reminder set` - `/reminder list` - `/reminder cancel`",
     "**Server Administration**",
-    "`/bot-setup` • `/sync-roles` • `/bot-status` • `/help` • `/docs`"
+    "`/bot-setup` - `/sync-roles` - `/bot-status` - `/help` - `/docs`"
 ].join("\n");
 
 const docsText = [
@@ -61,13 +61,10 @@ export const statusCommand: SlashCommand = {
             `Platform API: ${health.healthy ? `healthy, ${health.latencyMs} ms` : "unreachable"}`,
             `Notification stream: ${stream.connected ? "connected" : "disconnected"}${stream.lastEventAt === null ? "" : `, last event ${when(stream.lastEventAt.toISOString())}`}`,
             "",
-            `Welcome: ${channel(ChannelPurpose.Welcome)}`,
             `Announcements: ${channel(ChannelPurpose.Announcements)}`,
-            `Telemetry: ${channel(ChannelPurpose.Telemetry)}`,
-            `Task forum: ${channel(ChannelPurpose.TaskForum)}`,
-            `Task submissions: ${channel(ChannelPurpose.TaskSubmissions)}`,
-            `Task log: ${channel(ChannelPurpose.TaskLogs)}`,
-            `Moderation logs: ${channel(ChannelPurpose.ModerationLogs)}`
+            `Rules: ${channel(ChannelPurpose.Rules)}`,
+            `Telemetry: ${context.configuration.telemetryWebhookUrl ? "webhook configured" : channel(ChannelPurpose.Telemetry)}`,
+            `Moderation logs: ${context.configuration.moderationLogsWebhookUrl ? "webhook configured" : channel(ChannelPurpose.ModerationLogs)}`
         ];
         await interaction.editReply({
             components: [panel(null, lines.join("\n"))],

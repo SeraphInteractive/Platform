@@ -5,11 +5,11 @@ import type { NotificationInput } from "../../src/Infrastructure/Notifications/N
 import { StreamNotifier } from "../../src/Infrastructure/Notifications/NotificationLog.js";
 import { DiscordOAuthError, type DiscordOAuthClient, type DiscordProfile } from "../../src/Infrastructure/Discord/DiscordOAuthClient.js";
 import { PresenceStatus, type PresenceProvider } from "../../src/Infrastructure/Discord/PresenceProvider.js";
-import type {
-    ObjectStorage,
-    PresignedUpload,
+import {
     StorageBucket,
-    StoredObjectMetadata
+    type ObjectStorage,
+    type PresignedUpload,
+    type StoredObjectMetadata
 } from "../../src/Infrastructure/Storage/ObjectStorage.js";
 
 export class FakeDiscordOAuthClient implements DiscordOAuthClient {
@@ -108,7 +108,42 @@ export class FakeObjectStorage implements ObjectStorage {
 
     public deleteObject(bucket: StorageBucket, key: string): Promise<void> {
         this.objects.delete(`${bucket}:${key}`);
+        this.buffers.delete(`${bucket}:${key}`);
         return Promise.resolve();
+    }
+
+    public moveObject(bucket: StorageBucket, sourceKey: string, destinationKey: string): Promise<void> {
+        const meta = this.objects.get(`${bucket}:${sourceKey}`);
+        if (meta !== undefined) {
+            this.objects.delete(`${bucket}:${sourceKey}`);
+            this.objects.set(`${bucket}:${destinationKey}`, meta);
+        }
+        const buf = this.buffers.get(`${bucket}:${sourceKey}`);
+        if (buf !== undefined) {
+            this.buffers.delete(`${bucket}:${sourceKey}`);
+            this.buffers.set(`${bucket}:${destinationKey}`, buf);
+        }
+        return Promise.resolve();
+    }
+
+    public getStorageUsage(): Promise<{ usedBytes: number; availableBytes: number | null }> {
+        let total = 0;
+        for (const meta of this.objects.values()) {
+            total += meta.sizeBytes;
+        }
+        return Promise.resolve({ usedBytes: total, availableBytes: 1024 * 1024 * 1024 });
+    }
+
+    public getVaultFolderUrl(bucket: StorageBucket, folderPath: string): string | null {
+        if (bucket !== StorageBucket.Deliverables) {
+            return null;
+        }
+        const clean = folderPath.replace(/^\/+/u, "").replace(/\/+$/u, "");
+        const encoded = clean
+            .split("/")
+            .map((seg) => encodeURIComponent(seg))
+            .join("/");
+        return `https://vault.test/apps/files/folders?dir=/${encoded}`;
     }
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { RoundStatus, ShotStatus, type UserDto } from "@platform/contracts";
-import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { Role, RoundStatus, ShotStatus, type UserDto } from "@platform/contracts";
+import { useQueryClient, useQuery, type QueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -27,9 +27,33 @@ import { useSession } from "@/Hooks/UseSession";
 import { hasAtLeast } from "@/Lib/Roles";
 import { isActivePath, navigationGroups, type NavigationItem } from "./Navigation";
 
-export function isVisible(item: NavigationItem, user: UserDto | null): boolean {
+export function useStudioAccess(user: UserDto | null): boolean {
+    const isAdmin = hasAtLeast(user, Role.Admin);
+    const { data: hasAccess } = useQuery({
+        queryKey: ["studio-access", user?.id],
+        queryFn: async () => {
+            const res = await fetch("/studio/script/api/session", { credentials: "same-origin" });
+            if (!res.ok) return false;
+            const payload = (await res.json().catch(() => null)) as {
+                data?: { isInvited?: boolean; acceptedInvites?: unknown[] } | null;
+            } | null;
+            return Boolean(payload?.data?.isInvited || (payload?.data?.acceptedInvites && payload.data.acceptedInvites.length > 0));
+        },
+        enabled: Boolean(user && !isAdmin),
+        staleTime: 60_000,
+        retry: false
+    });
+
+    return isAdmin || Boolean(hasAccess);
+}
+
+export function isVisible(item: NavigationItem, user: UserDto | null, _hasStudioAccess = false): boolean {
     if (item.requiresSession === true && user === null) {
         return false;
+    }
+    if (item.href === "/studio/script") {
+        // screenplay studio access is restricted strictly to admin and super_admin
+        return hasAtLeast(user, Role.Admin);
     }
     return item.minimumRole === undefined || hasAtLeast(user, item.minimumRole);
 }
@@ -49,6 +73,7 @@ function preloadData(queryClient: QueryClient, href: string): void {
 export function AppSidebar(): ReactNode {
     const pathname = usePathname();
     const { user } = useSession();
+    const hasStudioAccess = useStudioAccess(user);
     const { discordInviteUrl } = useSiteConfig();
     const { setOpenMobile } = useSidebar();
     const queryClient = useQueryClient();
@@ -62,7 +87,7 @@ export function AppSidebar(): ReactNode {
             </SidebarHeader>
             <SidebarContent>
                 {navigationGroups.map((group) => {
-                    const items = group.items.filter((item) => isVisible(item, user));
+                    const items = group.items.filter((item) => isVisible(item, user, hasStudioAccess));
                     if (items.length === 0) {
                         return null;
                     }

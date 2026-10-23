@@ -1,3 +1,4 @@
+import type { TicketListQuery } from "@platform/contracts";
 import type { PageQuery, ShotQuery } from "./PlatformApi";
 
 export const queryKeys = {
@@ -20,7 +21,8 @@ export const queryKeys = {
     shot: (shotId: string) => ["shot", shotId] as const,
     reviewQueue: (query: PageQuery) => ["reviews", query] as const,
     reviewsAll: ["reviews"] as const,
-    users: (query: PageQuery & { readonly role?: string }) => ["users", query] as const,
+    users: (query: PageQuery & { readonly role?: string; readonly specialty?: string; readonly discordId?: string }) =>
+        ["users", query] as const,
     usersAll: ["users"] as const,
     entry: (roundId: string, entryId: string) => ["round", roundId, "entry", entryId] as const,
     entryTelemetry: (roundId: string, entryId: string) => ["round", roundId, "telemetry", entryId] as const,
@@ -30,5 +32,22 @@ export const queryKeys = {
     documentRevisions: (slug: string) => ["document", slug, "revisions"] as const,
     legalAcceptance: ["legal-acceptance"] as const,
     specialtyHolders: ["users", "specialty-holders"] as const,
-    automodRules: ["automod-rules"] as const
+    automodRules: ["automod-rules"] as const,
+    departments: ["departments"] as const,
+    activity: (limit?: number) => ["telemetry", "activity", limit ?? 50] as const,
+    myModeration: ["users", "me", "moderation"] as const,
+    ticketConfig: ["tickets", "config"] as const,
+    ticketAccess: ["tickets", "access"] as const,
+    ticketSummary: ["tickets", "summary"] as const,
+    ticket: (ticketId: string) => ["tickets", "detail", ticketId] as const,
+    ticketsAll: ["tickets"] as const,
+    tickets: (query: TicketListQuery) => ["tickets", "list", query] as const,
+    ticketsList: ["tickets", "list"] as const,
+    discordDirectory: ["discord-directory"] as const,
+    positions: ["positions"] as const,
+    feedbackSettings: ["feedback", "settings"] as const,
+    feedbackSubjects: ["feedback", "subjects"] as const,
+    feedbackSurveys: (subjectId: string) => ["feedback", "subjects", subjectId, "surveys"] as const,
+    feedbackResults: (surveyId: string) => ["feedback", "surveys", surveyId] as const,
+    feedbackAll: ["feedback"] as const
 };

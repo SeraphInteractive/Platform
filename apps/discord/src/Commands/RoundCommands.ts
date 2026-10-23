@@ -131,7 +131,7 @@ export const roundCommands: readonly SlashCommand[] = [
     roundCommand("entries", "Browse the entries in a round", RoundView.Entries, false),
     roundCommand("leaderboard", "Show live standings for a round", RoundView.Leaderboard, false),
     roundCommand("results", "Show the certified results of a round", RoundView.Results, false, RoundStatus.Finalized),
-    roundCommand("telemetry", "Show raid telemetry for a round (moderators)", RoundView.Telemetry, true)
+    roundCommand("telemetry", "Show raid telemetry for a round (supervisors)", RoundView.Telemetry, true)
 ];
 
 export const roundSelectHandler: ComponentHandler = {

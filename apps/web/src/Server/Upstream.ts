@@ -29,8 +29,15 @@ export async function apiFetch(request: NextRequest, path: string, options: Upst
     if (options.token !== undefined && options.token !== null) {
         headers.set("Authorization", `Bearer ${options.token}`);
     }
+    const clientIp = request.headers.get("cf-connecting-ip") ?? request.headers.get("x-real-ip");
     const forwardedFor = request.headers.get("x-forwarded-for");
-    if (forwardedFor !== null && /^[0-9a-fA-F.:, ]{1,512}$/u.test(forwardedFor)) {
+    if (clientIp !== null && /^[0-9a-fA-F.:]{1,45}$/u.test(clientIp)) {
+        // append verified client ip to prevent rate limit bypasses via spoofed x-forwarded-for
+        headers.set(
+            "X-Forwarded-For",
+            forwardedFor !== null && /^[0-9a-fA-F.:, ]{1,512}$/u.test(forwardedFor) ? `${forwardedFor}, ${clientIp}` : clientIp
+        );
+    } else if (forwardedFor !== null && /^[0-9a-fA-F.:, ]{1,512}$/u.test(forwardedFor)) {
         headers.set("X-Forwarded-For", forwardedFor);
     }
     const requestId = request.headers.get("x-request-id");
@@ -41,12 +48,17 @@ export async function apiFetch(request: NextRequest, path: string, options: Upst
     const signals = [options.signal, options.timeout === false ? undefined : AbortSignal.timeout(upstreamTimeoutMs)].filter(
         (signal): signal is AbortSignal => signal !== undefined
     );
-    return fetch(url, {
+    const init: RequestInit = {
         method: options.method,
         headers,
         body: options.body,
         redirect: "manual",
         cache: "no-store",
         signal: signals.length === 0 ? undefined : AbortSignal.any(signals)
-    });
+    };
+    if (options.body !== undefined && options.body !== null && typeof options.body !== "string") {
+        // duplex required by node fetch for streaming request bodies
+        (init as Record<string, unknown>).duplex = "half";
+    }
+    return fetch(url, init);
 }

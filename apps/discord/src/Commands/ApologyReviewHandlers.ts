@@ -4,6 +4,7 @@ import {
     ButtonBuilder,
     ButtonStyle,
     InteractionContextType,
+    MessageFlags,
     ModalBuilder,
     PermissionFlagsBits,
     SlashCommandBuilder,
@@ -14,7 +15,7 @@ import {
     type ModalSubmitInteraction,
     type SendableChannels
 } from "discord.js";
-import { Accent, ephemeral, message, notice, panel, plain } from "../Discord/Ui.js";
+import { Accent, asEdit, ephemeral, message, notice, panel, plain, type V2Message } from "../Discord/Ui.js";
 import { isLeadership, studioRoles } from "../Services/StudioRoles.js";
 import { ChannelPurpose } from "../State/SettingsStore.js";
 import type { BotContext, ComponentHandler, SlashCommand } from "./Command.js";
@@ -35,13 +36,23 @@ export const banApologyCommand: SlashCommand = {
         )
         .toJSON(),
     async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        const respond = async (payload: V2Message): Promise<void> => {
+            if (typeof interaction.editReply === "function") {
+                await interaction.editReply(asEdit(payload));
+            } else {
+                await interaction.reply(payload);
+            }
+        };
+
         const apologyText = interaction.options.getString("apology", true).trim();
         const guild =
             interaction.client.guilds.cache.get(context.configuration.guildId) ??
             (await interaction.client.guilds.fetch(context.configuration.guildId).catch(() => null));
 
         if (guild === null) {
-            await interaction.reply(notice("Server could not be reached.", Accent.Danger));
+            await respond(notice("Server could not be reached.", Accent.Danger));
             return;
         }
 
@@ -50,18 +61,18 @@ export const banApologyCommand: SlashCommand = {
             .then(() => true)
             .catch(() => false);
         if (!isBannedOnDiscord) {
-            await interaction.reply(notice("You are not currently banned from the server.", Accent.Warning));
+            await respond(notice("You are not currently banned from the server.", Accent.Warning));
             return;
         }
 
         const record = context.warnings.getRecord(interaction.user.id);
         if (record === undefined || record.offenceLevel < 3) {
-            await interaction.reply(notice("Only members with an active ban can submit an apology review.", Accent.Warning));
+            await respond(notice("Only members with an active ban can submit an apology review.", Accent.Warning));
             return;
         }
 
         if (record.apology.status === "pending") {
-            await interaction.reply(notice("You already have an apology review pending supervisor evaluation.", Accent.Warning));
+            await respond(notice("You already have an apology review pending supervisor evaluation.", Accent.Warning));
             return;
         }
 
@@ -69,11 +80,11 @@ export const banApologyCommand: SlashCommand = {
             context.warnings.submitApology(interaction.user.id, apologyText);
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : "Failed to submit apology.";
-            await interaction.reply(notice(msg, Accent.Danger));
+            await respond(notice(msg, Accent.Danger));
             return;
         }
 
-        await interaction.reply(
+        await respond(
             message(
                 panel(
                     Accent.Success,
@@ -304,7 +315,7 @@ export const apologyDecisionButtonHandler: ComponentHandler = {
                                 `Your ban apology has been reviewed and **APPROVED** by <@${interaction.user.id}>.\n\n` +
                                     `Your offences and warnings have been **automatically reset**.\n` +
                                     `Please review the server rules to avoid future disciplinary action:\n` +
-                                    `• [Discord Rules](https://dev-api.seraphinteractive.com/rules)`
+                                    `• [Discord Rules](https://dev-api.projectstairway.net/rules)`
                             )
                         )
                     )

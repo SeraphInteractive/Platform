@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleUser, LogIn, LogOut, Moon, Sun, UserRound } from "lucide-react";
+import { CircleUser, LogIn, LogOut, Moon, Sun } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -84,12 +84,6 @@ function UserMenu(): ReactNode {
                     <Link href="/profile">
                         <CircleUser />
                         Profile
-                    </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                    <Link href="/me">
-                        <UserRound />
-                        My work
                     </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem

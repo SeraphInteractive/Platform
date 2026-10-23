@@ -50,22 +50,25 @@ export const studioRoles: readonly StudioRole[] = Object.freeze([
     { name: "Producer", tier: StudioTier.Executive, color: 0xe74c3c, specialty: Specialty.Producer },
     { name: "Creative Director", tier: StudioTier.Executive, color: 0x9b59b6, specialty: Specialty.CreativeDirector },
     { name: "Production Manager", tier: StudioTier.Executive, color: 0xc0392b, specialty: Specialty.ProductionManager },
+    { name: "Technical Director", tier: StudioTier.Executive, color: 0x3498db, specialty: Specialty.TechnicalDirector },
     { name: "Admin", tier: StudioTier.Executive, color: 0x992d22 },
-    { name: "Technical Director", tier: StudioTier.Department, color: 0x3498db, specialty: Specialty.TechnicalDirector },
     { name: "Art Director", tier: StudioTier.Department, color: 0xe67e22, specialty: Specialty.ArtDirector },
-    { name: "Editorial Supervisor", tier: StudioTier.Department, color: 0x8e44ad, specialty: Specialty.EditorialSupervisor },
-    { name: "Layout / Previs Lead", tier: StudioTier.Department, color: 0x9c27b0, specialty: Specialty.LayoutPrevisLead },
-    { name: "Modelling Supervisor", tier: StudioTier.Department, color: 0x1abc9c, specialty: Specialty.ModellingSupervisor },
-    { name: "Rigging Supervisor", tier: StudioTier.Department, color: 0x2ecc71, specialty: Specialty.RiggingSupervisor },
-    { name: "Surfacing / LookDev Lead", tier: StudioTier.Department, color: 0x16a085, specialty: Specialty.SurfacingLookDevLead },
-    { name: "Animation Supervisor", tier: StudioTier.Department, color: 0xf39c12, specialty: Specialty.AnimationSupervisor },
-    { name: "CFX and VFX Supervisor", tier: StudioTier.Department, color: 0xe91e63, specialty: Specialty.CfxVfxSupervisor },
     {
-        name: "Lighting and Compositing Supervisor",
+        name: "Modeling and Surfacing Lead",
+        tier: StudioTier.Department,
+        color: 0x1abc9c,
+        specialty: Specialty.ModelingAndSurfacingLead
+    },
+    { name: "Rigging Supervisor", tier: StudioTier.Department, color: 0x2ecc71, specialty: Specialty.RiggingSupervisor },
+    { name: "Layout / Previs Lead", tier: StudioTier.Department, color: 0x9c27b0, specialty: Specialty.LayoutPrevisLead },
+    { name: "Animation Supervisor", tier: StudioTier.Department, color: 0xf39c12, specialty: Specialty.AnimationSupervisor },
+    {
+        name: "Lighting and VFX Lead",
         tier: StudioTier.Department,
         color: 0xf1c40f,
-        specialty: Specialty.LightingCompositingSupervisor
+        specialty: Specialty.LightingAndVfxLead
     },
+    { name: "Editorial Supervisor", tier: StudioTier.Department, color: 0x8e44ad, specialty: Specialty.EditorialSupervisor },
     { name: "Sound Director", tier: StudioTier.Department, color: 0x00bcd4, specialty: Specialty.SoundDirector },
     { name: "Supervisor", tier: StudioTier.Department, color: 0x1abc9c },
     { name: "Media Team", tier: StudioTier.Department, color: 0x9b59b6, specialty: Specialty.MediaTeam },
@@ -86,7 +89,24 @@ export const studioRoles: readonly StudioRole[] = Object.freeze([
 ]);
 
 export const contributorRoleName = "General Contributors";
-export const legacyStudioRoleNames: readonly string[] = Object.freeze(["Observer", "observer", "Unverified", "unverified"]);
+export const legacyStudioRoleNames: readonly string[] = Object.freeze([
+    "Observer",
+    "observer",
+    "Unverified",
+    "unverified",
+    "Modelling Supervisor",
+    "modelling supervisor",
+    "Surfacing / LookDev Lead",
+    "surfacing / lookdev lead",
+    "CFX and VFX Supervisor",
+    "cfx and vfx supervisor",
+    "Lighting and Compositing Supervisor",
+    "lighting and compositing supervisor",
+    "Moderator",
+    "moderator",
+    "Mod",
+    "mod"
+]);
 
 export const roleAliases: Readonly<Record<string, string>> = {
     supervisors: "Supervisor",
@@ -129,7 +149,37 @@ export const roleAliases: Readonly<Record<string, string>> = {
     producer: "Producer",
     producers: "Producer",
     admin: "Admin",
-    admins: "Admin"
+    admins: "Admin",
+    td: "Technical Director",
+    technicaldirector: "Technical Director",
+    technicaldirectors: "Technical Director",
+    artdirector: "Art Director",
+    artdirectors: "Art Director",
+    modelingandsurfacinglead: "Modeling and Surfacing Lead",
+    modellingsurfacinglead: "Modeling and Surfacing Lead",
+    modellingsupervisor: "Modeling and Surfacing Lead",
+    modelingsupervisor: "Modeling and Surfacing Lead",
+    surfacinglookdevlead: "Modeling and Surfacing Lead",
+    surfacinglead: "Modeling and Surfacing Lead",
+    riggingsupervisor: "Rigging Supervisor",
+    riggingsupervisors: "Rigging Supervisor",
+    layoutprevislead: "Layout / Previs Lead",
+    animationsupervisor: "Animation Supervisor",
+    animationsupervisors: "Animation Supervisor",
+    lightingandvfxlead: "Lighting and VFX Lead",
+    lightingvfxlead: "Lighting and VFX Lead",
+    cfxandvfxsupervisor: "Lighting and VFX Lead",
+    cfxvfxsupervisor: "Lighting and VFX Lead",
+    lightingandcompositingsupervisor: "Lighting and VFX Lead",
+    lightingcompositingsupervisor: "Lighting and VFX Lead",
+    editorialsupervisor: "Editorial Supervisor",
+    editorialsupervisors: "Editorial Supervisor",
+    sounddirector: "Sound Director",
+    sounddirectors: "Sound Director",
+    creativedirector: "Creative Director",
+    creativedirectors: "Creative Director",
+    productionmanager: "Production Manager",
+    productionmanagers: "Production Manager"
 };
 
 export function normalizeName(name: string): string {

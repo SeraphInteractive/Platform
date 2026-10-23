@@ -47,6 +47,7 @@ export class TokenService {
                 discordId: users.discordId,
                 discordUsername: users.discordUsername,
                 role: users.role,
+                specialties: users.specialties,
                 isBlacklisted: users.isBlacklisted,
                 termsVersion: users.termsVersion,
                 emailVerifiedAt: users.emailVerifiedAt
@@ -79,6 +80,7 @@ export class TokenService {
                 discordId: row.discordId,
                 discordUsername: row.discordUsername,
                 role: row.role,
+                specialties: row.specialties,
                 isBlacklisted: row.isBlacklisted,
                 termsVersion: row.termsVersion,
                 isVerified: row.emailVerifiedAt !== null
@@ -93,6 +95,7 @@ export class TokenService {
                 discordId: users.discordId,
                 discordUsername: users.discordUsername,
                 role: users.role,
+                specialties: users.specialties,
                 isBlacklisted: users.isBlacklisted,
                 termsVersion: users.termsVersion,
                 emailVerifiedAt: users.emailVerifiedAt
@@ -111,6 +114,7 @@ export class TokenService {
                       discordId: user.discordId,
                       discordUsername: user.discordUsername,
                       role: user.role,
+                      specialties: user.specialties,
                       isBlacklisted: user.isBlacklisted,
                       termsVersion: user.termsVersion,
                       isVerified: user.emailVerifiedAt !== null

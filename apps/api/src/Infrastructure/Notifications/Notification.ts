@@ -40,6 +40,17 @@ export function roundReferenceOf(round: Pick<VotingRoundRecord, "id" | "title" |
     return { id: round.id, title: round.title, pollType: round.pollType };
 }
 
-export function shotReferenceOf(shot: Pick<ShotRecord, "id" | "shotCode" | "title" | "sceneNumber" | "difficultyTier">): ShotReference {
-    return { id: shot.id, code: shot.shotCode, title: shot.title, sceneNumber: shot.sceneNumber, difficulty: shot.difficultyTier };
+export function shotReferenceOf(
+    shot: Pick<ShotRecord, "id" | "shotCode" | "title" | "sceneNumber" | "difficultyTier"> &
+        Partial<Pick<ShotRecord, "shotType" | "departmentId">>
+): ShotReference {
+    return {
+        id: shot.id,
+        code: shot.shotCode,
+        title: shot.title,
+        sceneNumber: shot.sceneNumber,
+        difficulty: shot.difficultyTier,
+        shotType: shot.shotType,
+        departmentId: shot.departmentId ?? null
+    };
 }

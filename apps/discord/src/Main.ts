@@ -1,4 +1,4 @@
-import { Role } from "@platform/contracts";
+import { NotificationType, Role } from "@platform/contracts";
 import { ActivityType, Client, Events, GatewayIntentBits, REST, Routes, type SendableChannels } from "discord.js";
 import { NotificationConsumer } from "./Api/NotificationConsumer.js";
 import { PlatformApiClient } from "./Api/PlatformApiClient.js";
@@ -6,6 +6,7 @@ import type { BotContext } from "./Commands/Command.js";
 import { createLogger } from "./Common/Logger.js";
 import { ConfigurationError, loadBotConfiguration } from "./Configuration/BotConfiguration.js";
 import { Accent, message, panel } from "./Discord/Ui.js";
+import { botAvatarBuffer } from "./Discord/BotAvatar.js";
 import { InteractionRouter, slashCommands } from "./Interactions/InteractionRouter.js";
 import { NotificationDispatcher } from "./Services/NotificationDispatcher.js";
 import { ReminderScheduler } from "./Services/ReminderScheduler.js";
@@ -15,6 +16,8 @@ import { ProfanityFilter } from "./Services/ProfanityFilter.js";
 import { ServerProvisioner } from "./Services/ServerProvisioner.js";
 import { syncMemberStudioRoles } from "./Services/StudioRoles.js";
 import { TaskForum } from "./Services/TaskForum.js";
+import { TicketDesk } from "./Services/TicketDesk.js";
+import { CrewCheckIns } from "./Services/CrewCheckIns.js";
 import { ReminderStore } from "./State/ReminderStore.js";
 import { ChannelPurpose, SettingsStore } from "./State/SettingsStore.js";
 import { WarningStore } from "./State/WarningStore.js";
@@ -22,10 +25,11 @@ import { WarningStore } from "./State/WarningStore.js";
 async function main(): Promise<void> {
     const configuration = loadBotConfiguration();
     const logger = createLogger(configuration.logLevel, configuration.logFormat === "pretty");
-    const settings = new SettingsStore(configuration.dataDirectory);
+    const api = new PlatformApiClient(configuration.apiBaseUrl, configuration.serviceToken, logger);
+    const settings = new SettingsStore(configuration.dataDirectory, api, configuration.guildId);
     await settings.load();
 
-    const warnings = new WarningStore(configuration.dataDirectory);
+    const warnings = new WarningStore(configuration.dataDirectory, api);
     await warnings.load();
 
     const client = new Client({
@@ -36,11 +40,48 @@ async function main(): Promise<void> {
             GatewayIntentBits.MessageContent
         ]
     });
-    const api = new PlatformApiClient(configuration.apiBaseUrl, configuration.serviceToken, logger);
     const forum = new TaskForum(client, configuration.guildId, settings, api, logger);
-    const dispatcher = new NotificationDispatcher(client, configuration.guildId, settings, forum, logger);
-    const consumer = new NotificationConsumer(api, settings, (notification) => dispatcher.handle(notification), logger);
-    const provisioner = new ServerProvisioner(settings, logger);
+    const webhookUrls = {
+        telemetry: configuration.telemetryWebhookUrl,
+        moderationLogs: configuration.moderationLogsWebhookUrl,
+        rules: configuration.rulesWebhookUrl
+    };
+    const dispatcher = new NotificationDispatcher(
+        client,
+        configuration.guildId,
+        settings,
+        forum,
+        logger,
+        webhookUrls,
+        api,
+        configuration.webAppUrl
+    );
+    const tickets = new TicketDesk(client, configuration.guildId, api, logger, configuration.webAppUrl);
+    const checkIns = new CrewCheckIns(client, configuration.guildId, api, logger);
+    const consumer = new NotificationConsumer(
+        api,
+        settings,
+        (notification) => {
+            if (notification.type === NotificationType.TicketConfigUpdated) {
+                return tickets.onConfigChanged(notification);
+            }
+            if (notification.type === NotificationType.TicketActivity) {
+                return tickets.handleActivity(notification);
+            }
+            if (notification.type === NotificationType.FeedbackSurveyOpened) {
+                return checkIns.opened(notification.surveyId);
+            }
+            if (notification.type === NotificationType.FeedbackSurveyClosed) {
+                return checkIns.closed(notification.surveyId);
+            }
+            if (notification.type === NotificationType.FeedbackOutcomeRecorded) {
+                return checkIns.outcome(notification.surveyId);
+            }
+            return dispatcher.handle(notification);
+        },
+        logger
+    );
+    const provisioner = new ServerProvisioner(settings, logger, configuration.announcementsChannelId, api, webhookUrls);
     const reminders = new ReminderStore(configuration.dataDirectory);
     await reminders.load();
     const reminderScheduler = new ReminderScheduler(client, reminders, logger);
@@ -60,6 +101,7 @@ async function main(): Promise<void> {
         roleScheduler,
         warnings,
         profanityFilter,
+        tickets,
         logger
     };
     const router = new InteractionRouter(context);
@@ -75,6 +117,12 @@ async function main(): Promise<void> {
         void (async (): Promise<void> => {
             logger.info({ user: ready.user.tag }, "connected to discord");
             ready.user.setPresence({ activities: [{ name: "voting rounds", type: ActivityType.Watching }], status: "online" });
+            if (ready.user.avatar === null && botAvatarBuffer !== undefined) {
+                // upload brand avatar to bot user profile on boot if unset
+                await ready.user.setAvatar(botAvatarBuffer).catch((err: unknown) => {
+                    logger.warn({ err }, "failed to set bot avatar on discord");
+                });
+            }
             const guild = await ready.guilds.fetch(configuration.guildId).catch(() => null);
             if (guild === null) {
                 logger.error({ guild: configuration.guildId }, "the bot is not a member of its configured server");
@@ -86,6 +134,10 @@ async function main(): Promise<void> {
             await forum.load().catch((error: unknown) => {
                 logger.warn({ err: error }, "failed to load task thread bindings");
             });
+            await tickets.start(guild).catch((error: unknown) => {
+                logger.warn({ err: error }, "failed to start the ticket desk");
+            });
+            await checkIns.start();
             consumer.start();
             reminderScheduler.start();
             roleScheduler.start();
@@ -107,10 +159,16 @@ async function main(): Promise<void> {
 
     client.on(Events.MessageCreate, (msg) => {
         void profanityFilter.inspectMessage(msg);
+        void tickets.recordMessage(msg);
     });
 
     client.on(Events.MessageUpdate, (_oldMsg, newMsg) => {
         void profanityFilter.inspectMessage(newMsg);
+        void tickets.recordEdit(newMsg);
+    });
+
+    client.on(Events.MessageDelete, (msg) => {
+        void tickets.recordDelete(msg);
     });
 
     client.on(Events.GuildMemberAdd, (member) => {
@@ -125,6 +183,7 @@ async function main(): Promise<void> {
                     logger.info({ member: member.id }, "banned blacklisted member upon joining");
                     return;
                 }
+                tickets.scheduleDirectorySync(member.guild);
                 if (user !== null) {
                     await syncMemberStudioRoles(member, user.role, user.specialties, "Member joined/rejoined");
                 } else {
@@ -182,6 +241,35 @@ async function main(): Promise<void> {
         })();
     });
 
+    client.on(Events.ChannelCreate, (channel) => {
+        tickets.scheduleDirectorySync(channel.guild);
+    });
+    client.on(Events.ChannelUpdate, (_previous, channel) => {
+        if (!channel.isDMBased()) {
+            tickets.scheduleDirectorySync(channel.guild);
+        }
+    });
+    client.on(Events.ChannelDelete, (channel) => {
+        if (!channel.isDMBased()) {
+            tickets.scheduleDirectorySync(channel.guild);
+        }
+    });
+    client.on(Events.GuildRoleCreate, (role) => {
+        tickets.scheduleDirectorySync(role.guild);
+    });
+    client.on(Events.GuildRoleUpdate, (_previous, role) => {
+        tickets.scheduleDirectorySync(role.guild);
+    });
+    client.on(Events.GuildMemberUpdate, (_previous, member) => {
+        tickets.scheduleDirectorySync(member.guild);
+    });
+    client.on(Events.GuildMemberRemove, (member) => {
+        tickets.scheduleDirectorySync(member.guild);
+    });
+    client.on(Events.GuildRoleDelete, (role) => {
+        tickets.scheduleDirectorySync(role.guild);
+    });
+
     client.on(Events.Error, (error) => {
         logger.error({ err: error }, "discord client error");
     });
@@ -201,6 +289,7 @@ async function main(): Promise<void> {
         reminderScheduler.stop();
         roleScheduler.stop();
         profanityFilter.stop();
+        tickets.stop();
         void client.destroy().finally(() => process.exit(0));
     };
     process.once("SIGTERM", () => {

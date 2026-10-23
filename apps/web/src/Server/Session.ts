@@ -91,5 +91,6 @@ export function isSameOrigin(request: NextRequest): boolean {
             return false;
         }
     }
-    return true;
+    // reject requests that omit all origin indicators to prevent null-origin CSRF bypasses
+    return false;
 }
