@@ -169,6 +169,13 @@
       "when": 1792600000000,
       "tag": "0023_add_post_production_shot_types",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792755479189,
+      "tag": "0024_populate_post_production_shot_types",
+      "breakpoints": true
     }
   ]
 }
