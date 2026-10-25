@@ -16,6 +16,7 @@ import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
 import { botAvatarBuffer, resolveBotAvatarUrl } from "../Discord/BotAvatar.js";
 import { Accent, capitalize, message, panel, person, plain, when } from "../Discord/Ui.js";
+import { discordRestOptions } from "../Discord/Rest.js";
 import { renderNotification, renderRulesMessage } from "../Views/NotificationViews.js";
 import { reviewCard, threadUpdate } from "../Views/TaskViews.js";
 import { syncMemberStudioRoles } from "./StudioRoles.js";
@@ -69,14 +70,16 @@ export class NotificationDispatcher {
         private readonly api?: PlatformApiClient,
         private readonly webAppUrl?: string
     ) {
+        // bypass node 24 undici symbol headers crash
+        const webhookOptions = discordRestOptions;
         if (webhooks.telemetry && isSafeDiscordWebhookUrl(webhooks.telemetry)) {
-            this.webhookClients[ChannelPurpose.Telemetry] = new WebhookClient({ url: webhooks.telemetry });
+            this.webhookClients[ChannelPurpose.Telemetry] = new WebhookClient({ url: webhooks.telemetry }, webhookOptions);
         }
         if (webhooks.moderationLogs && isSafeDiscordWebhookUrl(webhooks.moderationLogs)) {
-            this.webhookClients[ChannelPurpose.ModerationLogs] = new WebhookClient({ url: webhooks.moderationLogs });
+            this.webhookClients[ChannelPurpose.ModerationLogs] = new WebhookClient({ url: webhooks.moderationLogs }, webhookOptions);
         }
         if (webhooks.rules && isSafeDiscordWebhookUrl(webhooks.rules)) {
-            this.webhookClients[ChannelPurpose.Rules] = new WebhookClient({ url: webhooks.rules });
+            this.webhookClients[ChannelPurpose.Rules] = new WebhookClient({ url: webhooks.rules }, webhookOptions);
         }
     }
 
@@ -97,7 +100,10 @@ export class NotificationDispatcher {
                 const depts = await this.api.listDepartments();
                 for (const dept of depts) {
                     if (dept.discordLogsWebhookUrl && isSafeDiscordWebhookUrl(dept.discordLogsWebhookUrl)) {
-                        this.departmentLogsWebhooks.set(dept.slug, new WebhookClient({ url: dept.discordLogsWebhookUrl }));
+                        this.departmentLogsWebhooks.set(
+                            dept.slug,
+                            new WebhookClient({ url: dept.discordLogsWebhookUrl }, discordRestOptions)
+                        );
                     }
                 }
                 this.lastDeptSync = Date.now();
@@ -181,14 +187,14 @@ export class NotificationDispatcher {
                         // align existing webhook entity label and avatar with stairway brand
                         existing.edit(editPayload).catch(() => undefined);
                     }
-                    const client = new WebhookClient({ url: existing.url });
+                    const client = new WebhookClient({ url: existing.url }, discordRestOptions);
                     this.webhookClients[purpose] = client;
                     return client;
                 }
                 if (typeof ch.createWebhook === "function") {
                     const created = await ch.createWebhook(editPayload);
                     if (created?.url && isSafeDiscordWebhookUrl(created.url)) {
-                        const client = new WebhookClient({ url: created.url });
+                        const client = new WebhookClient({ url: created.url }, discordRestOptions);
                         this.webhookClients[purpose] = client;
                         return client;
                     }

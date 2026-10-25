@@ -16,6 +16,7 @@ import {
 import type { Logger } from "pino";
 import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
 import { botAvatarBuffer } from "../Discord/BotAvatar.js";
+import { discordRestOptions } from "../Discord/Rest.js";
 import { message, panel, plain } from "../Discord/Ui.js";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
 import { htmlToDiscordMarkdown } from "../Views/NotificationViews.js";
@@ -976,7 +977,7 @@ export class ServerProvisioner {
 
         if (this.webhooks?.rules !== undefined) {
             try {
-                const webhook = new WebhookClient({ url: this.webhooks.rules });
+                const webhook = new WebhookClient({ url: this.webhooks.rules }, discordRestOptions);
                 const existingId = this.settings.rulesMessageId;
                 let edited = false;
                 if (existingId !== undefined) {

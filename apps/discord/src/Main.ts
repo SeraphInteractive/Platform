@@ -7,6 +7,7 @@ import { createLogger } from "./Common/Logger.js";
 import { ConfigurationError, loadBotConfiguration } from "./Configuration/BotConfiguration.js";
 import { Accent, message, panel } from "./Discord/Ui.js";
 import { botAvatarBuffer } from "./Discord/BotAvatar.js";
+import { discordRestOptions } from "./Discord/Rest.js";
 import { InteractionRouter, slashCommands } from "./Interactions/InteractionRouter.js";
 import { NotificationDispatcher } from "./Services/NotificationDispatcher.js";
 import { ReminderScheduler } from "./Services/ReminderScheduler.js";
@@ -38,7 +39,8 @@ async function main(): Promise<void> {
             GatewayIntentBits.GuildMembers,
             GatewayIntentBits.GuildMessages,
             GatewayIntentBits.MessageContent
-        ]
+        ],
+        ...discordRestOptions
     });
     const forum = new TaskForum(client, configuration.guildId, settings, api, logger);
     const webhookUrls = {
