@@ -131,14 +131,41 @@ describe("announcements API", () => {
                 username?: string;
                 avatar_url?: string;
                 content?: string;
+                components?: { type: number; content?: string }[];
                 allowed_mentions?: { parse?: string[]; roles?: string[]; users?: string[] };
             };
             expect(sentPayload.username).toBe("Project Stairway");
             expect(sentPayload.avatar_url).toMatch(/\/branding\/bot-pfp\.png$/u);
-            expect(sentPayload.content).toBe("@everyone <@&100000000000000014> <@100000000000000015>");
+            expect(sentPayload.content).toBeUndefined();
+            expect(sentPayload.components?.[0]?.content).toBe("@everyone <@&100000000000000014> <@100000000000000015>");
             expect(sentPayload.allowed_mentions?.parse).toContain("everyone");
             expect(sentPayload.allowed_mentions?.roles).toContain("100000000000000014");
             expect(sentPayload.allowed_mentions?.users).toContain("100000000000000015");
+        } finally {
+            globalThis.fetch = globalFetch;
+        }
+    });
+
+    it("returns 422 when all target webhooks fail to dispatch", async () => {
+        const globalFetch = globalThis.fetch;
+        globalThis.fetch = vi.fn<typeof globalThis.fetch>(async () => new Response("error from discord", { status: 400 }));
+
+        try {
+            const failedPublish = await context.application.inject({
+                method: "POST",
+                url: "/api/v1/announcements",
+                headers: supervisor.headers,
+                payload: {
+                    target: "department:animation",
+                    title: "Test Failure",
+                    content: "This should fail with 422."
+                }
+            });
+
+            expect(failedPublish.statusCode).toBe(422);
+            const body = json<{ code: string; detail: string }>(failedPublish);
+            expect(body.code).toBe("INTERNAL_ERROR");
+            expect(body.detail).toContain("Failed to publish announcement to any channels");
         } finally {
             globalThis.fetch = globalFetch;
         }

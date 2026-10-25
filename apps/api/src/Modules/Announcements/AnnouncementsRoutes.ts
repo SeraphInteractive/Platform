@@ -79,33 +79,39 @@ export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceConta
                     ? "https://dev-app.projectstairway.net/branding/bot-pfp.png"
                     : `${baseAppUrl}/branding/bot-pfp.png`;
 
-            // discord components v2 layout using container with stairway blue accent bar and text displays
+            const components: { type: number; accent_color?: number; content?: string; components?: unknown[] }[] = [];
+            if (pingText.length > 0) {
+                // components v2 rejects top-level content, mentions must live in text display
+                components.push({
+                    type: 10,
+                    content: pingText
+                });
+            }
+            components.push({
+                type: 17,
+                accent_color: embedColor,
+                components: [
+                    {
+                        type: 10,
+                        content: `# ${title.trim()}`
+                    },
+                    {
+                        type: 10,
+                        content: content.trim()
+                    },
+                    {
+                        type: 10,
+                        content: `-# ~ ${authorName}`
+                    }
+                ]
+            });
+
             const webhookPayload = {
                 username: "Project Stairway",
                 avatar_url: botAvatarUrl,
-                flags: 32768, // IS_COMPONENTS_V2
-                ...(pingText.length > 0 ? { content: pingText } : {}),
+                flags: 32768,
                 allowed_mentions: allowedMentions,
-                components: [
-                    {
-                        type: 17, // container
-                        accent_color: embedColor,
-                        components: [
-                            {
-                                type: 10, // text display
-                                content: `# ${title.trim()}`
-                            },
-                            {
-                                type: 10, // text display
-                                content: content.trim()
-                            },
-                            {
-                                type: 10, // text display
-                                content: `-# ~ ${authorName}`
-                            }
-                        ]
-                    }
-                ]
+                components
             };
 
             const webhookTargets: { name: string; url: string }[] = [];
@@ -184,7 +190,11 @@ export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceConta
                         if (response.ok || response.status === 204) {
                             dispatchedChannels.push(item.name);
                         } else {
-                            request.log.warn({ target: item.name, status: response.status }, "failed to dispatch announcement webhook");
+                            const errorBody = await response.text().catch(() => "");
+                            request.log.warn(
+                                { target: item.name, status: response.status, body: errorBody },
+                                "failed to dispatch announcement webhook"
+                            );
                             errors.push(item.name);
                         }
                     } catch (err: unknown) {
@@ -195,8 +205,9 @@ export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceConta
             );
 
             if (dispatchedChannels.length === 0 && errors.length > 0) {
+                // use 422 to prevent cloudflare 502 bad gateway edge error page interception
                 throw new ApplicationError(
-                    502,
+                    422,
                     ErrorCode.InternalError,
                     `Failed to publish announcement to any channels: ${errors.join(", ")}`
                 );
