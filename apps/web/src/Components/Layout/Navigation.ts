@@ -76,7 +76,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
             },
             {
                 href: "/studio/script" as Route,
-                label: "Studio",
+                label: "Desk",
                 description: "Screenplay studio and writer room",
                 icon: Clapperboard,
                 minimumRole: Role.Admin
@@ -149,7 +149,7 @@ export const segmentLabels: Readonly<Record<string, string>> = {
     profile: "Profile",
     guidelines: "Guidelines",
     studio: "Studio",
-    script: "Studio",
+    script: "Desk",
     rounds: "Rounds",
     telemetry: "Telemetry",
     reviews: "Reviews",
