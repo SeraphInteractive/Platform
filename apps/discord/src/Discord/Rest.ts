@@ -10,3 +10,5 @@ export const discordRestOptions = {
         makeRequest: makeFetchRequest
     }
 } as const;
+
+export const discordRest = discordRestOptions.rest;

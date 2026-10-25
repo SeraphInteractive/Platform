@@ -7,7 +7,7 @@ import { createLogger } from "./Common/Logger.js";
 import { ConfigurationError, loadBotConfiguration } from "./Configuration/BotConfiguration.js";
 import { Accent, message, panel } from "./Discord/Ui.js";
 import { botAvatarBuffer } from "./Discord/BotAvatar.js";
-import { discordRestOptions } from "./Discord/Rest.js";
+import { discordRest, discordRestOptions } from "./Discord/Rest.js";
 import { InteractionRouter, slashCommands } from "./Interactions/InteractionRouter.js";
 import { NotificationDispatcher } from "./Services/NotificationDispatcher.js";
 import { ReminderScheduler } from "./Services/ReminderScheduler.js";
@@ -108,7 +108,7 @@ async function main(): Promise<void> {
     };
     const router = new InteractionRouter(context);
 
-    await new REST({ version: "10" })
+    await new REST({ version: "10", ...discordRest })
         .setToken(configuration.discordToken)
         .put(Routes.applicationGuildCommands(configuration.clientId, configuration.guildId), {
             body: slashCommands.map((command) => command.definition)
