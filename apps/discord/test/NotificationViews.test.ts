@@ -436,21 +436,30 @@ describe("every notification", () => {
     });
 
     it("announces phase unlocks to announcements and routes step progress to telemetry", () => {
-        const phaseUnlock = only({
-            type: NotificationType.PipelineUpdated,
-            occurredAt,
-            stepId: "2.1",
-            stepTitle: "3D Modelling",
-            phaseNumber: 2,
-            phaseTitle: "Phase 2: LookDev",
-            progressPercent: 36,
-            isPhaseTransition: true,
-            actor: supervisor
-        });
-        expect(phaseUnlock.purpose).toBe(ChannelPurpose.Announcements);
-        expect(phaseUnlock.text).toContain("## Phase 2 Unlocked: Phase 2: LookDev");
-        expect(phaseUnlock.text).toContain("3D Modelling");
-        expect(phaseUnlock.text).toContain("36% overall completed");
+        const rendered = renderNotification(
+            {
+                type: NotificationType.PipelineUpdated,
+                occurredAt,
+                stepId: "2.1",
+                stepTitle: "3D Modelling",
+                phaseNumber: 2,
+                phaseTitle: "Phase 2: LookDev",
+                progressPercent: 36,
+                isPhaseTransition: true,
+                actor: supervisor
+            },
+            context
+        );
+        expect(rendered).toHaveLength(2);
+        const announcement = rendered.find((r) => r.purpose === ChannelPurpose.Announcements);
+        const telemetry = rendered.find((r) => r.purpose === ChannelPurpose.Telemetry);
+        expect(announcement).toBeDefined();
+        expect(telemetry).toBeDefined();
+        expect(texts((announcement as RenderedNotification).message).join("\n")).toContain("## Phase 2 Unlocked: Phase 2: LookDev");
+        expect(texts((announcement as RenderedNotification).message).join("\n")).toContain("3D Modelling");
+        expect(texts((announcement as RenderedNotification).message).join("\n")).toContain("36% overall completed");
+        expect(texts((telemetry as RenderedNotification).message).join("\n")).toContain("Pipeline update: Step 2\\.1 - 3D Modelling");
+        expect(texts((telemetry as RenderedNotification).message).join("\n")).toContain("Phase 2: LookDev");
 
         const stepProgress = only({
             type: NotificationType.PipelineUpdated,
@@ -467,6 +476,69 @@ describe("every notification", () => {
         expect(stepProgress.text).toContain("Rigging and Deformation");
         expect(stepProgress.text).toContain("Phase 2: LookDev");
         expect(stepProgress.text).toContain("41% completed");
+    });
+
+    it("routes task lifecycle and announcement events to telemetry with clickable links", () => {
+        const created = only({
+            type: NotificationType.ShotCreated,
+            occurredAt,
+            shot
+        });
+        expect(created.purpose).toBe(ChannelPurpose.Telemetry);
+        expect(created.text).toContain("Task created: [SC01\\_A1B2](https://dev-app.projectstairway.net/grabbox/SC01_A1B2) - Opening pan");
+        expect(created.text).toContain("Difficulty: Hard | Scene: 1");
+
+        const claimed = only({
+            type: NotificationType.ShotClaimed,
+            occurredAt,
+            shot,
+            claimant: voter,
+            deadlineAt: "2026-10-01T00:00:00.000Z"
+        });
+        expect(claimed.purpose).toBe(ChannelPurpose.Telemetry);
+        expect(claimed.text).toContain("Task claimed: [SC01\\_A1B2](https://dev-app.projectstairway.net/grabbox/SC01_A1B2) - Opening pan");
+        expect(claimed.text).toContain("Claimed by <@215537065863938049>");
+
+        const released = only({
+            type: NotificationType.ShotReleased,
+            occurredAt,
+            shot,
+            actor: voter,
+            reason: "Hardware issue"
+        });
+        expect(released.purpose).toBe(ChannelPurpose.Telemetry);
+        expect(released.text).toContain("Task released: [SC01\\_A1B2](https://dev-app.projectstairway.net/grabbox/SC01_A1B2)");
+        expect(released.text).toContain("Hardware issue");
+
+        const reviewed = only({
+            type: NotificationType.SubmissionReviewed,
+            occurredAt,
+            shot,
+            submissionId: shot.id,
+            version: 2,
+            decision: ReviewDecision.Approved,
+            contributor: voter,
+            reviewer: supervisor,
+            notes: "Looks clean"
+        });
+        expect(reviewed.purpose).toBe(ChannelPurpose.Telemetry);
+        expect(reviewed.text).toContain(
+            "Deliverable approved: [SC01\\_A1B2](https://dev-app.projectstairway.net/grabbox/SC01_A1B2) - Opening pan (v2)"
+        );
+        expect(reviewed.text).toContain("Reviewed by <@364539598942240768>");
+
+        const announcement = only({
+            type: NotificationType.AnnouncementPublished,
+            occurredAt,
+            title: "Production Milestone",
+            target: "general",
+            author: supervisor,
+            channels: ["1100000000000000001"]
+        });
+        expect(announcement.purpose).toBe(ChannelPurpose.Telemetry);
+        expect(announcement.text).toContain("Announcement published: Production Milestone");
+        expect(announcement.text).toContain("Target: 1100000000000000001");
+        expect(announcement.text).toContain("Published by <@364539598942240768>");
     });
 
     it("shows entry and winner media as a components v2 gallery", () => {

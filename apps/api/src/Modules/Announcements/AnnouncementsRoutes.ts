@@ -55,18 +55,21 @@ export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceConta
             if (pings?.everyone || pings?.here) {
                 parseMentions.push("everyone");
             }
+
+            // discord rejects payloads containing both parse type and explicit id whitelist
+            const allowedMentions: {
+                parse: ("everyone" | "roles" | "users")[];
+                roles?: string[];
+                users?: string[];
+            } = {
+                parse: parseMentions
+            };
             if (pings?.roleIds && pings.roleIds.length > 0) {
-                parseMentions.push("roles");
+                allowedMentions.roles = pings.roleIds;
             }
             if (pings?.userIds && pings.userIds.length > 0) {
-                parseMentions.push("users");
+                allowedMentions.users = pings.userIds;
             }
-
-            const allowedMentions = {
-                parse: parseMentions,
-                roles: pings?.roleIds ?? [],
-                users: pings?.userIds ?? []
-            };
 
             // fallback to public dev endpoint if app url is local or cloudflare ssl 526 on apex domain
             const baseAppUrl =

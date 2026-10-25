@@ -207,7 +207,8 @@ export class NotificationDispatcher {
         const memberIds = await this.resolveMembers(notification);
         const context = {
             threadFor: (shotId: string) => this.forum.threadFor(shotId),
-            isMember: (discordId: string) => memberIds.has(discordId)
+            isMember: (discordId: string) => memberIds.has(discordId),
+            webAppUrl: this.webAppUrl
         };
         for (const rendered of renderNotification(notification, context)) {
             let webhook = this.webhookClients[rendered.purpose];

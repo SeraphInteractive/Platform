@@ -1,6 +1,7 @@
 "use client";
 
 import {
+    EntryStatus,
     NotificationType,
     ReviewDecision,
     activityEntrySchema,
@@ -100,6 +101,23 @@ function describeNotification(notification: PlatformNotification): ActivityPrese
                 href: `/grabbox/${notification.shot.code}` as Route
             };
 
+        case NotificationType.ShotUpdated:
+            return {
+                tag: "Task",
+                tone: Tone.Neutral,
+                title: `Task updated: ${notification.shot.code}`,
+                detail: notification.shot.title,
+                href: `/grabbox/${notification.shot.code}` as Route
+            };
+
+        case NotificationType.ShotDeleted:
+            return {
+                tag: "Task",
+                tone: Tone.Warning,
+                title: `Task deleted: ${notification.shot.code}`,
+                detail: notification.shot.title
+            };
+
         case NotificationType.ShotClaimed:
             return {
                 tag: "Claim",
@@ -172,6 +190,23 @@ function describeNotification(notification: PlatformNotification): ActivityPrese
                 href: `/studio/rounds/${notification.round.id}` as Route
             };
 
+        case NotificationType.RoundUpdated:
+            return {
+                tag: "Round",
+                tone: Tone.Neutral,
+                title: `${notification.actor.username} updated round`,
+                detail: notification.round.title,
+                href: `/studio/rounds/${notification.round.id}` as Route
+            };
+
+        case NotificationType.RoundDeleted:
+            return {
+                tag: "Round",
+                tone: Tone.Warning,
+                title: `${notification.actor.username} deleted round`,
+                detail: notification.round.title
+            };
+
         case NotificationType.RoundStatusChanged:
             return {
                 tag: "Round",
@@ -195,6 +230,41 @@ function describeNotification(notification: PlatformNotification): ActivityPrese
                 tag: "Entry",
                 tone: Tone.Info,
                 title: `${notification.author.username} submitted entry`,
+                detail: `"${notification.entry.title}" in ${notification.round.title}`,
+                href: `/studio/rounds/${notification.round.id}` as Route
+            };
+
+        case NotificationType.EntryUpdated:
+            return {
+                tag: "Entry",
+                tone: Tone.Neutral,
+                title: `${notification.actor.username} updated entry`,
+                detail: `"${notification.entry.title}" in ${notification.round.title}`,
+                href: `/studio/rounds/${notification.round.id}` as Route
+            };
+
+        case NotificationType.EntryDeleted:
+            return {
+                tag: "Entry",
+                tone: Tone.Warning,
+                title: `${notification.actor.username} deleted entry`,
+                detail: `"${notification.entry.title}" in ${notification.round.title}`
+            };
+
+        case NotificationType.EntryStatusChanged:
+            return {
+                tag: "Entry",
+                tone: notification.status === EntryStatus.Approved ? Tone.Positive : Tone.Negative,
+                title: `${notification.actor.username} set entry to ${notification.status}`,
+                detail: `"${notification.entry.title}" in ${notification.round.title}`,
+                href: `/studio/rounds/${notification.round.id}` as Route
+            };
+
+        case NotificationType.EntryReinstated:
+            return {
+                tag: "Entry",
+                tone: Tone.Positive,
+                title: `${notification.actor.username} reinstated entry`,
                 detail: `"${notification.entry.title}" in ${notification.round.title}`,
                 href: `/studio/rounds/${notification.round.id}` as Route
             };

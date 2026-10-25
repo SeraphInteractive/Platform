@@ -139,6 +139,8 @@ describe("announcements API", () => {
             expect(sentPayload.content).toBeUndefined();
             expect(sentPayload.components?.[0]?.content).toBe("@everyone <@&100000000000000014> <@100000000000000015>");
             expect(sentPayload.allowed_mentions?.parse).toContain("everyone");
+            expect(sentPayload.allowed_mentions?.parse).not.toContain("roles");
+            expect(sentPayload.allowed_mentions?.parse).not.toContain("users");
             expect(sentPayload.allowed_mentions?.roles).toContain("100000000000000014");
             expect(sentPayload.allowed_mentions?.users).toContain("100000000000000015");
         } finally {
