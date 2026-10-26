@@ -406,7 +406,7 @@ describe("b13: Webhook auto-discovery and bot user fallback", () => {
         expect(sendSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 username: "Project Stairway Assets",
-                avatarURL: "https://dev-app.projectstairway.net/branding/bot-pfp.png"
+                avatarURL: "https://cdn.discordapp.com/embed/avatars/0.png"
             })
         );
         sendSpy.mockRestore();

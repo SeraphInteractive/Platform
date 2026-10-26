@@ -65,7 +65,6 @@ COPY --from=discord-dependencies /app/package.json ./
 COPY --from=discord-dependencies /app/node_modules ./node_modules
 COPY --from=build /app/apps/discord/package.json apps/discord/
 COPY --from=build /app/apps/discord/dist apps/discord/dist
-COPY apps/discord/assets apps/discord/assets
 RUN mkdir -p /app/data && chown node:node /app/data && chmod 700 /app/data
 ENV DATA_DIRECTORY=/app/data
 USER node

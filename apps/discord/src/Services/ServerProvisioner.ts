@@ -15,7 +15,6 @@ import {
 } from "discord.js";
 import type { Logger } from "pino";
 import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
-import { botAvatarBuffer } from "../Discord/BotAvatar.js";
 import { discordRestOptions } from "../Discord/Rest.js";
 import { message, panel, plain } from "../Discord/Ui.js";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
@@ -44,14 +43,10 @@ async function ensureWebhookOnChannel(channel: TextChannel, name: string, logger
         const webhooks = await channel.fetchWebhooks();
         const existing = webhooks.find((hook) => hook.name.toLowerCase() === name.toLowerCase());
         if (existing?.url) {
-            if (!existing.avatar && botAvatarBuffer !== undefined) {
-                await existing.edit({ avatar: botAvatarBuffer }).catch(() => undefined);
-            }
             return existing.url;
         }
         const created = await channel.createWebhook({
             name,
-            avatar: botAvatarBuffer,
             reason: "Studio department webhook setup"
         });
         return created.url;

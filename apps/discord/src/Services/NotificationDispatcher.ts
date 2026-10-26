@@ -14,7 +14,7 @@ import { WebhookClient, type Client, type Collection, type ContainerBuilder, typ
 import type { Logger } from "pino";
 import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
-import { botAvatarBuffer, resolveBotAvatarUrl } from "../Discord/BotAvatar.js";
+import { resolveBotAvatarUrl } from "../Discord/BotAvatar.js";
 import { Accent, capitalize, message, panel, person, plain, when } from "../Discord/Ui.js";
 import { discordRestOptions } from "../Discord/Rest.js";
 import { renderNotification, renderRulesMessage } from "../Views/NotificationViews.js";
@@ -141,7 +141,7 @@ export class NotificationDispatcher {
     }
 
     private avatarUrl(): string | undefined {
-        return resolveBotAvatarUrl(this.client, this.webAppUrl);
+        return resolveBotAvatarUrl(this.client);
     }
 
     private async sendDepartmentLog(
@@ -170,13 +170,10 @@ export class NotificationDispatcher {
             return cached;
         }
         const targetName = this.displayNameFor(purpose);
-        const editPayload: { name: string; avatar?: Buffer } = { name: targetName };
-        if (botAvatarBuffer) {
-            editPayload.avatar = botAvatarBuffer;
-        }
+        const editPayload: { name: string } = { name: targetName };
         const ch = channel as {
             fetchWebhooks?: () => Promise<Collection<string, Webhook>>;
-            createWebhook?: (options: { name: string; avatar?: Buffer }) => Promise<Webhook>;
+            createWebhook?: (options: { name: string }) => Promise<Webhook>;
         };
         if (typeof ch.fetchWebhooks === "function") {
             try {

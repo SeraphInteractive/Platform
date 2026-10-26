@@ -135,7 +135,7 @@ describe("announcements API", () => {
                 allowed_mentions?: { parse?: string[]; roles?: string[]; users?: string[] };
             };
             expect(sentPayload.username).toBe("Project Stairway");
-            expect(sentPayload.avatar_url).toMatch(/\/branding\/bot-pfp\.png$/u);
+            expect(sentPayload.avatar_url).toBeUndefined();
             expect(sentPayload.content).toBeUndefined();
             expect(sentPayload.components?.[0]?.content).toBe("@everyone <@&100000000000000014> <@100000000000000015>");
             expect(sentPayload.allowed_mentions?.parse).toContain("everyone");

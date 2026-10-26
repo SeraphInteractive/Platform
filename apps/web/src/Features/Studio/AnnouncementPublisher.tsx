@@ -213,19 +213,8 @@ export function AnnouncementPublisher(): ReactNode {
                         </div>
                         <div className="rounded-lg border bg-neutral-950 p-4 font-sans text-neutral-100">
                             <div className="flex items-center gap-2 mb-3">
-                                <div className="relative size-6 shrink-0 overflow-hidden rounded-full bg-[#5865F2]">
-                                    <img
-                                        src="/branding/bot-pfp.png"
-                                        alt="Project Stairway Bot"
-                                        className="size-full object-cover"
-                                        onError={(e) => {
-                                            // fallback to initials if image fails to load
-                                            e.currentTarget.style.display = "none";
-                                        }}
-                                    />
-                                    <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white -z-10">
-                                        PS
-                                    </span>
+                                <div className="size-6 shrink-0 rounded-full bg-[#5865F2] flex items-center justify-center text-[10px] font-bold text-white">
+                                    PS
                                 </div>
                                 <div>
                                     <span className="text-xs font-semibold text-white">Project Stairway</span>

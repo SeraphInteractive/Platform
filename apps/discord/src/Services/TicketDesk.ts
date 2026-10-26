@@ -35,7 +35,6 @@ import {
 } from "discord.js";
 import type { Logger } from "pino";
 import { PlatformApiError, type PlatformApiClient } from "../Api/PlatformApiClient.js";
-import { botAvatarBuffer } from "../Discord/BotAvatar.js";
 import { Accent, asEdit, plain, truncate, type V2Message } from "../Discord/Ui.js";
 import {
     applicantNotice,
@@ -618,12 +617,7 @@ export class TicketDesk {
             const existing = (await channel.fetchWebhooks()).find(
                 (hook) => hook.owner?.id === this.client.user?.id && hook.name === webhookName
             );
-            const webhook =
-                existing ??
-                (await channel.createWebhook({ name: webhookName, avatar: botAvatarBuffer, reason: "Relay ticket replies from the web" }));
-            if (webhook && !webhook.avatar && botAvatarBuffer !== undefined) {
-                await webhook.edit({ avatar: botAvatarBuffer }).catch(() => undefined);
-            }
+            const webhook = existing ?? (await channel.createWebhook({ name: webhookName, reason: "Relay ticket replies from the web" }));
             this.webhooks.set(channel.id, webhook);
             return webhook;
         } catch (error: unknown) {
