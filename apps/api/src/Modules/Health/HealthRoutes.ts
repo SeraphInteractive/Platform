@@ -1,5 +1,6 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
+import { requireService } from "../../Common/Security/Authorization.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
 
 const statusSchema = z.object({ status: z.enum(["ok", "unavailable"]) });
@@ -65,11 +66,11 @@ async function timedProbe(probe: () => Promise<void>): Promise<{ status: "ok" | 
     }
 }
 
-export const healthRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
+export const probeRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
     application.get(
         "/health/live",
         {
-            config: { rateLimit: false },
+            config: { rateLimit: { max: 300, timeWindow: "1 minute" } },
             logLevel: "warn",
             schema: { tags: ["Health"], summary: "Liveness probe.", response: { 200: statusSchema } }
         },
@@ -79,7 +80,7 @@ export const healthRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }>
     application.get(
         "/health/ready",
         {
-            config: { rateLimit: false },
+            config: { rateLimit: { max: 120, timeWindow: "1 minute" } },
             logLevel: "warn",
             schema: {
                 tags: ["Health"],
@@ -98,15 +99,21 @@ export const healthRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }>
             return reply.status(503).send({ status: "unavailable" as const });
         }
     );
+};
+
+export const healthRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> = async (application, { services }) => {
+    await application.register(probeRoutes, { services });
 
     application.post(
         "/health/bot-heartbeat",
         {
-            config: { rateLimit: false },
+            preHandler: requireService(),
+            config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
             logLevel: "warn",
             schema: {
                 tags: ["Health"],
                 summary: "Heartbeat check-in from the Discord bot.",
+                security: [{ bearer: [] }],
                 body: z.object({
                     wsPingMs: z.number().min(0).max(60000)
                 }),
@@ -126,7 +133,7 @@ export const healthRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }>
     application.get(
         "/health/detailed",
         {
-            config: { rateLimit: false },
+            config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
             logLevel: "warn",
             schema: {
                 tags: ["Health"],

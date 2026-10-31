@@ -9,9 +9,11 @@ import {
     ReviewDecision,
     Role,
     RoundStatus,
+    ShotType,
     Specialty
 } from "./Enums.js";
 import { snowflakeSchema, timestampSchema, uuidSchema } from "./Http.js";
+import { ApplicationStage, TicketEventKind } from "./Tickets.js";
 
 export enum NotificationType {
     BallotSubmitted = "ballot.submitted",
@@ -41,7 +43,13 @@ export enum NotificationType {
     SubmissionReviewed = "submission.reviewed",
     PipelineUpdated = "pipeline.updated",
     MediaFlaggedAi = "media.flagged_ai",
-    DocumentUpdated = "document.updated"
+    DocumentUpdated = "document.updated",
+    AnnouncementPublished = "announcement.published",
+    TicketConfigUpdated = "ticket.config_updated",
+    TicketActivity = "ticket.activity",
+    FeedbackSurveyOpened = "feedback.survey_opened",
+    FeedbackSurveyClosed = "feedback.survey_closed",
+    FeedbackOutcomeRecorded = "feedback.outcome_recorded"
 }
 
 export const notificationPersonSchema = z.object({
@@ -56,7 +64,9 @@ const shotReference = z.object({
     code: z.string(),
     title: z.string(),
     sceneNumber: z.number().int(),
-    difficulty: z.enum(DifficultyTier)
+    difficulty: z.enum(DifficultyTier),
+    shotType: z.enum(ShotType).optional(),
+    departmentId: uuidSchema.nullable().optional()
 });
 
 function notification<T extends NotificationType, S extends z.ZodRawShape>(
@@ -213,7 +223,30 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
         sections: z.array(z.object({ id: z.string(), title: z.string(), html: z.string() })),
         actor: notificationPersonSchema,
         note: z.string().nullable()
-    })
+    }),
+    notification(NotificationType.AnnouncementPublished, {
+        title: z.string(),
+        target: z.string(),
+        author: notificationPersonSchema,
+        channels: z.array(z.string()).optional()
+    }),
+    notification(NotificationType.TicketConfigUpdated, {
+        actor: notificationPersonSchema,
+        removedHubs: z.array(z.object({ channelId: snowflakeSchema, messageId: snowflakeSchema })).default([])
+    }),
+    notification(NotificationType.TicketActivity, {
+        ticketId: uuidSchema,
+        eventId: uuidSchema,
+        kind: z.enum(TicketEventKind),
+        actor: notificationPersonSchema,
+        stage: z.enum(ApplicationStage).nullable(),
+        target: notificationPersonSchema.nullable(),
+        note: z.string().nullable(),
+        reply: z.object({ messageId: uuidSchema, content: z.string(), avatarUrl: z.string().nullable() }).nullable()
+    }),
+    notification(NotificationType.FeedbackSurveyOpened, { surveyId: uuidSchema }),
+    notification(NotificationType.FeedbackSurveyClosed, { surveyId: uuidSchema }),
+    notification(NotificationType.FeedbackOutcomeRecorded, { surveyId: uuidSchema })
 ]);
 
 export type PlatformNotification = z.infer<typeof platformNotificationSchema>;
@@ -227,3 +260,12 @@ export type ShotReference = z.infer<typeof shotReference>;
 export type RoundReference = z.infer<typeof roundReference>;
 
 export const notificationStreamIdPattern = /^\d{1,20}-\d{1,20}$/u;
+
+export const activityEntrySchema = z
+    .object({
+        id: z.string(),
+        notification: platformNotificationSchema
+    })
+    .meta({ id: "ActivityEntry" });
+
+export type ActivityEntryDto = z.infer<typeof activityEntrySchema>;

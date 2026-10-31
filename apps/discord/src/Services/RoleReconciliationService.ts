@@ -150,10 +150,10 @@ export class RoleReconciliationService {
         }
 
         const lines = [
-            "## 🔄 Weekly Role Reconciliation Summary",
-            `• Positioned **${summary.reorderedRoles}** studio roles by hierarchy.`,
-            `• Checked **${summary.totalUsersChecked}** registered users, reconciled **${summary.driftedMembersSynced}** drifted ${pluralize(summary.driftedMembersSynced, "member")}.`,
-            summary.errors.length > 0 ? `⚠️ **${summary.errors.length}** error(s) encountered during sync.` : null,
+            "## Weekly Role Reconciliation Summary",
+            `- Positioned **${summary.reorderedRoles}** studio roles by hierarchy.`,
+            `- Checked **${summary.totalUsersChecked}** registered users, reconciled **${summary.driftedMembersSynced}** drifted ${pluralize(summary.driftedMembersSynced, "member")}.`,
+            summary.errors.length > 0 ? `**${summary.errors.length}** error(s) encountered during sync.` : null,
             `*Duration: ${(summary.durationMs / 1000).toFixed(1)}s*`
         ].filter((line): line is string => line !== null);
 

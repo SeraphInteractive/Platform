@@ -173,6 +173,7 @@ export class LeaderboardService {
                 const systemActor: UserActor = {
                     userId: round.createdBy,
                     role: Role.Admin,
+                    specialties: [],
                     displayName: "System",
                     discordId: "0"
                 };
@@ -203,15 +204,20 @@ export class LeaderboardService {
             voterId: row.voterId,
             picks: [row.rank1, row.rank2, row.rank3].filter((pick): pick is string => pick !== null).slice(0, scheme.weights.length)
         }));
+        const eligibleEntries = entryRows.filter((entry) => entry.status === EntryStatus.Approved && !entry.isQuarantined);
+        const eligibleIds = new Set(eligibleEntries.map((entry) => entry.id));
+        const eligible = new Map(eligibleEntries.map((entry) => [entry.id, entry.title]));
+
+        // strip quarantined and unapproved picks from ballots to prevent dilution of active vote share
+        const cleanBallots: Ballot[] = logicBallots.map((ballot) => ({
+            voterId: ballot.voterId,
+            picks: ballot.picks.filter((pick) => eligibleIds.has(pick))
+        }));
+
         const aggregation = aggregateScores(
-            entryRows.map((entry) => entry.id),
-            logicBallots,
+            eligibleEntries.map((entry) => entry.id),
+            cleanBallots,
             scheme
-        );
-        const eligible = new Map(
-            entryRows
-                .filter((entry) => entry.status === EntryStatus.Approved && !entry.isQuarantined)
-                .map((entry) => [entry.id, entry.title])
         );
 
         const ranked = aggregation.leaderboard
@@ -230,8 +236,9 @@ export class LeaderboardService {
             })
             .sort(
                 (a, b) =>
-                    (b.regularizedTotalScore ?? b.breakdown.rawScore) - (a.regularizedTotalScore ?? a.breakdown.rawScore) ||
                     b.breakdown.rawScore - a.breakdown.rawScore ||
+                    (b.regularizedTotalScore ?? b.breakdown.rawScore) - (a.regularizedTotalScore ?? a.breakdown.rawScore) ||
+                    (b.breakdown.rankCounts[0] ?? 0) - (a.breakdown.rankCounts[0] ?? 0) ||
                     a.breakdown.entryId.localeCompare(b.breakdown.entryId)
             );
 
@@ -248,7 +255,7 @@ export class LeaderboardService {
         }));
 
         return {
-            ballots: logicBallots,
+            ballots: cleanBallots,
             leaderboard: {
                 roundId: round.id,
                 pollType: round.pollType,

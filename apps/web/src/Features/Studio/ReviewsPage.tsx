@@ -2,7 +2,7 @@
 
 import { fieldRules, problemOf, ReviewDecision, type ReviewQueueItemDto, Role, SubmissionStatus, textLimits } from "@platform/contracts";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download } from "lucide-react";
+import { Download, FolderOpen } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useId, useState, type ReactNode } from "react";
@@ -47,6 +47,7 @@ function ReviewCard({ item, reviewerId }: { readonly item: ReviewQueueItemDto; r
     });
     const video = safeHttpUrl(item.videoUrl);
     const blend = safeHttpUrl(item.blendUrl);
+    const vault = safeHttpUrl(item.vaultUrl ?? null);
     const isOwn = reviewerId !== null && item.contributor?.id === reviewerId;
 
     return (
@@ -84,6 +85,14 @@ function ReviewCard({ item, reviewerId }: { readonly item: ReviewQueueItemDto; r
                                 <a href={blend} target="_blank" rel="noopener noreferrer">
                                     <Download />
                                     .blend
+                                </a>
+                            </Button>
+                        )}
+                        {vault !== null && (
+                            <Button asChild size="xs" variant="outline">
+                                <a href={vault} target="_blank" rel="noopener noreferrer">
+                                    <FolderOpen />
+                                    Vault
                                 </a>
                             </Button>
                         )}
@@ -208,7 +217,7 @@ export function ReviewsPage(): ReactNode {
             <Tabs defaultValue="tasks" className="space-y-6">
                 <TabsList>
                     <TabsTrigger value="tasks">Task Deliverables</TabsTrigger>
-                    <TabsTrigger value="proposals">Round Proposals</TabsTrigger>
+                    <TabsTrigger value="proposals">Entry Proposals</TabsTrigger>
                 </TabsList>
                 <TabsContent value="tasks">
                     <ReviewQueue />

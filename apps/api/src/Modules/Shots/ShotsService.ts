@@ -1,3 +1,4 @@
+import { ShotType, shotTypeRequiredSpecialties, shotTypeToDepartment, specialtyLabel } from "@platform/contracts";
 import { and, asc, count, desc, eq, inArray, lt, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { StorageConfiguration } from "../../Configuration/ApplicationConfiguration.js";
@@ -16,10 +17,12 @@ import { hasAtLeast, rankOf, Role } from "../../Domain/Roles.js";
 import { isUniqueViolation, type Database, type Transaction } from "../../Infrastructure/Database/Database.js";
 import {
     deletedStorageObjects,
+    departments,
     shots,
     submissions,
     users,
     votingRounds,
+    type DepartmentRecord,
     type ShotRecord,
     type SubmissionRecord,
     type UserRecord
@@ -42,11 +45,14 @@ export interface ShotListQuery extends PaginationQuery {
     readonly sceneNumber?: number;
     readonly difficultyTier?: DifficultyTier;
     readonly status?: ShotStatus;
+    readonly shotType?: ShotType;
+    readonly departmentId?: string;
 }
 
 export interface ShotListItem {
     readonly shot: ShotRecord;
     readonly claimer: UserSummaryRecord | null;
+    readonly creator?: UserSummaryRecord | null;
     readonly latestSubmission: Pick<SubmissionRecord, "version" | "status"> | null;
     readonly isSeniorLocked: boolean;
 }
@@ -57,6 +63,7 @@ export interface SubmissionView {
     readonly reviewer: UserSummaryRecord | null;
     readonly videoUrl: string | null;
     readonly blendUrl: string | null;
+    readonly vaultUrl?: string | null;
 }
 
 export interface ShotDetail extends ShotListItem {
@@ -71,6 +78,8 @@ export interface CreateShotInput {
     readonly description: string | null;
     readonly difficultyTier: DifficultyTier;
     readonly seniorPriorityHours: number;
+    readonly shotType?: ShotType;
+    readonly departmentId?: string | null;
     readonly imageKeys?: readonly string[];
 }
 
@@ -81,6 +90,8 @@ export interface UpdateShotInput {
     readonly title?: string;
     readonly description?: string | null;
     readonly difficultyTier?: DifficultyTier;
+    readonly shotType?: ShotType;
+    readonly departmentId?: string | null;
     readonly imageKeys?: readonly string[];
 }
 
@@ -109,6 +120,14 @@ const userSummaryColumns = {
     discordAvatar: users.discordAvatar
 };
 
+const creators = alias(users, "creators");
+const creatorSummaryColumns = {
+    id: creators.id,
+    discordId: creators.discordId,
+    discordUsername: creators.discordUsername,
+    discordAvatar: creators.discordAvatar
+};
+
 const revisionGraceDays = 3;
 
 export class ShotsService {
@@ -130,13 +149,20 @@ export class ShotsService {
         if (query.status !== undefined) {
             conditions.push(eq(shots.status, query.status));
         }
+        if (query.shotType !== undefined) {
+            conditions.push(eq(shots.shotType, query.shotType));
+        }
+        if (query.departmentId !== undefined) {
+            conditions.push(eq(shots.departmentId, query.departmentId));
+        }
         const filter = conditions.length === 0 ? undefined : and(...conditions);
 
         const [rows, totals] = await Promise.all([
             this.database
-                .select({ shot: shots, claimer: userSummaryColumns })
+                .select({ shot: shots, claimer: userSummaryColumns, creator: creatorSummaryColumns })
                 .from(shots)
                 .leftJoin(users, eq(users.id, shots.claimedBy))
+                .leftJoin(creators, eq(creators.id, shots.createdBy))
                 .where(filter)
                 .orderBy(asc(shots.sceneNumber), asc(shots.shotCode))
                 .limit(query.perPage)
@@ -164,6 +190,7 @@ export class ShotsService {
             rows.map((row) => ({
                 shot: row.shot,
                 claimer: row.claimer,
+                creator: row.creator?.id === null ? null : row.creator,
                 latestSubmission: latestByShot.get(row.shot.id) ?? null,
                 isSeniorLocked: this.isSeniorLocked(row.shot, viewer, now)
             })),
@@ -173,11 +200,13 @@ export class ShotsService {
     }
 
     public async getDetail(shotId: string, viewer: AuthenticatedUser | null): Promise<ShotDetail> {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(shotId);
         const [row] = await this.database
-            .select({ shot: shots, claimer: userSummaryColumns })
+            .select({ shot: shots, claimer: userSummaryColumns, creator: creatorSummaryColumns })
             .from(shots)
             .leftJoin(users, eq(users.id, shots.claimedBy))
-            .where(eq(shots.id, shotId))
+            .leftJoin(creators, eq(creators.id, shots.createdBy))
+            .where(isUuid ? eq(shots.id, shotId) : eq(shots.shotCode, shotId))
             .limit(1);
         if (row === undefined) {
             throw new NotFoundError("Shot");
@@ -198,18 +227,18 @@ export class ShotsService {
             .from(submissions)
             .leftJoin(users, eq(users.id, submissions.contributorId))
             .leftJoin(reviewers, eq(reviewers.id, submissions.reviewedBy))
-            .where(eq(submissions.shotId, shotId))
+            .where(eq(submissions.shotId, row.shot.id))
             .orderBy(desc(submissions.version));
 
         const isStaff = viewer !== null && hasAtLeast(viewer.role, Role.Supervisor);
         const views = await Promise.all(
             submissionRows.map(async (item) => {
-                const canDownload = isStaff || (viewer !== null && item.submission.contributorId === viewer.id);
+                const canViewNotes = isStaff || (viewer !== null && item.submission.contributorId === viewer.id);
                 return {
-                    submission: canDownload ? item.submission : { ...item.submission, notes: null, supervisorNotes: null },
+                    submission: canViewNotes ? item.submission : { ...item.submission, notes: null, supervisorNotes: null },
                     contributor: item.contributor,
                     reviewer: item.reviewer,
-                    ...(await this.downloadUrls(item.submission, canDownload))
+                    ...(await this.downloadUrls(item.submission, isStaff, isStaff))
                 };
             })
         );
@@ -217,6 +246,7 @@ export class ShotsService {
         return {
             shot: row.shot,
             claimer: row.claimer,
+            creator: row.creator?.id === null ? null : row.creator,
             latestSubmission:
                 submissionRows[0] === undefined
                     ? null
@@ -228,9 +258,10 @@ export class ShotsService {
 
     public async getByCode(shotCode: string, viewer: AuthenticatedUser | null): Promise<ShotListItem> {
         const [row] = await this.database
-            .select({ shot: shots, claimer: userSummaryColumns })
+            .select({ shot: shots, claimer: userSummaryColumns, creator: creatorSummaryColumns })
             .from(shots)
             .leftJoin(users, eq(users.id, shots.claimedBy))
+            .leftJoin(creators, eq(creators.id, shots.createdBy))
             .where(eq(shots.shotCode, shotCode))
             .limit(1);
         if (row === undefined) {
@@ -240,15 +271,27 @@ export class ShotsService {
         return {
             shot: row.shot,
             claimer: row.claimer,
+            creator: row.creator?.id === null ? null : row.creator,
             latestSubmission: null,
             isSeniorLocked: this.isSeniorLocked(row.shot, viewer, new Date())
         };
     }
 
-    public async create(input: CreateShotInput): Promise<ShotRecord> {
+    public async create(input: CreateShotInput, creator?: AuthenticatedUser): Promise<ShotRecord> {
         if (input.roundId !== null) {
             await this.requireRound(input.roundId);
         }
+        const shotType = input.shotType ?? ShotType.Animation;
+        const dept = await this.getDepartmentForShot(this.database, input.departmentId ?? null, shotType);
+        const departmentId = dept?.id ?? input.departmentId ?? null;
+
+        if (creator !== undefined && !hasAtLeast(creator.role, Role.Admin)) {
+            // supervisors are restricted to their own department
+            if (dept === undefined || !creator.specialties.some((s) => dept.supervisorSpecialties.includes(s))) {
+                throw new ForbiddenError("You are not authorized to create tasks for this department.", ErrorCode.UnauthorizedDepartment);
+            }
+        }
+
         const seniorPriorityUntil = input.seniorPriorityHours > 0 ? new Date(Date.now() + input.seniorPriorityHours * 3_600_000) : null;
         try {
             const [shot] = await this.database
@@ -260,6 +303,9 @@ export class ShotsService {
                     title: input.title,
                     description: input.description,
                     difficultyTier: input.difficultyTier,
+                    shotType,
+                    departmentId,
+                    createdBy: creator?.id ?? null,
                     seniorPriorityUntil,
                     imageKeys: input.imageKeys === undefined ? [] : [...input.imageKeys]
                 })
@@ -274,10 +320,35 @@ export class ShotsService {
         }
     }
 
-    public async update(shotId: string, input: UpdateShotInput): Promise<ShotRecord> {
+    public async update(shotId: string, input: UpdateShotInput, updater?: AuthenticatedUser): Promise<ShotRecord> {
         if (input.roundId !== undefined && input.roundId !== null) {
             await this.requireRound(input.roundId);
         }
+
+        let nextDepartmentId: string | null | undefined = input.departmentId;
+        if (updater !== undefined && !hasAtLeast(updater.role, Role.Admin)) {
+            const [existing] = await this.database.select().from(shots).where(eq(shots.id, shotId)).limit(1);
+            if (existing === undefined) {
+                throw new NotFoundError("Shot");
+            }
+            const currentDept = await this.getDepartmentForShot(this.database, existing.departmentId, existing.shotType);
+            if (currentDept === undefined || !updater.specialties.some((s) => currentDept.supervisorSpecialties.includes(s))) {
+                throw new ForbiddenError("You are not authorized to modify tasks for this department.", ErrorCode.UnauthorizedDepartment);
+            }
+            if (input.shotType !== undefined && input.shotType !== existing.shotType) {
+                const targetDept = await this.getDepartmentForShot(this.database, input.departmentId ?? null, input.shotType);
+                if (targetDept === undefined || !updater.specialties.some((s) => targetDept.supervisorSpecialties.includes(s))) {
+                    throw new ForbiddenError("You are not authorized to move tasks to this department.", ErrorCode.UnauthorizedDepartment);
+                }
+                nextDepartmentId = targetDept.id;
+            }
+        } else if (input.shotType !== undefined && input.departmentId === undefined) {
+            const targetDept = await this.getDepartmentForShot(this.database, null, input.shotType);
+            if (targetDept !== undefined) {
+                nextDepartmentId = targetDept.id;
+            }
+        }
+
         const values: Partial<typeof shots.$inferInsert> = {
             ...(input.roundId !== undefined ? { roundId: input.roundId } : {}),
             ...(input.sceneNumber !== undefined ? { sceneNumber: input.sceneNumber } : {}),
@@ -285,6 +356,8 @@ export class ShotsService {
             ...(input.title !== undefined ? { title: input.title } : {}),
             ...(input.description !== undefined ? { description: input.description } : {}),
             ...(input.difficultyTier !== undefined ? { difficultyTier: input.difficultyTier } : {}),
+            ...(input.shotType !== undefined ? { shotType: input.shotType } : {}),
+            ...(nextDepartmentId !== undefined ? { departmentId: nextDepartmentId } : {}),
             ...(input.imageKeys !== undefined ? { imageKeys: [...input.imageKeys] } : {})
         };
         try {
@@ -322,6 +395,12 @@ export class ShotsService {
         if (user.isBlacklisted) {
             throw new ForbiddenError("Your account cannot claim tasks.", ErrorCode.UserBlacklisted);
         }
+        if (!hasAtLeast(user.role, Role.Admin)) {
+            // contributor parent role required to claim
+            if (!hasAtLeast(user.role, Role.Contributor)) {
+                throw new ForbiddenError("Contributor role is required to claim tasks.", ErrorCode.InsufficientRole);
+            }
+        }
         const now = new Date();
         let claimed: ShotRecord;
         try {
@@ -340,6 +419,15 @@ export class ShotsService {
                 const shot = await this.lockShot(transaction, shotId);
                 if (shot.status !== ShotStatus.Available) {
                     throw new ConflictError(`Shot ${shot.shotCode} is ${shot.status} and cannot be claimed.`, ErrorCode.ShotUnavailable);
+                }
+                if (!hasAtLeast(user.role, Role.Admin)) {
+                    const requiredSpecialties = shotTypeRequiredSpecialties[shot.shotType] ?? [];
+                    if (requiredSpecialties.length > 0 && !requiredSpecialties.some((s) => user.specialties.includes(s))) {
+                        throw new ForbiddenError(
+                            `This task requires the ${requiredSpecialties.map(specialtyLabel).join(" or ")} specialty.`,
+                            ErrorCode.SpecialtyRequired
+                        );
+                    }
                 }
                 if (this.isSeniorLocked(shot, user, now) && shot.seniorPriorityUntil !== null) {
                     const hours = Math.ceil((shot.seniorPriorityUntil.getTime() - now.getTime()) / 3_600_000);
@@ -383,6 +471,16 @@ export class ShotsService {
             if (shot.claimedBy !== user.id && !isStaff) {
                 throw new ForbiddenError("You do not hold the claim on this shot.");
             }
+            if (shot.claimedBy !== user.id && !hasAtLeast(user.role, Role.Admin)) {
+                // supervisors can only release claims inside their own department
+                const dept = await this.getDepartmentForShot(transaction, shot.departmentId, shot.shotType);
+                if (dept === undefined || !user.specialties.some((s) => dept.supervisorSpecialties.includes(s))) {
+                    throw new ForbiddenError(
+                        "You are not authorized to release tasks for this department.",
+                        ErrorCode.UnauthorizedDepartment
+                    );
+                }
+            }
             if (shot.status !== ShotStatus.Claimed) {
                 throw new ConflictError(`Only claimed shots can be released; this shot is ${shot.status}.`, ErrorCode.ShotUnavailable);
             }
@@ -419,7 +517,7 @@ export class ShotsService {
         this.assertActiveClaim(shot, user);
         return this.storage.createUpload(
             StorageBucket.Deliverables,
-            createDeliverableKey(shotId, user.id, fileName),
+            createDeliverableKey(shot.shotCode, fileName),
             input.contentType,
             input.sizeBytes
         );
@@ -429,9 +527,31 @@ export class ShotsService {
         if (user.isBlacklisted) {
             throw new ForbiddenError("Your account cannot submit tasks.", ErrorCode.UserBlacklisted);
         }
+        const [shotRecord] = await this.database.select().from(shots).where(eq(shots.id, shotId)).limit(1);
+        if (shotRecord === undefined) {
+            throw new NotFoundError("Shot");
+        }
         const maxBytes = this.storageConfiguration.deliverableMaxBytes;
-        await assertDeliverable(this.storage, input.videoKey, DeliverableKind.Video, shotId, user.id, maxBytes, "videoKey");
-        await assertDeliverable(this.storage, input.blendKey, DeliverableKind.Blend, shotId, user.id, maxBytes, "blendKey");
+        await assertDeliverable(
+            this.storage,
+            input.videoKey,
+            DeliverableKind.Video,
+            shotRecord.shotCode,
+            shotId,
+            user.id,
+            maxBytes,
+            "videoKey"
+        );
+        await assertDeliverable(
+            this.storage,
+            input.blendKey,
+            DeliverableKind.Blend,
+            shotRecord.shotCode,
+            shotId,
+            user.id,
+            maxBytes,
+            "blendKey"
+        );
 
         const buffer = await this.storage.getObject(StorageBucket.Deliverables, input.videoKey, 524288);
         const detection = inspectMediaAiSignatures(buffer);
@@ -560,15 +680,24 @@ export class ShotsService {
 
     private async downloadUrls(
         submission: SubmissionRecord,
-        allowed: boolean
-    ): Promise<{ videoUrl: string | null; blendUrl: string | null }> {
+        allowed: boolean,
+        isStaff = false
+    ): Promise<{ videoUrl: string | null; blendUrl: string | null; vaultUrl: string | null }> {
         if (!allowed || !this.storage.isEnabled(StorageBucket.Deliverables)) {
-            return { videoUrl: null, blendUrl: null };
+            return { videoUrl: null, blendUrl: null, vaultUrl: null };
         }
+        const folderPath = submission.videoKey.includes("/")
+            ? submission.videoKey.slice(0, submission.videoKey.lastIndexOf("/"))
+            : "Project Stairway/Submission Reviews/Pending";
+        const vaultUrl =
+            isStaff && typeof this.storage.getVaultFolderUrl === "function"
+                ? this.storage.getVaultFolderUrl(StorageBucket.Deliverables, folderPath)
+                : null;
         return {
             videoUrl: await this.storage.createDownloadUrl(StorageBucket.Deliverables, submission.videoKey),
             blendUrl:
-                submission.blendKey === null ? null : await this.storage.createDownloadUrl(StorageBucket.Deliverables, submission.blendKey)
+                submission.blendKey === null ? null : await this.storage.createDownloadUrl(StorageBucket.Deliverables, submission.blendKey),
+            vaultUrl
         };
     }
 
@@ -618,5 +747,24 @@ export class ShotsService {
             throw new NotFoundError("Shot");
         }
         return shot;
+    }
+
+    private async getDepartmentForShot(
+        transaction: Database | Transaction,
+        departmentId: string | null,
+        shotType: ShotType
+    ): Promise<DepartmentRecord | undefined> {
+        if (departmentId !== null) {
+            const [dept] = await transaction.select().from(departments).where(eq(departments.id, departmentId)).limit(1);
+            if (dept !== undefined) {
+                return dept;
+            }
+        }
+        const slug = shotTypeToDepartment[shotType];
+        if (slug !== undefined) {
+            const [dept] = await transaction.select().from(departments).where(eq(departments.slug, slug)).limit(1);
+            return dept;
+        }
+        return undefined;
     }
 }

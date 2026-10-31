@@ -20,10 +20,29 @@ export function evaluateRankSeparation(
     const deltaScore = breakdownA.rawScore - breakdownB.rawScore;
     const deltaVariance = Math.max(0, momentsA.totalVariance + momentsB.totalVariance - 2 * covariance.totalCovariance);
     const standardError = Math.sqrt(deltaVariance);
-    const zScore = standardError > 1e-9 ? deltaScore / standardError : 0;
-    const pValue = approximateTwoTailedPValue(zScore);
-    // a decisive lead requires positive separation exceeding the threshold
-    const isDecisive = zScore >= zThreshold;
+    let zScore = 0;
+    let pValue = 1;
+    let isDecisive = false;
+
+    if (totalBallots <= 1) {
+        // sample size is insufficient to reject null hypothesis or declare a decisive lead
+        zScore = 0;
+        pValue = 1;
+        isDecisive = false;
+    } else if (standardError > 1e-9) {
+        zScore = deltaScore / standardError;
+        pValue = approximateTwoTailedPValue(zScore);
+        isDecisive = zScore >= zThreshold;
+    } else if (deltaScore > 0) {
+        // deterministic positive lead when sample variance across all ballots is zero
+        zScore = 999;
+        pValue = 0;
+        isDecisive = true;
+    } else if (deltaScore < 0) {
+        zScore = -999;
+        pValue = 0;
+        isDecisive = false;
+    }
 
     return {
         entryA: breakdownA.entryId,

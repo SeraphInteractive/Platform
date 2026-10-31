@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
     DifficultyTier,
+    DepartmentSlug,
     DocumentSlug,
     documentLimits,
     EntryStatus,
@@ -9,9 +10,11 @@ import {
     RaidSeverity,
     Role,
     RoundStatus,
+    ScreenplayRole,
     SeparationAction,
     SeparationStatus,
     ShotStatus,
+    ShotType,
     Specialty,
     SubmissionStatus
 } from "./Enums.js";
@@ -217,6 +220,27 @@ export const raidTelemetrySchema = z
     })
     .meta({ id: "RaidTelemetry" });
 
+export const departmentSchema = z
+    .object({
+        id: uuidSchema,
+        name: z.string(),
+        slug: z.enum(DepartmentSlug),
+        supervisorSpecialties: z.array(z.enum(Specialty)),
+        contributorSpecialties: z.array(z.enum(Specialty)),
+        shotTypes: z.array(z.enum(ShotType)),
+        discordCategoryId: snowflakeSchema.nullable().optional(),
+        discordForumId: snowflakeSchema.nullable().optional(),
+        discordChatChannelId: snowflakeSchema.nullable().optional(),
+        discordInfoChannelId: snowflakeSchema.nullable().optional(),
+        discordInfoWebhookUrl: z.string().nullable().optional(),
+        discordLogsChannelId: snowflakeSchema.nullable().optional(),
+        discordLogsWebhookUrl: z.string().nullable().optional(),
+        discordApplyChannelId: snowflakeSchema.nullable().optional(),
+        createdAt: timestampSchema,
+        updatedAt: timestampSchema
+    })
+    .meta({ id: "Department" });
+
 export const shotSchema = z
     .object({
         id: uuidSchema,
@@ -227,8 +251,11 @@ export const shotSchema = z
         description: z.string().nullable(),
         difficultyTier: z.enum(DifficultyTier),
         tierDays: z.number().int(),
+        shotType: z.enum(ShotType),
+        departmentId: uuidSchema.nullable().optional(),
         status: z.enum(ShotStatus),
         claimer: userSummarySchema.nullable(),
+        creator: userSummarySchema.nullable().default(null),
         claimedAt: timestampSchema.nullable(),
         deadlineAt: timestampSchema.nullable(),
         seniorPriorityUntil: timestampSchema.nullable(),
@@ -253,6 +280,7 @@ export const submissionSchema = z
         reviewedAt: timestampSchema.nullable(),
         videoUrl: z.url().nullable().describe("Short-lived download link, only for staff and the contributor."),
         blendUrl: z.url().nullable(),
+        vaultUrl: z.url().nullable().optional(),
         aiFlags: z.array(z.string()).default([]),
         createdAt: timestampSchema
     })
@@ -313,6 +341,7 @@ export type LeaderboardDto = z.infer<typeof leaderboardSchema>;
 export type SeparationDto = z.infer<typeof separationSchema>;
 export type RoundResultDto = z.infer<typeof roundResultSchema>;
 export type RaidTelemetryDto = z.infer<typeof raidTelemetrySchema>;
+export type DepartmentDto = z.infer<typeof departmentSchema>;
 export type ShotDto = z.infer<typeof shotSchema>;
 export type SubmissionDto = z.infer<typeof submissionSchema>;
 export type ShotDetailDto = z.infer<typeof shotDetailSchema>;
@@ -398,3 +427,274 @@ export type DocumentDto = z.infer<typeof documentSchema>;
 export type DocumentUpdateDto = z.input<typeof documentUpdateSchema>;
 export type DocumentRevisionSummaryDto = z.infer<typeof documentRevisionSummarySchema>;
 export type DocumentRevisionDto = z.infer<typeof documentRevisionSchema>;
+
+export const screenplayShelfSchema = z
+    .object({
+        id: uuidSchema,
+        userId: uuidSchema,
+        name: z.string().min(1).max(100),
+        createdAt: timestampSchema
+    })
+    .meta({ id: "ScreenplayShelf" });
+
+export const createScreenplayShelfSchema = z
+    .object({
+        name: z.string().trim().min(1).max(100)
+    })
+    .meta({ id: "CreateScreenplayShelf" });
+
+export const screenplayCollaboratorSchema = z
+    .object({
+        id: uuidSchema,
+        screenplayId: uuidSchema,
+        userId: uuidSchema,
+        user: userSummarySchema.optional(),
+        role: z.enum(ScreenplayRole),
+        invitedBy: uuidSchema,
+        createdAt: timestampSchema
+    })
+    .meta({ id: "ScreenplayCollaborator" });
+
+export const addScreenplayCollaboratorSchema = z
+    .object({
+        userId: uuidSchema,
+        role: z.enum(ScreenplayRole).default(ScreenplayRole.Editor)
+    })
+    .meta({ id: "AddScreenplayCollaborator" });
+
+export const screenplayVersionSchema = z
+    .object({
+        id: uuidSchema,
+        screenplayId: uuidSchema,
+        userId: uuidSchema,
+        user: userSummarySchema.nullable().optional(),
+        name: z.string().min(1).max(150),
+        content: z.record(z.string(), z.any()).or(z.array(z.any())),
+        wordCount: z.number().int().nonnegative().default(0),
+        sceneCount: z.number().int().nonnegative().default(0),
+        createdAt: timestampSchema
+    })
+    .meta({ id: "ScreenplayVersion" });
+
+export const createScreenplayVersionSchema = z
+    .object({
+        name: z.string().trim().min(1).max(150),
+        content: z.record(z.string(), z.any()).or(z.array(z.any())),
+        wordCount: z.number().int().nonnegative().default(0).optional(),
+        sceneCount: z.number().int().nonnegative().default(0).optional()
+    })
+    .meta({ id: "CreateScreenplayVersion" });
+
+export const screenplaySummarySchema = z
+    .object({
+        id: uuidSchema,
+        ownerId: uuidSchema,
+        owner: userSummarySchema.optional(),
+        title: z.string().min(1).max(200),
+        shelfId: uuidSchema.nullable(),
+        category: z.string().nullable(),
+        wordCount: z.number().int().nonnegative(),
+        sceneCount: z.number().int().nonnegative(),
+        userRole: z.enum(["owner", "editor", "viewer"]).optional(),
+        createdAt: timestampSchema,
+        updatedAt: timestampSchema
+    })
+    .meta({ id: "ScreenplaySummary" });
+
+export const screenplaySchema = z
+    .object({
+        id: uuidSchema,
+        ownerId: uuidSchema,
+        owner: userSummarySchema.optional(),
+        title: z.string().min(1).max(200),
+        content: z.record(z.string(), z.any()).or(z.array(z.any())),
+        titlePage: z.record(z.string(), z.any()).nullable(),
+        shelfId: uuidSchema.nullable(),
+        category: z.string().nullable(),
+        wordCount: z.number().int().nonnegative(),
+        sceneCount: z.number().int().nonnegative(),
+        userRole: z.enum(["owner", "editor", "viewer"]).optional(),
+        collaborators: z.array(screenplayCollaboratorSchema).optional(),
+        createdAt: timestampSchema,
+        updatedAt: timestampSchema
+    })
+    .meta({ id: "Screenplay" });
+
+export const createScreenplaySchema = z
+    .object({
+        title: z.string().trim().min(1).max(200).default("Untitled Screenplay"),
+        content: z.record(z.string(), z.any()).or(z.array(z.any())).optional(),
+        titlePage: z.record(z.string(), z.any()).nullable().optional(),
+        shelfId: uuidSchema.nullable().optional(),
+        category: z.string().max(100).nullable().optional(),
+        wordCount: z.number().int().nonnegative().default(0).optional(),
+        sceneCount: z.number().int().nonnegative().default(0).optional()
+    })
+    .meta({ id: "CreateScreenplay" });
+
+export const updateScreenplaySchema = z
+    .object({
+        title: z.string().trim().min(1).max(200).optional(),
+        content: z.record(z.string(), z.any()).or(z.array(z.any())).optional(),
+        titlePage: z.record(z.string(), z.any()).nullable().optional(),
+        shelfId: uuidSchema.nullable().optional(),
+        category: z.string().max(100).nullable().optional(),
+        wordCount: z.number().int().nonnegative().optional(),
+        sceneCount: z.number().int().nonnegative().optional()
+    })
+    .meta({ id: "UpdateScreenplay" });
+
+export const screenplayEventSchema = z
+    .discriminatedUnion("type", [
+        z.object({
+            type: z.literal("script.updated"),
+            scriptId: uuidSchema,
+            userId: uuidSchema,
+            updatedAt: timestampSchema,
+            title: z.string().optional(),
+            content: z.record(z.string(), z.any()).or(z.array(z.any())).optional(),
+            titlePage: z.record(z.string(), z.any()).nullable().optional(),
+            wordCount: z.number().int().nonnegative().optional(),
+            sceneCount: z.number().int().nonnegative().optional()
+        }),
+        z.object({
+            type: z.literal("script.version_created"),
+            scriptId: uuidSchema,
+            versionId: uuidSchema,
+            name: z.string(),
+            userId: uuidSchema,
+            occurredAt: timestampSchema
+        })
+    ])
+    .meta({ id: "ScreenplayEvent" });
+
+export type ScreenplayShelfDto = z.infer<typeof screenplayShelfSchema>;
+export type CreateScreenplayShelfDto = z.input<typeof createScreenplayShelfSchema>;
+export type ScreenplayCollaboratorDto = z.infer<typeof screenplayCollaboratorSchema>;
+export type AddScreenplayCollaboratorDto = z.input<typeof addScreenplayCollaboratorSchema>;
+export type ScreenplayVersionDto = z.infer<typeof screenplayVersionSchema>;
+export type CreateScreenplayVersionDto = z.input<typeof createScreenplayVersionSchema>;
+export type ScreenplaySummaryDto = z.infer<typeof screenplaySummarySchema>;
+export type ScreenplayDto = z.infer<typeof screenplaySchema>;
+export type CreateScreenplayDto = z.input<typeof createScreenplaySchema>;
+export type UpdateScreenplayDto = z.input<typeof updateScreenplaySchema>;
+export type ScreenplayEventDto = z.infer<typeof screenplayEventSchema>;
+
+export const discordSettingsSchema = z
+    .object({
+        guildId: snowflakeSchema,
+        channels: z.record(z.string(), snowflakeSchema).default({}),
+        webhooks: z.record(z.string(), z.string()).default({}),
+        roles: z.record(z.string(), snowflakeSchema).default({}),
+        forumTags: z.record(z.string(), snowflakeSchema).default({}),
+        notificationCursor: z.string().nullable().default(null),
+        rulesMessageId: snowflakeSchema.nullable().default(null),
+        createdAt: timestampSchema.optional(),
+        updatedAt: timestampSchema.optional()
+    })
+    .meta({ id: "DiscordSettings" });
+
+export const updateDiscordSettingsSchema = z
+    .object({
+        channels: z.record(z.string(), snowflakeSchema).optional(),
+        webhooks: z.record(z.string(), z.string()).optional(),
+        roles: z.record(z.string(), snowflakeSchema).optional(),
+        forumTags: z.record(z.string(), snowflakeSchema).optional(),
+        notificationCursor: z.string().nullable().optional(),
+        rulesMessageId: snowflakeSchema.nullable().optional()
+    })
+    .meta({ id: "UpdateDiscordSettings" });
+
+export type DiscordSettingsDto = z.infer<typeof discordSettingsSchema>;
+export type UpdateDiscordSettingsDto = z.input<typeof updateDiscordSettingsSchema>;
+
+export const infractionSchema = z
+    .object({
+        id: z.string(),
+        timestamp: z.string(),
+        reason: z.string(),
+        channelId: z.string(),
+        messageSnippet: z.string()
+    })
+    .meta({ id: "Infraction" });
+
+export const timeoutRecordSchema = z
+    .object({
+        id: z.string(),
+        timestamp: z.string(),
+        durationMs: z.number(),
+        reason: z.string(),
+        level: z.number().default(1)
+    })
+    .meta({ id: "TimeoutRecord" });
+
+export const apologyRecordSchema = z
+    .object({
+        status: z.enum(["none", "pending", "approved", "rejected"]).default("none"),
+        text: z.string().nullable().default(null),
+        submittedAt: z.string().nullable().default(null),
+        reviewedBy: z.string().nullable().optional(),
+        reviewedAt: z.string().nullable().optional()
+    })
+    .meta({ id: "ApologyRecord" });
+
+export const userModerationRecordSchema = z
+    .object({
+        userId: snowflakeSchema,
+        offenceLevel: z.number().int().default(0),
+        stageWarnings: z.number().int().default(0),
+        infractions: z.array(infractionSchema).default([]),
+        timeouts: z.array(timeoutRecordSchema).default([]),
+        apology: apologyRecordSchema.default({ status: "none", text: null, submittedAt: null }),
+        createdAt: timestampSchema.optional(),
+        updatedAt: timestampSchema.optional()
+    })
+    .meta({ id: "UserModerationRecord" });
+
+export const updateUserModerationRecordSchema = z
+    .object({
+        offenceLevel: z.number().int().optional(),
+        stageWarnings: z.number().int().optional(),
+        infractions: z.array(infractionSchema).optional(),
+        timeouts: z.array(timeoutRecordSchema).optional(),
+        apology: apologyRecordSchema.optional()
+    })
+    .meta({ id: "UpdateUserModerationRecord" });
+
+export type InfractionDto = z.infer<typeof infractionSchema>;
+export type TimeoutRecordDto = z.infer<typeof timeoutRecordSchema>;
+export type ApologyRecordDto = z.infer<typeof apologyRecordSchema>;
+export type UserModerationRecordDto = z.infer<typeof userModerationRecordSchema>;
+export type UpdateUserModerationRecordDto = z.input<typeof updateUserModerationRecordSchema>;
+
+export const announcementPingsSchema = z
+    .object({
+        everyone: z.boolean().optional(),
+        here: z.boolean().optional(),
+        roleIds: z.array(snowflakeSchema).max(20).optional(),
+        userIds: z.array(snowflakeSchema).max(50).optional()
+    })
+    .meta({ id: "AnnouncementPings" });
+
+export type AnnouncementPingsDto = z.infer<typeof announcementPingsSchema>;
+
+export const publishAnnouncementSchema = z
+    .object({
+        target: z.string().min(1).max(64),
+        title: z.string().min(1).max(256),
+        content: z.string().min(1).max(4000),
+        pings: announcementPingsSchema.optional()
+    })
+    .meta({ id: "PublishAnnouncement" });
+
+export type PublishAnnouncementDto = z.infer<typeof publishAnnouncementSchema>;
+
+export const announcementPublishResultSchema = z
+    .object({
+        target: z.string(),
+        dispatchedCount: z.number().int(),
+        channels: z.array(z.string())
+    })
+    .meta({ id: "AnnouncementPublishResult" });
+
+export type AnnouncementPublishResultDto = z.infer<typeof announcementPublishResultSchema>;

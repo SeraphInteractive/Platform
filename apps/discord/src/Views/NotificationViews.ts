@@ -5,13 +5,14 @@ import {
     RaidFlag,
     ReviewDecision,
     RoundStatus,
+    roleLabel,
+    specialtyLabel,
     type NotificationOf,
-    type PlatformNotification,
-    type ShotReference
+    type PlatformNotification
 } from "@platform/contracts";
 import type { MediaGalleryBuilder } from "discord.js";
 import { ChannelPurpose } from "../State/SettingsStore.js";
-import { Accent, image, message, panel, person, plain, quote, when, type V2Message } from "../Discord/Ui.js";
+import { Accent, capitalize, image, message, panel, person, plain, quote, when, type V2Message } from "../Discord/Ui.js";
 
 export interface RenderedNotification {
     readonly purpose: ChannelPurpose;
@@ -21,6 +22,12 @@ export interface RenderedNotification {
 export interface NotificationContext {
     readonly threadFor: (shotId: string) => string | undefined;
     readonly isMember?: (discordId: string) => boolean;
+    readonly webAppUrl?: string;
+}
+
+function taskLink(code: string, webAppUrl?: string): string {
+    const base = webAppUrl ?? "https://dev-app.projectstairway.net";
+    return `[${plain(code)}](${base}/grabbox/${encodeURIComponent(code)})`;
 }
 
 type Line = string | MediaGalleryBuilder | null;
@@ -49,15 +56,6 @@ function preview(url: string | null | undefined, title: string): MediaGalleryBui
 
 function reason(value: string | null): string | null {
     return value === null || value.trim().length === 0 ? null : `-# Reason: ${plain(value, 300)}`;
-}
-
-function shotName(shot: ShotReference): string {
-    return `${plain(shot.code, 50)} - ${plain(shot.title, 120)}`;
-}
-
-function shotLink(shot: ShotReference, context: NotificationContext): string {
-    const thread = context.threadFor(shot.id);
-    return thread === undefined ? shotName(shot) : `${shotName(shot)} (<#${thread}>)`;
 }
 
 function describeBallot(notification: NotificationOf<NotificationType.BallotSubmitted>, context: NotificationContext): string {
@@ -111,7 +109,6 @@ export function describeWinner(notification: NotificationOf<NotificationType.Rou
 
 export function renderNotification(notification: PlatformNotification, context: NotificationContext): RenderedNotification[] {
     const telemetry = ChannelPurpose.Telemetry;
-    const taskLogs = ChannelPurpose.TaskLogs;
     const isMember = context.isMember;
     switch (notification.type) {
         case NotificationType.BallotSubmitted:
@@ -145,19 +142,20 @@ export function renderNotification(notification: PlatformNotification, context: 
                     `${person(notification.user, isMember)}, by ${person(notification.actor, isMember)}`
                 )
             ];
-        case NotificationType.UserRoleChanged:
+        case NotificationType.UserRoleChanged: {
+            const role = roleLabel(notification.role);
+            const specialties = notification.specialties.length > 0 ? ` (${notification.specialties.map(specialtyLabel).join(", ")})` : "";
             return [
                 post(
                     telemetry,
                     Accent.Info,
                     "**User role updated**",
-                    `${person(notification.user, isMember)} is now ${notification.role}${notification.specialties.length > 0 ? ` (${notification.specialties.join(", ")})` : ""}, by ${person(notification.actor, isMember)}`
+                    `${person(notification.user, isMember)} is now ${role}${specialties}, by ${person(notification.actor, isMember)}`
                 )
             ];
+        }
         case NotificationType.ContributorPromoted:
-            return [
-                post(ChannelPurpose.Announcements, Accent.Success, `${person(notification.user, isMember)} is now a senior contributor.`)
-            ];
+            return [post(telemetry, Accent.Success, `${person(notification.user, isMember)} is now a senior contributor.`)];
         case NotificationType.RaidAlert:
             return [
                 post(
@@ -295,75 +293,109 @@ export function renderNotification(notification: PlatformNotification, context: 
                     preview(notification.entry.mediaUrl, notification.entry.title)
                 )
             ];
-        case NotificationType.ShotCreated:
-            return [post(taskLogs, null, `**Task created:** ${shotLink(notification.shot, context)}`)];
-        case NotificationType.ShotUpdated:
-            return [post(taskLogs, null, `**Task updated:** ${shotLink(notification.shot, context)}`)];
-        case NotificationType.ShotDeleted:
-            return [post(taskLogs, Accent.Warning, `**Task deleted:** ${shotName(notification.shot)}`)];
-        case NotificationType.ShotClaimed:
+        case NotificationType.ShotCreated: {
+            const link = taskLink(notification.shot.code, context.webAppUrl);
             return [
                 post(
-                    taskLogs,
-                    null,
-                    `**Claimed:** ${shotLink(notification.shot, context)}`,
-                    `${person(notification.claimant, isMember)}, due ${when(notification.deadlineAt)}`
+                    telemetry,
+                    Accent.Info,
+                    `**Task created: ${link} - ${plain(notification.shot.title)}**`,
+                    `Difficulty: ${capitalize(notification.shot.difficulty)} | Scene: ${notification.shot.sceneNumber}`
                 )
             ];
-        case NotificationType.ShotReleased:
+        }
+        case NotificationType.ShotUpdated: {
+            const link = taskLink(notification.shot.code, context.webAppUrl);
             return [
                 post(
-                    taskLogs,
-                    null,
-                    `**Released:** ${shotLink(notification.shot, context)}`,
-                    `By ${person(notification.actor, isMember)}`,
-                    reason(notification.reason)
+                    telemetry,
+                    Accent.Info,
+                    `**Task updated: ${link} - ${plain(notification.shot.title)}**`,
+                    `Difficulty: ${capitalize(notification.shot.difficulty)} | Scene: ${notification.shot.sceneNumber}`
                 )
             ];
-        case NotificationType.ShotExpired:
+        }
+        case NotificationType.ShotDeleted: {
             return [
                 post(
-                    taskLogs,
+                    telemetry,
                     Accent.Warning,
-                    `**Claim expired:** ${shotLink(notification.shot, context)}`,
-                    notification.claimant === null
-                        ? "The task is open again."
-                        : `${person(notification.claimant, isMember)} ran out of time. The task is open again.`
+                    `**Task deleted: ${plain(notification.shot.code)} - ${plain(notification.shot.title)}**`,
+                    `Scene: ${notification.shot.sceneNumber}`
                 )
             ];
-        case NotificationType.SubmissionCreated:
+        }
+        case NotificationType.ShotClaimed: {
+            const link = taskLink(notification.shot.code, context.webAppUrl);
             return [
                 post(
-                    taskLogs,
-                    null,
-                    `**Submitted:** ${shotLink(notification.shot, context)}, version ${notification.version}`,
-                    `By ${person(notification.contributor, isMember)}`,
-                    notification.notes === null ? null : quote(notification.notes, 500)
+                    telemetry,
+                    Accent.Info,
+                    `**Task claimed: ${link} - ${plain(notification.shot.title)}**`,
+                    `Claimed by ${person(notification.claimant, isMember)}.`,
+                    `Due: ${when(notification.deadlineAt, "f")} (${when(notification.deadlineAt)}).`
                 )
             ];
-        case NotificationType.SubmissionReviewed: {
-            const approved = notification.decision === ReviewDecision.Approved;
-            const rendered = [
+        }
+        case NotificationType.ShotReleased: {
+            const link = taskLink(notification.shot.code, context.webAppUrl);
+            const reasonLine = notification.reason ? `\n> ${plain(notification.reason)}` : "";
+            return [
                 post(
-                    taskLogs,
-                    approved ? Accent.Success : Accent.Warning,
-                    `**${approved ? "Approved" : "Changes requested"}:** ${shotLink(notification.shot, context)}, version ${notification.version}`,
-                    `Reviewed by ${person(notification.reviewer, isMember)}`,
-                    notification.notes === null ? null : quote(notification.notes, 600)
+                    telemetry,
+                    Accent.Warning,
+                    `**Task released: ${link} - ${plain(notification.shot.title)}**`,
+                    `Released by ${person(notification.actor, isMember)}. The task is open again.${reasonLine}`
                 )
             ];
-            if (approved) {
-                rendered.push(
-                    post(
-                        ChannelPurpose.Announcements,
-                        Accent.Success,
-                        `**${shotName(notification.shot)} is finished.** Delivered by ${person(notification.contributor, isMember)}.`
-                    )
-                );
-            }
-            return rendered;
+        }
+        case NotificationType.ShotExpired: {
+            const link = taskLink(notification.shot.code, context.webAppUrl);
+            const who = notification.claimant ? ` Claim by ${person(notification.claimant, isMember)} expired.` : " Claim expired.";
+            return [
+                post(
+                    telemetry,
+                    Accent.Danger,
+                    `**Task claim expired: ${link} - ${plain(notification.shot.title)}**`,
+                    `${who} The task is open again.`
+                )
+            ];
+        }
+        case NotificationType.SubmissionCreated: {
+            const link = taskLink(notification.shot.code, context.webAppUrl);
+            const notesLine = notification.notes ? `\n> ${plain(notification.notes)}` : "";
+            return [
+                post(
+                    telemetry,
+                    Accent.Info,
+                    `**Deliverable submitted: ${link} - ${plain(notification.shot.title)} (v${notification.version})**`,
+                    `Submitted by ${person(notification.contributor, isMember)} for supervisor review.${notesLine}`
+                )
+            ];
+        }
+        case NotificationType.SubmissionReviewed: {
+            const link = taskLink(notification.shot.code, context.webAppUrl);
+            const approved = notification.decision === ReviewDecision.Approved;
+            const accent = approved ? Accent.Success : Accent.Warning;
+            const title = approved ? "Deliverable approved" : "Changes requested";
+            const notesLine = notification.notes ? `\n> ${plain(notification.notes)}` : "";
+            return [
+                post(
+                    telemetry,
+                    accent,
+                    `**${title}: ${link} - ${plain(notification.shot.title)} (v${notification.version})**`,
+                    `Reviewed by ${person(notification.reviewer, isMember)}. Contributor: ${person(notification.contributor, isMember)}.${notesLine}`
+                )
+            ];
         }
         case NotificationType.PipelineUpdated: {
+            const telemetryPost = post(
+                telemetry,
+                Accent.Info,
+                `**Pipeline update: Step ${plain(notification.stepId)} - ${plain(notification.stepTitle)}**`,
+                `In **${plain(notification.phaseTitle)}** (${notification.progressPercent}% completed).`,
+                `-# Updated by ${person(notification.actor, isMember)}`
+            );
             if (notification.isPhaseTransition) {
                 return [
                     post(
@@ -372,18 +404,11 @@ export function renderNotification(notification: PlatformNotification, context: 
                         `## Phase ${notification.phaseNumber} Unlocked: ${plain(notification.phaseTitle)}`,
                         `Now entering **Step ${plain(notification.stepId)}: ${plain(notification.stepTitle)}** (${notification.progressPercent}% overall completed).`,
                         `-# Updated by ${person(notification.actor, isMember)}`
-                    )
+                    ),
+                    telemetryPost
                 ];
             }
-            return [
-                post(
-                    ChannelPurpose.Announcements,
-                    Accent.Info,
-                    `**Pipeline Update: Step ${plain(notification.stepId)} - ${plain(notification.stepTitle)}**`,
-                    `In **${plain(notification.phaseTitle)}** (${notification.progressPercent}% completed).`,
-                    `-# Updated by ${person(notification.actor, isMember)}`
-                )
-            ];
+            return [telemetryPost];
         }
         case NotificationType.MediaFlaggedAi: {
             const kindLabel = notification.mediaKind === "entry" ? "Round Entry" : "Task Deliverable";
@@ -399,6 +424,12 @@ export function renderNotification(notification: PlatformNotification, context: 
                 )
             ];
         }
+        case NotificationType.TicketConfigUpdated:
+        case NotificationType.TicketActivity:
+        case NotificationType.FeedbackSurveyOpened:
+        case NotificationType.FeedbackSurveyClosed:
+        case NotificationType.FeedbackOutcomeRecorded:
+            return [];
         case NotificationType.DocumentUpdated: {
             const noteText =
                 notification.note !== null && notification.note.trim().length > 0 ? `\n-# Note: ${plain(notification.note, 200)}` : "";
@@ -408,6 +439,18 @@ export function renderNotification(notification: PlatformNotification, context: 
                     Accent.Info,
                     `**${plain(notification.title)} Published (Rev #${notification.revision})**`,
                     `Published by ${person(notification.actor, isMember)}${noteText}`
+                )
+            ];
+        }
+        case NotificationType.AnnouncementPublished: {
+            const dest = notification.channels && notification.channels.length > 0 ? notification.channels.join(", ") : notification.target;
+            return [
+                post(
+                    telemetry,
+                    Accent.Info,
+                    `**Announcement published: ${plain(notification.title)}**`,
+                    `Target: ${dest}`,
+                    `-# Published by ${person(notification.author, isMember)}`
                 )
             ];
         }
@@ -447,7 +490,7 @@ export function renderRulesMessage(notification: NotificationOf<NotificationType
         lines.push("");
     }
 
-    lines.push(`-# Revision ${notification.revision} • Project Stairway Studio`);
+    lines.push(`-# Revision ${notification.revision} - Project Stairway Studio`);
 
     return message(panel(null, lines.join("\n").trim()));
 }

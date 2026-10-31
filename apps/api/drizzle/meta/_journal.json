@@ -92,6 +92,90 @@
       "when": 1791694665819,
       "tag": "0012_fine_next_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791990756574,
+      "tag": "0013_colossal_brother_voodoo",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792004092149,
+      "tag": "0014_condemned_deathstrike",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1792004092150,
+      "tag": "0015_remap_legacy_supervisor_specialties",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792343244756,
+      "tag": "0016_open_abomination",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792344498581,
+      "tag": "0017_silly_flatman",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792345000000,
+      "tag": "0018_remap_moderator_to_supervisor",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792346000000,
+      "tag": "0019_add_departments_and_shot_types",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792430115114,
+      "tag": "0020_add_created_by_to_shots",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792434847763,
+      "tag": "0021_department_discord_webhooks",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792514696555,
+      "tag": "0022_tickets_and_crew_feedback",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792600000000,
+      "tag": "0023_add_post_production_shot_types",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792755479189,
+      "tag": "0024_populate_post_production_shot_types",
+      "breakpoints": true
     }
   ]
 }

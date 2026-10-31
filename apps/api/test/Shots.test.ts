@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DifficultyTier, ShotStatus } from "../src/Domain/Enums.js";
+import { DifficultyTier, ShotStatus, ShotType, Specialty, SubmissionStatus } from "../src/Domain/Enums.js";
 import { Role } from "../src/Domain/Roles.js";
-import { shots, users } from "../src/Infrastructure/Database/Schema.js";
+import { shots, submissions, users } from "../src/Infrastructure/Database/Schema.js";
 import { NotificationType } from "../src/Infrastructure/Notifications/Notification.js";
 import { StorageBucket } from "../src/Infrastructure/Storage/ObjectStorage.js";
 import { createTestContext, json, nextSnowflake, serviceToken, type TestContext, type TestUser } from "./Support/TestApplication.js";
@@ -39,11 +39,34 @@ describe("shot grab-box", () => {
         const shotId = await createShot("SC01-010");
         const voter = await context.createUser(Role.Voter);
 
-        // users without contributor role can claim tasks
-        const claim = await context.application.inject({
+        // users without contributor role cannot claim tasks
+        const nonContributorClaim = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${shotId}/claim`,
             headers: voter.headers
+        });
+        expect(nonContributorClaim.statusCode).toBe(403);
+        expect(json(nonContributorClaim).code).toBe("INSUFFICIENT_ROLE");
+
+        // contributors without required specialty cannot claim tasks
+        const wrongSpecialtyUser = await context.createUser(Role.Contributor, {
+            specialties: [Specialty.Rigger]
+        });
+        const wrongClaim = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${shotId}/claim`,
+            headers: wrongSpecialtyUser.headers
+        });
+        expect(wrongClaim.statusCode).toBe(403);
+        expect(json(wrongClaim).code).toBe("SPECIALTY_REQUIRED");
+
+        const contributor = await context.createUser(Role.Contributor, {
+            specialties: [Specialty.Animator]
+        });
+        const claim = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${shotId}/claim`,
+            headers: contributor.headers
         });
         expect(claim.statusCode).toBe(200);
         expect(json<Envelope<{ status: string; deadlineAt: string }>>(claim).data.status).toBe(ShotStatus.Claimed);
@@ -52,14 +75,14 @@ describe("shot grab-box", () => {
         const second = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${otherShot}/claim`,
-            headers: voter.headers
+            headers: contributor.headers
         });
         expect(json(second).code).toBe("ACTIVE_CLAIM_EXISTS");
 
         const badExtension = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${shotId}/uploads`,
-            headers: voter.headers,
+            headers: contributor.headers,
             payload: { kind: "video", fileName: "../../evil.sh", contentType: "video/mp4", sizeBytes: 100 }
         });
         expect(badExtension.statusCode).toBe(422);
@@ -67,26 +90,27 @@ describe("shot grab-box", () => {
         const upload = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${shotId}/uploads`,
-            headers: voter.headers,
+            headers: contributor.headers,
             payload: { kind: "video", fileName: "../../final cut.mp4", contentType: "video/mp4", sizeBytes: 1024 }
         });
         expect(upload.statusCode).toBe(201);
         const { key } = json<Envelope<{ key: string }>>(upload).data;
-        expect(key).toMatch(new RegExp(`^shots/${shotId}/${voter.record.id}/[0-9a-f-]{36}-final_cut\\.mp4$`, "u"));
+        expect(key).toBe("Project Stairway/Submission Reviews/Pending/SC01-010/final_cut.mp4");
 
         const blendUpload = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${shotId}/uploads`,
-            headers: voter.headers,
+            headers: contributor.headers,
             payload: { kind: "blend", fileName: "project.blend", contentType: "application/octet-stream", sizeBytes: 2048 }
         });
         expect(blendUpload.statusCode).toBe(201);
         const blendKey = json<Envelope<{ key: string }>>(blendUpload).data.key;
+        expect(blendKey).toBe("Project Stairway/Submission Reviews/Pending/SC01-010/project.blend");
 
         const missing = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${shotId}/submissions`,
-            headers: voter.headers,
+            headers: contributor.headers,
             payload: { videoKey: key, blendKey }
         });
         expect(json(missing).code).toBe("UPLOAD_MISSING");
@@ -96,23 +120,40 @@ describe("shot grab-box", () => {
         const submitted = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${shotId}/submissions`,
-            headers: voter.headers,
+            headers: contributor.headers,
             payload: { videoKey: key, blendKey, notes: "v1" }
         });
         expect(submitted.statusCode).toBe(201);
         const submission = json<Envelope<{ id: string; version: number; videoUrl: string | null }>>(submitted).data;
         expect(submission.version).toBe(1);
-        expect(submission.videoUrl).not.toBeNull();
-
-        // submitting work promotes voter to contributor
-        const [updatedUser] = await context.database.select().from(users).where(eq(users.id, voter.record.id));
-        expect(updatedUser?.role).toBe(Role.Contributor);
+        expect(submission.videoUrl).toBeNull();
 
         const publicDetail = await context.application.inject({ method: "GET", url: `/api/v1/shots/${shotId}` });
         expect(json<Envelope<{ submissions: { videoUrl: string | null }[] }>>(publicDetail).data.submissions[0]?.videoUrl).toBeNull();
 
+        const claimantDetail = await context.application.inject({
+            method: "GET",
+            url: `/api/v1/shots/${shotId}`,
+            headers: contributor.headers
+        });
+        expect(json<Envelope<{ submissions: { videoUrl: string | null }[] }>>(claimantDetail).data.submissions[0]?.videoUrl).toBeNull();
+
+        const supervisorDetail = await context.application.inject({
+            method: "GET",
+            url: `/api/v1/shots/${shotId}`,
+            headers: supervisor.headers
+        });
+        expect(
+            json<Envelope<{ submissions: { videoUrl: string | null }[] }>>(supervisorDetail).data.submissions[0]?.videoUrl
+        ).not.toBeNull();
+
         const queue = await context.application.inject({ method: "GET", url: "/api/v1/reviews", headers: supervisor.headers });
-        expect(json<{ data: { id: string }[] }>(queue).data.map((item) => item.id)).toContain(submission.id);
+        const queueItems = json<{ data: { id: string; vaultUrl: string | null }[] }>(queue).data;
+        expect(queueItems.map((item) => item.id)).toContain(submission.id);
+        const queueEntry = queueItems.find((item) => item.id === submission.id);
+        expect(queueEntry?.vaultUrl).toBe(
+            `https://vault.test/apps/files/folders?dir=/Project%20Stairway/Submission%20Reviews/Pending/SC01-010`
+        );
 
         const revision = await context.application.inject({
             method: "POST",
@@ -133,9 +174,72 @@ describe("shot grab-box", () => {
         expect(afterRevision?.status).toBe(ShotStatus.Claimed);
     });
 
+    it("promotes approved submission deliverables from Pending to Affirmed vault", async () => {
+        const shotId = await createShot("SC01-099");
+        const contributor = await context.createUser(Role.Contributor, { specialties: [Specialty.Animator] });
+        await context.application.inject({ method: "POST", url: `/api/v1/shots/${shotId}/claim`, headers: contributor.headers });
+
+        const upload = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${shotId}/uploads`,
+            headers: contributor.headers,
+            payload: { kind: "video", fileName: "shot.mp4", contentType: "video/mp4", sizeBytes: 1024 }
+        });
+        const { key: videoKey } = json<Envelope<{ key: string }>>(upload).data;
+
+        const blendUpload = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${shotId}/uploads`,
+            headers: contributor.headers,
+            payload: { kind: "blend", fileName: "shot.blend", contentType: "application/octet-stream", sizeBytes: 2048 }
+        });
+        const { key: blendKey } = json<Envelope<{ key: string }>>(blendUpload).data;
+
+        context.storage.store(StorageBucket.Deliverables, videoKey, 1024, "video/mp4");
+        context.storage.store(StorageBucket.Deliverables, blendKey, 2048, "application/octet-stream");
+
+        const submitted = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${shotId}/submissions`,
+            headers: contributor.headers,
+            payload: { videoKey, blendKey, notes: "ready for review" }
+        });
+        const { id: submissionId } = json<Envelope<{ id: string }>>(submitted).data;
+
+        const approved = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/submissions/${submissionId}/review`,
+            headers: supervisor.headers,
+            payload: { decision: "approved" }
+        });
+        expect(approved.statusCode).toBe(200);
+
+        // pending keys should be moved to affirmed prefix
+        expect(await context.storage.getMetadata(StorageBucket.Deliverables, videoKey)).toBeNull();
+        expect(await context.storage.getMetadata(StorageBucket.Deliverables, blendKey)).toBeNull();
+
+        const affirmedVideoKey = videoKey.replace(
+            /^Project Stairway\/Submission Reviews\/Pending\//u,
+            "Project Stairway/Submission Reviews/Affirmed/"
+        );
+        const affirmedBlendKey = blendKey.replace(
+            /^Project Stairway\/Submission Reviews\/Pending\//u,
+            "Project Stairway/Submission Reviews/Affirmed/"
+        );
+        expect(await context.storage.getMetadata(StorageBucket.Deliverables, affirmedVideoKey)).not.toBeNull();
+        expect(await context.storage.getMetadata(StorageBucket.Deliverables, affirmedBlendKey)).not.toBeNull();
+
+        const [dbSubmission] = await context.database.select().from(submissions).where(eq(submissions.id, submissionId));
+        expect(dbSubmission?.videoKey).toBe(affirmedVideoKey);
+        expect(dbSubmission?.blendKey).toBe(affirmedBlendKey);
+        expect(dbSubmission?.status).toBe(SubmissionStatus.Approved);
+    });
+
     it("prevents supervisors from reviewing their own work", async () => {
         const shotId = await createShot("SC02-010");
-        const worker = await context.createUser(Role.Supervisor);
+        const worker = await context.createUser(Role.Supervisor, {
+            specialties: [Specialty.AnimationSupervisor, Specialty.Animator]
+        });
         await context.application.inject({ method: "POST", url: `/api/v1/shots/${shotId}/claim`, headers: worker.headers });
         const upload = json<Envelope<{ key: string }>>(
             await context.application.inject({
@@ -174,8 +278,8 @@ describe("shot grab-box", () => {
 
     it("enforces the senior priority window", async () => {
         const shotId = await createShot("SC03-010", DifficultyTier.Complex, 24);
-        const contributor = await context.createUser(Role.Contributor);
-        const senior = await context.createUser(Role.SeniorContributor);
+        const contributor = await context.createUser(Role.Contributor, { specialties: [Specialty.Animator] });
+        const senior = await context.createUser(Role.SeniorContributor, { specialties: [Specialty.Animator] });
         const listed = await context.application.inject({
             method: "GET",
             url: "/api/v1/shots?difficultyTier=complex",
@@ -196,7 +300,7 @@ describe("shot grab-box", () => {
 
     it("reclaims expired claims", async () => {
         const shotId = await createShot("SC04-010");
-        const contributor = await context.createUser(Role.Contributor);
+        const contributor = await context.createUser(Role.Contributor, { specialties: [Specialty.Animator] });
         await context.application.inject({ method: "POST", url: `/api/v1/shots/${shotId}/claim`, headers: contributor.headers });
         await context.database
             .update(shots)
@@ -296,7 +400,7 @@ describe("shot grab-box", () => {
 
     it("scans task deliverables for AI video signatures and notifies supervisors", async () => {
         const shotId = await createShot("SC07-010");
-        const worker = await context.createUser(Role.Contributor);
+        const worker = await context.createUser(Role.Contributor, { specialties: [Specialty.Animator] });
 
         await context.application.inject({
             method: "POST",
@@ -339,7 +443,7 @@ describe("shot grab-box", () => {
 
     it("prevents blacklisted users from claiming or submitting tasks", async () => {
         const shotId = await createShot("SC08-010");
-        const worker = await context.createUser(Role.Contributor);
+        const worker = await context.createUser(Role.Contributor, { specialties: [Specialty.Animator] });
         await context.database.update(users).set({ isBlacklisted: true }).where(eq(users.id, worker.record.id));
 
         const claimAttempt = await context.application.inject({
@@ -358,5 +462,158 @@ describe("shot grab-box", () => {
         });
         expect(submitAttempt.statusCode).toBe(403);
         expect(json(submitAttempt).code).toBe("USER_BLACKLISTED");
+    });
+
+    it("enforces department isolation on task creation and review", async () => {
+        const assetsSupervisor = await context.createUser(Role.Supervisor, {
+            specialties: [Specialty.ModelingAndSurfacingLead]
+        });
+
+        // assets supervisor cannot create animation shot
+        const wrongDeptCreate = await context.application.inject({
+            method: "POST",
+            url: "/api/v1/shots",
+            headers: assetsSupervisor.headers,
+            payload: {
+                sceneNumber: 1,
+                shotCode: "SC09-010",
+                title: "Animation Shot",
+                shotType: ShotType.Animation,
+                difficultyTier: DifficultyTier.Easy
+            }
+        });
+        expect(wrongDeptCreate.statusCode).toBe(403);
+        expect(json(wrongDeptCreate).code).toBe("UNAUTHORIZED_DEPARTMENT");
+
+        // assets supervisor can create 3D modeling shot
+        const validCreate = await context.application.inject({
+            method: "POST",
+            url: "/api/v1/shots",
+            headers: assetsSupervisor.headers,
+            payload: {
+                sceneNumber: 1,
+                shotCode: "SC09-020",
+                title: "3D Modeling Shot",
+                shotType: ShotType.Modelling3d,
+                difficultyTier: DifficultyTier.Easy
+            }
+        });
+        expect(validCreate.statusCode).toBe(201);
+        const modelingShotId = json<Envelope<{ id: string }>>(validCreate).data.id;
+
+        // animator cannot claim 3D modeling shot
+        const animator = await context.createUser(Role.Contributor, {
+            specialties: [Specialty.Animator]
+        });
+        const animatorClaim = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${modelingShotId}/claim`,
+            headers: animator.headers
+        });
+        expect(animatorClaim.statusCode).toBe(403);
+        expect(json(animatorClaim).code).toBe("SPECIALTY_REQUIRED");
+
+        // modeler can claim 3D modeling shot
+        const modeler = await context.createUser(Role.Contributor, {
+            specialties: [Specialty.Modeler3d]
+        });
+        const modelerClaim = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${modelingShotId}/claim`,
+            headers: modeler.headers
+        });
+        expect(modelerClaim.statusCode).toBe(200);
+
+        // submit deliverables
+        const upload = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${modelingShotId}/uploads`,
+            headers: modeler.headers,
+            payload: { kind: "video", fileName: "model.mp4", contentType: "video/mp4", sizeBytes: 1024 }
+        });
+        const blendUpload = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${modelingShotId}/uploads`,
+            headers: modeler.headers,
+            payload: { kind: "blend", fileName: "model.blend", contentType: "application/octet-stream", sizeBytes: 2048 }
+        });
+        const videoKey = json<Envelope<{ key: string }>>(upload).data.key;
+        const blendKey = json<Envelope<{ key: string }>>(blendUpload).data.key;
+        context.storage.store(StorageBucket.Deliverables, videoKey, 1024, "video/mp4");
+        context.storage.store(StorageBucket.Deliverables, blendKey, 2048, "application/octet-stream");
+
+        const submitted = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${modelingShotId}/submissions`,
+            headers: modeler.headers,
+            payload: { videoKey, blendKey, notes: "mesh ready" }
+        });
+        expect(submitted.statusCode).toBe(201);
+        const submissionId = json<Envelope<{ id: string }>>(submitted).data.id;
+
+        // animation supervisor cannot review assets submission
+        const animSupervisorReview = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/submissions/${submissionId}/review`,
+            headers: supervisor.headers,
+            payload: { decision: "approved" }
+        });
+        expect(animSupervisorReview.statusCode).toBe(403);
+        expect(json(animSupervisorReview).code).toBe("UNAUTHORIZED_DEPARTMENT");
+
+        // assets supervisor can approve assets submission
+        const assetsReview = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/submissions/${submissionId}/review`,
+            headers: assetsSupervisor.headers,
+            payload: { decision: "approved" }
+        });
+        expect(assetsReview.statusCode).toBe(200);
+    });
+
+    it("enforces grab-box pipeline for post-production department", async () => {
+        const editorialSupervisor = await context.createUser(Role.Supervisor, {
+            specialties: [Specialty.EditorialSupervisor]
+        });
+
+        // editorial supervisor can create video editing task
+        const createVideoShot = await context.application.inject({
+            method: "POST",
+            url: "/api/v1/shots",
+            headers: editorialSupervisor.headers,
+            payload: {
+                sceneNumber: 2,
+                shotCode: "SC02-POST-01",
+                title: "Scene Assembly & Rough Cut",
+                shotType: ShotType.VideoEditing,
+                difficultyTier: DifficultyTier.Medium
+            }
+        });
+        expect(createVideoShot.statusCode).toBe(201);
+        const postShotId = json<Envelope<{ id: string; departmentId: string }>>(createVideoShot).data.id;
+
+        // animator cannot claim video editing task
+        const animator = await context.createUser(Role.Contributor, {
+            specialties: [Specialty.Animator]
+        });
+        const invalidClaim = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${postShotId}/claim`,
+            headers: animator.headers
+        });
+        expect(invalidClaim.statusCode).toBe(403);
+        expect(json(invalidClaim).code).toBe("SPECIALTY_REQUIRED");
+
+        // video editor can claim video editing task
+        const videoEditor = await context.createUser(Role.Contributor, {
+            specialties: [Specialty.VideoEditor]
+        });
+        const validClaim = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/shots/${postShotId}/claim`,
+            headers: videoEditor.headers
+        });
+        expect(validClaim.statusCode).toBe(200);
+        expect(json<Envelope<{ status: string }>>(validClaim).data.status).toBe(ShotStatus.Claimed);
     });
 });

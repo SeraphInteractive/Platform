@@ -1,4 +1,14 @@
-import { DifficultyTier, EntryStatus, PollType, RoundStatus, ShotStatus, SubmissionStatus, type Specialty } from "@platform/contracts";
+import {
+    DepartmentSlug,
+    DifficultyTier,
+    EntryStatus,
+    PollType,
+    RoundStatus,
+    ShotStatus,
+    ShotType,
+    SubmissionStatus,
+    Specialty
+} from "@platform/contracts";
 
 const timeFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
 const dayFormat = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short" });
@@ -129,6 +139,33 @@ export const difficultyLabels: Readonly<Record<DifficultyTier, string>> = {
 };
 
 export function specialtyLabel(specialty: Specialty): string {
+    if (specialty === Specialty.LightingAndVfxLead) {
+        return "Lighting and VFX Lead";
+    }
+    if (specialty === Specialty.ModelingAndSurfacingLead) {
+        return "Modeling and Surfacing Lead";
+    }
     const words = specialty.split("_").map((word) => (word === "3d" ? "3D" : `${word.charAt(0).toUpperCase()}${word.slice(1)}`));
     return words.join(" ");
 }
+
+export const shotTypeLabels: Readonly<Record<ShotType, string>> = {
+    [ShotType.ConceptArt]: "Concept Art",
+    [ShotType.Modelling3d]: "3D Modelling",
+    [ShotType.Rigging]: "Rigging",
+    [ShotType.SurfaceTextureArt]: "Surface / Texture Art",
+    [ShotType.Animation]: "Animation",
+    [ShotType.Lighting]: "Lighting",
+    [ShotType.Vfx]: "VFX",
+    [ShotType.VideoEditing]: "Video Editing",
+    [ShotType.SoundDesign]: "Sound Design",
+    [ShotType.VoiceActing]: "Voice Acting"
+};
+
+export const departmentSlugLabels: Readonly<Record<DepartmentSlug, string>> = {
+    [DepartmentSlug.ArtAndWriting]: "Art and Writing",
+    [DepartmentSlug.Assets]: "Assets",
+    [DepartmentSlug.Animation]: "Animation",
+    [DepartmentSlug.LightingAndVfx]: "Lighting and VFX",
+    [DepartmentSlug.PostProduction]: "Post-Production"
+};

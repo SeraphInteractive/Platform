@@ -1,10 +1,13 @@
+import { shotTypeToDepartment } from "@platform/contracts";
 import { asc, count, eq } from "drizzle-orm";
 import { ConflictError, ErrorCode, ForbiddenError, NotFoundError } from "../../Common/Errors/ApplicationError.js";
 import { createPage, offsetOf, type Page, type PaginationQuery } from "../../Common/Http/Schemas.js";
 import type { UserActor } from "../../Common/Security/Principal.js";
 import { ReviewDecision, ShotStatus, SubmissionStatus } from "../../Domain/Enums.js";
+import { hasAtLeast, Role } from "../../Domain/Roles.js";
 import type { Database } from "../../Infrastructure/Database/Database.js";
 import {
+    departments,
     shots,
     submissions,
     users,
@@ -20,6 +23,7 @@ import {
     type Notifier
 } from "../../Infrastructure/Notifications/Notification.js";
 import { StorageBucket, type ObjectStorage } from "../../Infrastructure/Storage/ObjectStorage.js";
+import { deliverableVaultAffirmedPrefix, deliverableVaultPendingPrefix } from "./DeliverablePolicy.js";
 import { ShotsService } from "./ShotsService.js";
 
 export interface ReviewQueueItem {
@@ -28,6 +32,7 @@ export interface ReviewQueueItem {
     readonly contributor: Pick<UserRecord, "id" | "discordId" | "discordUsername" | "discordAvatar"> | null;
     readonly videoUrl: string | null;
     readonly blendUrl: string | null;
+    readonly vaultUrl: string | null;
 }
 
 export class ReviewsService {
@@ -63,14 +68,23 @@ export class ReviewsService {
 
         const enabled = this.storage.isEnabled(StorageBucket.Deliverables);
         const items = await Promise.all(
-            rows.map(async (row) => ({
-                ...row,
-                videoUrl: enabled ? await this.storage.createDownloadUrl(StorageBucket.Deliverables, row.submission.videoKey) : null,
-                blendUrl:
-                    enabled && row.submission.blendKey !== null
-                        ? await this.storage.createDownloadUrl(StorageBucket.Deliverables, row.submission.blendKey)
-                        : null
-            }))
+            rows.map(async (row) => {
+                const folderPath = row.submission.videoKey.includes("/")
+                    ? row.submission.videoKey.slice(0, row.submission.videoKey.lastIndexOf("/"))
+                    : "Pending";
+                const vaultUrl = this.storage.getVaultFolderUrl
+                    ? this.storage.getVaultFolderUrl(StorageBucket.Deliverables, folderPath)
+                    : null;
+                return {
+                    ...row,
+                    videoUrl: enabled ? await this.storage.createDownloadUrl(StorageBucket.Deliverables, row.submission.videoKey) : null,
+                    blendUrl:
+                        enabled && row.submission.blendKey !== null
+                            ? await this.storage.createDownloadUrl(StorageBucket.Deliverables, row.submission.blendKey)
+                            : null,
+                    vaultUrl
+                };
+            })
         );
         return createPage(items, totals[0]?.total ?? 0, query);
     }
@@ -97,14 +111,62 @@ export class ReviewsService {
                 throw new NotFoundError("Shot");
             }
 
+            if (!hasAtLeast(reviewer.role, Role.Admin)) {
+                // review authority is scoped to the shot's department
+                const [dept] = await transaction
+                    .select({ supervisorSpecialties: departments.supervisorSpecialties })
+                    .from(departments)
+                    .where(
+                        lockedShot.departmentId !== null
+                            ? eq(departments.id, lockedShot.departmentId)
+                            : eq(departments.slug, shotTypeToDepartment[lockedShot.shotType])
+                    )
+                    .limit(1);
+
+                if (dept === undefined || !reviewer.specialties.some((s) => dept.supervisorSpecialties.includes(s))) {
+                    throw new ForbiddenError(
+                        "You are not authorized to review tasks for this department.",
+                        ErrorCode.UnauthorizedDepartment
+                    );
+                }
+            }
+
             const approved = decision === ReviewDecision.Approved;
+            let videoKey = current.videoKey;
+            let blendKey = current.blendKey;
+
+            if (approved) {
+                // promote approved deliverables from pending to affirmed vault
+                const promoteKey = (key: string): string => {
+                    if (key.startsWith(deliverableVaultPendingPrefix)) {
+                        return `${deliverableVaultAffirmedPrefix}${key.slice(deliverableVaultPendingPrefix.length)}`;
+                    }
+                    if (key.startsWith("Pending/")) {
+                        return `${deliverableVaultAffirmedPrefix}${key.slice("Pending/".length)}`;
+                    }
+                    return `${deliverableVaultAffirmedPrefix}${key}`;
+                };
+                videoKey = promoteKey(current.videoKey);
+                if (current.blendKey !== null) {
+                    blendKey = promoteKey(current.blendKey);
+                }
+
+                if (typeof this.storage.moveObject === "function" && this.storage.isEnabled(StorageBucket.Deliverables)) {
+                    await this.storage.moveObject(StorageBucket.Deliverables, current.videoKey, videoKey);
+                    if (current.blendKey !== null && blendKey !== null) {
+                        await this.storage.moveObject(StorageBucket.Deliverables, current.blendKey, blendKey);
+                    }
+                }
+            }
+
             const [updated] = await transaction
                 .update(submissions)
                 .set({
                     status: approved ? SubmissionStatus.Approved : SubmissionStatus.RevisionRequested,
                     supervisorNotes: notes,
                     reviewedBy: reviewer.userId,
-                    reviewedAt: new Date()
+                    reviewedAt: new Date(),
+                    ...(approved ? { videoKey, blendKey } : {})
                 })
                 .where(eq(submissions.id, submissionId))
                 .returning();

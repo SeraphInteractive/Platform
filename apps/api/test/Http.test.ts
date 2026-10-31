@@ -70,8 +70,8 @@ describe("http contract", () => {
 
     it("reports readiness and publishes an OpenAPI document", async () => {
         expect(json(await context.application.inject({ method: "GET", url: "/health/ready" }))).toEqual({ status: "ok" });
-        const moderator = await context.createUser(Role.Moderator);
-        const spec = await context.application.inject({ method: "GET", url: "/api/v1/openapi.json", headers: moderator.headers });
+        const supervisor = await context.createUser(Role.Supervisor);
+        const spec = await context.application.inject({ method: "GET", url: "/api/v1/openapi.json", headers: supervisor.headers });
         expect(spec.statusCode).toBe(200);
         const document = json<{ openapi: string; paths: Record<string, unknown> }>(spec);
         expect(document.openapi).toBe("3.1.0");
