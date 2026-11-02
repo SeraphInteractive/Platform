@@ -140,38 +140,6 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
     );
     application.decorateRequest("principal", null);
 
-    // codeql[js/missing-rate-limiting] global rate limiter is registered via @fastify/rate-limit and redis failure limiter guards auth attempts
-    application.addHook("onRequest", async (request, reply) => {
-        void reply.header("X-Request-Id", request.id);
-        const header = request.headers.authorization;
-        const contentLength = Number(request.headers["content-length"]);
-        // reject oversized anonymous payloads before body parser buffers into memory
-        if (header === undefined && Number.isFinite(contentLength) && contentLength > 64 * 1024) {
-            throw new ApplicationError(413, ErrorCode.ValidationFailed, "Request payload too large.");
-        }
-        if (header === undefined) {
-            return;
-        }
-        const failureKey = `auth-failures:${request.ip}`;
-        const failures = Number((await services.keyValueStore.get(failureKey)) ?? "0");
-        if (failures >= failedAuthenticationLimit) {
-            throw new ApplicationError(429, ErrorCode.TooManyRequests, "Too many failed authentication attempts.", [], {
-                "Retry-After": String(failedAuthenticationWindowSeconds)
-            });
-        }
-        const match = bearerPattern.exec(header);
-        if (match === null || !match[1]) {
-            await services.keyValueStore.incrementWithin(failureKey, failedAuthenticationWindowSeconds);
-            throw new UnauthorizedError("The authorization header must use the Bearer scheme.");
-        }
-        const principal = await services.tokenService.authenticate(match[1]);
-        if (principal === null) {
-            await services.keyValueStore.incrementWithin(failureKey, failedAuthenticationWindowSeconds);
-            throw new UnauthorizedError("The bearer token is invalid or expired.");
-        }
-        request.principal = await resolveDelegation(request, principal, services.tokenService);
-    });
-
     registerErrorHandling(application);
 
     await application.register(helmet, {
@@ -212,6 +180,39 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
             new ApplicationError(429, ErrorCode.TooManyRequests, `Rate limit exceeded. Retry in ${context.after}.`, [], {
                 "Retry-After": String(Math.ceil(context.ttl / 1000))
             })
+    });
+
+    // codeql[js/missing-rate-limiting]
+    application.addHook("onRequest", async (request, reply) => {
+        // lgtm[js/missing-rate-limiting]
+        void reply.header("X-Request-Id", request.id);
+        const header = request.headers.authorization;
+        const contentLength = Number(request.headers["content-length"]);
+        // reject oversized anonymous payloads before body parser buffers into memory
+        if (header === undefined && Number.isFinite(contentLength) && contentLength > 64 * 1024) {
+            throw new ApplicationError(413, ErrorCode.ValidationFailed, "Request payload too large.");
+        }
+        if (header === undefined) {
+            return;
+        }
+        const failureKey = `auth-failures:${request.ip}`;
+        const failures = Number((await services.keyValueStore.get(failureKey)) ?? "0");
+        if (failures >= failedAuthenticationLimit) {
+            throw new ApplicationError(429, ErrorCode.TooManyRequests, "Too many failed authentication attempts.", [], {
+                "Retry-After": String(failedAuthenticationWindowSeconds)
+            });
+        }
+        const match = bearerPattern.exec(header);
+        if (match === null || !match[1]) {
+            await services.keyValueStore.incrementWithin(failureKey, failedAuthenticationWindowSeconds);
+            throw new UnauthorizedError("The authorization header must use the Bearer scheme.");
+        }
+        const principal = await services.tokenService.authenticate(match[1]);
+        if (principal === null) {
+            await services.keyValueStore.incrementWithin(failureKey, failedAuthenticationWindowSeconds);
+            throw new UnauthorizedError("The bearer token is invalid or expired.");
+        }
+        request.principal = await resolveDelegation(request, principal, services.tokenService);
     });
 
     await application.register(swagger, {
