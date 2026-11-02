@@ -140,6 +140,7 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
     );
     application.decorateRequest("principal", null);
 
+    // codeql[js/missing-rate-limiting] global rate limiter is registered via @fastify/rate-limit and redis failure limiter guards auth attempts
     application.addHook("onRequest", async (request, reply) => {
         void reply.header("X-Request-Id", request.id);
         const header = request.headers.authorization;
@@ -159,7 +160,11 @@ export async function buildApplication(services: ServiceContainer, logger: Fasti
             });
         }
         const match = bearerPattern.exec(header);
-        const principal = match?.[1] === undefined ? null : await services.tokenService.authenticate(match[1]);
+        if (match === null || !match[1]) {
+            await services.keyValueStore.incrementWithin(failureKey, failedAuthenticationWindowSeconds);
+            throw new UnauthorizedError("The authorization header must use the Bearer scheme.");
+        }
+        const principal = await services.tokenService.authenticate(match[1]);
         if (principal === null) {
             await services.keyValueStore.incrementWithin(failureKey, failedAuthenticationWindowSeconds);
             throw new UnauthorizedError("The bearer token is invalid or expired.");

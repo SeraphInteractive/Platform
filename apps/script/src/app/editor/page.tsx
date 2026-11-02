@@ -890,16 +890,14 @@ function ScreenplayEditorContent() {
                 }
             }
 
-            const currentUser = userRef.current;
-            const authorName = currentUser?.globalName || currentUser?.username || "Admin";
-            const avatarUrl = currentUser?.avatarUrl || null;
+            // static author metadata avoids storing sensitive auth data in local storage
             const snapshot: VersionSnapshot = {
                 id: `milestone-${Date.now()}`,
                 name,
                 timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
                 isoDate: new Date().toISOString(),
-                author: authorName,
-                avatarUrl,
+                author: "Local",
+                avatarUrl: null,
                 wordCount: wordCount,
                 sceneCount: scenes.length,
                 content: currentJson
@@ -943,16 +941,14 @@ function ScreenplayEditorContent() {
             }
 
             const currentJson = editor.getJSON();
-            const currentUser = userRef.current;
-            const authorName = currentUser?.globalName || currentUser?.username || "Admin";
-            const avatarUrl = currentUser?.avatarUrl || null;
+            // static author metadata avoids storing sensitive auth data in local storage
             const backup: VersionSnapshot = {
                 id: `auto-backup-${Date.now()}`,
                 name: `Pre-restore Backup (${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`,
                 timestamp: "Just now",
                 isoDate: new Date().toISOString(),
-                author: authorName,
-                avatarUrl,
+                author: "Local",
+                avatarUrl: null,
                 wordCount: wordCount,
                 sceneCount: scenes.length,
                 content: currentJson

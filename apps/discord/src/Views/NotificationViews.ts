@@ -457,27 +457,36 @@ export function renderNotification(notification: PlatformNotification, context: 
     }
 }
 
+const htmlEntityMap: Record<string, string> = {
+    "&gt;": ">",
+    "&lt;": "<",
+    "&quot;": '"',
+    "&apos;": "'",
+    "&#39;": "'",
+    "&amp;": "&"
+};
+
 export function htmlToDiscordMarkdown(html: string): string {
-    return html
-        .replace(/<br\s*\/?>/gi, "\n")
-        .replace(/<\/p>\s*<p>/gi, "\n\n")
-        .replace(/<\/?p>/gi, "")
-        .replace(/<strong>(.*?)<\/strong>/gi, "**$1**")
-        .replace(/<b>(.*?)<\/b>/gi, "**$1**")
-        .replace(/<em>(.*?)<\/em>/gi, "*$1*")
-        .replace(/<i>(.*?)<\/i>/gi, "*$1*")
-        .replace(/<code>(.*?)<\/code>/gi, "`$1`")
-        .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/gi, "```\n$1\n```")
-        .replace(/<li>(.*?)<\/li>/gi, "• $1\n\n")
-        .replace(/<\/?ul>/gi, "\n")
-        .replace(/<\/?ol>/gi, "\n")
-        .replace(/<a\s+(?:[^>]*?\s+)?href="([^"]*)"[^>]*>(.*?)<\/a>/gi, "[$2]($1)")
-        .replace(/&gt;/gi, ">")
-        .replace(/&lt;/gi, "<")
-        .replace(/&amp;/gi, "&")
-        .replace(/&quot;/gi, '"')
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
+    return (
+        html
+            .replace(/<br\s*\/?>/gi, "\n")
+            .replace(/<\/p>\s*<p>/gi, "\n\n")
+            .replace(/<\/?p>/gi, "")
+            .replace(/<strong>(.*?)<\/strong>/gi, "**$1**")
+            .replace(/<b>(.*?)<\/b>/gi, "**$1**")
+            .replace(/<em>(.*?)<\/em>/gi, "*$1*")
+            .replace(/<i>(.*?)<\/i>/gi, "*$1*")
+            .replace(/<code>(.*?)<\/code>/gi, "`$1`")
+            .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/gi, "```\n$1\n```")
+            .replace(/<li>(.*?)<\/li>/gi, "• $1\n\n")
+            .replace(/<\/?ul>/gi, "\n")
+            .replace(/<\/?ol>/gi, "\n")
+            .replace(/<a\s+(?:[^>]*?\s+)?href="([^"]*)"[^>]*>(.*?)<\/a>/gi, "[$2]($1)")
+            // single pass decoding prevents double-unescaping
+            .replace(/&(?:gt|lt|quot|apos|#39|amp);/gi, (match) => htmlEntityMap[match.toLowerCase()] ?? match)
+            .replace(/\n{3,}/g, "\n\n")
+            .trim()
+    );
 }
 
 export function renderRulesMessage(notification: NotificationOf<NotificationType.DocumentUpdated>): V2Message {
