@@ -16,7 +16,7 @@ import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
 import { resolveBotAvatarUrl } from "../Discord/BotAvatar.js";
 import { Accent, capitalize, message, panel, person, plain, when } from "../Discord/Ui.js";
-import { discordRestOptions } from "../Discord/Rest.js";
+import { discordRestOptions, isSafeDiscordWebhookUrl } from "../Discord/Rest.js";
 import { renderNotification, renderRulesMessage } from "../Views/NotificationViews.js";
 import { reviewCard, threadUpdate } from "../Views/TaskViews.js";
 import { syncMemberStudioRoles } from "./StudioRoles.js";
@@ -26,21 +26,6 @@ export interface WebhookEndpoints {
     readonly telemetry?: string;
     readonly moderationLogs?: string;
     readonly rules?: string;
-}
-
-const allowedDiscordWebhookHosts = new Set(["discord.com", "discordapp.com", "canary.discord.com", "ptb.discord.com"]);
-
-function isSafeDiscordWebhookUrl(value: string): boolean {
-    try {
-        const url = new URL(value);
-        if (url.protocol !== "https:") {
-            return false;
-        }
-        const host = url.hostname.toLowerCase();
-        return allowedDiscordWebhookHosts.has(host) && url.pathname.startsWith("/api/webhooks/");
-    } catch {
-        return false;
-    }
 }
 
 function collectDiscordIds(notification: PlatformNotification): string[] {
@@ -72,14 +57,17 @@ export class NotificationDispatcher {
     ) {
         // bypass node 24 undici symbol headers crash
         const webhookOptions = discordRestOptions;
-        if (webhooks.telemetry && isSafeDiscordWebhookUrl(webhooks.telemetry)) {
-            this.webhookClients[ChannelPurpose.Telemetry] = new WebhookClient({ url: webhooks.telemetry }, webhookOptions);
+        const telemetryHook = webhooks.telemetry ?? settings.webhook("telemetry");
+        if (telemetryHook && isSafeDiscordWebhookUrl(telemetryHook)) {
+            this.webhookClients[ChannelPurpose.Telemetry] = new WebhookClient({ url: telemetryHook }, webhookOptions);
         }
-        if (webhooks.moderationLogs && isSafeDiscordWebhookUrl(webhooks.moderationLogs)) {
-            this.webhookClients[ChannelPurpose.ModerationLogs] = new WebhookClient({ url: webhooks.moderationLogs }, webhookOptions);
+        const modLogsHook = webhooks.moderationLogs ?? settings.webhook("moderationLogs");
+        if (modLogsHook && isSafeDiscordWebhookUrl(modLogsHook)) {
+            this.webhookClients[ChannelPurpose.ModerationLogs] = new WebhookClient({ url: modLogsHook }, webhookOptions);
         }
-        if (webhooks.rules && isSafeDiscordWebhookUrl(webhooks.rules)) {
-            this.webhookClients[ChannelPurpose.Rules] = new WebhookClient({ url: webhooks.rules }, webhookOptions);
+        const rulesHook = webhooks.rules ?? settings.webhook("rules");
+        if (rulesHook && isSafeDiscordWebhookUrl(rulesHook)) {
+            this.webhookClients[ChannelPurpose.Rules] = new WebhookClient({ url: rulesHook }, webhookOptions);
         }
     }
 
@@ -169,6 +157,12 @@ export class NotificationDispatcher {
         if (cached !== undefined) {
             return cached;
         }
+        const configuredUrl = this.settings.webhook(purpose);
+        if (configuredUrl && isSafeDiscordWebhookUrl(configuredUrl)) {
+            const client = new WebhookClient({ url: configuredUrl }, discordRestOptions);
+            this.webhookClients[purpose] = client;
+            return client;
+        }
         const targetName = this.displayNameFor(purpose);
         const editPayload: { name: string } = { name: targetName };
         const ch = channel as {
@@ -186,6 +180,9 @@ export class NotificationDispatcher {
                     }
                     const client = new WebhookClient({ url: existing.url }, discordRestOptions);
                     this.webhookClients[purpose] = client;
+                    void this.settings.update((s) => {
+                        s.webhooks[purpose] = existing.url;
+                    });
                     return client;
                 }
                 if (typeof ch.createWebhook === "function") {
@@ -193,6 +190,9 @@ export class NotificationDispatcher {
                     if (created?.url && isSafeDiscordWebhookUrl(created.url)) {
                         const client = new WebhookClient({ url: created.url }, discordRestOptions);
                         this.webhookClients[purpose] = client;
+                        void this.settings.update((s) => {
+                            s.webhooks[purpose] = created.url;
+                        });
                         return client;
                     }
                 }

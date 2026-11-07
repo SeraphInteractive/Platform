@@ -53,7 +53,12 @@ function mockChannel(id: string, name: string, type: ChannelType, parentId?: str
             fetchPinned: vi.fn().mockResolvedValue(new Collection())
         },
         fetchWebhooks: vi.fn().mockResolvedValue(new Collection()),
-        createWebhook: vi.fn().mockResolvedValue({ url: "https://example.com/webhook" })
+        createWebhook: vi.fn().mockResolvedValue({
+            id: "mock-created-hook",
+            name: "Studio Announcements",
+            url: "https://discord.com/api/webhooks/100000000000000001/mock_token_000000000000000000000000000000000000000000000000000000000000",
+            delete: vi.fn().mockResolvedValue(undefined)
+        })
     };
 }
 
@@ -270,5 +275,102 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
         await provisioner.ensureForumPermissions(forum as never, false);
 
         expect(forum.permissionOverwrites.set).not.toHaveBeenCalled();
+    });
+
+    it("must purge duplicate and residual webhooks on managed channels and sync system webhooks to database", async () => {
+        const announcementsChannel = mockChannel("announcements-id", "announcements", ChannelType.GuildText);
+        const validWebhook = {
+            id: "valid-hook-id",
+            name: "Studio Announcements",
+            url: "https://discord.com/api/webhooks/100000000000000001/mock_token_000000000000000000000000000000000000000000000000000000000001",
+            delete: vi.fn().mockResolvedValue(undefined)
+        };
+        const duplicateWebhook = {
+            id: "duplicate-hook-id",
+            name: "Studio Announcements",
+            url: "https://discord.com/api/webhooks/100000000000000002/mock_token_000000000000000000000000000000000000000000000000000000000002",
+            delete: vi.fn().mockResolvedValue(undefined)
+        };
+        const residualWebhook = {
+            id: "residual-hook-id",
+            name: "Rogue Spammer Webhook",
+            url: "https://discord.com/api/webhooks/100000000000000003/mock_token_000000000000000000000000000000000000000000000000000000000003",
+            delete: vi.fn().mockResolvedValue(undefined)
+        };
+        const announcementsWebhooks = new Collection<string, unknown>();
+        announcementsWebhooks.set(validWebhook.id, validWebhook);
+        announcementsWebhooks.set(duplicateWebhook.id, duplicateWebhook);
+        announcementsWebhooks.set(residualWebhook.id, residualWebhook);
+        announcementsChannel.fetchWebhooks = vi.fn().mockResolvedValue(announcementsWebhooks);
+
+        const channels = new Collection<string, GuildBasedChannel>();
+        channels.set(announcementsChannel.id, announcementsChannel as never);
+
+        const mockApi = {
+            listDepartments: vi.fn().mockResolvedValue([]),
+            bindDepartmentDiscordMap: vi.fn().mockResolvedValue(undefined),
+            updateDiscordSettings: vi.fn().mockResolvedValue({}),
+            getDocument: vi.fn().mockRejectedValue(new Error("no docs"))
+        };
+
+        const mockGuild = {
+            id: "guild-1",
+            client: { user: { id: "bot-user-1" } },
+            roles: {
+                everyone: { id: "everyone-role-id" },
+                fetch: vi.fn().mockResolvedValue(new Collection<string, Role>()),
+                create: vi.fn().mockImplementation((opts: { name: string }) =>
+                    Promise.resolve({
+                        id: `role-${opts.name}`,
+                        name: opts.name,
+                        hoist: false,
+                        setHoist: vi.fn(),
+                        setPermissions: vi.fn()
+                    })
+                )
+            },
+            channels: {
+                fetch: vi.fn().mockResolvedValue(channels),
+                create: vi
+                    .fn()
+                    .mockImplementation((opts: { name: string; type: ChannelType; parent?: string }) =>
+                        Promise.resolve(mockChannel(`chan-${opts.name}`, opts.name, opts.type, opts.parent))
+                    )
+            },
+            fetchWebhooks: vi.fn().mockResolvedValue(new Collection())
+        } as unknown as Guild;
+
+        const mockLogger = {
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            debug: vi.fn()
+        };
+
+        const provisioner = new ServerProvisioner(settings, mockLogger as never, undefined, mockApi as never);
+        const summary = await provisioner.provision(mockGuild);
+
+        // invariant: active valid webhook is kept intact
+        expect(validWebhook.delete).not.toHaveBeenCalled();
+
+        // invariant: duplicate webhook with same name is purged
+        expect(duplicateWebhook.delete).toHaveBeenCalled();
+
+        // invariant: rogue/residual webhook on system channel is purged
+        expect(residualWebhook.delete).toHaveBeenCalled();
+
+        // invariant: deleted residuals are recorded in summary
+        expect(summary.deletedWebhooks).toBeDefined();
+        expect(summary.deletedWebhooks?.length).toBeGreaterThanOrEqual(2);
+
+        // invariant: webhooks are synchronized to API and database
+        expect(mockApi.updateDiscordSettings).toHaveBeenCalledWith(
+            "guild-1",
+            expect.objectContaining({
+                webhooks: expect.objectContaining({
+                    announcements: validWebhook.url
+                })
+            })
+        );
     });
 });

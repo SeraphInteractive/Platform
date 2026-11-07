@@ -60,6 +60,16 @@ export const botSetupCommand: SlashCommand = {
             lines.push(`- ${nonDeptBound.join(", ")}`);
         }
 
+        if (summary.deletedWebhooks && summary.deletedWebhooks.length > 0) {
+            lines.push("");
+            lines.push("**Residual Webhooks Cleaned Up**");
+            lines.push(`- Removed ${pluralize(summary.deletedWebhooks.length, "residual webhook")}: ${summary.deletedWebhooks.join(", ")}`);
+        } else {
+            lines.push("");
+            lines.push("**Webhooks**");
+            lines.push("- All channel webhooks synced to database with zero residual webhooks.");
+        }
+
         await interaction.editReply(asEdit(ephemeral(panel(null, lines.join("\n").trim()))));
     }
 };

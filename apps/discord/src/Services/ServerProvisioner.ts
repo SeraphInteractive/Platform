@@ -15,7 +15,7 @@ import {
 } from "discord.js";
 import type { Logger } from "pino";
 import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
-import { discordRestOptions } from "../Discord/Rest.js";
+import { discordRestOptions, isSafeDiscordWebhookUrl } from "../Discord/Rest.js";
 import { message, panel, plain } from "../Discord/Ui.js";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
 import { htmlToDiscordMarkdown } from "../Views/NotificationViews.js";
@@ -38,22 +38,76 @@ export const departmentGrabBoxName: Readonly<Record<DepartmentSlug, string>> = O
     [DepartmentSlug.PostProduction]: "Post-Production-GrabBox"
 });
 
-async function ensureWebhookOnChannel(channel: TextChannel, name: string, logger: Logger): Promise<string | null> {
+interface ReconcileWebhookResult {
+    readonly activeUrl: string | null;
+    readonly activeId: string | null;
+    readonly deletedNames: string[];
+}
+
+async function reconcileWebhookOnChannel(
+    channel: TextChannel,
+    canonicalName: string,
+    botId: string | undefined,
+    exclusiveSystemChannel: boolean,
+    logger: Logger
+): Promise<ReconcileWebhookResult> {
+    const deletedNames: string[] = [];
+    let activeUrl: string | null = null;
+    let activeId: string | null = null;
+
+    if (typeof channel.fetchWebhooks !== "function") {
+        return { activeUrl, activeId, deletedNames };
+    }
+
     try {
         const webhooks = await channel.fetchWebhooks();
-        const existing = webhooks.find((hook) => hook.name.toLowerCase() === name.toLowerCase());
-        if (existing?.url) {
-            return existing.url;
+        const matching = webhooks.filter((hook) => hook.name.toLowerCase() === canonicalName.toLowerCase());
+        const validMatching = matching.filter((hook) => typeof hook.url === "string" && isSafeDiscordWebhookUrl(hook.url));
+
+        let activeHook = validMatching.first();
+
+        if (activeHook !== undefined) {
+            activeUrl = activeHook.url;
+            activeId = activeHook.id;
+
+            // purge duplicate webhooks sharing the same canonical purpose
+            for (const hook of matching.values()) {
+                if (hook.id !== activeHook.id && typeof hook.delete === "function") {
+                    await hook.delete("Residual duplicate webhook cleanup").catch(() => undefined);
+                    deletedNames.push(`${hook.name} (duplicate on #${channel.name})`);
+                }
+            }
+        } else if (typeof channel.createWebhook === "function") {
+            const created = await channel.createWebhook({
+                name: canonicalName,
+                reason: "Studio webhook setup"
+            });
+            activeHook = created;
+            activeUrl = created.url;
+            activeId = created.id;
         }
-        const created = await channel.createWebhook({
-            name,
-            reason: "Studio department webhook setup"
-        });
-        return created.url;
+
+        // remove stray or unauthorized webhooks from managed channel
+        for (const hook of webhooks.values()) {
+            if (activeHook !== undefined && hook.id === activeHook.id) {
+                continue;
+            }
+            if (typeof hook.delete !== "function") {
+                continue;
+            }
+            const isBotOwned = botId !== undefined && hook.owner?.id === botId;
+            const isStudioNamed = /studio|stairway|grabbox/i.test(hook.name);
+
+            if (exclusiveSystemChannel || isBotOwned || isStudioNamed) {
+                await hook.delete("Residual studio webhook cleanup").catch(() => undefined);
+                deletedNames.push(`${hook.name} (residual on #${channel.name})`);
+            }
+        }
     } catch (err: unknown) {
-        logger.warn({ err, channel: channel.name }, `failed to ensure webhook ${name}`);
-        return null;
+        logger.warn({ err, channel: channel.name }, `failed to reconcile webhooks on #${channel.name}`);
     }
+
+    return { activeUrl, activeId, deletedNames };
 }
 
 export interface DepartmentProvisionSummary {
@@ -68,6 +122,7 @@ export interface ProvisionSummary {
     readonly createdChannels: readonly string[];
     readonly boundChannels: readonly string[];
     readonly departments?: readonly DepartmentProvisionSummary[];
+    readonly deletedWebhooks?: readonly string[];
 }
 
 export interface ServerProvisionerWebhooks {
@@ -178,6 +233,7 @@ export class ServerProvisioner {
     ) {}
 
     public async bindExisting(guild: Guild): Promise<void> {
+        const botId = guild.client?.user?.id;
         const [roles, channels] = await Promise.all([guild.roles.fetch(), guild.channels.fetch()]);
         await this.settings.update((settings) => {
             delete settings.channels.welcome;
@@ -312,12 +368,14 @@ export class ServerProvisioner {
 
                     if (category !== undefined && category !== null && deptForum !== undefined && deptForum !== null) {
                         let infoWebhookUrl = dept.discordInfoWebhookUrl ?? null;
-                        if (!infoWebhookUrl && deptInfo) {
-                            infoWebhookUrl = await ensureWebhookOnChannel(deptInfo, `${dept.name} Info`, this.logger);
+                        if (deptInfo) {
+                            const infoRes = await reconcileWebhookOnChannel(deptInfo, `${dept.name} Info`, botId, false, this.logger);
+                            infoWebhookUrl = infoRes.activeUrl;
                         }
                         let logsWebhookUrl = dept.discordLogsWebhookUrl ?? null;
-                        if (!logsWebhookUrl && deptLogs) {
-                            logsWebhookUrl = await ensureWebhookOnChannel(deptLogs, `${dept.name} Logs`, this.logger);
+                        if (deptLogs) {
+                            const logsRes = await reconcileWebhookOnChannel(deptLogs, `${dept.name} Logs`, botId, false, this.logger);
+                            logsWebhookUrl = logsRes.activeUrl;
                         }
 
                         await this.api.bindDepartmentDiscordMap(dept.id, {
@@ -358,6 +416,8 @@ export class ServerProvisioner {
         const createdRoles: string[] = [];
         const createdChannels: string[] = [];
         const boundChannels: string[] = [];
+        const deletedWebhooks: string[] = [];
+        const activeWebhookIds = new Set<string>();
         const existingRoles = await guild.roles.fetch();
         const roleIds = new Map<string, DiscordRole>();
 
@@ -581,16 +641,12 @@ export class ServerProvisioner {
             readOnlyOverwrites
         );
 
-        const announcementsWebhookUrl = await ensureWebhookOnChannel(announcements, "Studio Announcements", this.logger);
-        if (announcementsWebhookUrl !== null && this.api !== undefined) {
-            await this.api
-                .updateDiscordSettings(guild.id, {
-                    webhooks: {
-                        announcements: announcementsWebhookUrl
-                    }
-                })
-                .catch(() => undefined);
+        const announcementsRes = await reconcileWebhookOnChannel(announcements, "Studio Announcements", botId, true, this.logger);
+        if (announcementsRes.activeId !== null) {
+            activeWebhookIds.add(announcementsRes.activeId);
         }
+        deletedWebhooks.push(...announcementsRes.deletedNames);
+        const announcementsWebhookUrl = announcementsRes.activeUrl;
 
         const rules = await ensureText(
             ChannelPurpose.Rules,
@@ -598,6 +654,12 @@ export class ServerProvisioner {
             "Community guidelines, voting invariants, and rules.",
             readOnlyOverwrites
         );
+        const rulesRes = await reconcileWebhookOnChannel(rules, "Studio Rules", botId, true, this.logger);
+        if (rulesRes.activeId !== null) {
+            activeWebhookIds.add(rulesRes.activeId);
+        }
+        deletedWebhooks.push(...rulesRes.deletedNames);
+        const rulesWebhookUrl = rulesRes.activeUrl;
 
         // telemetry channel (skip creating if webhook URL configured and channel not found)
         const telemetryExisting = channels.find(
@@ -610,6 +672,16 @@ export class ServerProvisioner {
             this.webhooks?.telemetry !== undefined && telemetryExisting === undefined
                 ? undefined
                 : await ensureText(ChannelPurpose.Telemetry, staff, "Voting activity, bans and raid alerts.", privateOverwrites);
+
+        let telemetryWebhookUrl: string | null = null;
+        if (telemetry !== undefined) {
+            const telemetryRes = await reconcileWebhookOnChannel(telemetry, "Studio Telemetry", botId, true, this.logger);
+            if (telemetryRes.activeId !== null) {
+                activeWebhookIds.add(telemetryRes.activeId);
+            }
+            deletedWebhooks.push(...telemetryRes.deletedNames);
+            telemetryWebhookUrl = telemetryRes.activeUrl;
+        }
 
         // moderation logs channel (skip creating if webhook URL configured and channel not found)
         const modLogsExisting = channels.find(
@@ -627,6 +699,16 @@ export class ServerProvisioner {
                       "Profanity warnings, timeouts, and AutoMod incident logs.",
                       privateOverwrites
                   );
+
+        let modLogsWebhookUrl: string | null = null;
+        if (moderationLogs !== undefined) {
+            const modLogsRes = await reconcileWebhookOnChannel(moderationLogs, "Studio Moderation", botId, true, this.logger);
+            if (modLogsRes.activeId !== null) {
+                activeWebhookIds.add(modLogsRes.activeId);
+            }
+            deletedWebhooks.push(...modLogsRes.deletedNames);
+            modLogsWebhookUrl = modLogsRes.activeUrl;
+        }
 
         const contributorRoles = studioRoles
             .filter((role) => role.tier <= StudioTier.Contributor)
@@ -725,7 +807,12 @@ export class ServerProvisioner {
                         `${dept.name} department announcements and guidelines.`,
                         deptInfoOverwrites
                     );
-                    const infoWebhookUrl = await ensureWebhookOnChannel(deptInfo, `${dept.name} Info`, this.logger);
+                    const infoRes = await reconcileWebhookOnChannel(deptInfo, `${dept.name} Info`, botId, false, this.logger);
+                    if (infoRes.activeId !== null) {
+                        activeWebhookIds.add(infoRes.activeId);
+                    }
+                    deletedWebhooks.push(...infoRes.deletedNames);
+                    const infoWebhookUrl = infoRes.activeUrl;
 
                     // 2. Apply channel (<prefix>-apply)
                     const applyName = `${prefix}-apply`;
@@ -899,7 +986,12 @@ export class ServerProvisioner {
                         `${dept.name} task updates, claims, submissions, and reviews.`,
                         deptLogsOverwrites
                     );
-                    const logsWebhookUrl = await ensureWebhookOnChannel(deptLogs, `${dept.name} Logs`, this.logger);
+                    const logsRes = await reconcileWebhookOnChannel(deptLogs, `${dept.name} Logs`, botId, false, this.logger);
+                    if (logsRes.activeId !== null) {
+                        activeWebhookIds.add(logsRes.activeId);
+                    }
+                    deletedWebhooks.push(...logsRes.deletedNames);
+                    const logsWebhookUrl = logsRes.activeUrl;
 
                     // 6. Voice channel (<dep> general) - department-gated connect
                     const voiceName = `${dept.name} General`;
@@ -970,9 +1062,10 @@ export class ServerProvisioner {
         }
         const rulesPayload = message(panel(null, rulesContent));
 
-        if (this.webhooks?.rules !== undefined) {
+        const effectiveRulesWebhookUrl = rulesWebhookUrl ?? this.webhooks?.rules;
+        if (effectiveRulesWebhookUrl) {
             try {
-                const webhook = new WebhookClient({ url: this.webhooks.rules }, discordRestOptions);
+                const webhook = new WebhookClient({ url: effectiveRulesWebhookUrl }, discordRestOptions);
                 const existingId = this.settings.rulesMessageId;
                 let edited = false;
                 if (existingId !== undefined) {
@@ -1012,6 +1105,20 @@ export class ServerProvisioner {
             }
         }
 
+        const systemWebhooks: Record<string, string> = {};
+        if (announcementsWebhookUrl !== null) {
+            systemWebhooks.announcements = announcementsWebhookUrl;
+        }
+        if (rulesWebhookUrl !== null) {
+            systemWebhooks.rules = rulesWebhookUrl;
+        }
+        if (telemetryWebhookUrl !== null) {
+            systemWebhooks.telemetry = telemetryWebhookUrl;
+        }
+        if (modLogsWebhookUrl !== null) {
+            systemWebhooks.moderationLogs = modLogsWebhookUrl;
+        }
+
         await this.settings.update((settings) => {
             delete settings.channels.welcome;
             delete settings.channels.taskSubmissions;
@@ -1027,9 +1134,50 @@ export class ServerProvisioner {
             }
             settings.roles[BoundRole.Voter] = roleIds.get("Voters")?.id;
             settings.roles[BoundRole.Contributor] = roleIds.get(contributorRoleName)?.id;
+            settings.webhooks = systemWebhooks;
         });
 
-        return { createdRoles, createdChannels, boundChannels, departments: departmentSummaries };
+        if (this.api !== undefined) {
+            await this.api
+                .updateDiscordSettings(guild.id, {
+                    webhooks: systemWebhooks
+                })
+                .catch(() => undefined);
+        }
+
+        // remove residual guild-wide webhooks not bound to active configuration
+        if (typeof guild.fetchWebhooks === "function") {
+            try {
+                const guildWebhooks = await guild.fetchWebhooks();
+                for (const hook of guildWebhooks.values()) {
+                    if (activeWebhookIds.has(hook.id)) {
+                        continue;
+                    }
+                    if (typeof hook.delete !== "function") {
+                        continue;
+                    }
+                    const isBotOwned = botId !== undefined && hook.owner?.id === botId;
+                    const isStudioNamed = /studio|stairway|grabbox/i.test(hook.name);
+                    if (hook.name === "Stairway Tickets") {
+                        continue;
+                    }
+                    if (isBotOwned || isStudioNamed) {
+                        await hook.delete("Residual studio webhook cleanup").catch(() => undefined);
+                        deletedWebhooks.push(`${hook.name} (orphaned)`);
+                    }
+                }
+            } catch (err: unknown) {
+                this.logger.warn({ err }, "failed to fetch guild webhooks for residual cleanup");
+            }
+        }
+
+        return {
+            createdRoles,
+            createdChannels,
+            boundChannels,
+            departments: departmentSummaries,
+            deletedWebhooks
+        };
     }
 
     public async ensureForumTags(forum: ForumChannel, isDefaultTaskForum = true): Promise<ForumChannel> {

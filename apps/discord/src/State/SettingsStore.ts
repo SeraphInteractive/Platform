@@ -28,7 +28,8 @@ const settingsSchema = z.object({
     roles: z.partialRecord(z.enum(BoundRole), snowflake).default({}),
     forumTags: z.partialRecord(z.enum(enumValues(ShotStatus)), snowflake).default({}),
     notificationCursor: z.string().regex(notificationStreamIdPattern).nullable().default(null),
-    rulesMessageId: snowflake.optional()
+    rulesMessageId: snowflake.optional(),
+    webhooks: z.record(z.string(), z.string()).default({})
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -58,7 +59,8 @@ export class SettingsStore {
                         roles: remote.roles ?? {},
                         forumTags: remote.forumTags ?? {},
                         notificationCursor: remote.notificationCursor ?? null,
-                        rulesMessageId: remote.rulesMessageId ?? undefined
+                        rulesMessageId: remote.rulesMessageId ?? undefined,
+                        webhooks: remote.webhooks ?? {}
                     };
                     void this.persistLocal();
                     return;
@@ -96,6 +98,10 @@ export class SettingsStore {
         return this.settings.rulesMessageId;
     }
 
+    public webhook(purpose: string): string | undefined {
+        return this.settings.webhooks[purpose];
+    }
+
     public snapshot(): Settings {
         return structuredClone(this.settings);
     }
@@ -111,6 +117,7 @@ export class SettingsStore {
                 JSON.stringify(previousSnapshot.channels) === JSON.stringify(this.settings.channels) &&
                 JSON.stringify(previousSnapshot.roles) === JSON.stringify(this.settings.roles) &&
                 JSON.stringify(previousSnapshot.forumTags) === JSON.stringify(this.settings.forumTags) &&
+                JSON.stringify(previousSnapshot.webhooks) === JSON.stringify(this.settings.webhooks) &&
                 previousSnapshot.rulesMessageId === this.settings.rulesMessageId;
 
             if (onlyCursorChanged) {
@@ -153,7 +160,8 @@ export class SettingsStore {
             roles: this.settings.roles,
             forumTags: this.settings.forumTags,
             notificationCursor: this.settings.notificationCursor,
-            rulesMessageId: this.settings.rulesMessageId ?? null
+            rulesMessageId: this.settings.rulesMessageId ?? null,
+            webhooks: this.settings.webhooks
         };
         this.pendingRemoteSync = this.pendingRemoteSync
             .then(async () => {
