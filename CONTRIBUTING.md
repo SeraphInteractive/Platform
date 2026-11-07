@@ -4,7 +4,7 @@ Hey, thanks for your interest in contributing to Project Stairway! This monorepo
 
 ## Code of Conduct
 
-By participating, you agree to follow our [Code of Conduct](https://dev-app.seraphinteractive.com/legal/acceptable-use). Be kind, assume good faith, and keep discussion focused on the work.
+By participating, you agree to follow our [Code of Conduct](https://dev-app.projectstairway.net/legal/acceptable-use). Be kind, assume good faith, and keep discussion focused on the work.
 
 ## AI Usage Policy
 

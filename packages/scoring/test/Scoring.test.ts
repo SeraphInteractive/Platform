@@ -158,25 +158,42 @@ describe("statistics", () => {
         expect(separation?.status).toBe(SeparationStatus.StatisticalTie);
         expect(separation?.varianceA).toBeCloseTo(100 * 0.51 * 0.49, 9);
     });
+    it("declares a decisive lead on unanimous results with zero standard error", () => {
+        const ballots: Ballot[] = Array.from({ length: 50 }, (_, index) => ({
+            voterId: `v${index}`,
+            picks: ["a", "b", "c"]
+        }));
+        const result = evaluateRankSeparation(breakdown("a", [50, 0, 0]), breakdown("b", [0, 50, 0]), ballots, ranked);
+        expect(result.deltaScore).toBe(50);
+        expect(result.standardError).toBe(0);
+        expect(result.zScore).toBe(999);
+        expect(result.pValue).toBe(0);
+        expect(result.status).toBe(SeparationStatus.DecisiveLead);
+        expect(result.recommendedAction).toBe(SeparationAction.DeclareWinner);
+    });
 });
 
 describe("bayesian shrinkage", () => {
     it("prevents a single first-place vote from sniping an established favourite", () => {
+        const zero = calculateBayesianShrinkage(breakdown("zero", [0, 0, 0]), 20, 200, ranked, 30);
         const cold = calculateBayesianShrinkage(breakdown("cold", [1, 0, 0]), 20, 200, ranked, 30);
         const established = calculateBayesianShrinkage(breakdown("fav", [100, 50, 0]), 20, 200, ranked, 30);
         expect(cold.globalMean).toBeCloseTo(0.3, 9);
-        expect(cold.regularizedTotalScore).toBeLessThan(80);
-        expect(established.regularizedTotalScore).toBeGreaterThan(400);
+        expect(zero.regularizedTotalScore).toBeCloseTo((9 / 230) * 200, 4);
+        expect(cold.regularizedTotalScore).toBeCloseTo((12 / 230) * 200, 4);
+        expect(cold.regularizedTotalScore).toBeGreaterThan(zero.regularizedTotalScore);
+        expect(established.regularizedTotalScore).toBeGreaterThan(300);
+        expect(established.regularizedTotalScore).toBeLessThan(400);
     });
 
-    it("sorts the regularized leaderboard", () => {
+    it("sorts the regularized leaderboard primarily by raw score", () => {
         const leaderboard = calculateRegularizedLeaderboard(
-            [breakdown("e1", [1, 0, 0]), breakdown("e2", [50, 20, 10]), breakdown("e3", [20, 30, 20])],
+            [breakdown("e1", [1, 0, 0]), breakdown("e2", [50, 20, 10]), breakdown("e3", [20, 30, 20]), breakdown("e0", [0, 0, 0])],
             10,
             100,
             ranked
         );
-        expect(leaderboard.map((item) => item.entryId)).toEqual(["e2", "e3", "e1"]);
+        expect(leaderboard.map((item) => item.entryId)).toEqual(["e2", "e3", "e1", "e0"]);
     });
 });
 

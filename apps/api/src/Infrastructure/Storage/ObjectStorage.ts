@@ -16,6 +16,11 @@ export interface StoredObjectMetadata {
     readonly contentType: string | undefined;
 }
 
+export interface StorageUsage {
+    readonly usedBytes: number;
+    readonly availableBytes: number | null;
+}
+
 export interface ObjectStorage {
     isEnabled(bucket: StorageBucket): boolean;
     createUpload(bucket: StorageBucket, key: string, contentType: string, sizeBytes: number): Promise<PresignedUpload>;
@@ -25,4 +30,7 @@ export interface ObjectStorage {
     createDownloadUrl(bucket: StorageBucket, key: string): Promise<string>;
     getPublicUrl(bucket: StorageBucket, key: string): string | null;
     deleteObject(bucket: StorageBucket, key: string): Promise<void>;
+    moveObject?(bucket: StorageBucket, sourceKey: string, destinationKey: string): Promise<void>;
+    getStorageUsage?(bucket?: StorageBucket): Promise<StorageUsage | null>;
+    getVaultFolderUrl?(bucket: StorageBucket, folderPath: string): string | null;
 }

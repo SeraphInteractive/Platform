@@ -10,25 +10,44 @@ export function calculateBayesianShrinkage(
     scheme: ScoringScheme,
     priorK: number = defaultShrinkagePriorK
 ): BayesianShrinkageResult {
-    const entries = Math.max(1, totalEntries);
-    const ballots = Math.max(0, totalBallots);
-    const prior = Math.max(0, priorK);
+    const entries = Number.isFinite(totalEntries) && totalEntries > 0 ? totalEntries : 1;
+    const ballots = Number.isFinite(totalBallots) && totalBallots > 0 ? totalBallots : 0;
+    const prior =
+        Number.isFinite(priorK) && priorK >= 0
+            ? priorK
+            : priorK === Number.POSITIVE_INFINITY
+              ? Number.POSITIVE_INFINITY
+              : defaultShrinkagePriorK;
     const globalMean = scheme.pointsPerBallot / entries;
     const { rawScore, appearanceCount: appearances } = breakdown;
 
-    if (prior === 0) {
+    if (prior === 0 || ballots === 0) {
         return {
             entryId: breakdown.entryId,
             rawScore,
             appearances,
-            priorK: 0,
+            priorK: prior === Number.POSITIVE_INFINITY ? defaultShrinkagePriorK : prior,
             globalMean,
-            regularizedMeanScore: appearances > 0 ? rawScore / appearances : 0,
+            regularizedMeanScore: ballots > 0 ? rawScore / ballots : 0,
             regularizedTotalScore: rawScore
         };
     }
 
-    const regularizedMeanScore = (rawScore + prior * globalMean) / (appearances + prior);
+    if (prior === Number.POSITIVE_INFINITY) {
+        return {
+            entryId: breakdown.entryId,
+            rawScore,
+            appearances,
+            priorK: prior,
+            globalMean,
+            regularizedMeanScore: globalMean,
+            regularizedTotalScore: globalMean * ballots
+        };
+    }
+
+    // shrink against total contest ballots to avoid phantom points for zero-vote entries
+    const denominator = ballots + prior;
+    const regularizedMeanScore = denominator > 0 ? (rawScore + prior * globalMean) / denominator : globalMean;
 
     return {
         entryId: breakdown.entryId,
@@ -37,7 +56,7 @@ export function calculateBayesianShrinkage(
         priorK: prior,
         globalMean,
         regularizedMeanScore,
-        regularizedTotalScore: ballots > 0 ? regularizedMeanScore * ballots : 0
+        regularizedTotalScore: regularizedMeanScore * ballots
     };
 }
 
@@ -50,5 +69,5 @@ export function calculateRegularizedLeaderboard(
 ): readonly BayesianShrinkageResult[] {
     return breakdowns
         .map((breakdown) => calculateBayesianShrinkage(breakdown, totalEntries, totalBallots, scheme, priorK))
-        .sort((a, b) => b.regularizedTotalScore - a.regularizedTotalScore);
+        .sort((a, b) => b.rawScore - a.rawScore || b.regularizedTotalScore - a.regularizedTotalScore || a.entryId.localeCompare(b.entryId));
 }

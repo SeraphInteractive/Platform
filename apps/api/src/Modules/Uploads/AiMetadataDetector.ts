@@ -114,7 +114,8 @@ function inspectPng(buffer: Buffer, flags: Set<string>, snippetRef: { current: s
                     } else if (type === "zTXt" && data.length > nullIdx + 2) {
                         // skip 1 byte compression method
                         const compressed = data.subarray(nullIdx + 2);
-                        textContent = inflateSync(compressed).toString("utf-8");
+                        // cap decompression output to prevent memory exhaustion from decompression bombs
+                        textContent = inflateSync(compressed, { maxOutputLength: 2 * 1024 * 1024 }).toString("utf-8");
                     } else if (type === "iTXt" && data.length > nullIdx + 3) {
                         const compFlag = data[nullIdx + 1];
                         const nullIdx2 = data.indexOf(0, nullIdx + 3); // language tag
@@ -122,7 +123,11 @@ function inspectPng(buffer: Buffer, flags: Set<string>, snippetRef: { current: s
                             const nullIdx3 = data.indexOf(0, nullIdx2 + 1); // trans keyword
                             if (nullIdx3 !== -1) {
                                 const textRaw = data.subarray(nullIdx3 + 1);
-                                textContent = compFlag === 1 ? inflateSync(textRaw).toString("utf-8") : textRaw.toString("utf-8");
+                                // cap decompression output to prevent memory exhaustion from decompression bombs
+                                textContent =
+                                    compFlag === 1
+                                        ? inflateSync(textRaw, { maxOutputLength: 2 * 1024 * 1024 }).toString("utf-8")
+                                        : textRaw.toString("utf-8");
                             }
                         }
                     }

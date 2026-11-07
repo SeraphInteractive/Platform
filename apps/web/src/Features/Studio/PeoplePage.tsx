@@ -7,6 +7,7 @@ import {
     type ModeratedUserDto,
     problemOf,
     Role,
+    selfSelectableSpecialties,
     type Specialty,
     type SpecialtyHolderDto,
     supervisorSpecialties,
@@ -15,7 +16,7 @@ import {
     type UserDto
 } from "@platform/contracts";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { UserPlus } from "lucide-react";
+import { Search, UserPlus } from "lucide-react";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { platformApi } from "@/Api/PlatformApi";
@@ -37,12 +38,14 @@ import { RadioGroup, RadioGroupItem } from "@/Components/Ui/radio-group";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/Components/Ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/Ui/table";
 import { useSession } from "@/Hooks/UseSession";
+import { splitSpecialties } from "@/Features/Profile/SpecialtyPicker";
 import { formatDate, specialtyLabel } from "@/Lib/Format";
 import { hasAtLeast, isGrantable, outranks, roleLabels, rolesByRank } from "@/Lib/Roles";
 import { safeHttpUrl } from "@/Lib/SafeUrl";
 import { cn } from "@/Lib/Utils";
 
 const anyRole = "any";
+const anySpecialty = "any";
 
 function grantableRoles(actor: UserDto): Role[] {
     return rolesByRank.filter((role) => isGrantable(role) && (hasAtLeast(actor, Role.Admin) || outranks(actor.role, role)));
@@ -63,12 +66,13 @@ function canManageSecondary(actor: UserDto, target: ModeratedUserDto): boolean {
 
 interface SpecialtySelectContentProps {
     readonly holders: Record<Specialty, SpecialtyHolderDto | null>;
-    readonly currentSpecialty: Specialty | null;
+    readonly currentSpecialty?: Specialty | null;
     readonly targetId?: string;
 }
 
 function SpecialtySelectContent({ holders, currentSpecialty, targetId }: SpecialtySelectContentProps): ReactNode {
-    const isCustomCraft = currentSpecialty !== null && !assignableSpecialties.includes(currentSpecialty);
+    const isCustomCraft = currentSpecialty !== null && currentSpecialty !== undefined && !assignableSpecialties.includes(currentSpecialty);
+
     return (
         <SelectContent>
             <SelectItem value="__none__">None</SelectItem>
@@ -291,11 +295,14 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
     const manageableSecondary = canManageSecondary(actor, target);
     const busy = setPrimaryRole.isPending || setSecondaryRole.isPending || promote.isPending || lift.isPending;
     const avatar = safeHttpUrl(target.avatarUrl);
-    const currentSpecialty = target.specialties[0] ?? "__none__";
+    const { assigned, chosen: personalSpecialties } = splitSpecialties(target.specialties);
+    const assignedStaffSpecialty = assigned[0] ?? null;
+    const currentSpecialty = assignedStaffSpecialty ?? "__none__";
 
     const onSecondaryRoleChange = (value: string): void => {
         if (value === "__none__") {
-            setSecondaryRole.mutate({ specialties: [] });
+            // keep personal craft specialties intact when clearing staff secondary role
+            setSecondaryRole.mutate({ specialties: personalSpecialties });
             return;
         }
         const next = value as Specialty;
@@ -304,18 +311,27 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
             setPendingTransfer({ specialty: next, holder });
             return;
         }
-        setSecondaryRole.mutate({ specialties: [next] });
+        // preserve user's personal craft specialties alongside assigned staff role
+        setSecondaryRole.mutate({ specialties: [...personalSpecialties, next] });
     };
 
     return (
         <TableRow>
             <TableCell>
                 <div className="flex items-center gap-2">
-                    <Avatar className="size-7">
+                    <Avatar className="size-7 shrink-0">
                         {avatar !== null && <AvatarImage src={avatar} alt="" />}
                         <AvatarFallback className="text-[10px]">{target.username.slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
-                    <span className="truncate font-medium">{target.username}</span>
+                    <div className="min-w-0">
+                        <span className="truncate font-medium block">{target.username}</span>
+                        <span className="text-muted-foreground font-mono text-[11px] block truncate">{target.discordId}</span>
+                        {personalSpecialties.length > 0 && (
+                            <span className="text-muted-foreground text-xs truncate block">
+                                {personalSpecialties.map(specialtyLabel).join(", ")}
+                            </span>
+                        )}
+                    </div>
                 </div>
             </TableCell>
             <TableCell>
@@ -398,7 +414,7 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
                             </SelectTrigger>
                             <SpecialtySelectContent
                                 holders={specialtyHolders}
-                                currentSpecialty={target.specialties[0] ?? null}
+                                currentSpecialty={assignedStaffSpecialty}
                                 targetId={target.id}
                             />
                         </Select>
@@ -423,7 +439,10 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
                                         <Button
                                             disabled={setSecondaryRole.isPending}
                                             onClick={() => {
-                                                setSecondaryRole.mutate({ specialties: [pendingTransfer.specialty], transfer: true });
+                                                setSecondaryRole.mutate({
+                                                    specialties: [...personalSpecialties, pendingTransfer.specialty],
+                                                    transfer: true
+                                                });
                                             }}
                                         >
                                             Transfer Role
@@ -435,7 +454,7 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
                     </>
                 ) : (
                     <span className="text-muted-foreground text-xs">
-                        {target.specialties[0] ? specialtyLabel(target.specialties[0]) : "None"}
+                        {assignedStaffSpecialty !== null ? specialtyLabel(assignedStaffSpecialty) : "None"}
                     </span>
                 )}
             </TableCell>
@@ -492,8 +511,26 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
 
 function PeopleTable({ actor }: { readonly actor: UserDto }): ReactNode {
     const [role, setRole] = useState<Role | typeof anyRole>(anyRole);
+    const [specialty, setSpecialty] = useState<Specialty | "none" | typeof anySpecialty>(anySpecialty);
+    const [discordIdInput, setDiscordIdInput] = useState("");
+    const [debouncedDiscordId, setDebouncedDiscordId] = useState("");
     const [page, setPage] = useState(1);
-    const query = { page, perPage: 20, role: role === anyRole ? undefined : role };
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedDiscordId(discordIdInput.trim());
+            setPage(1);
+        }, 250);
+        return () => clearTimeout(timer);
+    }, [discordIdInput]);
+
+    const query = {
+        page,
+        perPage: 20,
+        role: role === anyRole ? undefined : role,
+        specialty: specialty === anySpecialty ? undefined : specialty,
+        discordId: debouncedDiscordId.length === 0 ? undefined : debouncedDiscordId
+    };
     const users = useQuery({
         queryKey: queryKeys.users(query),
         queryFn: () => platformApi.users(query),
@@ -514,6 +551,16 @@ function PeopleTable({ actor }: { readonly actor: UserDto }): ReactNode {
                     )
                 }
             >
+                <div className="relative">
+                    <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
+                    <Input
+                        placeholder="Search Discord ID..."
+                        value={discordIdInput}
+                        onChange={(e) => setDiscordIdInput(e.target.value)}
+                        className="h-8 pl-8 text-xs w-44 sm:w-56"
+                        aria-label="Search Discord ID"
+                    />
+                </div>
                 <Select
                     value={role}
                     onValueChange={(value) => {
@@ -521,16 +568,63 @@ function PeopleTable({ actor }: { readonly actor: UserDto }): ReactNode {
                         setPage(1);
                     }}
                 >
-                    <SelectTrigger size="sm" className="w-44" aria-label="Role">
+                    <SelectTrigger size="sm" className="w-40" aria-label="Role">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value={anyRole}>Any role</SelectItem>
+                        <SelectItem value={anyRole}>Any primary role</SelectItem>
                         {rolesByRank.map((item) => (
                             <SelectItem key={item} value={item}>
                                 {roleLabels[item]}
                             </SelectItem>
                         ))}
+                    </SelectContent>
+                </Select>
+                <Select
+                    value={specialty}
+                    onValueChange={(value) => {
+                        setSpecialty(value as Specialty | "none" | typeof anySpecialty);
+                        setPage(1);
+                    }}
+                >
+                    <SelectTrigger size="sm" className="w-48" aria-label="Secondary Role">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value={anySpecialty}>Any secondary role</SelectItem>
+                        <SelectItem value="none">No secondary role</SelectItem>
+                        <SelectGroup>
+                            <SelectLabel>Admin Roles</SelectLabel>
+                            {adminSpecialties.map((item) => (
+                                <SelectItem key={item} value={item}>
+                                    {specialtyLabel(item)}
+                                </SelectItem>
+                            ))}
+                        </SelectGroup>
+                        <SelectGroup>
+                            <SelectLabel>Supervisor Roles</SelectLabel>
+                            {supervisorSpecialties.map((item) => (
+                                <SelectItem key={item} value={item}>
+                                    {specialtyLabel(item)}
+                                </SelectItem>
+                            ))}
+                        </SelectGroup>
+                        <SelectGroup>
+                            <SelectLabel>Team Roles</SelectLabel>
+                            {teamSpecialties.map((item) => (
+                                <SelectItem key={item} value={item}>
+                                    {specialtyLabel(item)}
+                                </SelectItem>
+                            ))}
+                        </SelectGroup>
+                        <SelectGroup>
+                            <SelectLabel>Craft Specialties</SelectLabel>
+                            {selfSelectableSpecialties.map((item) => (
+                                <SelectItem key={item} value={item}>
+                                    {specialtyLabel(item)}
+                                </SelectItem>
+                            ))}
+                        </SelectGroup>
                     </SelectContent>
                 </Select>
             </Toolbar>
@@ -692,7 +786,7 @@ function PeopleContent(): ReactNode {
 export function PeoplePage(): ReactNode {
     const { user } = useSession();
     return (
-        <RequireRole role={Role.Moderator}>
+        <RequireRole role={Role.Supervisor}>
             <PageHeader
                 title="People"
                 actions={

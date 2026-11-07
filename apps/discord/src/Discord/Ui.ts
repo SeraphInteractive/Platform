@@ -29,6 +29,9 @@ export interface V2Message {
     readonly flags: number;
     readonly components: TopLevelComponent[];
     readonly allowedMentions: { readonly parse: [] };
+    readonly withComponents?: boolean;
+    readonly username?: string;
+    readonly avatarURL?: string;
 }
 
 const textDisplayLimit = 4000;
@@ -36,7 +39,7 @@ const textDisplayLimit = 4000;
 const markdownEscapes = { heading: true, bulletedList: true, numberedList: true, maskedLink: true } as const;
 
 export function text(content: string): TextDisplayBuilder {
-    const trimmed = content.length > textDisplayLimit ? `${content.slice(0, textDisplayLimit - 1)}…` : content;
+    const trimmed = content.length > textDisplayLimit ? `${content.slice(0, textDisplayLimit - 3)}...` : content;
     return new TextDisplayBuilder().setContent(trimmed);
 }
 
@@ -44,14 +47,20 @@ export function divider(): SeparatorBuilder {
     return new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small);
 }
 
-export function panel(accent: Accent | null, ...blocks: readonly Block[]): ContainerBuilder {
+export function panel(accent: Accent | number | null, ...blocks: readonly Block[]): ContainerBuilder {
     const container = new ContainerBuilder();
     if (accent !== null) {
         container.setAccentColor(accent);
     }
     for (const block of blocks) {
         if (typeof block === "string") {
-            container.addTextDisplayComponents(text(block));
+            if (block.length <= textDisplayLimit) {
+                container.addTextDisplayComponents(text(block));
+            } else {
+                for (let i = 0; i < block.length; i += textDisplayLimit) {
+                    container.addTextDisplayComponents(text(block.slice(i, i + textDisplayLimit)));
+                }
+            }
         } else if (block instanceof SeparatorBuilder) {
             container.addSeparatorComponents(block);
         } else if (block instanceof MediaGalleryBuilder) {
@@ -64,11 +73,21 @@ export function panel(accent: Accent | null, ...blocks: readonly Block[]): Conta
 }
 
 export function message(...components: readonly TopLevelComponent[]): V2Message {
-    return { flags: MessageFlags.IsComponentsV2, components: [...components], allowedMentions: { parse: [] } };
+    return {
+        flags: MessageFlags.IsComponentsV2,
+        components: [...components],
+        allowedMentions: { parse: [] },
+        withComponents: true
+    };
 }
 
 export function ephemeral(...components: readonly TopLevelComponent[]): V2Message {
-    return { flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral, components: [...components], allowedMentions: { parse: [] } };
+    return {
+        flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+        components: [...components],
+        allowedMentions: { parse: [] },
+        withComponents: true
+    };
 }
 
 export function notice(content: string, accent: Accent | null = null): V2Message {

@@ -1,5 +1,5 @@
 import { Role, type Specialty } from "@platform/contracts";
-import { MessageFlags, SlashCommandBuilder, type ChatInputCommandInteraction, type GuildMember } from "discord.js";
+import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder, type ChatInputCommandInteraction, type GuildMember } from "discord.js";
 import { asEdit, ephemeral, message, panel, plain } from "../Discord/Ui.js";
 import { findStudioRole, isLeadership, platformRoleFor } from "../Services/StudioRoles.js";
 import { actingAs, requirePlatformRole, UserFacingError, type BotContext, type SlashCommand } from "./Command.js";
@@ -40,6 +40,7 @@ export const assignRoleCommand: SlashCommand = {
     definition: new SlashCommandBuilder()
         .setName("assign-role")
         .setDescription("Give someone a studio role and matching platform access")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
         .addUserOption((option) => option.setName("member").setDescription("Who gets the role").setRequired(true))
         .addRoleOption((option) => option.setName("role").setDescription("Studio role").setRequired(true))
         .addStringOption((option) => option.setName("reason").setDescription("Why (kept in the audit log)").setMaxLength(300))
@@ -62,6 +63,7 @@ export const assignRoleCommand: SlashCommand = {
             throw new UserFacingError("That person isn't in this server.");
         }
         await interaction.deferReply();
+        await requirePlatformRole(interaction, context, Role.Supervisor);
         const api = actingAs(interaction, context);
         const reason = `${interaction.options.getString("reason") ?? "Assigned with /assign-role"} (by ${interaction.user.username})`;
 

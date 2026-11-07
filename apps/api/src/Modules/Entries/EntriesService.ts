@@ -77,7 +77,7 @@ export class EntriesService {
         if (round.status === RoundStatus.Draft && !canSeeDrafts(viewer)) {
             throw new NotFoundError("Round");
         }
-        const isStaff = viewer !== null && hasAtLeast(viewer.role, Role.Moderator);
+        const isStaff = viewer !== null && hasAtLeast(viewer.role, Role.Supervisor);
         const conditions: SQL[] = [eq(entries.roundId, roundId)];
         if (!isStaff) {
             conditions.push(eq(entries.status, EntryStatus.Approved), eq(entries.isQuarantined, false));
@@ -114,7 +114,7 @@ export class EntriesService {
             (row.entry.status === EntryStatus.Approved &&
                 !row.entry.isQuarantined &&
                 (round.status !== RoundStatus.Draft || canSeeDrafts(viewer))) ||
-            (viewer !== null && (hasAtLeast(viewer.role, Role.Moderator) || row.entry.submittedBy === viewer.id));
+            (viewer !== null && (hasAtLeast(viewer.role, Role.Supervisor) || row.entry.submittedBy === viewer.id));
         if (!isVisible) {
             throw new NotFoundError("Entry");
         }

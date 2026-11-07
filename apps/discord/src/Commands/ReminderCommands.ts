@@ -50,7 +50,7 @@ export const reminderCommand: SlashCommand = {
                 ephemeral(
                     panel(
                         Accent.Success,
-                        `## ⏰ Reminder set\n${truncate(reminder.message, 200)}\n\nFires ${when(reminder.fireAt)} • I'll DM you.`
+                        `## Reminder set\n${truncate(reminder.message, 200)}\n\nFires ${when(reminder.fireAt)} - I'll DM you.`
                     )
                 )
             );
@@ -64,7 +64,7 @@ export const reminderCommand: SlashCommand = {
                 return;
             }
 
-            const lines = reminders.map((r, i) => `**${i + 1}.** ${truncate(r.message, 100)} — ${when(r.fireAt)}`);
+            const lines = reminders.map((r, i) => `**${i + 1}.** ${truncate(r.message, 100)} - ${when(r.fireAt)}`);
             await interaction.reply(ephemeral(panel(null, `## Your reminders\n${lines.join("\n")}`)));
             return;
         }

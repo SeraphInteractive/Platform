@@ -289,4 +289,158 @@ describe("ServerProvisioner hierarchy", () => {
         expect(posMap.get("1")!).toBeGreaterThan(posMap.get("2")!);
         expect(posMap.get("2")!).toBeGreaterThan(posMap.get("3")!);
     });
+
+    it("binds existing department channels to platform API", async () => {
+        const bindDepartmentDiscordMap = vi.fn(async () => ({}));
+        const mockApi = {
+            listDepartments: vi.fn(async () => [
+                {
+                    id: "dept-1",
+                    name: "Animation",
+                    slug: "animation",
+                    supervisorSpecialties: [],
+                    contributorSpecialties: [],
+                    shotTypes: []
+                }
+            ]),
+            bindDepartmentDiscordMap
+        };
+
+        const mockCategory = { id: "cat-1", name: "Animation", type: 4 }; // ChannelType.GuildCategory = 4
+        const mockForum = { id: "forum-1", name: "animation-tasks", type: 15 }; // ChannelType.GuildForum = 15
+        const mockChat = { id: "chat-1", name: "animation", type: 0 }; // ChannelType.GuildText = 0
+
+        function createMockCollection<T>(items: Map<string, T>): {
+            find(fn: (item: T) => boolean): T | undefined;
+            get(key: string): T | undefined;
+            values(): IterableIterator<T>;
+        } {
+            return {
+                find(fn: (item: T) => boolean): T | undefined {
+                    for (const item of items.values()) {
+                        if (fn(item)) {
+                            return item;
+                        }
+                    }
+                    return undefined;
+                },
+                get(key: string): T | undefined {
+                    return items.get(key);
+                },
+                values(): IterableIterator<T> {
+                    return items.values();
+                }
+            };
+        }
+
+        const channelsMap = new Map<string, any>([
+            ["cat-1", mockCategory],
+            ["forum-1", mockForum],
+            ["chat-1", mockChat]
+        ]);
+
+        const mockGuild = {
+            id: "guild-1",
+            roles: { fetch: vi.fn(async () => createMockCollection(new Map())) },
+            channels: { fetch: vi.fn(async () => createMockCollection(channelsMap)) }
+        };
+
+        const settings = new SettingsStore("/tmp/test-settings-dept-bind");
+        const provisioner = new ServerProvisioner(settings, { warn: vi.fn(), info: vi.fn() } as any, undefined, mockApi as any);
+
+        await provisioner.bindExisting(mockGuild as any);
+        expect(bindDepartmentDiscordMap).toHaveBeenCalledWith(
+            "dept-1",
+            expect.objectContaining({
+                discordCategoryId: "cat-1",
+                discordForumId: "forum-1",
+                discordChatChannelId: "chat-1"
+            })
+        );
+    });
+
+    it("binds department forums with GrabBox names", async () => {
+        const bindDepartmentDiscordMap = vi.fn(async () => ({}));
+        const mockApi = {
+            listDepartments: vi.fn(async () => [
+                {
+                    id: "dept-assets",
+                    name: "Assets",
+                    slug: "assets",
+                    supervisorSpecialties: [],
+                    contributorSpecialties: [],
+                    shotTypes: []
+                },
+                {
+                    id: "dept-vfx",
+                    name: "Lighting and VFX",
+                    slug: "lighting-and-vfx",
+                    supervisorSpecialties: [],
+                    contributorSpecialties: [],
+                    shotTypes: []
+                }
+            ]),
+            bindDepartmentDiscordMap
+        };
+
+        const mockCategoryAssets = { id: "cat-assets", name: "Assets", type: 4 };
+        const mockForumAssets = { id: "forum-assets", name: "Assets-GrabBox", type: 15 };
+        const mockCategoryVfx = { id: "cat-vfx", name: "Lighting and VFX", type: 4 };
+        const mockForumVfx = { id: "forum-vfx", name: "Lighting-VFX-GrabBox", type: 15 };
+
+        function createMockCollection<T>(items: Map<string, T>): {
+            find(fn: (item: T) => boolean): T | undefined;
+            get(key: string): T | undefined;
+            values(): IterableIterator<T>;
+        } {
+            return {
+                find(fn: (item: T) => boolean): T | undefined {
+                    for (const item of items.values()) {
+                        if (fn(item)) {
+                            return item;
+                        }
+                    }
+                    return undefined;
+                },
+                get(key: string): T | undefined {
+                    return items.get(key);
+                },
+                values(): IterableIterator<T> {
+                    return items.values();
+                }
+            };
+        }
+
+        const channelsMap = new Map<string, any>([
+            ["cat-assets", mockCategoryAssets],
+            ["forum-assets", mockForumAssets],
+            ["cat-vfx", mockCategoryVfx],
+            ["forum-vfx", mockForumVfx]
+        ]);
+
+        const mockGuild = {
+            id: "guild-1",
+            roles: { fetch: vi.fn(async () => createMockCollection(new Map())) },
+            channels: { fetch: vi.fn(async () => createMockCollection(channelsMap)) }
+        };
+
+        const settings = new SettingsStore("/tmp/test-settings-grabbox-bind");
+        const provisioner = new ServerProvisioner(settings, { warn: vi.fn(), info: vi.fn() } as any, undefined, mockApi as any);
+
+        await provisioner.bindExisting(mockGuild as any);
+        expect(bindDepartmentDiscordMap).toHaveBeenCalledWith(
+            "dept-assets",
+            expect.objectContaining({
+                discordCategoryId: "cat-assets",
+                discordForumId: "forum-assets"
+            })
+        );
+        expect(bindDepartmentDiscordMap).toHaveBeenCalledWith(
+            "dept-vfx",
+            expect.objectContaining({
+                discordCategoryId: "cat-vfx",
+                discordForumId: "forum-vfx"
+            })
+        );
+    });
 });

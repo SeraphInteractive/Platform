@@ -2,6 +2,8 @@ import { Role } from "@platform/contracts";
 import {
     Activity,
     BookOpen,
+    BriefcaseBusiness,
+    Clapperboard,
     ClipboardCheck,
     FileText,
     Gauge,
@@ -9,7 +11,9 @@ import {
     Home,
     LayoutDashboard,
     ListChecks,
+    LifeBuoy,
     Map,
+    MessageSquareHeart,
     UserRound,
     Users,
     Vote,
@@ -40,7 +44,19 @@ export const navigationGroups: readonly NavigationGroup[] = [
             { href: "/voting", label: "Vote", description: "Pitch ideas and rank your favourites", icon: Vote },
             { href: "/grabbox", label: "Grab-box", description: "Claim a production task and deliver it", icon: Hammer },
             { href: "/roadmap", label: "Roadmap", description: "The road from pitch to final mix", icon: Map },
-            { href: "/me", label: "My work", description: "Your role, claims and submissions", icon: UserRound, requiresSession: true }
+            {
+                href: "/positions" as Route,
+                label: "Positions",
+                description: "Open roles on the project and how to apply",
+                icon: BriefcaseBusiness
+            },
+            {
+                href: "/profile",
+                label: "Profile",
+                description: "Your profile, tasks, submissions and standing",
+                icon: UserRound,
+                requiresSession: true
+            }
         ]
     },
     {
@@ -48,29 +64,36 @@ export const navigationGroups: readonly NavigationGroup[] = [
         items: [{ href: "/guidelines", label: "Guidelines", description: "How voting, contributing and fair play work", icon: BookOpen }]
     },
     {
-        label: "Studio",
+        label: "Management",
         items: [
             {
                 href: "/studio",
                 label: "Dashboard",
                 description: "Everything waiting on staff",
                 icon: LayoutDashboard,
-                minimumRole: Role.Moderator,
+                minimumRole: Role.Supervisor,
                 exact: true
+            },
+            {
+                href: "/studio/script" as Route,
+                label: "Desk",
+                description: "Screenplay studio and writer room",
+                icon: Clapperboard,
+                minimumRole: Role.Admin
             },
             {
                 href: "/studio/rounds",
                 label: "Rounds",
                 description: "Run voting rounds and moderate entries",
                 icon: ListChecks,
-                minimumRole: Role.Moderator
+                minimumRole: Role.Supervisor
             },
             {
                 href: "/studio/telemetry" as Route,
                 label: "Telemetry",
                 description: "Raid detection, invariance, and ballot network",
                 icon: Activity,
-                minimumRole: Role.Moderator
+                minimumRole: Role.Supervisor
             },
             {
                 href: "/studio/reviews",
@@ -91,7 +114,21 @@ export const navigationGroups: readonly NavigationGroup[] = [
                 label: "People",
                 description: "Roles, specialties and voting access",
                 icon: Users,
-                minimumRole: Role.Moderator
+                minimumRole: Role.Supervisor
+            },
+            {
+                href: "/studio/tickets" as Route,
+                label: "Tickets",
+                description: "Tickets, applications and the Discord hubs",
+                icon: LifeBuoy,
+                minimumRole: Role.Supervisor
+            },
+            {
+                href: "/studio/feedback" as Route,
+                label: "Crew feedback",
+                description: "Private crew check-ins on department supervisors",
+                icon: MessageSquareHeart,
+                minimumRole: Role.Admin
             },
             {
                 href: "/studio/content",
@@ -112,10 +149,14 @@ export const segmentLabels: Readonly<Record<string, string>> = {
     profile: "Profile",
     guidelines: "Guidelines",
     studio: "Studio",
+    script: "Desk",
     rounds: "Rounds",
     telemetry: "Telemetry",
     reviews: "Reviews",
     tasks: "Tasks",
+    tickets: "Tickets",
+    feedback: "Crew feedback",
+    positions: "Positions",
     people: "People",
     auth: "Sign in",
     callback: "Signing in",

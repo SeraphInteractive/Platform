@@ -24,7 +24,7 @@ export function SeniorLock({ shot }: { readonly shot: ShotDto }): ReactNode {
 
 export function ClaimantText({ shot }: { readonly shot: ShotDto }): ReactNode {
     if (shot.claimer === null) {
-        return <span className="text-muted-foreground">—</span>;
+        return <span className="text-muted-foreground">-</span>;
     }
     return <span>{shot.claimer.username}</span>;
 }

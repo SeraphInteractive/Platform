@@ -112,7 +112,7 @@ function RoundsTable(): ReactNode {
 export function RoundsPage(): ReactNode {
     const { user } = useSession();
     return (
-        <RequireRole role={Role.Moderator}>
+        <RequireRole role={Role.Supervisor}>
             <PageHeader
                 title="Rounds"
                 actions={

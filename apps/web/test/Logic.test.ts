@@ -83,8 +83,8 @@ describe("roles", () => {
     });
 
     it("checks minimum roles", () => {
-        expect(hasAtLeast(user(Role.Supervisor), Role.Moderator)).toBe(true);
-        expect(hasAtLeast(user(Role.Contributor), Role.Moderator)).toBe(false);
+        expect(hasAtLeast(user(Role.Supervisor), Role.Contributor)).toBe(true);
+        expect(hasAtLeast(user(Role.Contributor), Role.Supervisor)).toBe(false);
         expect(hasAtLeast(null, Role.Voter)).toBe(false);
     });
 
@@ -112,6 +112,8 @@ describe("formatting", () => {
     it("labels specialties", () => {
         expect(specialtyLabel(Specialty.Modeler3d)).toBe("3D Modeler");
         expect(specialtyLabel(Specialty.CfxVfxSupervisor)).toBe("Cfx Vfx Supervisor");
+        expect(specialtyLabel(Specialty.ModelingAndSurfacingLead)).toBe("Modeling and Surfacing Lead");
+        expect(specialtyLabel(Specialty.LightingAndVfxLead)).toBe("Lighting and VFX Lead");
     });
 });
 

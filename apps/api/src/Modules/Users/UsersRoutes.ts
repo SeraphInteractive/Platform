@@ -19,14 +19,14 @@ import {
     requireUser
 } from "../../Common/Security/Authorization.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
-import { maximumSpecialties, Role, selfSelectableSpecialties, Specialty } from "../../Domain/Roles.js";
+import { maximumSpecialties, maximumTotalSpecialties, Role, selfSelectableSpecialties, Specialty } from "../../Domain/Roles.js";
 import { PresenceStatus } from "../../Infrastructure/Discord/PresenceProvider.js";
 import { moderatedUserSchema, toModeratedUserResponse, toUserResponse, userSchema } from "./UserPresenter.js";
 import type { UserReference } from "./UsersService.js";
 
 const roleChangeSchema = z.object({
     role: z.enum(Role),
-    specialties: z.array(z.enum(Specialty)).max(maximumSpecialties).optional(),
+    specialties: z.array(z.enum(Specialty)).max(maximumTotalSpecialties).optional(),
     transfer: z.boolean().optional()
 });
 
@@ -44,19 +44,22 @@ export const usersRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
     const security = [{ bearer: [] }];
     const staff = requireRole(Role.Supervisor);
     const staffOrService = requireRoleOrService(Role.Supervisor);
-    const moderatorOrService = requireRoleOrService(Role.Moderator);
     const byId = (params: { userId: string }): UserReference => ({ kind: "id", id: params.userId });
     const byDiscord = (params: { discordId: string }): UserReference => ({ kind: "discord", discordId: params.discordId });
 
     application.get(
         "/users",
         {
-            preHandler: moderatorOrService,
+            preHandler: staffOrService,
             schema: {
                 tags: ["Users"],
                 summary: "List registered users.",
                 security,
-                querystring: paginationQuerySchema.extend({ role: z.enum(Role).optional() }),
+                querystring: paginationQuerySchema.extend({
+                    role: z.enum(Role).optional(),
+                    specialty: z.union([z.enum(Specialty), z.literal("none")]).optional(),
+                    discordId: z.string().trim().min(1).max(32).optional()
+                }),
                 response: { 200: pageEnvelope(moderatedUserSchema), ...errorResponses }
             }
         },
@@ -69,7 +72,7 @@ export const usersRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
     application.get(
         "/users/specialty-holders",
         {
-            preHandler: moderatorOrService,
+            preHandler: staffOrService,
             schema: {
                 tags: ["Users"],
                 summary: "List current holders of exclusive supervisor and admin specialties.",

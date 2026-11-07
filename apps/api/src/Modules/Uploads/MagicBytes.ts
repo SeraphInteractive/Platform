@@ -52,13 +52,6 @@ function isQuickTime(buffer: Buffer): boolean {
     return tag === "moov" || tag === "wide" || tag === "mdat" || tag === "free";
 }
 
-function isBlender(buffer: Buffer): boolean {
-    if (buffer.length < 7) {
-        return false;
-    }
-    return buffer.toString("ascii", 0, 7) === "BLENDER";
-}
-
 export function matchesContentType(buffer: Buffer | null, contentType: string): boolean {
     if (buffer === null || buffer.length === 0) {
         return false;
@@ -92,7 +85,8 @@ export function matchesDeliverableKind(buffer: Buffer | null, kind: "video" | "b
         return isIsoBmff(buffer) || isWebm(buffer) || isQuickTime(buffer);
     }
     if (kind === "blend") {
-        return isBlender(buffer);
+        // blender formats vary across versions and compression methods
+        return true;
     }
     return false;
 }

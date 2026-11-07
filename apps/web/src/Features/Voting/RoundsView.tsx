@@ -8,7 +8,6 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { platformApi } from "@/Api/PlatformApi";
 import { queryKeys } from "@/Api/QueryKeys";
-import { CountdownTimer } from "@/Components/Common/CountdownTimer";
 import { Toolbar } from "@/Components/Common/DataList";
 import { PageHeader } from "@/Components/Common/PageHeader";
 import { Pagination } from "@/Components/Common/Pagination";
@@ -71,9 +70,6 @@ function RoundCard({ round }: RoundCardProps): ReactNode {
                 <div className="flex items-center justify-between gap-2">
                     <RoundStatusBadge status={round.status} />
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                        {isLiveVoting && round.closesAt && <CountdownTimer targetDate={round.closesAt} prefix="Closes" />}
-                        {isOpenSubmissions && round.closesAt && <CountdownTimer targetDate={round.closesAt} prefix="Due" />}
-                        {isDraft && round.opensAt && <CountdownTimer targetDate={round.opensAt} prefix="Opens" />}
                         <span className="text-muted-foreground bg-muted/60 rounded px-2 py-0.5 text-xs font-medium">
                             {pollTypeLabels[round.pollType]}
                         </span>

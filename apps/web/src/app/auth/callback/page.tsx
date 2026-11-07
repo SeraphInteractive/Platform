@@ -2,7 +2,7 @@
 
 import { dataEnvelope, userSchema, type UserDto } from "@platform/contracts";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { StairwayLoader } from "@/Components/Common/StairwayLoader";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -75,9 +75,8 @@ export default function AuthCallbackPage(): ReactNode {
 
     if (failure === null) {
         return (
-            <div className="text-muted-foreground flex items-center justify-center gap-2 py-24 text-sm" role="status">
-                <Loader2 className="size-4 animate-spin" />
-                Signing you in…
+            <div className="flex min-h-[50vh] items-center justify-center py-20">
+                <StairwayLoader size="md" label="Signing you in..." />
             </div>
         );
     }

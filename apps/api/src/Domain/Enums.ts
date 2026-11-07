@@ -1,4 +1,5 @@
 export {
+    DepartmentSlug,
     DeliverableKind,
     DifficultyTier,
     EntryStatus,
@@ -6,6 +7,9 @@ export {
     PollType,
     ReviewDecision,
     RoundStatus,
+    ScreenplayRole,
     ShotStatus,
+    ShotType,
+    Specialty,
     SubmissionStatus
 } from "@platform/contracts";

@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { DifficultyTier, ReviewDecision, Role, ShotStatus, type ShotDetailDto } from "@platform/contracts";
+import { DifficultyTier, ReviewDecision, Role, ShotStatus, ShotType, type ShotDetailDto, type UserDto } from "@platform/contracts";
 import {
     ChannelType,
     LabelBuilder,
@@ -76,6 +76,24 @@ export const createTaskCommand: SlashCommand = {
                     { name: "Complex (14 days)", value: DifficultyTier.Complex }
                 )
         )
+        .addStringOption((option) =>
+            option
+                .setName("type")
+                .setDescription("Task department discipline")
+                .setRequired(false)
+                .addChoices(
+                    { name: "Animation", value: ShotType.Animation },
+                    { name: "3D Modelling", value: ShotType.Modelling3d },
+                    { name: "Rigging", value: ShotType.Rigging },
+                    { name: "Surface / Texture Art", value: ShotType.SurfaceTextureArt },
+                    { name: "Lighting", value: ShotType.Lighting },
+                    { name: "VFX", value: ShotType.Vfx },
+                    { name: "Concept Art", value: ShotType.ConceptArt },
+                    { name: "Video Editing", value: ShotType.VideoEditing },
+                    { name: "Sound Design", value: ShotType.SoundDesign },
+                    { name: "Voice Acting", value: ShotType.VoiceActing }
+                )
+        )
         .addStringOption((option) => option.setName("code").setDescription("Shot code, generated if empty").setMaxLength(50))
         .addStringOption((option) => option.setName("description").setDescription("Details for whoever takes it").setMaxLength(1500))
         .addIntegerOption((option) =>
@@ -93,13 +111,16 @@ export const createTaskCommand: SlashCommand = {
         const code =
             interaction.options.getString("code")?.trim() ??
             `SC${String(scene).padStart(2, "0")}_${randomBytes(2).toString("hex").toUpperCase()}`;
+        const rawShotType = interaction.options.getString("type");
+        const shotType = rawShotType ? (rawShotType as ShotType) : ShotType.Animation;
         const shot = await actingAs(interaction, context).createShot({
             title: interaction.options.getString("title", true).trim(),
             sceneNumber: scene,
             shotCode: code,
             difficultyTier: interaction.options.getString("difficulty", true) as DifficultyTier,
             description: interaction.options.getString("description")?.trim() ?? null,
-            seniorPriorityHours: interaction.options.getInteger("senior_hours") ?? 0
+            seniorPriorityHours: interaction.options.getInteger("senior_hours") ?? 0,
+            shotType
         });
         const threadId = await context.forum.ensureThread(referenceOf(shot), shot.description, shot.status);
         const where = threadId === null ? "Set up the task forum with /setup-forum to give it a post." : `Its post is <#${threadId}>.`;
@@ -132,8 +153,8 @@ export const takeTaskCommand: SlashCommand = {
     async autocomplete(interaction: AutocompleteInteraction, context: BotContext): Promise<void> {
         const focused = interaction.options.getFocused().toLowerCase();
         try {
-            const all = await context.api.listAllShots();
-            const matches = all
+            const shots = typeof context.api.searchShots === "function" ? await context.api.searchShots({ q: focused, limit: 10 }) : [];
+            const matches = shots
                 .filter((s) => s.shotCode.toLowerCase().includes(focused) || s.title.toLowerCase().includes(focused))
                 .slice(0, 10)
                 .map((s) => ({ name: `[${s.shotCode}] ${s.title}`.slice(0, 100), value: s.id }));
@@ -166,10 +187,12 @@ export const releaseTaskCommand: SlashCommand = {
         if (shot.status !== ShotStatus.Claimed) {
             throw new UserFacingError("Only claimed tasks can be released.");
         }
-        const me = await actingAs(interaction, context).me();
-        const isStaff = hasAtLeast(me.role, Role.Supervisor);
+        const me = (await actingAs(interaction, context).me()) as UserDto & { departmentId?: string | null };
         const isClaimant = shot.claimer?.id === me.id;
-        if (!isStaff && !isClaimant) {
+        const isAdmin = hasAtLeast(me.role, Role.Admin);
+        const isDeptSupervisor =
+            hasAtLeast(me.role, Role.Supervisor) && Boolean(me.departmentId && shot.departmentId && me.departmentId === shot.departmentId);
+        if (!isClaimant && !isAdmin && !isDeptSupervisor) {
             throw new UserFacingError("Only the task claimant, department supervisors, or admins can release this task.");
         }
         await actingAs(interaction, context).releaseShot(shot.id, interaction.options.getString("reason")?.trim() ?? null);
@@ -178,8 +201,8 @@ export const releaseTaskCommand: SlashCommand = {
     async autocomplete(interaction: AutocompleteInteraction, context: BotContext): Promise<void> {
         const focused = interaction.options.getFocused().toLowerCase();
         try {
-            const all = await context.api.listAllShots();
-            const matches = all
+            const shots = typeof context.api.searchShots === "function" ? await context.api.searchShots({ q: focused, limit: 10 }) : [];
+            const matches = shots
                 .filter((s) => s.shotCode.toLowerCase().includes(focused) || s.title.toLowerCase().includes(focused))
                 .slice(0, 10)
                 .map((s) => ({ name: `[${s.shotCode}] ${s.title}`.slice(0, 100), value: s.id }));
@@ -212,11 +235,11 @@ export const submitTaskCommand: SlashCommand = {
             throw new UserFacingError("Only claimed tasks can accept submissions.");
         }
         const me = await actingAs(interaction, context).me();
-        const isStaff = hasAtLeast(me.role, Role.Supervisor);
         const isClaimant = shot.claimer?.id === me.id;
-        if (!isStaff && !isClaimant) {
+        if (!isClaimant) {
             throw new UserFacingError("Only the contributor who claimed this task can submit work for it.");
         }
+        const claimantDiscordId = interaction.user.id;
         const grabboxUrl = `${context.configuration.webAppUrl}/grabbox?shotId=${shot.id}`;
         await interaction.editReply(
             asEdit(
@@ -225,9 +248,9 @@ export const submitTaskCommand: SlashCommand = {
                         Accent.Info,
                         `### Deliverable Submission: **${plain(shot.shotCode, 50)}**\n` +
                             `To prevent Discord file size limits and relay failures, submit full video renders and Blender project files directly through the Grab-Box UI.\n\n` +
-                            `• **Task:** ${plain(shot.title, 100)}\n` +
-                            `• **Status:** ${capitalize(shot.status)}\n` +
-                            `• **Claimant:** <@${interaction.user.id}>`,
+                            `- **Task:** ${plain(shot.title, 100)}\n` +
+                            `- **Status:** ${capitalize(shot.status)}\n` +
+                            `- **Claimant:** <@${claimantDiscordId}>`,
                         divider(),
                         buttons(linkButton("Open Grab-Box & Submit", grabboxUrl))
                     )
@@ -238,8 +261,8 @@ export const submitTaskCommand: SlashCommand = {
     async autocomplete(interaction: AutocompleteInteraction, context: BotContext): Promise<void> {
         const focused = interaction.options.getFocused().toLowerCase();
         try {
-            const all = await context.api.listAllShots();
-            const matches = all
+            const shots = typeof context.api.searchShots === "function" ? await context.api.searchShots({ q: focused, limit: 10 }) : [];
+            const matches = shots
                 .filter((s) => s.shotCode.toLowerCase().includes(focused) || s.title.toLowerCase().includes(focused))
                 .slice(0, 10)
                 .map((s) => ({ name: `[${s.shotCode}] ${s.title}`.slice(0, 100), value: s.id }));
@@ -297,7 +320,7 @@ export const availableTasksCommand: SlashCommand = {
             return `• **${plain(shot.shotCode, 50)}** - ${plain(shot.title, 80)} (${capitalize(shot.difficultyTier)})\n  ↳ ${destination}`;
         });
 
-        const overflow = available.length > 15 ? `\n\n-# …and ${available.length - 15} more available tasks.` : "";
+        const overflow = available.length > 15 ? `\n\n-# ...and ${available.length - 15} more available tasks.` : "";
         const body = `### Available Tasks (${available.length})\n${lines.join("\n")}${overflow}\n\n-# Use \`/take-task\` in a task post to claim it.`;
         await interaction.editReply(asEdit(ephemeral(panel(Accent.Info, body))));
     }
@@ -370,10 +393,12 @@ export const reviewModalHandler: ComponentHandler = {
             return;
         }
         const notes = modal.fields.getTextInputValue("notes").trim();
-        await actingAs(modal, context).reviewSubmission(submissionId, decision, notes.length === 0 ? null : notes);
         if (modal.isFromMessage()) {
+            // acknowledge interaction immediately to avoid 3-second discord 10062 timeout
+            await modal.deferUpdate();
+            await actingAs(modal, context).reviewSubmission(submissionId, decision, notes.length === 0 ? null : notes);
             const card = modal.message.components[0];
-            await modal.update({
+            await modal.editReply({
                 components:
                     card === undefined
                         ? [text(reviewOutcome(decision, modal.user.id))]
@@ -383,7 +408,10 @@ export const reviewModalHandler: ComponentHandler = {
             });
             return;
         }
-        await modal.reply(ephemeral(panel(null, "Review saved.")));
+        // acknowledge interaction immediately to avoid 3-second discord 10062 timeout
+        await modal.deferReply({ flags: MessageFlags.Ephemeral });
+        await actingAs(modal, context).reviewSubmission(submissionId, decision, notes.length === 0 ? null : notes);
+        await modal.editReply(asEdit(ephemeral(panel(null, "Review saved."))));
     }
 };
 

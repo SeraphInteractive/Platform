@@ -47,6 +47,19 @@ export class RedisNotificationLog implements NotificationLog {
         return latest?.[0] ?? "0-0";
     }
 
+    public async recent(count: number): Promise<NotificationLogEntry[]> {
+        const reply = await this.redis.xrevrange(streamKey, "+", "-", "COUNT", count);
+        const entries: NotificationLogEntry[] = [];
+        for (const [id, fields] of reply ?? []) {
+            const index = fields.indexOf("payload");
+            const payload = index >= 0 ? fields[index + 1] : undefined;
+            if (payload !== undefined) {
+                entries.push({ id, payload });
+            }
+        }
+        return entries;
+    }
+
     public openReader(): NotificationReader {
         return new RedisNotificationReader(
             this.redis.duplicate({ connectionName: "platform-api-notifications", commandTimeout: undefined })

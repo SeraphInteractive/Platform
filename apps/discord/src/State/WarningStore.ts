@@ -1,7 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { UpdateUserModerationRecordDto } from "@platform/contracts";
 import { z } from "zod";
+import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
 
 export interface Infraction {
     readonly id: string;
@@ -87,13 +89,44 @@ export type InfractionPenalty =
 export class WarningStore {
     private records = new Map<string, UserWarningRecord>();
     private writeChain: Promise<void> = Promise.resolve();
+    private pendingRemoteSync: Promise<void> = Promise.resolve();
     private readonly path: string;
 
-    public constructor(private readonly directory: string) {
+    public constructor(
+        private readonly directory: string,
+        private readonly api?: PlatformApiClient
+    ) {
         this.path = join(directory, "warnings.json");
     }
 
     public async load(): Promise<void> {
+        if (this.api !== undefined) {
+            try {
+                const remote = await this.api.listModerationRecords();
+                this.records.clear();
+                for (const dto of remote) {
+                    this.records.set(dto.userId, {
+                        userId: dto.userId,
+                        offenceLevel: dto.offenceLevel,
+                        stageWarnings: dto.stageWarnings,
+                        infractions: dto.infractions.map((i) => ({ ...i })),
+                        timeouts: dto.timeouts.map((t) => ({ ...t })),
+                        apology: {
+                            status: dto.apology.status,
+                            text: dto.apology.text,
+                            submittedAt: dto.apology.submittedAt,
+                            reviewedBy: dto.apology.reviewedBy ?? null,
+                            reviewedAt: dto.apology.reviewedAt ?? null
+                        }
+                    });
+                }
+                await this.persist();
+                return;
+            } catch {
+                // fallback to local file cache
+            }
+        }
+
         try {
             const parsed = storeSchema.safeParse(JSON.parse(await readFile(this.path, "utf8")));
             if (parsed.success) {
@@ -155,6 +188,7 @@ export class WarningStore {
         }
 
         void this.persist();
+        this.syncRemoteUser(userId);
         return penalty;
     }
 
@@ -172,6 +206,7 @@ export class WarningStore {
             submittedAt: new Date().toISOString()
         };
         void this.persist();
+        this.syncRemoteUser(userId);
     }
 
     public reviewApology(userId: string, approved: boolean, reviewerId: string): UserWarningRecord {
@@ -203,6 +238,7 @@ export class WarningStore {
         }
 
         void this.persist();
+        this.syncRemoteUser(userId);
         return record;
     }
 
@@ -214,6 +250,7 @@ export class WarningStore {
         record.stageWarnings = 0;
         record.apology = { status: "none", text: null, submittedAt: null };
         void this.persist();
+        this.syncRemoteUser(userId);
         return record;
     }
 
@@ -225,6 +262,7 @@ export class WarningStore {
         record.timeouts = [];
         record.apology = { status: "none", text: null, submittedAt: null };
         void this.persist();
+        this.syncRemoteDelete(userId);
     }
 
     public getRecord(userId: string): UserWarningRecord | undefined {
@@ -235,8 +273,45 @@ export class WarningStore {
         return record;
     }
 
-    public flush(): Promise<void> {
-        return this.writeChain;
+    public async flush(): Promise<void> {
+        await Promise.all([this.writeChain, this.pendingRemoteSync]);
+    }
+
+    private syncRemoteUser(userId: string): void {
+        if (this.api === undefined) {
+            return;
+        }
+        const record = this.records.get(userId);
+        if (record === undefined) {
+            return;
+        }
+        const payload: UpdateUserModerationRecordDto = {
+            offenceLevel: record.offenceLevel,
+            stageWarnings: record.stageWarnings,
+            infractions: record.infractions,
+            timeouts: record.timeouts,
+            apology: record.apology
+        };
+        this.pendingRemoteSync = this.pendingRemoteSync
+            .then(async () => {
+                await this.api!.updateModerationRecord(userId, payload);
+            })
+            .catch(() => {
+                // silent catch to preserve synchronous automod execution
+            });
+    }
+
+    private syncRemoteDelete(userId: string): void {
+        if (this.api === undefined) {
+            return;
+        }
+        this.pendingRemoteSync = this.pendingRemoteSync
+            .then(async () => {
+                await this.api!.deleteModerationRecord(userId);
+            })
+            .catch(() => {
+                // silent catch to preserve synchronous automod execution
+            });
     }
 
     private pruneDecayedInfractions(record: UserWarningRecord): void {

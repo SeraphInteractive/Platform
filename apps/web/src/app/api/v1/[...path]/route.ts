@@ -10,6 +10,7 @@ interface RouteContext {
 }
 
 const maximumBodyBytes = 64 * 1024;
+const maximumUploadStreamBytes = 2 * 1024 * 1024 * 1024;
 const maximumQueryLength = 2048;
 const forwardedResponseHeaders = [
     "content-type",
@@ -48,15 +49,21 @@ async function forward(request: NextRequest, context: RouteContext): Promise<Nex
             return problem(403, "FORBIDDEN", "Cross-origin request rejected.");
         }
         if (isUploadStream) {
-            const buffer = await request.arrayBuffer();
-            if (buffer.byteLength > 50 * 1024 * 1024) {
-                return problem(413, "PAYLOAD_TOO_LARGE", "The upload is too large.");
+            const contentLengthHeader = request.headers.get("content-length");
+            if (contentLengthHeader !== null) {
+                const contentLength = Number(contentLengthHeader);
+                if (!Number.isFinite(contentLength) || contentLength > maximumUploadStreamBytes) {
+                    return problem(413, "PAYLOAD_TOO_LARGE", "The upload is too large.");
+                }
             }
-            body = buffer;
+            // stream request body directly to prevent in-memory buffer exhaustion
+            body = request.body ?? undefined;
             contentType = request.headers.get("content-type") ?? "application/octet-stream";
         } else {
             const text = await request.text();
-            if (new TextEncoder().encode(text).byteLength > maximumBodyBytes) {
+            // allow up to 10 mb for screenplay documents and version history snapshots
+            const maxBytes = path[0] === "scripts" ? 10 * 1024 * 1024 : maximumBodyBytes;
+            if (new TextEncoder().encode(text).byteLength > maxBytes) {
                 return problem(413, "PAYLOAD_TOO_LARGE", "The request body is too large.");
             }
             if (text.length > 0) {

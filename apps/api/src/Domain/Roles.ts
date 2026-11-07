@@ -1,14 +1,16 @@
-import { maximumSpecialties, Role, type Specialty } from "@platform/contracts";
+import { maximumTotalSpecialties, Role, type Specialty } from "@platform/contracts";
 
 export {
     adminSpecialties,
     assignableSpecialties,
     exclusiveSpecialties,
     maximumSpecialties,
+    maximumTotalSpecialties,
     Role,
     selfSelectableSpecialties,
     Specialty,
     specialtyLabel,
+    supervisorGrantableSpecialties,
     supervisorSpecialties,
     teamSpecialties
 } from "@platform/contracts";
@@ -18,7 +20,6 @@ const roleRanks: Readonly<Record<Role, number>> = Object.freeze({
     [Role.Voter]: 1,
     [Role.Contributor]: 2,
     [Role.SeniorContributor]: 3,
-    [Role.Moderator]: 4,
     [Role.Supervisor]: 4,
     [Role.Admin]: 5,
     [Role.SuperAdmin]: 6
@@ -28,7 +29,6 @@ const specialtyRoles: ReadonlySet<Role> = new Set([
     Role.SuperAdmin,
     Role.Admin,
     Role.Supervisor,
-    Role.Moderator,
     Role.SeniorContributor,
     Role.Contributor,
     Role.Voter,
@@ -68,5 +68,5 @@ export function normalizeSpecialties(role: Role, specialties: readonly Specialty
     if (!canHoldSpecialties(role)) {
         return [];
     }
-    return [...new Set(specialties)].slice(0, maximumSpecialties);
+    return [...new Set(specialties)].slice(0, maximumTotalSpecialties);
 }

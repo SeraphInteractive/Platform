@@ -1,25 +1,15 @@
-import { Role, type UserDto } from "@platform/contracts";
+import { Role, roleLabel, roleLabels, type UserDto } from "@platform/contracts";
+
+export { roleLabel, roleLabels };
 
 const roleRanks: Readonly<Record<Role, number>> = {
     [Role.Member]: 0,
     [Role.Voter]: 1,
     [Role.Contributor]: 2,
     [Role.SeniorContributor]: 3,
-    [Role.Moderator]: 4,
     [Role.Supervisor]: 4,
     [Role.Admin]: 5,
     [Role.SuperAdmin]: 6
-};
-
-export const roleLabels: Readonly<Record<Role, string>> = {
-    [Role.Member]: "Member",
-    [Role.Voter]: "Voter",
-    [Role.Contributor]: "Contributor",
-    [Role.SeniorContributor]: "Senior Contributor",
-    [Role.Moderator]: "Supervisor",
-    [Role.Supervisor]: "Supervisor",
-    [Role.Admin]: "Admin",
-    [Role.SuperAdmin]: "Super admin"
 };
 
 export const rolesByRank: readonly Role[] = [
@@ -36,8 +26,12 @@ export function isGrantable(role: Role): boolean {
     return role !== Role.SuperAdmin;
 }
 
-export function hasAtLeast(user: UserDto | null | undefined, required: Role): boolean {
-    return user !== null && user !== undefined && roleRanks[user.role] >= roleRanks[required];
+export function hasAtLeast(subject: UserDto | Role | null | undefined, required: Role): boolean {
+    if (subject === null || subject === undefined) {
+        return false;
+    }
+    const role = typeof subject === "string" ? subject : subject.role;
+    return roleRanks[role] >= roleRanks[required];
 }
 
 export function outranks(role: Role, other: Role): boolean {

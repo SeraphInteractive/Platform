@@ -6,6 +6,7 @@ import { Activity } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 import { platformApi } from "@/Api/PlatformApi";
+import { ApiError } from "@/Api/ApiClient";
 import { queryKeys } from "@/Api/QueryKeys";
 import { PageHeader } from "@/Components/Common/PageHeader";
 import { EmptyState, ErrorState, LoadingRows, RequireRole } from "@/Components/Common/States";
@@ -26,7 +27,7 @@ function TelemetryView(): ReactNode {
 
     const roundList: readonly RoundDto[] = rounds.data?.data ?? [];
 
-    // prefer open rounds, then drafts, then closed
+    // prefer open rounds, then closed, then drafts
     const defaultRound = useMemo(() => {
         if (queryRoundId !== null) {
             const found = roundList.find((r) => r.id === queryRoundId);
@@ -34,6 +35,8 @@ function TelemetryView(): ReactNode {
         }
         return (
             roundList.find((r) => r.status === RoundStatus.Open) ??
+            roundList.find((r) => r.status === RoundStatus.Voting) ??
+            roundList.find((r) => r.status === RoundStatus.Finalized) ??
             roundList.find((r) => r.status === RoundStatus.Draft) ??
             roundList[0] ??
             null
@@ -54,6 +57,13 @@ function TelemetryView(): ReactNode {
     }
 
     if (rounds.isError) {
+        if (rounds.error instanceof ApiError && rounds.error.status === 404) {
+            return (
+                <EmptyState title="No voting rounds found">
+                    Create a voting round to begin collecting telemetry and monitoring ballot activity.
+                </EmptyState>
+            );
+        }
         return <ErrorState error={rounds.error} onRetry={() => void rounds.refetch()} />;
     }
 
@@ -116,7 +126,7 @@ function TelemetryView(): ReactNode {
 
 export function TelemetryPage(): ReactNode {
     return (
-        <RequireRole role={Role.Moderator}>
+        <RequireRole role={Role.Supervisor}>
             <PageHeader title="Telemetry" description="Raid defense, Bayesian invariance and ballot co-occurrence network." />
             <TelemetryView />
         </RequireRole>

@@ -10,7 +10,7 @@ import { pino } from "pino";
 import { buildApplication } from "../../src/App.js";
 import type { ApplicationConfiguration } from "../../src/Configuration/ApplicationConfiguration.js";
 import { createServiceContainer, type ServiceContainer } from "../../src/Composition/ServiceContainer.js";
-import { initialTermsVersion } from "@platform/contracts";
+import { initialTermsVersion, Specialty } from "@platform/contracts";
 import { Role } from "../../src/Domain/Roles.js";
 import { MemoryKeyValueStore } from "../../src/Infrastructure/Cache/MemoryKeyValueStore.js";
 import type { Database } from "../../src/Infrastructure/Database/Database.js";
@@ -50,7 +50,7 @@ export const testConfiguration: ApplicationConfiguration = {
         clientSecret: "secret",
         redirectUri: "https://api.example.test/api/v1/auth/discord/callback"
     },
-    roleAssignments: { superAdmins: [], admins: [adminDiscordId], supervisors: [], moderators: [], seniorContributors: [] },
+    roleAssignments: { superAdmins: [], admins: [adminDiscordId], supervisors: [], seniorContributors: [] },
     storage: {
         endpoint: undefined,
         region: "auto",
@@ -173,12 +173,14 @@ export async function createTestContext(): Promise<TestContext> {
         discord,
         emailSender,
         createUser: async (role, overrides = {}) => {
+            const defaultSpecialties = role === Role.Supervisor ? [Specialty.AnimationSupervisor] : [];
             const [record] = await database
                 .insert(schema.users)
                 .values({
                     discordId: nextSnowflake(),
                     discordUsername: `${role}-user`,
                     role,
+                    specialties: overrides.specialties ?? defaultSpecialties,
                     termsVersion: initialTermsVersion,
                     termsAcceptedAt: new Date(),
                     emailVerifiedAt: role === Role.Member ? null : new Date(),

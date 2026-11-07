@@ -68,7 +68,7 @@ function StandingsTable({
                             <TableCell className="text-right tabular-nums">{formatPercent(item.voteSharePercentage)}</TableCell>
                             {showRegularized && (
                                 <TableCell className="text-right tabular-nums">
-                                    {item.regularizedTotalScore === null ? "—" : formatNumber(item.regularizedTotalScore)}
+                                    {item.regularizedTotalScore === null ? "-" : formatNumber(item.regularizedTotalScore)}
                                 </TableCell>
                             )}
                             <TableCell className="text-right tabular-nums">{item.appearanceCount}</TableCell>

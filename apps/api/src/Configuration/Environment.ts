@@ -85,7 +85,6 @@ const environmentObject = z.object({
     ),
     ADMIN_DISCORD_IDS: snowflakeList,
     SUPERVISOR_DISCORD_IDS: snowflakeList,
-    MODERATOR_DISCORD_IDS: snowflakeList,
     SENIOR_DISCORD_IDS: snowflakeList,
 
     S3_ENDPOINT: z
@@ -133,6 +132,9 @@ export const environmentSchema = environmentObject.superRefine((value, context) 
     const insecure = [value.APP_URL, value.DISCORD_REDIRECT_URI, ...value.CORS_ORIGINS].filter((url) => url.startsWith("http:"));
     if (insecure.length > 0) {
         context.addIssue({ code: "custom", path: ["APP_URL"], message: `production URLs must use https: ${insecure.join(", ")}` });
+    }
+    if (value.REDIS_HOST === "memory") {
+        context.addIssue({ code: "custom", path: ["REDIS_HOST"], message: "in-memory state is for development only" });
     }
     for (const key of ["REDIS_PASSWORD", "RESEND_API_KEY", "EMAIL_FROM", "TURNSTILE_SECRET_KEY"] as const) {
         if (value[key] === undefined) {

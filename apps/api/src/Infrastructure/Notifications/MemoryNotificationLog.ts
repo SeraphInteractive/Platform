@@ -47,7 +47,11 @@ class MemoryNotificationReader implements NotificationReader {
 export class MemoryNotificationLog implements NotificationLog {
     public readonly entries: NotificationLogEntry[] = [];
     private readonly appended = new EventEmitter();
-    private sequence = 0;
+    private sequence: number;
+
+    public constructor(initialSequence = 0) {
+        this.sequence = initialSequence;
+    }
 
     public append(payload: string): Promise<string> {
         this.sequence++;
@@ -59,6 +63,10 @@ export class MemoryNotificationLog implements NotificationLog {
 
     public latestId(): Promise<string> {
         return Promise.resolve(this.entries.at(-1)?.id ?? "0-0");
+    }
+
+    public recent(count: number): Promise<NotificationLogEntry[]> {
+        return Promise.resolve(this.entries.slice(-count).reverse());
     }
 
     public openReader(): NotificationReader {
