@@ -1,8 +1,7 @@
-import { DepartmentSlug, DocumentSlug, ShotStatus } from "@platform/contracts";
+import { DepartmentSlug, ShotStatus } from "@platform/contracts";
 import {
     ChannelType,
     PermissionFlagsBits,
-    WebhookClient,
     type CategoryChannel,
     type ForumChannel,
     type Guild,
@@ -15,10 +14,8 @@ import {
 } from "discord.js";
 import type { Logger } from "pino";
 import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
-import { discordRestOptions, isSafeDiscordWebhookUrl } from "../Discord/Rest.js";
-import { message, panel, plain } from "../Discord/Ui.js";
+import { isSafeDiscordWebhookUrl } from "../Discord/Rest.js";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
-import { htmlToDiscordMarkdown } from "../Views/NotificationViews.js";
 import { setUpDepartmentDesk } from "./DepartmentDesks.js";
 import { contributorRoleName, findStudioRole, normalizeName, permissionsForRole, studioRoles, StudioTier } from "./StudioRoles.js";
 
@@ -138,90 +135,19 @@ export const forumTagNames: Readonly<Record<ShotStatus, string>> = {
     [ShotStatus.Approved]: "Approved"
 };
 
-type SystemChannelPurpose = ChannelPurpose.Rules | ChannelPurpose.Announcements | ChannelPurpose.Telemetry | ChannelPurpose.ModerationLogs;
+type SystemChannelPurpose = ChannelPurpose.Announcements | ChannelPurpose.Telemetry | ChannelPurpose.ModerationLogs;
 
 const channelNames: Readonly<Record<SystemChannelPurpose, string>> = {
-    [ChannelPurpose.Rules]: "rules",
     [ChannelPurpose.Announcements]: "announcements",
     [ChannelPurpose.Telemetry]: "telemetry-alerts",
     [ChannelPurpose.ModerationLogs]: "moderation-logs"
 };
 
 const channelAliases: Readonly<Record<SystemChannelPurpose, readonly string[]>> = {
-    [ChannelPurpose.Rules]: ["rules", "studio-rules", "guidelines", "rules-and-guidelines"],
     [ChannelPurpose.Announcements]: ["announcements", "announcement", "studio-announcements"],
     [ChannelPurpose.Telemetry]: ["telemetry-alerts", "telemetry", "bot-alerts", "alerts"],
     [ChannelPurpose.ModerationLogs]: ["moderation-logs", "mod-logs", "supervisor-logs", "mod-log"]
 };
-
-export function renderDocumentMarkdown(title: string, revision: number, sections: readonly { title: string; html: string }[]): string {
-    const lines: string[] = [`# ${plain(title)}`, "*Official community standards and pipeline etiquette.*", ""];
-    for (const section of sections) {
-        lines.push(`### ${section.title}`);
-        lines.push("");
-        lines.push(htmlToDiscordMarkdown(section.html));
-        lines.push("");
-    }
-    lines.push(`-# Revision ${revision} - Project Stairway Studio`);
-    return lines.join("\n").trim();
-}
-
-export const studioRules = [
-    "# Project Stairway - Discord Rules",
-    "*Official community standards and pipeline etiquette.*",
-    "",
-    "### 1. Conduct",
-    "",
-    "- **Respect and Zero Tolerance:** Harassment, hate speech, slurs, doxxing, or personal attacks result in immediate removal.",
-    "",
-    "- **PG-13 Standard:** Explicit, NSFW, gore, or disruptive media is strictly prohibited.",
-    "",
-    "- **No Spam or Promotion:** Unsolicited commercial advertising, DM self-promotion, and link spam are not allowed.",
-    "",
-    "- **Channel Discipline:** Keep discussions on-topic in designated department channels and production threads.",
-    "",
-    "### 2. Moderation",
-    "",
-    "- **Automated Inspection:** AutoMod actively deletes profanity, slurs, and obfuscated text variations across all channels.",
-    "",
-    "- **Progressive Discipline:**\n- 1st Offence (5 warnings): 24-hour mute.\n- 2nd Offence (+3 warnings): 1-week mute.\n- 3rd Offence (+1 warning): 1-month server ban.",
-    "",
-    "- **Decay and Logs:** Infraction warnings decay after 30 days. All moderation actions are logged to staff channels.",
-    "",
-    "- **Ban Apology Review:** Banned members can submit `/ban-apology` in direct messages with the bot for supervisor review.",
-    "",
-    "### 3. Permissions",
-    "",
-    "- **Base Members:** Text-only access in public channels. File uploads, link embeds, and external emojis are restricted to prevent raids and spam.",
-    "",
-    "- **Verified Voters:** Authenticated community members unlock file attachments, image uploads, link embeds, and external reactions.",
-    "",
-    "- **Contributors:** Unlocks thread creation and active participation in task review discussions.",
-    "",
-    "### 4. Grab-Box",
-    "",
-    "- **Single Active Claim:** Contributors may hold only one active production task claim at a time.",
-    "",
-    "- **Deadlines and Release:** Complete tasks within the allocated timeframe. If unable to finish, release the task promptly with `/release-task`.",
-    "",
-    "- **Submission Standards:** Submissions must include packed, organized `.blend` files alongside compressed viewport preview video (`MP4`/`WebM`).",
-    "",
-    "- **Supervisor QA:** Deliverables must pass department supervisor review before merging into the master film timeline.",
-    "",
-    "### 5. Charter & Links",
-    "",
-    "- **Contributor Ownership:** You retain ownership of original work while granting the studio a perpetual license for film production and release.",
-    "",
-    "- **Guidelines and Studio Charter:** [https://projectstairway.net/guidelines](https://projectstairway.net/guidelines)",
-    "",
-    "- **Terms of Service:** [https://projectstairway.net/legal/terms](https://projectstairway.net/legal/terms)",
-    "",
-    "- **Grab-Box Pipeline:** [https://projectstairway.net/grabbox](https://projectstairway.net/grabbox)",
-    "",
-    "- **Platform Dashboard:** [https://projectstairway.net](https://projectstairway.net)",
-    "",
-    "-# Revision 1 - Project Stairway Studio"
-].join("\n");
 
 export class ServerProvisioner {
     public constructor(
@@ -648,19 +574,6 @@ export class ServerProvisioner {
         deletedWebhooks.push(...announcementsRes.deletedNames);
         const announcementsWebhookUrl = announcementsRes.activeUrl;
 
-        const rules = await ensureText(
-            ChannelPurpose.Rules,
-            platform,
-            "Community guidelines, voting invariants, and rules.",
-            readOnlyOverwrites
-        );
-        const rulesRes = await reconcileWebhookOnChannel(rules, "Studio Rules", botId, true, this.logger);
-        if (rulesRes.activeId !== null) {
-            activeWebhookIds.add(rulesRes.activeId);
-        }
-        deletedWebhooks.push(...rulesRes.deletedNames);
-        const rulesWebhookUrl = rulesRes.activeUrl;
-
         // telemetry channel (skip creating if webhook URL configured and channel not found)
         const telemetryExisting = channels.find(
             (channel) =>
@@ -1049,68 +962,9 @@ export class ServerProvisioner {
             }
         }
 
-        let rulesContent = studioRules;
-        if (this.api !== undefined) {
-            try {
-                const doc = await this.api.getDocument(DocumentSlug.Rules);
-                if (doc !== null && doc.sections.length > 0) {
-                    rulesContent = renderDocumentMarkdown(doc.title, doc.revision, doc.sections);
-                }
-            } catch {
-                // fall back to default rules content
-            }
-        }
-        const rulesPayload = message(panel(null, rulesContent));
-
-        const effectiveRulesWebhookUrl = rulesWebhookUrl ?? this.webhooks?.rules;
-        if (effectiveRulesWebhookUrl) {
-            try {
-                const webhook = new WebhookClient({ url: effectiveRulesWebhookUrl }, discordRestOptions);
-                const existingId = this.settings.rulesMessageId;
-                let edited = false;
-                if (existingId !== undefined) {
-                    try {
-                        await webhook.editMessage(existingId, {
-                            flags: rulesPayload.flags,
-                            components: rulesPayload.components,
-                            allowedMentions: rulesPayload.allowedMentions
-                        });
-                        edited = true;
-                    } catch {
-                        // ignore and post fresh message
-                    }
-                }
-                if (!edited) {
-                    const posted = await webhook.send({
-                        flags: rulesPayload.flags,
-                        components: rulesPayload.components,
-                        allowedMentions: rulesPayload.allowedMentions
-                    });
-                    await this.settings.update((settings) => {
-                        settings.rulesMessageId = posted.id;
-                    });
-                    await rules.messages.pin(posted.id).catch(() => undefined);
-                }
-            } catch (err: unknown) {
-                this.logger.warn({ err }, "failed to publish rules via webhook during setup");
-            }
-        } else {
-            const pins = await rules.messages.fetchPinned().catch(() => null);
-            const botRulesMessage = pins?.find((msg) => msg.author.id === botId);
-            if (botRulesMessage !== undefined) {
-                await botRulesMessage.edit(rulesPayload).catch(() => undefined);
-            } else {
-                const posted = await rules.send(rulesPayload);
-                await posted.pin().catch(() => undefined);
-            }
-        }
-
         const systemWebhooks: Record<string, string> = {};
         if (announcementsWebhookUrl !== null) {
             systemWebhooks.announcements = announcementsWebhookUrl;
-        }
-        if (rulesWebhookUrl !== null) {
-            systemWebhooks.rules = rulesWebhookUrl;
         }
         if (telemetryWebhookUrl !== null) {
             systemWebhooks.telemetry = telemetryWebhookUrl;
@@ -1123,8 +977,12 @@ export class ServerProvisioner {
             delete settings.channels.welcome;
             delete settings.channels.taskSubmissions;
             delete settings.channels.taskForum;
+            delete settings.channels.rules;
+            delete settings.rulesMessageId;
+            if (settings.webhooks) {
+                delete settings.webhooks.rules;
+            }
 
-            settings.channels[ChannelPurpose.Rules] = rules.id;
             settings.channels[ChannelPurpose.Announcements] = announcements.id;
             if (telemetry !== undefined) {
                 settings.channels[ChannelPurpose.Telemetry] = telemetry.id;
@@ -1157,7 +1015,7 @@ export class ServerProvisioner {
                         continue;
                     }
                     const isBotOwned = botId !== undefined && hook.owner?.id === botId;
-                    const isStudioNamed = /studio|stairway|grabbox/i.test(hook.name);
+                    const isStudioNamed = /studio|stairway|grabbox|rules/i.test(hook.name);
                     if (hook.name === "Stairway Tickets") {
                         continue;
                     }

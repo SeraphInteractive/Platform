@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { ChannelType, Collection, type Guild, type GuildBasedChannel, type Role } from "discord.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ServerProvisioner } from "../../src/Services/ServerProvisioner.js";
-import { SettingsStore } from "../../src/State/SettingsStore.js";
+import { ChannelPurpose, SettingsStore } from "../../src/State/SettingsStore.js";
 
 interface MockChannelData {
     id: string;
@@ -82,10 +82,17 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
 
     it("must never re-parent existing channels into default categories", async () => {
         const existingCategory = mockChannel("custom-archive-category", "Archive", ChannelType.GuildCategory);
+        const existingAnnouncementsChannel = mockChannel(
+            "announcements-channel-id",
+            "announcements",
+            ChannelType.GuildText,
+            existingCategory.id
+        );
         const existingRulesChannel = mockChannel("rules-channel-id", "rules", ChannelType.GuildText, existingCategory.id);
 
         const channels = new Collection<string, GuildBasedChannel>();
         channels.set(existingCategory.id, existingCategory as never);
+        channels.set(existingAnnouncementsChannel.id, existingAnnouncementsChannel as never);
         channels.set(existingRulesChannel.id, existingRulesChannel as never);
 
         const mockGuild = {
@@ -125,7 +132,12 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
         await provisioner.provision(mockGuild);
 
         // invariant: existing channels must never be moved or re-parented into bot default categories
+        expect(existingAnnouncementsChannel.setParent).not.toHaveBeenCalled();
         expect(existingRulesChannel.setParent).not.toHaveBeenCalled();
+
+        // invariant: manual rules channel is left intact and not bound or webhooked by bot
+        expect(settings.channel(ChannelPurpose.Rules)).toBeUndefined();
+        expect(existingRulesChannel.createWebhook).not.toHaveBeenCalled();
     });
 
     it("must never alter channel sidebar order via setPosition", async () => {
@@ -313,6 +325,15 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
             getDocument: vi.fn().mockRejectedValue(new Error("no docs"))
         };
 
+        const residualStudioRulesWebhook = {
+            id: "residual-rules-hook-id",
+            name: "Studio Rules",
+            url: "https://discord.com/api/webhooks/100000000000000004/mock_token_000000000000000000000000000000000000000000000000000000000004",
+            delete: vi.fn().mockResolvedValue(undefined)
+        };
+        const guildWebhooks = new Collection<string, unknown>();
+        guildWebhooks.set(residualStudioRulesWebhook.id, residualStudioRulesWebhook);
+
         const mockGuild = {
             id: "guild-1",
             client: { user: { id: "bot-user-1" } },
@@ -337,7 +358,7 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
                         Promise.resolve(mockChannel(`chan-${opts.name}`, opts.name, opts.type, opts.parent))
                     )
             },
-            fetchWebhooks: vi.fn().mockResolvedValue(new Collection())
+            fetchWebhooks: vi.fn().mockResolvedValue(guildWebhooks)
         } as unknown as Guild;
 
         const mockLogger = {
@@ -359,11 +380,14 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
         // invariant: rogue/residual webhook on system channel is purged
         expect(residualWebhook.delete).toHaveBeenCalled();
 
+        // invariant: residual studio rules webhook in guild is purged
+        expect(residualStudioRulesWebhook.delete).toHaveBeenCalled();
+
         // invariant: deleted residuals are recorded in summary
         expect(summary.deletedWebhooks).toBeDefined();
-        expect(summary.deletedWebhooks?.length).toBeGreaterThanOrEqual(2);
+        expect(summary.deletedWebhooks?.length).toBeGreaterThanOrEqual(3);
 
-        // invariant: webhooks are synchronized to API and database
+        // invariant: webhooks are synchronized to API and database without rules webhook
         expect(mockApi.updateDiscordSettings).toHaveBeenCalledWith(
             "guild-1",
             expect.objectContaining({
@@ -372,5 +396,8 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
                 })
             })
         );
+        const savedWebhooks = (mockApi.updateDiscordSettings.mock.calls[0]![1] as { webhooks: Record<string, string> }).webhooks;
+        expect(savedWebhooks.rules).toBeUndefined();
+        expect(settings.channel(ChannelPurpose.Rules)).toBeUndefined();
     });
 });

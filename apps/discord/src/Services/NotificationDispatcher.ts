@@ -1,6 +1,5 @@
 import {
     departmentDefinitions,
-    DocumentSlug,
     EntryStatus,
     NotificationType,
     ReviewDecision,
@@ -17,7 +16,7 @@ import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/Settings
 import { resolveBotAvatarUrl } from "../Discord/BotAvatar.js";
 import { Accent, capitalize, message, panel, person, plain, when } from "../Discord/Ui.js";
 import { discordRestOptions, isSafeDiscordWebhookUrl } from "../Discord/Rest.js";
-import { renderNotification, renderRulesMessage } from "../Views/NotificationViews.js";
+import { renderNotification } from "../Views/NotificationViews.js";
 import { reviewCard, threadUpdate } from "../Views/TaskViews.js";
 import { syncMemberStudioRoles } from "./StudioRoles.js";
 import type { TaskForum } from "./TaskForum.js";
@@ -65,10 +64,6 @@ export class NotificationDispatcher {
         if (modLogsHook && isSafeDiscordWebhookUrl(modLogsHook)) {
             this.webhookClients[ChannelPurpose.ModerationLogs] = new WebhookClient({ url: modLogsHook }, webhookOptions);
         }
-        const rulesHook = webhooks.rules ?? settings.webhook("rules");
-        if (rulesHook && isSafeDiscordWebhookUrl(rulesHook)) {
-            this.webhookClients[ChannelPurpose.Rules] = new WebhookClient({ url: rulesHook }, webhookOptions);
-        }
     }
 
     private async getLogsWebhookForShotType(shotType?: ShotType | null): Promise<WebhookClient | null> {
@@ -109,8 +104,6 @@ export class NotificationDispatcher {
                 return "Project Stairway Telemetry";
             case ChannelPurpose.ModerationLogs:
                 return "Project Stairway Moderation";
-            case ChannelPurpose.Rules:
-                return "Project Stairway Guidelines";
             default:
                 return "Project Stairway";
         }
@@ -234,8 +227,8 @@ export class NotificationDispatcher {
                     this.logger.warn({ err: error, purpose: rendered.purpose }, "webhook dispatch failed");
                 }
             } else if (channel !== null) {
-                // telemetry, moderation logs, and rules must never post under bot user identity
-                const webhookOnlyPurposes = new Set([ChannelPurpose.Telemetry, ChannelPurpose.ModerationLogs, ChannelPurpose.Rules]);
+                // telemetry and moderation logs must never post under bot user identity
+                const webhookOnlyPurposes = new Set([ChannelPurpose.Telemetry, ChannelPurpose.ModerationLogs]);
                 if (!webhookOnlyPurposes.has(rendered.purpose)) {
                     await channel.send(rendered.message);
                 }
@@ -488,86 +481,7 @@ export class NotificationDispatcher {
                 }
                 return;
             case NotificationType.DocumentUpdated: {
-                if (notification.slug === DocumentSlug.Rules || notification.slug === DocumentSlug.Guidelines) {
-                    let rulesWebhook = this.webhookClients[ChannelPurpose.Rules];
-                    if (rulesWebhook === undefined) {
-                        const rulesChannel = await this.channel(ChannelPurpose.Rules);
-                        if (rulesChannel !== null) {
-                            rulesWebhook = (await this.getOrCreateWebhook(rulesChannel, ChannelPurpose.Rules)) ?? undefined;
-                        }
-                    }
-                    const rendered = renderRulesMessage(notification);
-                    const rulesPayload = {
-                        flags: rendered.flags,
-                        components: rendered.components as never,
-                        allowedMentions: rendered.allowedMentions,
-                        withComponents: true
-                    };
-
-                    if (rulesWebhook !== undefined) {
-                        const existingId = this.settings.rulesMessageId;
-                        let edited = false;
-                        if (existingId !== undefined) {
-                            try {
-                                await rulesWebhook.editMessage(existingId, rulesPayload);
-                                edited = true;
-                                this.logger.info(
-                                    { revision: notification.revision, slug: notification.slug, messageId: existingId },
-                                    "edited rules webhook message in-place"
-                                );
-                            } catch (err: unknown) {
-                                this.logger.warn({ err, existingId }, "failed to edit rules webhook message, creating new one");
-                            }
-                        }
-                        if (!edited) {
-                            try {
-                                const posted = await rulesWebhook.send({
-                                    ...rulesPayload,
-                                    username: this.displayNameFor(ChannelPurpose.Rules),
-                                    avatarURL: this.avatarUrl()
-                                });
-                                await this.settings.update((settings) => {
-                                    settings.rulesMessageId = posted.id;
-                                });
-                                const rulesChannel = await this.channel(ChannelPurpose.Rules);
-                                if (rulesChannel !== null && "messages" in rulesChannel) {
-                                    await rulesChannel.messages.pin(posted.id).catch(() => undefined);
-                                }
-                                this.logger.info(
-                                    { revision: notification.revision, slug: notification.slug, messageId: posted.id },
-                                    "published new rules message via webhook and pinned"
-                                );
-                            } catch (err: unknown) {
-                                this.logger.error({ err }, "failed to post rules via webhook");
-                            }
-                        }
-                        return;
-                    }
-
-                    const rulesChannel = await this.channel(ChannelPurpose.Rules);
-                    if (rulesChannel !== null && "messages" in rulesChannel) {
-                        const botId = this.client.user?.id;
-                        const pins = await rulesChannel.messages.fetchPinned().catch(() => null);
-                        const pinnedBotMsg = pins?.find((msg) => msg.author.id === botId);
-                        if (pinnedBotMsg !== undefined) {
-                            await pinnedBotMsg.edit(rendered).catch((err) => {
-                                this.logger.error({ err }, "failed to edit pinned rules message");
-                            });
-                        } else {
-                            const posted = await rulesChannel.send(rendered).catch((err) => {
-                                this.logger.error({ err }, "failed to post updated rules message");
-                                return null;
-                            });
-                            if (posted !== null) {
-                                await posted.pin().catch(() => undefined);
-                            }
-                        }
-                        this.logger.info(
-                            { revision: notification.revision, slug: notification.slug },
-                            "dynamically synced rules channel message in-place"
-                        );
-                    }
-                }
+                // manual rules channel is maintained by server admins; skip automated webhook/bot sync
                 return;
             }
             default:
