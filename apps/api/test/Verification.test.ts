@@ -1,4 +1,4 @@
-import { initialTermsVersion } from "@platform/contracts";
+import { initialTermsVersion, NotificationType } from "@platform/contracts";
 import type { LightMyRequestResponse } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Role } from "../src/Domain/Roles.js";
@@ -98,9 +98,31 @@ describe("member verification", () => {
 
         const verified = await confirm(member, code ?? "");
         expect(verified.statusCode).toBe(200);
-        expect(json<{ data: { role: string; isVerified: boolean } }>(verified).data).toMatchObject({ role: Role.Member, isVerified: true });
+        expect(json<{ data: { role: string; isVerified: boolean } }>(verified).data).toMatchObject({ role: Role.Voter, isVerified: true });
+        const roleNotification = context.notifier.notifications.find(
+            (n) => n.type === NotificationType.UserRoleChanged && n.user.discordId === member.record.discordId
+        );
+        expect(roleNotification).toBeDefined();
+        expect(roleNotification).toMatchObject({
+            type: NotificationType.UserRoleChanged,
+            user: { discordId: member.record.discordId, username: member.record.discordUsername },
+            role: Role.Voter
+        });
 
         expect((await confirm(member, code ?? "")).statusCode).toBe(409);
+    });
+
+    it("preserves higher roles when verified and does not demote to voter", async () => {
+        const contributor = await context.createUser(Role.Contributor, { emailVerifiedAt: null });
+        expect((await send(contributor, "contributor@example.org")).statusCode).toBe(200);
+        const code = context.emailSender.lastCode();
+        expect(code).not.toBeNull();
+        const verified = await confirm(contributor, code ?? "");
+        expect(verified.statusCode).toBe(200);
+        expect(json<{ data: { role: string; isVerified: boolean } }>(verified).data).toMatchObject({
+            role: Role.Contributor,
+            isVerified: true
+        });
     });
 
     it("never links one address to two accounts, including aliases", async () => {

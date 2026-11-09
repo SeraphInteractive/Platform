@@ -2,6 +2,7 @@ import { DepartmentSlug, ShotStatus } from "@platform/contracts";
 import {
     ChannelType,
     PermissionFlagsBits,
+    PermissionsBitField,
     type CategoryChannel,
     type ForumChannel,
     type Guild,
@@ -17,7 +18,15 @@ import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
 import { isSafeDiscordWebhookUrl } from "../Discord/Rest.js";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
 import { setUpDepartmentDesk } from "./DepartmentDesks.js";
-import { contributorRoleName, findStudioRole, normalizeName, permissionsForRole, studioRoles, StudioTier } from "./StudioRoles.js";
+import {
+    contributorRoleName,
+    findStudioRole,
+    memberPermissions,
+    normalizeName,
+    permissionsForRole,
+    studioRoles,
+    StudioTier
+} from "./StudioRoles.js";
 
 export const departmentChannelPrefix: Readonly<Record<DepartmentSlug, string>> = Object.freeze({
     [DepartmentSlug.ArtAndWriting]: "art",
@@ -148,6 +157,25 @@ const channelAliases: Readonly<Record<SystemChannelPurpose, readonly string[]>> 
     [ChannelPurpose.Telemetry]: ["telemetry-alerts", "telemetry", "bot-alerts", "alerts"],
     [ChannelPurpose.ModerationLogs]: ["moderation-logs", "mod-logs", "supervisor-logs", "mod-log"]
 };
+
+function toPermissionOverwriteOptions(item: OverwriteResolvable): { id: string; options: PermissionOverwriteOptions } | null {
+    if (typeof item !== "object" || item === null || !("id" in item)) {
+        return null;
+    }
+    const options: PermissionOverwriteOptions = {};
+    if ("allow" in item && item.allow !== undefined) {
+        for (const flag of new PermissionsBitField(item.allow).toArray()) {
+            options[flag] = true;
+        }
+    }
+    if ("deny" in item && item.deny !== undefined) {
+        for (const flag of new PermissionsBitField(item.deny).toArray()) {
+            options[flag] = false;
+        }
+    }
+    const targetId = typeof item.id === "string" ? item.id : item.id.id;
+    return { id: targetId, options };
+}
 
 export class ServerProvisioner {
     public constructor(
@@ -371,6 +399,9 @@ export class ServerProvisioner {
         }
 
         await this.enforceRoleHierarchy(guild);
+        if (typeof guild.roles.everyone?.setPermissions === "function") {
+            await guild.roles.everyone.setPermissions(memberPermissions, "Studio base permissions").catch(() => undefined);
+        }
 
         const staffRoles = studioRoles
             .filter((role) => role.tier <= StudioTier.Department)
@@ -384,9 +415,26 @@ export class ServerProvisioner {
             channels.find((channel) => channel !== null && channel.type === type && normalizeName(channel.name) === normalizeName(name)) ??
             undefined;
 
+        const applyOverwrites = async (
+            channel: TextChannel | VoiceChannel | CategoryChannel,
+            overwrites: OverwriteResolvable[]
+        ): Promise<void> => {
+            for (const item of overwrites) {
+                const parsed = toPermissionOverwriteOptions(item);
+                if (parsed !== null) {
+                    await channel.permissionOverwrites
+                        .create(parsed.id, parsed.options, { reason: "Configure studio channel permissions" })
+                        .catch(() => undefined);
+                }
+            }
+        };
+
         const ensureCategory = async (name: string, overwrites: OverwriteResolvable[]): Promise<CategoryChannel> => {
             const existing = find(name, ChannelType.GuildCategory);
             if (existing?.type === ChannelType.GuildCategory) {
+                if (overwrites.length > 0) {
+                    await applyOverwrites(existing, overwrites);
+                }
                 return existing;
             }
             createdChannels.push(name);
@@ -427,17 +475,7 @@ export class ServerProvisioner {
                     await existing.setName(name, "Normalize channel name").catch(() => undefined);
                 }
                 boundChannels.push(`#${existing.name}`);
-                await existing.permissionOverwrites
-                    .create(
-                        botId,
-                        {
-                            ViewChannel: true,
-                            SendMessages: true,
-                            ReadMessageHistory: true
-                        },
-                        { reason: "Ensure bot access to bound channel" }
-                    )
-                    .catch(() => undefined);
+                await applyOverwrites(existing, overwrites);
                 return existing;
             }
             createdChannels.push(`#${name}`);
@@ -479,17 +517,7 @@ export class ServerProvisioner {
                     await existing.setName(name, "Normalize voice channel name").catch(() => undefined);
                 }
                 boundChannels.push(existing.name);
-                await existing.permissionOverwrites
-                    .create(
-                        botId,
-                        {
-                            ViewChannel: true,
-                            Connect: true,
-                            Speak: true
-                        },
-                        { reason: "Ensure bot access to bound voice channel" }
-                    )
-                    .catch(() => undefined);
+                await applyOverwrites(existing, overwrites);
                 return existing;
             }
             createdChannels.push(name);
@@ -512,17 +540,7 @@ export class ServerProvisioner {
             const channelById = configuredId !== undefined ? channels.get(configuredId) : undefined;
             if (channelById?.type === ChannelType.GuildText) {
                 boundChannels.push(`#${channelById.name}`);
-                await channelById.permissionOverwrites
-                    .create(
-                        botId,
-                        {
-                            ViewChannel: true,
-                            SendMessages: true,
-                            ReadMessageHistory: true
-                        },
-                        { reason: "Ensure bot access to bound channel" }
-                    )
-                    .catch(() => undefined);
+                await applyOverwrites(channelById, overwrites);
                 return channelById;
             }
             return ensureNamedText(channelNames[purpose], channelAliases[purpose], parent, topic, overwrites);
@@ -628,7 +646,16 @@ export class ServerProvisioner {
             .map((role) => roleIds.get(role.name))
             .filter((role): role is DiscordRole => role !== undefined);
 
-        const production = await ensureCategory("Production", []);
+        const productionCategoryOverwrites: OverwriteResolvable[] = [
+            { id: everyone, deny: [PermissionFlagsBits.ViewChannel] },
+            ...contributorRoles.map((role) => ({
+                id: role.id,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory]
+            })),
+            botAccess
+        ];
+
+        const production = await ensureCategory("Production", productionCategoryOverwrites);
 
         const productionGeneralOverwrites: OverwriteResolvable[] = [
             { id: everyone, deny: [PermissionFlagsBits.ViewChannel] },
@@ -684,6 +711,18 @@ export class ServerProvisioner {
                 for (const dept of depts) {
                     const prefix = departmentChannelPrefix[dept.slug] ?? dept.slug;
                     const category = await ensureCategory(dept.name, []);
+
+                    const deptSpecialties = new Set([...dept.contributorSpecialties, ...dept.supervisorSpecialties]);
+                    const deptRoles = studioRoles
+                        .filter(
+                            (sr) => sr.tier <= StudioTier.Executive || (sr.specialty !== undefined && deptSpecialties.has(sr.specialty))
+                        )
+                        .map((sr) => roleIds.get(sr.name))
+                        .filter((role): role is DiscordRole => role !== undefined);
+                    const supervisorRole = roleIds.get("Supervisor");
+                    if (supervisorRole !== undefined && !deptRoles.some((r) => r.id === supervisorRole.id)) {
+                        deptRoles.push(supervisorRole);
+                    }
 
                     // 1. Info channel (<prefix>-info)
                     const infoName = `${prefix}-info`;
@@ -793,8 +832,6 @@ export class ServerProvisioner {
                             channel.type === ChannelType.GuildForum &&
                             forumAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
                     ) as ForumChannel | undefined;
-
-                    const isExistingDeptForum = deptForum !== undefined;
                     if (deptForum === undefined) {
                         deptForum = await guild.channels.create({
                             name: tasksForumName,
@@ -810,34 +847,18 @@ export class ServerProvisioner {
                         }
                         boundChannels.push(deptForum.name);
                     }
-                    await this.ensureForumPermissions(deptForum, isExistingDeptForum);
+                    await this.ensureForumPermissions(deptForum, deptRoles);
                     await this.ensureForumTags(deptForum, true);
 
                     // 4. General discussion (<prefix>-general) - department-gated chat
                     const generalName = `${prefix}-general`;
                     const generalAliases = [generalName, dept.slug, `${prefix}-chat`, `${dept.slug}-chat`];
 
-                    const deptSpecialties = new Set([...dept.contributorSpecialties, ...dept.supervisorSpecialties]);
-                    const deptRoles = studioRoles
-                        .filter(
-                            (sr) => sr.tier <= StudioTier.Executive || (sr.specialty !== undefined && deptSpecialties.has(sr.specialty))
-                        )
-                        .map((sr) => roleIds.get(sr.name))
-                        .filter((role): role is DiscordRole => role !== undefined);
-                    const supervisorRole = roleIds.get("Supervisor");
-                    if (supervisorRole !== undefined && !deptRoles.some((r) => r.id === supervisorRole.id)) {
-                        deptRoles.push(supervisorRole);
-                    }
-
                     const deptGeneralOverwrites: OverwriteResolvable[] = [
                         {
                             id: everyone,
-                            allow: [
-                                PermissionFlagsBits.ViewChannel,
-                                PermissionFlagsBits.ReadMessageHistory,
-                                PermissionFlagsBits.AddReactions
-                            ],
                             deny: [
+                                PermissionFlagsBits.ViewChannel,
                                 PermissionFlagsBits.SendMessages,
                                 PermissionFlagsBits.CreatePublicThreads,
                                 PermissionFlagsBits.CreatePrivateThreads
@@ -870,14 +891,14 @@ export class ServerProvisioner {
                     const deptLogsOverwrites: OverwriteResolvable[] = [
                         {
                             id: everyone,
-                            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
                             deny: [
+                                PermissionFlagsBits.ViewChannel,
                                 PermissionFlagsBits.SendMessages,
                                 PermissionFlagsBits.CreatePublicThreads,
                                 PermissionFlagsBits.CreatePrivateThreads
                             ]
                         },
-                        ...staffRoles.map((role) => ({
+                        ...deptRoles.map((role) => ({
                             id: role.id,
                             allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
                             deny: [PermissionFlagsBits.SendMessages]
@@ -919,8 +940,7 @@ export class ServerProvisioner {
                     const deptVoiceOverwrites: OverwriteResolvable[] = [
                         {
                             id: everyone,
-                            allow: [PermissionFlagsBits.ViewChannel],
-                            deny: [PermissionFlagsBits.Connect, PermissionFlagsBits.Speak]
+                            deny: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak]
                         },
                         ...deptRoles.map((role) => ({
                             id: role.id,
@@ -1062,10 +1082,13 @@ export class ServerProvisioner {
         return updated;
     }
 
-    public async ensureForumPermissions(forum: ForumChannel, isExisting = false): Promise<void> {
+    public async ensureForumPermissions(
+        forum: ForumChannel,
+        deptRolesOrIsExisting: readonly DiscordRole[] | boolean = false
+    ): Promise<void> {
         const guild = forum.guild;
         const botId = guild.client.user.id;
-        if (isExisting) {
+        if (deptRolesOrIsExisting === true) {
             // preserve existing permissions and only ensure bot access
             await forum.permissionOverwrites
                 .create(
@@ -1083,31 +1106,39 @@ export class ServerProvisioner {
                 .catch(() => undefined);
             return;
         }
+
         const everyone = guild.roles.everyone.id;
         const existingRoles = await guild.roles.fetch();
         const staffRoles = studioRoles
             .filter((role) => role.tier <= StudioTier.Department)
             .map((def) => existingRoles.find((role) => findStudioRole(role.name)?.name === def.name))
             .filter((role): role is DiscordRole => role !== undefined);
-        const contributorRoles = studioRoles
-            .filter((role) => role.tier === StudioTier.Contributor)
-            .map((def) => existingRoles.find((role) => findStudioRole(role.name)?.name === def.name))
-            .filter((role): role is DiscordRole => role !== undefined);
+
+        const deptRoles = typeof deptRolesOrIsExisting !== "boolean" ? deptRolesOrIsExisting : undefined;
+        const allowedRoles: readonly DiscordRole[] =
+            deptRoles !== undefined && deptRoles.length > 0
+                ? deptRoles
+                : studioRoles
+                      .filter((role) => role.tier === StudioTier.Contributor)
+                      .map((def) => existingRoles.find((role) => findStudioRole(role.name)?.name === def.name))
+                      .filter((role): role is DiscordRole => role !== undefined);
+
+        const isDeptForum = deptRoles !== undefined && deptRoles.length > 0;
 
         const overwrites: { id: string; options: PermissionOverwriteOptions }[] = [
             {
                 id: everyone,
                 options: {
-                    ViewChannel: true,
-                    ReadMessageHistory: true,
-                    SendMessagesInThreads: true,
-                    UseApplicationCommands: true,
+                    ViewChannel: !isDeptForum,
+                    ReadMessageHistory: !isDeptForum,
+                    SendMessagesInThreads: !isDeptForum,
+                    UseApplicationCommands: !isDeptForum,
                     SendMessages: false,
                     CreatePublicThreads: false,
                     CreatePrivateThreads: false
                 }
             },
-            ...contributorRoles.map((role) => ({
+            ...allowedRoles.map((role) => ({
                 id: role.id,
                 options: {
                     ViewChannel: true,

@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ChannelType, Collection, type Guild, type GuildBasedChannel, type Role } from "discord.js";
+import { ChannelType, Collection, PermissionFlagsBits, type Guild, type GuildBasedChannel, type Role } from "discord.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ServerProvisioner } from "../../src/Services/ServerProvisioner.js";
 import { ChannelPurpose, SettingsStore } from "../../src/State/SettingsStore.js";
@@ -25,7 +25,7 @@ function mockChannel(id: string, name: string, type: ChannelType, parentId?: str
             id: "guild-1",
             client: { user: { id: "bot-user-1" } },
             roles: {
-                everyone: { id: "everyone-role-id" },
+                everyone: { id: "everyone-role-id", setPermissions: vi.fn().mockResolvedValue(undefined) },
                 fetch: vi.fn().mockResolvedValue(rolesColl),
                 cache: rolesColl
             }
@@ -99,7 +99,7 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
             id: "guild-1",
             client: { user: { id: "bot-user-1" } },
             roles: {
-                everyone: { id: "everyone-role-id" },
+                everyone: { id: "everyone-role-id", setPermissions: vi.fn().mockResolvedValue(undefined) },
                 fetch: vi.fn().mockResolvedValue(new Collection<string, Role>()),
                 create: vi.fn().mockImplementation((opts: { name: string }) =>
                     Promise.resolve({
@@ -154,7 +154,7 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
             id: "guild-1",
             client: { user: { id: "bot-user-1" } },
             roles: {
-                everyone: { id: "everyone-role-id" },
+                everyone: { id: "everyone-role-id", setPermissions: vi.fn().mockResolvedValue(undefined) },
                 fetch: vi.fn().mockResolvedValue(new Collection<string, Role>()),
                 create: vi.fn().mockImplementation((opts: { name: string }) =>
                     Promise.resolve({
@@ -218,7 +218,7 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
             id: "guild-1",
             client: { user: { id: "bot-user-1" } },
             roles: {
-                everyone: { id: "everyone-role-id" },
+                everyone: { id: "everyone-role-id", setPermissions: vi.fn().mockResolvedValue(undefined) },
                 fetch: vi.fn().mockResolvedValue(new Collection<string, Role>()),
                 create: vi.fn().mockImplementation((opts: { name: string }) =>
                     Promise.resolve({
@@ -338,7 +338,7 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
             id: "guild-1",
             client: { user: { id: "bot-user-1" } },
             roles: {
-                everyone: { id: "everyone-role-id" },
+                everyone: { id: "everyone-role-id", setPermissions: vi.fn().mockResolvedValue(undefined) },
                 fetch: vi.fn().mockResolvedValue(new Collection<string, Role>()),
                 create: vi.fn().mockImplementation((opts: { name: string }) =>
                     Promise.resolve({
@@ -399,5 +399,79 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
         const savedWebhooks = (mockApi.updateDiscordSettings.mock.calls[0]![1] as { webhooks: Record<string, string> }).webhooks;
         expect(savedWebhooks.rules).toBeUndefined();
         expect(settings.channel(ChannelPurpose.Rules)).toBeUndefined();
+    });
+
+    it("locks down active department channels and removes image perms from everyone role", async () => {
+        const everyoneSetPerms = vi.fn().mockResolvedValue(undefined);
+        const rolesColl = new Collection<string, Role>();
+        const createdChannelsMap = new Map<string, MockChannelData>();
+        const mockGuild = {
+            id: "guild-1",
+            client: { user: { id: "bot-user-1" } },
+            roles: {
+                everyone: { id: "everyone-role-id", setPermissions: everyoneSetPerms },
+                fetch: vi.fn().mockResolvedValue(rolesColl),
+                create: vi.fn().mockImplementation((opts: { name: string }) =>
+                    Promise.resolve({
+                        id: `role-${opts.name}`,
+                        name: opts.name,
+                        hoist: false,
+                        setHoist: vi.fn(),
+                        setPermissions: vi.fn()
+                    })
+                )
+            },
+            channels: {
+                fetch: vi.fn().mockResolvedValue(new Collection<string, GuildBasedChannel>()),
+                create: vi.fn().mockImplementation((opts: { name: string; type: ChannelType; parent?: string }) => {
+                    const chan = mockChannel(`chan-${opts.name}`, opts.name, opts.type, opts.parent);
+                    createdChannelsMap.set(opts.name, chan);
+                    return Promise.resolve(chan);
+                })
+            },
+            fetchWebhooks: vi.fn().mockResolvedValue(new Collection())
+        } as unknown as Guild;
+
+        const mockApi = {
+            listDepartments: vi.fn().mockResolvedValue([
+                {
+                    id: "dept-1",
+                    name: "Art and Writing",
+                    slug: "art-and-writing",
+                    contributorSpecialties: ["concept_artist"],
+                    supervisorSpecialties: []
+                }
+            ]),
+            bindDepartmentDiscordMap: vi.fn().mockResolvedValue(undefined),
+            updateDiscordSettings: vi.fn().mockResolvedValue({}),
+            getDocument: vi.fn().mockRejectedValue(new Error("no docs"))
+        };
+
+        const mockLogger = {
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            debug: vi.fn()
+        };
+
+        const provisioner = new ServerProvisioner(settings, mockLogger as never, undefined, mockApi as never);
+        await provisioner.provision(mockGuild);
+
+        // invariant: everyone role permissions are set to memberPermissions (text-only, no image attachments)
+        expect(everyoneSetPerms).toHaveBeenCalled();
+        const calledPerms = everyoneSetPerms.mock.calls[0]![0];
+        expect(calledPerms).toContain(PermissionFlagsBits.SendMessages);
+        expect(calledPerms).not.toContain(PermissionFlagsBits.AttachFiles);
+        expect(calledPerms).not.toContain(PermissionFlagsBits.EmbedLinks);
+
+        // invariant: active department channels are created and configured
+        const deptChat = createdChannelsMap.get("art-general");
+        expect(deptChat).toBeDefined();
+
+        const deptGrabbox = createdChannelsMap.get("Art-Writing-GrabBox");
+        expect(deptGrabbox).toBeDefined();
+
+        const deptVoice = createdChannelsMap.get("Art and Writing General");
+        expect(deptVoice).toBeDefined();
     });
 });

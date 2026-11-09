@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
-import { emailCodeLength } from "@platform/contracts";
+import { emailCodeLength, Role } from "@platform/contracts";
 import {
     ApplicationError,
     BadRequestError,
@@ -151,12 +151,13 @@ export class VerificationService {
                 if (current === undefined) {
                     throw new NotFoundError("User");
                 }
+                const promotedRole = current.role === Role.Member ? Role.Voter : current.role;
                 return transaction
                     .update(users)
                     .set({
                         verifiedEmailHash: pending.emailHash,
                         emailVerifiedAt: new Date(),
-                        role: current.role
+                        role: promotedRole
                     })
                     .where(and(eq(users.id, user.id), isNull(users.emailVerifiedAt)))
                     .returning();
