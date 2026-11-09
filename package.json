@@ -13,7 +13,7 @@
     "scripts": {
         "build": "tsc -b",
         "clean": "tsc -b --clean",
-        "typecheck": "tsc -b && tsc -p tsconfig.eslint.json && npm run typecheck -w @platform/web && npm run typecheck -w @platform/script",
+        "typecheck": "tsc -b && tsc -p tsconfig.eslint.json && npm run typecheck -w @platform/web && npm run typecheck -w @platform/script && npm run typecheck -w @platform/landing",
         "lint": "tsc -b packages/scoring packages/contracts && eslint . && npm run lint -w @platform/web",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
@@ -29,6 +29,8 @@
         "build:web": "tsc -b packages/scoring packages/contracts && npm run build -w @platform/web",
         "dev:script": "tsc -b packages/scoring packages/contracts && npm run dev -w @platform/script",
         "build:script": "tsc -b packages/scoring packages/contracts && npm run build -w @platform/script",
+        "dev:landing": "npm run dev -w @platform/landing",
+        "build:landing": "npm run build -w @platform/landing",
         "dev:discord": "tsc -b packages/scoring packages/contracts && npm run dev -w @platform/discord"
     },
     "devDependencies": {

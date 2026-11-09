@@ -259,6 +259,20 @@ services:
       api:
         condition: service_healthy
 
+  landing:
+    <<: *api-hardening
+    image: platform-landing
+    build:
+      context: .
+      target: landing
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+    networks:
+      - edge
+
 networks:
   backend:
     internal: true
