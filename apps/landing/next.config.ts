@@ -6,11 +6,14 @@ const nextConfig: NextConfig = {
     outputFileTracingRoot: fileURLToPath(new URL("../..", import.meta.url)),
     poweredByHeader: false,
     reactStrictMode: true,
+    images: {
+        unoptimized: true
+    },
     async redirects() {
         return [
             {
-                source: "/:path+",
-                destination: "https://app.projectstairway.net/:path+",
+                source: "/:path((?!logo\\.jpg|favicon\\.ico|_next).+)",
+                destination: "https://app.projectstairway.net/:path",
                 permanent: false
             }
         ];

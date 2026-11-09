@@ -11,6 +11,7 @@ export default function LandingPage(): ReactNode {
                     width={1920}
                     height={607}
                     priority
+                    unoptimized
                     className="h-auto w-full object-contain drop-shadow-[0_0_40px_rgba(255,255,255,0.12)]"
                 />
             </div>
