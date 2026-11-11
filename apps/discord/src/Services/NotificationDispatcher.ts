@@ -4,9 +4,11 @@ import {
     NotificationType,
     ReviewDecision,
     Role,
+    roleLabel,
     ShotStatus,
     type ShotType,
     shotTypeToDepartment,
+    specialtyLabel,
     type PlatformNotification
 } from "@platform/contracts";
 import { WebhookClient, type Client, type Collection, type ContainerBuilder, type SendableChannels, type Webhook } from "discord.js";
@@ -66,14 +68,7 @@ export class NotificationDispatcher {
         }
     }
 
-    private async getLogsWebhookForShotType(shotType?: ShotType | null): Promise<WebhookClient | null> {
-        if (!shotType) {
-            return null;
-        }
-        const deptSlug = shotTypeToDepartment[shotType];
-        if (!deptSlug) {
-            return null;
-        }
+    public async getLogsWebhookForDeptSlug(deptSlug: string): Promise<WebhookClient | null> {
         const cached = this.departmentLogsWebhooks.get(deptSlug);
         if (cached !== undefined && Date.now() - this.lastDeptSync < 60_000) {
             return cached;
@@ -95,6 +90,12 @@ export class NotificationDispatcher {
                 this.logger.warn({ err }, "failed to fetch department webhooks for task notification");
             }
         }
+        const fallbackUrl = this.settings.webhook(`${deptSlug}-logs`) ?? this.settings.webhook(deptSlug);
+        if (fallbackUrl && isSafeDiscordWebhookUrl(fallbackUrl)) {
+            const client = new WebhookClient({ url: fallbackUrl }, discordRestOptions);
+            this.departmentLogsWebhooks.set(deptSlug, client);
+            return client;
+        }
         return null;
     }
 
@@ -104,20 +105,15 @@ export class NotificationDispatcher {
                 return "Project Stairway Telemetry";
             case ChannelPurpose.ModerationLogs:
                 return "Project Stairway Moderation";
+            case ChannelPurpose.ProductionAnnouncements:
+                return "Project Stairway Announcements";
             default:
                 return "Project Stairway";
         }
     }
 
-    private departmentWebhookName(shotType?: ShotType | null): string {
-        if (!shotType) {
-            return "Project Stairway Tasks";
-        }
-        const deptSlug = shotTypeToDepartment[shotType];
-        if (!deptSlug) {
-            return "Project Stairway Tasks";
-        }
-        const dept = departmentDefinitions.find((d) => d.slug === deptSlug);
+    private departmentWebhookNameBySlug(deptSlug: string): string {
+        const dept = departmentDefinitions.find((d) => (d.slug as string) === deptSlug);
         return dept !== undefined ? `Project Stairway ${dept.name}` : "Project Stairway Tasks";
     }
 
@@ -125,24 +121,55 @@ export class NotificationDispatcher {
         return resolveBotAvatarUrl(this.client);
     }
 
-    private async sendDepartmentLog(
-        shotType: ShotType | null | undefined,
-        panelContent: ContainerBuilder,
-        failureMessage: string
-    ): Promise<void> {
-        const hook = await this.getLogsWebhookForShotType(shotType);
+    private async sendDepartmentLogBySlug(deptSlug: string, panelContent: ContainerBuilder, failureMessage: string): Promise<void> {
+        const hook = await this.getLogsWebhookForDeptSlug(deptSlug);
         if (hook === null) {
             return;
         }
         await hook
             .send({
                 ...message(panelContent),
-                username: this.departmentWebhookName(shotType),
+                username: this.departmentWebhookNameBySlug(deptSlug),
                 avatarURL: this.avatarUrl()
             })
             .catch((err: unknown) => {
                 this.logger.warn({ err }, failureMessage);
             });
+    }
+
+    private async sendDepartmentLog(
+        shotType: ShotType | null | undefined,
+        panelContent: ContainerBuilder,
+        failureMessage: string
+    ): Promise<void> {
+        if (!shotType) {
+            return;
+        }
+        const deptSlug = shotTypeToDepartment[shotType];
+        if (!deptSlug) {
+            return;
+        }
+        await this.sendDepartmentLogBySlug(deptSlug, panelContent, failureMessage);
+    }
+
+    private async resolveWebhook(purpose: ChannelPurpose, channel: SendableChannels | null): Promise<WebhookClient | null> {
+        const cached = this.webhookClients[purpose];
+        if (cached !== undefined) {
+            return cached;
+        }
+        const configuredUrl =
+            this.settings.webhook(purpose) ??
+            this.settings.webhook(purpose.toLowerCase()) ??
+            (purpose === ChannelPurpose.ProductionAnnouncements ? this.settings.webhook("production-announcements") : undefined);
+        if (configuredUrl && isSafeDiscordWebhookUrl(configuredUrl)) {
+            const client = new WebhookClient({ url: configuredUrl }, discordRestOptions);
+            this.webhookClients[purpose] = client;
+            return client;
+        }
+        if (channel !== null) {
+            return this.getOrCreateWebhook(channel, purpose);
+        }
+        return null;
     }
 
     private async getOrCreateWebhook(channel: unknown, purpose: ChannelPurpose): Promise<WebhookClient | null> {
@@ -207,12 +234,9 @@ export class NotificationDispatcher {
             webAppUrl: this.webAppUrl
         };
         for (const rendered of renderNotification(notification, context)) {
-            let webhook = this.webhookClients[rendered.purpose];
             const channel = await this.channel(rendered.purpose);
-            if (webhook === undefined && channel !== null) {
-                webhook = (await this.getOrCreateWebhook(channel, rendered.purpose)) ?? undefined;
-            }
-            if (webhook !== undefined) {
+            const webhook = await this.resolveWebhook(rendered.purpose, channel);
+            if (webhook !== null) {
                 try {
                     await webhook.send({
                         flags: rendered.message.flags,
@@ -417,7 +441,7 @@ export class NotificationDispatcher {
                     }
                 }
                 return;
-            case NotificationType.UserRoleChanged:
+            case NotificationType.UserRoleChanged: {
                 if (notification.user.discordId !== null) {
                     const guild = await this.client.guilds.fetch(this.guildId).catch(() => null);
                     if (guild !== null) {
@@ -434,7 +458,33 @@ export class NotificationDispatcher {
                         }
                     }
                 }
+                const affectedDeptSlugs = new Set<string>();
+                for (const spec of notification.specialties) {
+                    for (const def of departmentDefinitions) {
+                        if (def.supervisorSpecialties.includes(spec) || def.contributorSpecialties.includes(spec)) {
+                            affectedDeptSlugs.add(def.slug);
+                        }
+                    }
+                }
+                if (affectedDeptSlugs.size > 0) {
+                    const roleName = roleLabel(notification.role);
+                    const specs = notification.specialties.map(specialtyLabel).join(", ");
+                    const userMention = notification.user.discordId
+                        ? `<@${notification.user.discordId}>`
+                        : plain(notification.user.username);
+                    const actorMention = notification.actor.discordId
+                        ? `<@${notification.actor.discordId}>`
+                        : plain(notification.actor.username);
+                    for (const slug of affectedDeptSlugs) {
+                        await this.sendDepartmentLogBySlug(
+                            slug,
+                            panel(Accent.Info, "**Role Assigned**", `${userMention} is now **${roleName}** (${specs}), by ${actorMention}`),
+                            "failed to post role assignment to department logs"
+                        );
+                    }
+                }
                 return;
+            }
             case NotificationType.ContributorPromoted:
                 if (notification.user.discordId !== null) {
                     const guild = await this.client.guilds.fetch(this.guildId).catch(() => null);

@@ -425,11 +425,42 @@ export function renderNotification(notification: PlatformNotification, context: 
             ];
         }
         case NotificationType.TicketConfigUpdated:
-        case NotificationType.TicketActivity:
+            return [post(telemetry, Accent.Info, "**Desk Configuration Updated**", `Updated by ${person(notification.actor, isMember)}`)];
+        case NotificationType.TicketActivity: {
+            const targetDesc = notification.target !== null ? ` for ${person(notification.target, isMember)}` : "";
+            const stageDesc = notification.stage !== null ? ` (Stage: ${notification.stage})` : "";
+            return [
+                post(
+                    ChannelPurpose.ModerationLogs,
+                    Accent.Info,
+                    `**Desk Activity: ${notification.kind}**`,
+                    `${person(notification.actor, isMember)}${targetDesc}${stageDesc}`,
+                    reason(notification.note)
+                )
+            ];
+        }
         case NotificationType.FeedbackSurveyOpened:
+            return [
+                post(
+                    telemetry,
+                    Accent.Info,
+                    "**Feedback Survey Opened**",
+                    `Survey \`${notification.surveyId.slice(0, 8)}\` is now open for responses.`
+                )
+            ];
         case NotificationType.FeedbackSurveyClosed:
+            return [
+                post(telemetry, Accent.Info, "**Feedback Survey Closed**", `Survey \`${notification.surveyId.slice(0, 8)}\` has concluded.`)
+            ];
         case NotificationType.FeedbackOutcomeRecorded:
-            return [];
+            return [
+                post(
+                    telemetry,
+                    Accent.Success,
+                    "**Feedback Outcome Recorded**",
+                    `Survey \`${notification.surveyId.slice(0, 8)}\` results compiled.`
+                )
+            ];
         case NotificationType.DocumentUpdated: {
             const noteText =
                 notification.note !== null && notification.note.trim().length > 0 ? `\n-# Note: ${plain(notification.note, 200)}` : "";

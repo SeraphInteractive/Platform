@@ -474,4 +474,163 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
         const deptVoice = createdChannelsMap.get("Art and Writing General");
         expect(deptVoice).toBeDefined();
     });
+
+    it("provisions production announcements, general, and isolated management channels with grab-box visibility", async () => {
+        const rolesColl = new Collection<string, Role>();
+        const createdChannelsMap = new Map<
+            string,
+            MockChannelData & { opts?: { permissionOverwrites?: { id: string; allow?: bigint[]; deny?: bigint[] }[] } }
+        >();
+        const mockGuild = {
+            id: "guild-1",
+            client: { user: { id: "bot-user-1" } },
+            roles: {
+                everyone: { id: "everyone-role-id", setPermissions: vi.fn().mockResolvedValue(undefined) },
+                fetch: vi.fn().mockResolvedValue(rolesColl),
+                cache: rolesColl,
+                setPositions: vi.fn().mockResolvedValue(new Collection()),
+                create: vi.fn().mockImplementation((opts: { name: string }) => {
+                    const role = {
+                        id: `role-${opts.name}`,
+                        name: opts.name,
+                        hoist: false,
+                        setHoist: vi.fn(),
+                        setPermissions: vi.fn()
+                    };
+                    rolesColl.set(role.id, role as unknown as Role);
+                    return Promise.resolve(role);
+                })
+            },
+            channels: {
+                fetch: vi.fn().mockResolvedValue(new Collection<string, GuildBasedChannel>()),
+                create: vi
+                    .fn()
+                    .mockImplementation(
+                        (opts: {
+                            name: string;
+                            type: ChannelType;
+                            parent?: string;
+                            permissionOverwrites?: { id: string; allow?: bigint[]; deny?: bigint[] }[];
+                        }) => {
+                            const chan = mockChannel(`chan-${opts.name}`, opts.name, opts.type, opts.parent);
+                            (chan as unknown as { opts: typeof opts }).opts = opts;
+                            createdChannelsMap.set(opts.name, chan);
+                            return Promise.resolve(chan);
+                        }
+                    )
+            },
+            fetchWebhooks: vi.fn().mockResolvedValue(new Collection())
+        } as unknown as Guild;
+
+        const mockApi = {
+            listDepartments: vi.fn().mockResolvedValue([
+                {
+                    id: "dept-1",
+                    name: "Art and Writing",
+                    slug: "art-and-writing",
+                    contributorSpecialties: ["concept_artist"],
+                    supervisorSpecialties: ["art_director"]
+                }
+            ]),
+            bindDepartmentDiscordMap: vi.fn().mockResolvedValue(undefined),
+            updateDiscordSettings: vi.fn().mockResolvedValue({}),
+            getDocument: vi.fn().mockRejectedValue(new Error("no docs"))
+        };
+
+        const mockLogger = {
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            debug: vi.fn()
+        };
+
+        const provisioner = new ServerProvisioner(settings, mockLogger as never, undefined, mockApi as never);
+        await provisioner.provision(mockGuild);
+
+        // invariant: production announcements channel exists with read-only permissions for contributors
+        const prodAnnouncements = createdChannelsMap.get("production-announcements");
+        expect(prodAnnouncements).toBeDefined();
+        const prodAnnounceOverwrites = prodAnnouncements?.opts?.permissionOverwrites;
+        expect(prodAnnounceOverwrites).toBeDefined();
+        const everyoneAnnounce = prodAnnounceOverwrites?.find((ow) => ow.id === "everyone-role-id");
+        expect(everyoneAnnounce?.deny).toContain(PermissionFlagsBits.ViewChannel);
+
+        // contributor role should have view channel and read message history, but denied send messages
+        const contributorRoleOw = prodAnnounceOverwrites?.find((ow) => ow.id === "role-General Contributors");
+        expect(contributorRoleOw?.allow).toContain(PermissionFlagsBits.ViewChannel);
+        expect(contributorRoleOw?.deny).toContain(PermissionFlagsBits.SendMessages);
+
+        // invariant: production-announcements webhook is configured in settings
+        const webhookUrl = settings.webhook("production-announcements");
+        expect(webhookUrl).toBeDefined();
+
+        // invariant: production-management channel is restricted strictly to supervisors and executives
+        const prodManagement = createdChannelsMap.get("production-management");
+        expect(prodManagement).toBeDefined();
+        const prodMgmtOverwrites = prodManagement?.opts?.permissionOverwrites;
+        expect(prodMgmtOverwrites).toBeDefined();
+        const everyoneMgmt = prodMgmtOverwrites?.find((ow) => ow.id === "everyone-role-id");
+        expect(everyoneMgmt?.deny).toContain(PermissionFlagsBits.ViewChannel);
+
+        // contributors should NOT be present in production-management allow overwrites
+        const contributorInMgmt = prodMgmtOverwrites?.find((ow) => ow.id === "role-General Contributors");
+        expect(contributorInMgmt).toBeUndefined();
+        const conceptArtistInMgmt = prodMgmtOverwrites?.find((ow) => ow.id === "role-Concept Artists");
+        expect(conceptArtistInMgmt).toBeUndefined();
+
+        // media team (tier 1 department role) should NOT be in production-management
+        const mediaTeamInMgmt = prodMgmtOverwrites?.find((ow) => ow.id === "role-Media Team");
+        expect(mediaTeamInMgmt).toBeUndefined();
+
+        // department supervisor / executive roles should have view permissions
+        const supervisorInMgmt = prodMgmtOverwrites?.find((ow) => ow.id === "role-Art Director");
+        expect(supervisorInMgmt?.allow).toContain(PermissionFlagsBits.ViewChannel);
+
+        // invariant: grab-box forum gives @everyone read-only view perms while department contributors can send messages in threads
+        const grabbox = createdChannelsMap.get("Art-Writing-GrabBox");
+        const grabboxMock = grabbox as unknown as {
+            permissionOverwrites?: {
+                create?: { mock: { calls: [string, Record<string, boolean>][] } };
+            };
+        };
+        const createCalls = grabboxMock?.permissionOverwrites?.create;
+        expect(createCalls).toBeDefined();
+        if (createCalls === undefined) {
+            throw new Error("missing createCalls mock");
+        }
+        expect(createCalls.mock.calls.length).toBeGreaterThan(0);
+
+        const everyoneGrabboxCall = createCalls.mock.calls.find((c) => c[0] === "everyone-role-id");
+        expect(everyoneGrabboxCall).toBeDefined();
+        expect(everyoneGrabboxCall?.[1]).toMatchObject({
+            ViewChannel: true,
+            ReadMessageHistory: true,
+            SendMessagesInThreads: false
+        });
+
+        const contributorGrabboxCall = createCalls.mock.calls.find((c) => c[0] === "role-Concept Artists");
+        expect(contributorGrabboxCall).toBeDefined();
+        expect(contributorGrabboxCall?.[1]).toMatchObject({
+            ViewChannel: true,
+            ReadMessageHistory: true,
+            SendMessagesInThreads: true,
+            AttachFiles: true,
+            EmbedLinks: true
+        });
+
+        // invariant: department log channel is restricted strictly to department supervisors
+        const logsChannel = createdChannelsMap.get("art-logs");
+        expect(logsChannel).toBeDefined();
+        const logsOverwrites = logsChannel?.opts?.permissionOverwrites;
+        expect(logsOverwrites).toBeDefined();
+        const everyoneLogs = logsOverwrites?.find((ow) => ow.id === "everyone-role-id");
+        expect(everyoneLogs?.deny).toContain(PermissionFlagsBits.ViewChannel);
+
+        const supervisorLogs = logsOverwrites?.find((ow) => ow.id === "role-Art Director");
+        expect(supervisorLogs?.allow).toContain(PermissionFlagsBits.ViewChannel);
+        expect(supervisorLogs?.allow).toContain(PermissionFlagsBits.ManageMessages);
+
+        const contributorLogs = logsOverwrites?.find((ow) => ow.id === "role-Concept Artists");
+        expect(contributorLogs).toBeUndefined();
+    });
 });

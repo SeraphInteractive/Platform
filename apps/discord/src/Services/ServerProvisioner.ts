@@ -144,16 +144,19 @@ export const forumTagNames: Readonly<Record<ShotStatus, string>> = {
     [ShotStatus.Approved]: "Approved"
 };
 
-type SystemChannelPurpose = ChannelPurpose.Announcements | ChannelPurpose.Telemetry | ChannelPurpose.ModerationLogs;
+type SystemChannelPurpose =
+    ChannelPurpose.Announcements | ChannelPurpose.ProductionAnnouncements | ChannelPurpose.Telemetry | ChannelPurpose.ModerationLogs;
 
 const channelNames: Readonly<Record<SystemChannelPurpose, string>> = {
     [ChannelPurpose.Announcements]: "announcements",
+    [ChannelPurpose.ProductionAnnouncements]: "production-announcements",
     [ChannelPurpose.Telemetry]: "telemetry-alerts",
     [ChannelPurpose.ModerationLogs]: "moderation-logs"
 };
 
 const channelAliases: Readonly<Record<SystemChannelPurpose, readonly string[]>> = {
     [ChannelPurpose.Announcements]: ["announcements", "announcement", "studio-announcements"],
+    [ChannelPurpose.ProductionAnnouncements]: ["production-announcements", "production-news", "contributor-announcements"],
     [ChannelPurpose.Telemetry]: ["telemetry-alerts", "telemetry", "bot-alerts", "alerts"],
     [ChannelPurpose.ModerationLogs]: ["moderation-logs", "mod-logs", "supervisor-logs", "mod-log"]
 };
@@ -657,6 +660,40 @@ export class ServerProvisioner {
 
         const production = await ensureCategory("Production", productionCategoryOverwrites);
 
+        // production announcements channel (webhook-driven, read-only for contributors)
+        const productionAnnouncementsOverwrites: OverwriteResolvable[] = [
+            { id: everyone, deny: [PermissionFlagsBits.ViewChannel] },
+            ...contributorRoles.map((role) => ({
+                id: role.id,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
+                deny: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.CreatePublicThreads, PermissionFlagsBits.CreatePrivateThreads]
+            })),
+            {
+                id: botId,
+                allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.SendMessages,
+                    PermissionFlagsBits.ReadMessageHistory,
+                    PermissionFlagsBits.ManageWebhooks
+                ]
+            }
+        ];
+
+        const prodAnnouncements = await ensureNamedText(
+            "production-announcements",
+            ["production-announcements", "production-news", "contributor-announcements"],
+            production,
+            "Production milestones, deliverables updates, and contributor announcements.",
+            productionAnnouncementsOverwrites
+        );
+
+        const prodAnnounceRes = await reconcileWebhookOnChannel(prodAnnouncements, "Production Announcements", botId, true, this.logger);
+        if (prodAnnounceRes.activeId !== null) {
+            activeWebhookIds.add(prodAnnounceRes.activeId);
+        }
+        deletedWebhooks.push(...prodAnnounceRes.deletedNames);
+        const prodAnnouncementsWebhookUrl = prodAnnounceRes.activeUrl;
+
         const productionGeneralOverwrites: OverwriteResolvable[] = [
             { id: everyone, deny: [PermissionFlagsBits.ViewChannel] },
             ...contributorRoles.map((role) => ({
@@ -681,9 +718,11 @@ export class ServerProvisioner {
             productionGeneralOverwrites
         );
 
+        // strictly for department supervisors and executives (no craft contributors)
+        const managementRoles = staffRoles.filter((role) => role.name !== "Media Team");
         const productionManagementOverwrites: OverwriteResolvable[] = [
             { id: everyone, deny: [PermissionFlagsBits.ViewChannel] },
-            ...staffRoles.map((role) => ({
+            ...managementRoles.map((role) => ({
                 id: role.id,
                 allow: [
                     PermissionFlagsBits.ViewChannel,
@@ -885,9 +924,22 @@ export class ServerProvisioner {
                         deptGeneralOverwrites
                     );
 
-                    // 5. Task logs (<prefix>-logs)
+                    // 5. Task logs (<prefix>-logs) - strictly visible and manageable by department supervisors
                     const logsName = `${prefix}-logs`;
                     const logsAliases = [logsName, `${dept.slug}-logs`, `${prefix}-task-logs`, `${dept.slug}-task-logs`];
+                    const supervisorSpecialtiesSet = new Set(dept.supervisorSpecialties);
+                    const deptSupervisorRoles = studioRoles
+                        .filter(
+                            (sr) =>
+                                sr.tier <= StudioTier.Executive ||
+                                (sr.specialty !== undefined && supervisorSpecialtiesSet.has(sr.specialty))
+                        )
+                        .map((sr) => roleIds.get(sr.name))
+                        .filter((role): role is DiscordRole => role !== undefined);
+                    if (supervisorRole !== undefined && !deptSupervisorRoles.some((r) => r.id === supervisorRole.id)) {
+                        deptSupervisorRoles.push(supervisorRole);
+                    }
+
                     const deptLogsOverwrites: OverwriteResolvable[] = [
                         {
                             id: everyone,
@@ -898,9 +950,13 @@ export class ServerProvisioner {
                                 PermissionFlagsBits.CreatePrivateThreads
                             ]
                         },
-                        ...deptRoles.map((role) => ({
+                        ...deptSupervisorRoles.map((role) => ({
                             id: role.id,
-                            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
+                            allow: [
+                                PermissionFlagsBits.ViewChannel,
+                                PermissionFlagsBits.ReadMessageHistory,
+                                PermissionFlagsBits.ManageMessages
+                            ],
                             deny: [PermissionFlagsBits.SendMessages]
                         })),
                         {
@@ -986,6 +1042,10 @@ export class ServerProvisioner {
         if (announcementsWebhookUrl !== null) {
             systemWebhooks.announcements = announcementsWebhookUrl;
         }
+        if (prodAnnouncementsWebhookUrl !== null) {
+            systemWebhooks[ChannelPurpose.ProductionAnnouncements] = prodAnnouncementsWebhookUrl;
+            systemWebhooks["production-announcements"] = prodAnnouncementsWebhookUrl;
+        }
         if (telemetryWebhookUrl !== null) {
             systemWebhooks.telemetry = telemetryWebhookUrl;
         }
@@ -1004,6 +1064,7 @@ export class ServerProvisioner {
             }
 
             settings.channels[ChannelPurpose.Announcements] = announcements.id;
+            settings.channels[ChannelPurpose.ProductionAnnouncements] = prodAnnouncements.id;
             if (telemetry !== undefined) {
                 settings.channels[ChannelPurpose.Telemetry] = telemetry.id;
             }
@@ -1123,16 +1184,14 @@ export class ServerProvisioner {
                       .map((def) => existingRoles.find((role) => findStudioRole(role.name)?.name === def.name))
                       .filter((role): role is DiscordRole => role !== undefined);
 
-        const isDeptForum = deptRoles !== undefined && deptRoles.length > 0;
-
         const overwrites: { id: string; options: PermissionOverwriteOptions }[] = [
             {
                 id: everyone,
                 options: {
-                    ViewChannel: !isDeptForum,
-                    ReadMessageHistory: !isDeptForum,
-                    SendMessagesInThreads: !isDeptForum,
-                    UseApplicationCommands: !isDeptForum,
+                    ViewChannel: true,
+                    ReadMessageHistory: true,
+                    SendMessagesInThreads: false,
+                    UseApplicationCommands: false,
                     SendMessages: false,
                     CreatePublicThreads: false,
                     CreatePrivateThreads: false
@@ -1145,7 +1204,8 @@ export class ServerProvisioner {
                     ReadMessageHistory: true,
                     SendMessagesInThreads: true,
                     UseApplicationCommands: true,
-                    AttachFiles: true
+                    AttachFiles: true,
+                    EmbedLinks: true
                 }
             })),
             ...staffRoles.map((role) => ({

@@ -3,6 +3,7 @@
 import {
     adminSpecialties,
     assignableSpecialties,
+    contributorSpecialties,
     fieldRules,
     type ModeratedUserDto,
     problemOf,
@@ -10,6 +11,7 @@ import {
     selfSelectableSpecialties,
     type Specialty,
     type SpecialtyHolderDto,
+    supervisorGrantableSpecialties,
     supervisorSpecialties,
     teamSpecialties,
     textLimits,
@@ -65,52 +67,68 @@ function canManageSecondary(actor: UserDto, target: ModeratedUserDto): boolean {
 }
 
 interface SpecialtySelectContentProps {
+    readonly actor: UserDto;
     readonly holders: Record<Specialty, SpecialtyHolderDto | null>;
     readonly currentSpecialty?: Specialty | null;
     readonly targetId?: string;
 }
 
-function SpecialtySelectContent({ holders, currentSpecialty, targetId }: SpecialtySelectContentProps): ReactNode {
-    const isCustomCraft = currentSpecialty !== null && currentSpecialty !== undefined && !assignableSpecialties.includes(currentSpecialty);
+function SpecialtySelectContent({ actor, holders, currentSpecialty, targetId }: SpecialtySelectContentProps): ReactNode {
+    const isAdmin = hasAtLeast(actor, Role.Admin);
+    const supervisorAllowed = new Set(actor.specialties.flatMap((s) => supervisorGrantableSpecialties[s] ?? []));
+    const visibleContributorRoles = isAdmin ? contributorSpecialties : contributorSpecialties.filter((s) => supervisorAllowed.has(s));
 
     return (
         <SelectContent>
             <SelectItem value="__none__">None</SelectItem>
-            {isCustomCraft && <SelectItem value={currentSpecialty}>{specialtyLabel(currentSpecialty)} (Craft)</SelectItem>}
-            <SelectGroup>
-                <SelectLabel>Admin Roles</SelectLabel>
-                {adminSpecialties.map((s) => {
-                    const holder = holders[s];
-                    const isHeldElsewhere = holder !== null && holder !== undefined && holder.id !== targetId;
-                    return (
+            {isAdmin && (
+                <>
+                    <SelectGroup>
+                        <SelectLabel>Admin Roles</SelectLabel>
+                        {adminSpecialties.map((s) => {
+                            const holder = holders[s];
+                            const isHeldElsewhere = holder !== null && holder !== undefined && holder.id !== targetId;
+                            return (
+                                <SelectItem key={s} value={s}>
+                                    {specialtyLabel(s)}
+                                    {isHeldElsewhere && ` (held by @${holder.username})`}
+                                </SelectItem>
+                            );
+                        })}
+                    </SelectGroup>
+                    <SelectGroup>
+                        <SelectLabel>Supervisor Roles</SelectLabel>
+                        {supervisorSpecialties.map((s) => {
+                            const holder = holders[s];
+                            const isHeldElsewhere = holder !== null && holder !== undefined && holder.id !== targetId;
+                            return (
+                                <SelectItem key={s} value={s}>
+                                    {specialtyLabel(s)}
+                                    {isHeldElsewhere && ` (held by @${holder.username})`}
+                                </SelectItem>
+                            );
+                        })}
+                    </SelectGroup>
+                    <SelectGroup>
+                        <SelectLabel>Team Roles</SelectLabel>
+                        {teamSpecialties.map((s) => (
+                            <SelectItem key={s} value={s}>
+                                {specialtyLabel(s)}
+                            </SelectItem>
+                        ))}
+                    </SelectGroup>
+                </>
+            )}
+            {visibleContributorRoles.length > 0 && (
+                <SelectGroup>
+                    <SelectLabel>Contributor Roles</SelectLabel>
+                    {visibleContributorRoles.map((s) => (
                         <SelectItem key={s} value={s}>
                             {specialtyLabel(s)}
-                            {isHeldElsewhere && ` (held by @${holder.username})`}
                         </SelectItem>
-                    );
-                })}
-            </SelectGroup>
-            <SelectGroup>
-                <SelectLabel>Supervisor Roles</SelectLabel>
-                {supervisorSpecialties.map((s) => {
-                    const holder = holders[s];
-                    const isHeldElsewhere = holder !== null && holder !== undefined && holder.id !== targetId;
-                    return (
-                        <SelectItem key={s} value={s}>
-                            {specialtyLabel(s)}
-                            {isHeldElsewhere && ` (held by @${holder.username})`}
-                        </SelectItem>
-                    );
-                })}
-            </SelectGroup>
-            <SelectGroup>
-                <SelectLabel>Team Roles</SelectLabel>
-                {teamSpecialties.map((s) => (
-                    <SelectItem key={s} value={s}>
-                        {specialtyLabel(s)}
-                    </SelectItem>
-                ))}
-            </SelectGroup>
+                    ))}
+                </SelectGroup>
+            )}
         </SelectContent>
     );
 }
@@ -295,24 +313,31 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
     const manageableSecondary = canManageSecondary(actor, target);
     const busy = setPrimaryRole.isPending || setSecondaryRole.isPending || promote.isPending || lift.isPending;
     const avatar = safeHttpUrl(target.avatarUrl);
-    const { assigned, chosen: personalSpecialties } = splitSpecialties(target.specialties);
-    const assignedStaffSpecialty = assigned[0] ?? null;
-    const currentSpecialty = assignedStaffSpecialty ?? "__none__";
+    const [pendingContributorSpecialty, setPendingContributorSpecialty] = useState<Specialty | null>(null);
+    const [pendingContributorTier, setPendingContributorTier] = useState<Role>(Role.Contributor);
+    const activeSpecialty = target.specialties[0] ?? null;
+    const currentSpecialty = activeSpecialty ?? "__none__";
 
     const onSecondaryRoleChange = (value: string): void => {
         if (value === "__none__") {
-            // keep personal craft specialties intact when clearing staff secondary role
-            setSecondaryRole.mutate({ specialties: personalSpecialties });
+            setSecondaryRole.mutate({ specialties: [] });
             return;
         }
         const next = value as Specialty;
+
+        // prompt to assign contributor level first if user is Member or Voter
+        if (contributorSpecialties.includes(next) && (target.role === Role.Member || target.role === Role.Voter)) {
+            setPendingContributorTier(Role.Contributor);
+            setPendingContributorSpecialty(next);
+            return;
+        }
+
         const holder = specialtyHolders[next];
         if (holder !== null && holder !== undefined && holder.id !== target.id) {
             setPendingTransfer({ specialty: next, holder });
             return;
         }
-        // preserve user's personal craft specialties alongside assigned staff role
-        setSecondaryRole.mutate({ specialties: [...personalSpecialties, next] });
+        setSecondaryRole.mutate({ specialties: [next] });
     };
 
     return (
@@ -326,9 +351,9 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
                     <div className="min-w-0">
                         <span className="truncate font-medium block">{target.username}</span>
                         <span className="text-muted-foreground font-mono text-[11px] block truncate">{target.discordId}</span>
-                        {personalSpecialties.length > 0 && (
+                        {target.specialties.length > 0 && (
                             <span className="text-muted-foreground text-xs truncate block">
-                                {personalSpecialties.map(specialtyLabel).join(", ")}
+                                {target.specialties.map(specialtyLabel).join(", ")}
                             </span>
                         )}
                     </div>
@@ -359,6 +384,7 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
                                     <SelectItem
                                         key={role}
                                         value={role}
+                                        disabled={role === Role.Voter && !target.isVerified}
                                         onPointerUp={() => {
                                             // re-selecting contributor tier when already contributor
                                             if (
@@ -379,6 +405,7 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
                                         }}
                                     >
                                         {roleLabels[role]}
+                                        {role === Role.Voter && !target.isVerified ? " (requires email verification)" : ""}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -413,8 +440,9 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
                                 <SelectValue />
                             </SelectTrigger>
                             <SpecialtySelectContent
+                                actor={actor}
                                 holders={specialtyHolders}
-                                currentSpecialty={assignedStaffSpecialty}
+                                currentSpecialty={activeSpecialty}
                                 targetId={target.id}
                             />
                         </Select>
@@ -440,7 +468,7 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
                                             disabled={setSecondaryRole.isPending}
                                             onClick={() => {
                                                 setSecondaryRole.mutate({
-                                                    specialties: [...personalSpecialties, pendingTransfer.specialty],
+                                                    specialties: [pendingTransfer.specialty],
                                                     transfer: true
                                                 });
                                             }}
@@ -451,10 +479,96 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
                                 </DialogContent>
                             </Dialog>
                         )}
+                        {pendingContributorSpecialty !== null && (
+                            <Dialog open={true} onOpenChange={(open) => !open && setPendingContributorSpecialty(null)}>
+                                <DialogContent className="sm:max-w-md">
+                                    <DialogHeader>
+                                        <DialogTitle>Assign Contributor Tier: @{target.username}</DialogTitle>
+                                        <DialogDescription>
+                                            To assign {specialtyLabel(pendingContributorSpecialty)}, select their contributor tier.
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <RadioGroup
+                                        value={pendingContributorTier}
+                                        onValueChange={(val) => setPendingContributorTier(val as Role)}
+                                        className="gap-3 py-2"
+                                    >
+                                        <label
+                                            htmlFor={`tier-prompt-base-${target.id}`}
+                                            className={cn(
+                                                "flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                                                pendingContributorTier === Role.Contributor
+                                                    ? "border-primary bg-accent/30"
+                                                    : "border-border hover:bg-muted/50"
+                                            )}
+                                        >
+                                            <RadioGroupItem
+                                                value={Role.Contributor}
+                                                id={`tier-prompt-base-${target.id}`}
+                                                className="mt-0.5"
+                                            />
+                                            <div className="space-y-1 text-sm">
+                                                <div className="font-medium text-foreground">Base Contributor</div>
+                                                <p className="text-muted-foreground text-xs leading-relaxed">
+                                                    Standard contributor access to grab-box tasks.
+                                                </p>
+                                            </div>
+                                        </label>
+                                        <label
+                                            htmlFor={`tier-prompt-senior-${target.id}`}
+                                            className={cn(
+                                                "flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                                                pendingContributorTier === Role.SeniorContributor
+                                                    ? "border-primary bg-accent/30"
+                                                    : "border-border hover:bg-muted/50"
+                                            )}
+                                        >
+                                            <RadioGroupItem
+                                                value={Role.SeniorContributor}
+                                                id={`tier-prompt-senior-${target.id}`}
+                                                className="mt-0.5"
+                                            />
+                                            <div className="space-y-1 text-sm">
+                                                <div className="font-medium text-foreground">Senior Contributor</div>
+                                                <p className="text-muted-foreground text-xs leading-relaxed">
+                                                    Priority access to hard/senior-locked tasks during priority windows.
+                                                </p>
+                                            </div>
+                                        </label>
+                                    </RadioGroup>
+                                    <DialogFooter>
+                                        <Button variant="ghost" onClick={() => setPendingContributorSpecialty(null)} disabled={busy}>
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            disabled={busy}
+                                            onClick={() => {
+                                                const spec = pendingContributorSpecialty;
+                                                const tier = pendingContributorTier;
+                                                platformApi.setRole(target.id, tier, [spec]).then(
+                                                    (updated) => {
+                                                        refresh();
+                                                        setPendingContributorSpecialty(null);
+                                                        toast.success(
+                                                            `Promoted @${updated.username} to ${roleLabels[tier]} as ${specialtyLabel(spec)}.`
+                                                        );
+                                                    },
+                                                    (err) => {
+                                                        toast.error(err instanceof Error ? err.message : "Failed to assign role.");
+                                                    }
+                                                );
+                                            }}
+                                        >
+                                            {busy ? "Saving..." : "Save Role"}
+                                        </Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                        )}
                     </>
                 ) : (
                     <span className="text-muted-foreground text-xs">
-                        {assignedStaffSpecialty !== null ? specialtyLabel(assignedStaffSpecialty) : "None"}
+                        {activeSpecialty !== null ? specialtyLabel(activeSpecialty) : "None"}
                     </span>
                 )}
             </TableCell>
@@ -751,8 +865,9 @@ function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProp
                             </SelectTrigger>
                             <SelectContent>
                                 {roles.map((r) => (
-                                    <SelectItem key={r} value={r}>
+                                    <SelectItem key={r} value={r} disabled={r === Role.Voter}>
                                         {roleLabels[r]}
+                                        {r === Role.Voter ? " (requires email verification)" : ""}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -764,7 +879,7 @@ function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProp
                             <SelectTrigger id="discord-secondary-role">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SpecialtySelectContent holders={specialtyHolders} currentSpecialty={null} />
+                            <SpecialtySelectContent actor={actor} holders={specialtyHolders} currentSpecialty={null} />
                         </Select>
                     </div>
                     <DialogFooter>

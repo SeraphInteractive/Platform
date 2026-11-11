@@ -177,12 +177,12 @@ export const shotTypeRequiredSpecialties: Readonly<Record<ShotType, readonly Spe
 
 export const supervisorGrantableSpecialties: Readonly<Partial<Record<Specialty, readonly Specialty[]>>> = Object.freeze({
     [Specialty.ArtDirector]: [Specialty.ConceptArtist, Specialty.Screenwriter],
-    [Specialty.ModelingAndSurfacingLead]: [Specialty.SurfaceTextureArtist, Specialty.Modeler3d],
+    [Specialty.ModelingAndSurfacingLead]: [Specialty.SurfaceTextureArtist, Specialty.Modeler3d, Specialty.Rigger],
     [Specialty.ModellingSupervisor]: [Specialty.Modeler3d],
-    [Specialty.RiggingSupervisor]: [Specialty.Rigger],
+    [Specialty.RiggingSupervisor]: [Specialty.Rigger, Specialty.Modeler3d],
     [Specialty.SurfacingLookDevLead]: [Specialty.SurfaceTextureArtist, Specialty.Modeler3d, Specialty.Rigger],
-    [Specialty.LayoutPrevisLead]: [Specialty.LayoutArtist],
-    [Specialty.AnimationSupervisor]: [Specialty.Animator, Specialty.VideoEditor],
+    [Specialty.LayoutPrevisLead]: [Specialty.LayoutArtist, Specialty.Animator],
+    [Specialty.AnimationSupervisor]: [Specialty.Animator, Specialty.LayoutArtist, Specialty.VideoEditor],
     [Specialty.LightingAndVfxLead]: [Specialty.LightingArtist, Specialty.VfxArtist],
     [Specialty.CfxVfxSupervisor]: [Specialty.VfxArtist],
     [Specialty.LightingCompositingSupervisor]: [Specialty.LightingArtist, Specialty.VfxArtist],
@@ -225,6 +225,8 @@ export const selfSelectableSpecialties: readonly Specialty[] = [
     Specialty.VideoEditor
 ];
 
+export const contributorSpecialties: readonly Specialty[] = selfSelectableSpecialties;
+
 export const adminSpecialties: readonly Specialty[] = [
     Specialty.Producer,
     Specialty.CreativeDirector,
@@ -247,7 +249,12 @@ export const exclusiveSpecialties: readonly Specialty[] = [...adminSpecialties, 
 
 export const teamSpecialties: readonly Specialty[] = [Specialty.MediaTeam];
 
-export const assignableSpecialties: readonly Specialty[] = [...adminSpecialties, ...supervisorSpecialties, ...teamSpecialties];
+export const assignableSpecialties: readonly Specialty[] = [
+    ...adminSpecialties,
+    ...supervisorSpecialties,
+    ...teamSpecialties,
+    ...contributorSpecialties
+];
 
 export function specialtyLabel(specialty: Specialty): string {
     if (specialty === Specialty.LightingAndVfxLead) {

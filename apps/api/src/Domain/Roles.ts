@@ -3,6 +3,7 @@ import { maximumTotalSpecialties, Role, type Specialty } from "@platform/contrac
 export {
     adminSpecialties,
     assignableSpecialties,
+    contributorSpecialties,
     exclusiveSpecialties,
     maximumSpecialties,
     maximumTotalSpecialties,

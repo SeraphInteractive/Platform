@@ -8,6 +8,7 @@ export enum ChannelPurpose {
     Welcome = "welcome",
     Rules = "rules",
     Announcements = "announcements",
+    ProductionAnnouncements = "productionAnnouncements",
     Telemetry = "telemetry",
     TaskLogs = "taskLogs",
     TaskSubmissions = "taskSubmissions",
