@@ -307,8 +307,8 @@ describe("ServerProvisioner hierarchy", () => {
         };
 
         const mockCategory = { id: "cat-1", name: "Animation", type: 4 }; // ChannelType.GuildCategory = 4
-        const mockForum = { id: "forum-1", name: "animation-tasks", type: 15 }; // ChannelType.GuildForum = 15
-        const mockChat = { id: "chat-1", name: "animation", type: 0 }; // ChannelType.GuildText = 0
+        const mockForum = { id: "forum-1", name: "animation-tasks", type: 15, parentId: "cat-1" }; // ChannelType.GuildForum = 15
+        const mockChat = { id: "chat-1", name: "animation", type: 0, parentId: "cat-1" }; // ChannelType.GuildText = 0
 
         function createMockCollection<T>(items: Map<string, T>): {
             find(fn: (item: T) => boolean): T | undefined;
@@ -384,9 +384,9 @@ describe("ServerProvisioner hierarchy", () => {
         };
 
         const mockCategoryAssets = { id: "cat-assets", name: "Assets", type: 4 };
-        const mockForumAssets = { id: "forum-assets", name: "Assets-GrabBox", type: 15 };
+        const mockForumAssets = { id: "forum-assets", name: "Assets-GrabBox", type: 15, parentId: "cat-assets" };
         const mockCategoryVfx = { id: "cat-vfx", name: "Lighting and VFX", type: 4 };
-        const mockForumVfx = { id: "forum-vfx", name: "Lighting-VFX-GrabBox", type: 15 };
+        const mockForumVfx = { id: "forum-vfx", name: "Lighting-VFX-GrabBox", type: 15, parentId: "cat-vfx" };
 
         function createMockCollection<T>(items: Map<string, T>): {
             find(fn: (item: T) => boolean): T | undefined;

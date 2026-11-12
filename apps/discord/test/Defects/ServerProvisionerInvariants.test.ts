@@ -290,7 +290,8 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
     });
 
     it("must purge duplicate and residual webhooks on managed channels and sync system webhooks to database", async () => {
-        const announcementsChannel = mockChannel("announcements-id", "announcements", ChannelType.GuildText);
+        const platformCategory = mockChannel("platform-id", "Platform", ChannelType.GuildCategory);
+        const announcementsChannel = mockChannel("announcements-id", "announcements", ChannelType.GuildText, platformCategory.id);
         const validWebhook = {
             id: "valid-hook-id",
             name: "Studio Announcements",
@@ -316,6 +317,7 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
         announcementsChannel.fetchWebhooks = vi.fn().mockResolvedValue(announcementsWebhooks);
 
         const channels = new Collection<string, GuildBasedChannel>();
+        channels.set(platformCategory.id, platformCategory as never);
         channels.set(announcementsChannel.id, announcementsChannel as never);
 
         const mockApi = {
@@ -411,15 +413,18 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
             roles: {
                 everyone: { id: "everyone-role-id", setPermissions: everyoneSetPerms },
                 fetch: vi.fn().mockResolvedValue(rolesColl),
-                create: vi.fn().mockImplementation((opts: { name: string }) =>
-                    Promise.resolve({
+                create: vi.fn().mockImplementation((opts: { name: string; permissions?: bigint[] }) => {
+                    const role = {
                         id: `role-${opts.name}`,
                         name: opts.name,
                         hoist: false,
+                        permissions: opts.permissions,
                         setHoist: vi.fn(),
                         setPermissions: vi.fn()
-                    })
-                )
+                    };
+                    rolesColl.set(role.id, role as unknown as Role);
+                    return Promise.resolve(role);
+                })
             },
             channels: {
                 fetch: vi.fn().mockResolvedValue(new Collection<string, GuildBasedChannel>()),
@@ -457,12 +462,35 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
         const provisioner = new ServerProvisioner(settings, mockLogger as never, undefined, mockApi as never);
         await provisioner.provision(mockGuild);
 
-        // invariant: everyone role permissions are set to memberPermissions (text-only, no image attachments)
+        // invariant: everyone role permissions are set to memberPermissions (text-only, connect allowed, no speaking or media)
         expect(everyoneSetPerms).toHaveBeenCalled();
         const calledPerms = everyoneSetPerms.mock.calls[0]![0];
         expect(calledPerms).toContain(PermissionFlagsBits.SendMessages);
+        expect(calledPerms).toContain(PermissionFlagsBits.Connect);
+        expect(calledPerms).not.toContain(PermissionFlagsBits.Speak);
         expect(calledPerms).not.toContain(PermissionFlagsBits.AttachFiles);
         expect(calledPerms).not.toContain(PermissionFlagsBits.EmbedLinks);
+
+        // invariant: members role permissions match memberPermissions
+        const membersRole = rolesColl.get("role-Members");
+        expect(membersRole).toBeDefined();
+        const memberPerms = (membersRole as unknown as { permissions: bigint[] }).permissions;
+        expect(memberPerms).toContain(PermissionFlagsBits.Connect);
+        expect(memberPerms).toContain(PermissionFlagsBits.SendMessages);
+        expect(memberPerms).not.toContain(PermissionFlagsBits.Speak);
+        expect(memberPerms).not.toContain(PermissionFlagsBits.AttachFiles);
+        expect(memberPerms).not.toContain(PermissionFlagsBits.EmbedLinks);
+
+        // invariant: voters role permissions allow speaking and media
+        const votersRole = rolesColl.get("role-Voters");
+        expect(votersRole).toBeDefined();
+        const voterPerms = (votersRole as unknown as { permissions: bigint[] }).permissions;
+        expect(voterPerms).toContain(PermissionFlagsBits.Connect);
+        expect(voterPerms).toContain(PermissionFlagsBits.Speak);
+        expect(voterPerms).toContain(PermissionFlagsBits.Stream);
+        expect(voterPerms).toContain(PermissionFlagsBits.UseVAD);
+        expect(voterPerms).toContain(PermissionFlagsBits.AttachFiles);
+        expect(voterPerms).toContain(PermissionFlagsBits.EmbedLinks);
 
         // invariant: active department channels are created and configured
         const deptChat = createdChannelsMap.get("art-general");
@@ -632,5 +660,87 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
 
         const contributorLogs = logsOverwrites?.find((ow) => ow.id === "role-Concept Artists");
         expect(contributorLogs).toBeUndefined();
+    });
+
+    it("never adopts, renames, or touches channels outside managed categories", async () => {
+        const externalCategory = mockChannel("ext-cat-id", "Voice channels", ChannelType.GuildCategory);
+        const externalVoice = mockChannel("ext-voice-id", "General", ChannelType.GuildVoice, externalCategory.id);
+        const externalTextCat = mockChannel("ext-text-cat-id", "Text channels", ChannelType.GuildCategory);
+        const externalText = mockChannel("ext-text-id", "general", ChannelType.GuildText, externalTextCat.id);
+
+        const channels = new Collection<string, GuildBasedChannel>();
+        channels.set(externalCategory.id, externalCategory as never);
+        channels.set(externalVoice.id, externalVoice as never);
+        channels.set(externalTextCat.id, externalTextCat as never);
+        channels.set(externalText.id, externalText as never);
+
+        const rolesColl = new Collection<string, Role>();
+        const mockGuild = {
+            id: "guild-1",
+            client: { user: { id: "bot-user-1" } },
+            roles: {
+                everyone: { id: "everyone-role-id", setPermissions: vi.fn().mockResolvedValue(undefined) },
+                fetch: vi.fn().mockResolvedValue(rolesColl),
+                cache: rolesColl,
+                setPositions: vi.fn().mockResolvedValue(new Collection()),
+                create: vi.fn().mockImplementation((opts: { name: string }) =>
+                    Promise.resolve({
+                        id: `role-${opts.name}`,
+                        name: opts.name,
+                        hoist: false,
+                        setHoist: vi.fn(),
+                        setPermissions: vi.fn()
+                    })
+                )
+            },
+            channels: {
+                fetch: vi.fn().mockResolvedValue(channels),
+                create: vi.fn().mockImplementation((opts: { name: string; type: ChannelType; parent?: string }) => {
+                    const chan = mockChannel(`chan-${opts.name}`, opts.name, opts.type, opts.parent);
+                    channels.set(chan.id, chan as never);
+                    return Promise.resolve(chan);
+                })
+            },
+            fetchWebhooks: vi.fn().mockResolvedValue(new Collection())
+        } as unknown as Guild;
+
+        const mockApi = {
+            listDepartments: vi.fn().mockResolvedValue([
+                {
+                    id: "dept-1",
+                    name: "Art and Writing",
+                    slug: "art-and-writing",
+                    contributorSpecialties: ["concept_artist"],
+                    supervisorSpecialties: ["art_director"]
+                }
+            ]),
+            bindDepartmentDiscordMap: vi.fn().mockResolvedValue(undefined),
+            updateDiscordSettings: vi.fn().mockResolvedValue({}),
+            getDocument: vi.fn().mockRejectedValue(new Error("no docs"))
+        };
+
+        const mockLogger = {
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            debug: vi.fn()
+        };
+
+        const provisioner = new ServerProvisioner(settings, mockLogger as never, undefined, mockApi as never);
+        await provisioner.provision(mockGuild);
+
+        // external channels outside managed categories must never be renamed
+        expect(externalVoice.setName).not.toHaveBeenCalled();
+        expect(externalText.setName).not.toHaveBeenCalled();
+
+        // external channels outside managed categories must never have overwrites modified
+        const voiceOverwrites = externalVoice.permissionOverwrites as { create: ReturnType<typeof vi.fn> };
+        const textOverwrites = externalText.permissionOverwrites as { create: ReturnType<typeof vi.fn> };
+        expect(voiceOverwrites.create).not.toHaveBeenCalled();
+        expect(textOverwrites.create).not.toHaveBeenCalled();
+
+        // external channels must never be re-parented
+        expect(externalVoice.setParent).not.toHaveBeenCalled();
+        expect(externalText.setParent).not.toHaveBeenCalled();
     });
 });

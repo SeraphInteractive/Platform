@@ -20,11 +20,15 @@ export const memberPermissions = [
     PermissionFlagsBits.ReadMessageHistory,
     PermissionFlagsBits.SendMessages,
     PermissionFlagsBits.AddReactions,
-    PermissionFlagsBits.UseApplicationCommands
+    PermissionFlagsBits.UseApplicationCommands,
+    PermissionFlagsBits.Connect
 ];
 
 export const voterPermissions = [
     ...memberPermissions,
+    PermissionFlagsBits.Speak,
+    PermissionFlagsBits.Stream,
+    PermissionFlagsBits.UseVAD,
     PermissionFlagsBits.AttachFiles,
     PermissionFlagsBits.EmbedLinks,
     PermissionFlagsBits.UseExternalEmojis,
