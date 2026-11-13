@@ -186,8 +186,8 @@ export const roleAliases: Readonly<Record<string, string>> = {
     productionmanagers: "Production Manager"
 };
 
-export function normalizeName(name: string): string {
-    return name.toLowerCase().replace(/[^a-z0-9]/gu, "");
+export function normalizeName(name?: string | null): string {
+    return (name ?? "").toLowerCase().replace(/[^a-z0-9]/gu, "");
 }
 
 export function findStudioRole(name: string): StudioRole | undefined {
@@ -261,25 +261,39 @@ export function permissionsFor(tier: StudioTier): readonly bigint[] {
 export function targetStudioRoleNames(role: Role, specialties: readonly Specialty[]): Set<string> {
     const names = new Set<string>();
 
+    if (role === Role.Member) {
+        names.add("Members");
+        return names;
+    }
+
+    if (role === Role.Voter) {
+        names.add("Voters");
+        return names;
+    }
+
     if (role === Role.SuperAdmin || role === Role.Admin) {
         names.add("Admin");
     } else if (role === Role.Supervisor) {
         names.add("Supervisor");
+    } else if (role === Role.Contributor || role === Role.SeniorContributor) {
+        names.add(contributorRoleName);
     }
 
     for (const specialty of specialties) {
         const studio = studioRoles.find((r) => r.specialty === specialty);
         if (studio !== undefined) {
+            // enforce role-tier specialty isolation on discord
+            if (role === Role.Supervisor && studio.tier !== StudioTier.Department) {
+                continue;
+            }
+            if ((role === Role.Contributor || role === Role.SeniorContributor) && studio.tier !== StudioTier.Contributor) {
+                continue;
+            }
+            if ((role === Role.Admin || role === Role.SuperAdmin) && studio.tier !== StudioTier.Executive) {
+                continue;
+            }
             names.add(studio.name);
         }
-    }
-
-    if (role === Role.Contributor || role === Role.SeniorContributor) {
-        names.add(contributorRoleName);
-    } else if (role === Role.Voter) {
-        names.add("Voters");
-    } else if (role === Role.Member) {
-        names.add("Members");
     }
 
     return names;

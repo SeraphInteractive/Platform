@@ -4,11 +4,9 @@ import {
     NotificationType,
     ReviewDecision,
     Role,
-    roleLabel,
     ShotStatus,
     type ShotType,
     shotTypeToDepartment,
-    specialtyLabel,
     type PlatformNotification
 } from "@platform/contracts";
 import { WebhookClient, type Client, type Collection, type ContainerBuilder, type SendableChannels, type Webhook } from "discord.js";
@@ -458,31 +456,6 @@ export class NotificationDispatcher {
                         }
                     }
                 }
-                const affectedDeptSlugs = new Set<string>();
-                for (const spec of notification.specialties) {
-                    for (const def of departmentDefinitions) {
-                        if (def.supervisorSpecialties.includes(spec) || def.contributorSpecialties.includes(spec)) {
-                            affectedDeptSlugs.add(def.slug);
-                        }
-                    }
-                }
-                if (affectedDeptSlugs.size > 0) {
-                    const roleName = roleLabel(notification.role);
-                    const specs = notification.specialties.map(specialtyLabel).join(", ");
-                    const userMention = notification.user.discordId
-                        ? `<@${notification.user.discordId}>`
-                        : plain(notification.user.username);
-                    const actorMention = notification.actor.discordId
-                        ? `<@${notification.actor.discordId}>`
-                        : plain(notification.actor.username);
-                    for (const slug of affectedDeptSlugs) {
-                        await this.sendDepartmentLogBySlug(
-                            slug,
-                            panel(Accent.Info, "**Role Assigned**", `${userMention} is now **${roleName}** (${specs}), by ${actorMention}`),
-                            "failed to post role assignment to department logs"
-                        );
-                    }
-                }
                 return;
             }
             case NotificationType.ContributorPromoted:
@@ -491,14 +464,17 @@ export class NotificationDispatcher {
                     if (guild !== null) {
                         const member = await guild.members.fetch(notification.user.discordId).catch(() => null);
                         if (member !== null) {
-                            await syncMemberStudioRoles(member, Role.SeniorContributor, [], "Promoted to senior contributor").catch(
-                                (error: unknown) => {
-                                    this.logger.warn(
-                                        { err: error, discordId: notification.user.discordId },
-                                        "failed to sync member studio roles"
-                                    );
-                                }
-                            );
+                            await syncMemberStudioRoles(
+                                member,
+                                Role.SeniorContributor,
+                                notification.specialties,
+                                "Promoted to senior contributor"
+                            ).catch((error: unknown) => {
+                                this.logger.warn(
+                                    { err: error, discordId: notification.user.discordId },
+                                    "failed to sync member studio roles"
+                                );
+                            });
                         }
                     }
                 }

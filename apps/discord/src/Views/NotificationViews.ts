@@ -3,6 +3,7 @@ import {
     NotificationType,
     PollType,
     RaidFlag,
+    rankOfRole,
     ReviewDecision,
     RoundStatus,
     roleLabel,
@@ -145,14 +146,33 @@ export function renderNotification(notification: PlatformNotification, context: 
         case NotificationType.UserRoleChanged: {
             const role = roleLabel(notification.role);
             const specialties = notification.specialties.length > 0 ? ` (${notification.specialties.map(specialtyLabel).join(", ")})` : "";
-            return [
-                post(
-                    telemetry,
-                    Accent.Info,
-                    "**User role updated**",
-                    `${person(notification.user, isMember)} is now ${role}${specialties}, by ${person(notification.actor, isMember)}`
-                )
-            ];
+            const prev = notification.previousRole;
+            const userText = person(notification.user, isMember);
+            const actorText = person(notification.actor, isMember);
+
+            if (prev !== undefined && rankOfRole(notification.role) < rankOfRole(prev)) {
+                return [
+                    post(
+                        telemetry,
+                        Accent.Warning,
+                        "**User Demoted**",
+                        `${userText} was demoted from **${roleLabel(prev)}** to **${role}**, by ${actorText}`
+                    )
+                ];
+            }
+
+            if (prev !== undefined && rankOfRole(notification.role) > rankOfRole(prev)) {
+                return [
+                    post(
+                        telemetry,
+                        Accent.Success,
+                        "**User Promoted**",
+                        `${userText} was promoted from **${roleLabel(prev)}** to **${role}**${specialties}, by ${actorText}`
+                    )
+                ];
+            }
+
+            return [post(telemetry, Accent.Info, "**User Role Updated**", `${userText} is now **${role}**${specialties}, by ${actorText}`)];
         }
         case NotificationType.ContributorPromoted:
             return [post(telemetry, Accent.Success, `${person(notification.user, isMember)} is now a senior contributor.`)];

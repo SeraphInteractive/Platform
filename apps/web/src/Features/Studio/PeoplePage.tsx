@@ -71,55 +71,68 @@ interface SpecialtySelectContentProps {
     readonly holders: Record<Specialty, SpecialtyHolderDto | null>;
     readonly currentSpecialty?: Specialty | null;
     readonly targetId?: string;
+    readonly targetRole?: Role;
 }
 
-function SpecialtySelectContent({ actor, holders, currentSpecialty, targetId }: SpecialtySelectContentProps): ReactNode {
+function SpecialtySelectContent({ actor, holders, currentSpecialty, targetId, targetRole }: SpecialtySelectContentProps): ReactNode {
     const isAdmin = hasAtLeast(actor, Role.Admin);
     const supervisorAllowed = new Set(actor.specialties.flatMap((s) => supervisorGrantableSpecialties[s] ?? []));
+    const isCommunity = targetRole === Role.Voter || targetRole === Role.Member;
+    const isExecutiveTarget = targetRole === Role.Admin || targetRole === Role.SuperAdmin;
+    const isSupervisorTarget = targetRole === Role.Supervisor;
+    const isContributorTarget = targetRole === Role.Contributor || targetRole === Role.SeniorContributor;
+
+    const showAdminRoles = isAdmin && (targetRole === undefined || isExecutiveTarget);
+    const showSupervisorRoles = isAdmin && (targetRole === undefined || isSupervisorTarget);
+    const showTeamRoles = isAdmin && (targetRole === undefined || !isCommunity);
+    const showContributorRoles = !isCommunity && (targetRole === undefined || isContributorTarget);
+
     const visibleContributorRoles = isAdmin ? contributorSpecialties : contributorSpecialties.filter((s) => supervisorAllowed.has(s));
 
     return (
         <SelectContent>
             <SelectItem value="__none__">None</SelectItem>
-            {isAdmin && (
-                <>
-                    <SelectGroup>
-                        <SelectLabel>Admin Roles</SelectLabel>
-                        {adminSpecialties.map((s) => {
-                            const holder = holders[s];
-                            const isHeldElsewhere = holder !== null && holder !== undefined && holder.id !== targetId;
-                            return (
-                                <SelectItem key={s} value={s}>
-                                    {specialtyLabel(s)}
-                                    {isHeldElsewhere && ` (held by @${holder.username})`}
-                                </SelectItem>
-                            );
-                        })}
-                    </SelectGroup>
-                    <SelectGroup>
-                        <SelectLabel>Supervisor Roles</SelectLabel>
-                        {supervisorSpecialties.map((s) => {
-                            const holder = holders[s];
-                            const isHeldElsewhere = holder !== null && holder !== undefined && holder.id !== targetId;
-                            return (
-                                <SelectItem key={s} value={s}>
-                                    {specialtyLabel(s)}
-                                    {isHeldElsewhere && ` (held by @${holder.username})`}
-                                </SelectItem>
-                            );
-                        })}
-                    </SelectGroup>
-                    <SelectGroup>
-                        <SelectLabel>Team Roles</SelectLabel>
-                        {teamSpecialties.map((s) => (
+            {showAdminRoles && (
+                <SelectGroup>
+                    <SelectLabel>Admin Roles</SelectLabel>
+                    {adminSpecialties.map((s) => {
+                        const holder = holders[s];
+                        const isHeldElsewhere = holder !== null && holder !== undefined && holder.id !== targetId;
+                        return (
                             <SelectItem key={s} value={s}>
                                 {specialtyLabel(s)}
+                                {isHeldElsewhere && ` (held by @${holder.username})`}
                             </SelectItem>
-                        ))}
-                    </SelectGroup>
-                </>
+                        );
+                    })}
+                </SelectGroup>
             )}
-            {visibleContributorRoles.length > 0 && (
+            {showSupervisorRoles && (
+                <SelectGroup>
+                    <SelectLabel>Supervisor Roles</SelectLabel>
+                    {supervisorSpecialties.map((s) => {
+                        const holder = holders[s];
+                        const isHeldElsewhere = holder !== null && holder !== undefined && holder.id !== targetId;
+                        return (
+                            <SelectItem key={s} value={s}>
+                                {specialtyLabel(s)}
+                                {isHeldElsewhere && ` (held by @${holder.username})`}
+                            </SelectItem>
+                        );
+                    })}
+                </SelectGroup>
+            )}
+            {showTeamRoles && (
+                <SelectGroup>
+                    <SelectLabel>Team Roles</SelectLabel>
+                    {teamSpecialties.map((s) => (
+                        <SelectItem key={s} value={s}>
+                            {specialtyLabel(s)}
+                        </SelectItem>
+                    ))}
+                </SelectGroup>
+            )}
+            {showContributorRoles && visibleContributorRoles.length > 0 && (
                 <SelectGroup>
                     <SelectLabel>Contributor Roles</SelectLabel>
                     {visibleContributorRoles.map((s) => (
@@ -277,7 +290,10 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
         void queryClient.invalidateQueries({ queryKey: queryKeys.specialtyHolders });
     };
     const setPrimaryRole = useMutation({
-        mutationFn: (role: Role) => platformApi.setRole(target.id, role, target.specialties),
+        mutationFn: (role: Role) => {
+            const nextSpecialties = role === Role.Voter || role === Role.Member ? [] : target.specialties;
+            return platformApi.setRole(target.id, role, nextSpecialties);
+        },
         onSuccess: (updated) => {
             refresh();
             toast.success(`${updated.username} is now ${roleLabels[updated.role]}.`);
@@ -444,6 +460,7 @@ function UserRow({ actor, target, specialtyHolders }: UserRowProps): ReactNode {
                                 holders={specialtyHolders}
                                 currentSpecialty={activeSpecialty}
                                 targetId={target.id}
+                                targetRole={target.role}
                             />
                         </Select>
                         {pendingTransfer !== null && (
@@ -802,9 +819,10 @@ function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProp
     const assign = useMutation({
         mutationFn: () => {
             const trimmedUsername = discordUsername.trim();
+            const isCommunityRole = role === Role.Voter || role === Role.Member;
             return platformApi.setRoleByDiscord(discordId.trim(), {
                 role,
-                specialties: secondaryRole === "__none__" ? [] : [secondaryRole as Specialty],
+                specialties: isCommunityRole || secondaryRole === "__none__" ? [] : [secondaryRole as Specialty],
                 discordUsername: trimmedUsername.length === 0 ? undefined : trimmedUsername
             });
         },
@@ -879,7 +897,7 @@ function AssignDiscordRoleDialog({ actor, trigger }: AssignDiscordRoleDialogProp
                             <SelectTrigger id="discord-secondary-role">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SpecialtySelectContent actor={actor} holders={specialtyHolders} currentSpecialty={null} />
+                            <SpecialtySelectContent actor={actor} holders={specialtyHolders} currentSpecialty={null} targetRole={role} />
                         </Select>
                     </div>
                     <DialogFooter>

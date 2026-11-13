@@ -21,6 +21,20 @@ export const roleLabels: Readonly<Record<Role, string>> = {
     [Role.SuperAdmin]: "Super admin"
 };
 
+export const roleRanks: Readonly<Record<Role, number>> = Object.freeze({
+    [Role.Member]: 0,
+    [Role.Voter]: 1,
+    [Role.Contributor]: 2,
+    [Role.SeniorContributor]: 3,
+    [Role.Supervisor]: 4,
+    [Role.Admin]: 5,
+    [Role.SuperAdmin]: 6
+});
+
+export function rankOfRole(role: Role): number {
+    return roleRanks[role] ?? 0;
+}
+
 export function roleLabel(role: Role): string {
     return roleLabels[role] ?? role;
 }
@@ -255,6 +269,22 @@ export const assignableSpecialties: readonly Specialty[] = [
     ...teamSpecialties,
     ...contributorSpecialties
 ];
+
+export function allowedSpecialtiesForRole(role: Role): readonly Specialty[] {
+    switch (role) {
+        case Role.SuperAdmin:
+        case Role.Admin:
+            return [...adminSpecialties, ...teamSpecialties];
+        case Role.Supervisor:
+            return [...supervisorSpecialties, ...teamSpecialties];
+        case Role.SeniorContributor:
+        case Role.Contributor:
+            return [...contributorSpecialties, ...teamSpecialties];
+        case Role.Voter:
+        case Role.Member:
+            return [];
+    }
+}
 
 export function specialtyLabel(specialty: Specialty): string {
     if (specialty === Specialty.LightingAndVfxLead) {

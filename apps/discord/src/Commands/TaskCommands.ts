@@ -1,5 +1,14 @@
 import { randomBytes } from "node:crypto";
-import { DifficultyTier, ReviewDecision, Role, ShotStatus, ShotType, type ShotDetailDto, type UserDto } from "@platform/contracts";
+import {
+    departmentDefinitions,
+    DifficultyTier,
+    ReviewDecision,
+    Role,
+    ShotStatus,
+    ShotType,
+    shotTypeToDepartment,
+    type ShotDetailDto
+} from "@platform/contracts";
 import {
     ChannelType,
     LabelBuilder,
@@ -187,11 +196,15 @@ export const releaseTaskCommand: SlashCommand = {
         if (shot.status !== ShotStatus.Claimed) {
             throw new UserFacingError("Only claimed tasks can be released.");
         }
-        const me = (await actingAs(interaction, context).me()) as UserDto & { departmentId?: string | null };
+        const me = await actingAs(interaction, context).me();
         const isClaimant = shot.claimer?.id === me.id;
         const isAdmin = hasAtLeast(me.role, Role.Admin);
+        const deptSlug = shotTypeToDepartment[shot.shotType];
+        const deptDef = departmentDefinitions.find((d) => d.slug === deptSlug);
         const isDeptSupervisor =
-            hasAtLeast(me.role, Role.Supervisor) && Boolean(me.departmentId && shot.departmentId && me.departmentId === shot.departmentId);
+            hasAtLeast(me.role, Role.Supervisor) &&
+            deptDef !== undefined &&
+            me.specialties.some((s) => deptDef.supervisorSpecialties.includes(s));
         if (!isClaimant && !isAdmin && !isDeptSupervisor) {
             throw new UserFacingError("Only the task claimant, department supervisors, or admins can release this task.");
         }

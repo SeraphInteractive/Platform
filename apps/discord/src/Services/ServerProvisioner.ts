@@ -289,14 +289,22 @@ export class ServerProvisioner {
                             chatAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
                     ) as TextChannel | undefined;
 
-                    const infoAliases = [`${prefix}-info`, `${dept.slug}-info`, `${prefix}-announcements`, `${dept.slug}-announcements`];
-                    const deptInfo = channels.find(
+                    const announceAliases = [
+                        `${prefix}-announcements`,
+                        `${dept.slug}-announcements`,
+                        `${prefix}-info`,
+                        `${dept.slug}-info`
+                    ];
+                    const deptAnnounce = channels.find(
                         (channel) =>
                             channel !== null &&
                             channel.parentId === category.id &&
                             channel.type === ChannelType.GuildText &&
-                            infoAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
+                            announceAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
                     ) as TextChannel | undefined;
+                    if (deptAnnounce !== undefined && deptAnnounce.name !== `${prefix}-announcements`) {
+                        await deptAnnounce.setName(`${prefix}-announcements`, "Rename to department announcements").catch(() => undefined);
+                    }
 
                     const logsAliases = [`${prefix}-logs`, `${dept.slug}-logs`, `${prefix}-task-logs`, `${dept.slug}-task-logs`];
                     const deptLogs = channels.find(
@@ -318,8 +326,14 @@ export class ServerProvisioner {
 
                     if (deptForum !== undefined && deptForum !== null) {
                         let infoWebhookUrl = dept.discordInfoWebhookUrl ?? null;
-                        if (deptInfo) {
-                            const infoRes = await reconcileWebhookOnChannel(deptInfo, `${dept.name} Info`, botId, false, this.logger);
+                        if (deptAnnounce) {
+                            const infoRes = await reconcileWebhookOnChannel(
+                                deptAnnounce,
+                                `${dept.name} Announcements`,
+                                botId,
+                                false,
+                                this.logger
+                            );
                             infoWebhookUrl = infoRes.activeUrl;
                         }
                         let logsWebhookUrl = dept.discordLogsWebhookUrl ?? null;
@@ -332,7 +346,7 @@ export class ServerProvisioner {
                             discordCategoryId: category.id,
                             discordForumId: deptForum.id,
                             discordChatChannelId: deptChat?.id ?? null,
-                            discordInfoChannelId: deptInfo?.id ?? null,
+                            discordInfoChannelId: deptAnnounce?.id ?? null,
                             discordInfoWebhookUrl: infoWebhookUrl,
                             discordLogsChannelId: deptLogs?.id ?? null,
                             discordLogsWebhookUrl: logsWebhookUrl,
@@ -742,19 +756,28 @@ export class ServerProvisioner {
                         deptRoles.push(supervisorRole);
                     }
 
-                    // 1. Info channel (<prefix>-info)
-                    const infoName = `${prefix}-info`;
-                    const infoAliases = [infoName, `${dept.slug}-info`, `${prefix}-announcements`, `${dept.slug}-announcements`];
-                    const deptInfoOverwrites: OverwriteResolvable[] = [
+                    // 1. Announcements channel (<prefix>-announcements)
+                    const announceName = `${prefix}-announcements`;
+                    const announceAliases = [announceName, `${dept.slug}-announcements`, `${prefix}-info`, `${dept.slug}-info`];
+                    const deptAnnounceOverwrites: OverwriteResolvable[] = [
                         {
                             id: everyone,
+                            deny: [
+                                PermissionFlagsBits.ViewChannel,
+                                PermissionFlagsBits.SendMessages,
+                                PermissionFlagsBits.CreatePublicThreads,
+                                PermissionFlagsBits.CreatePrivateThreads
+                            ]
+                        },
+                        ...deptRoles.map((role) => ({
+                            id: role.id,
                             allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
                             deny: [
                                 PermissionFlagsBits.SendMessages,
                                 PermissionFlagsBits.CreatePublicThreads,
                                 PermissionFlagsBits.CreatePrivateThreads
                             ]
-                        },
+                        })),
                         ...staffRoles.map((role) => ({
                             id: role.id,
                             allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
@@ -770,19 +793,28 @@ export class ServerProvisioner {
                             ]
                         }
                     ];
-                    const deptInfo = await ensureNamedText(
-                        infoName,
-                        infoAliases,
+                    const deptAnnounce = await ensureNamedText(
+                        announceName,
+                        announceAliases,
                         category,
                         `${dept.name} department announcements and guidelines.`,
-                        deptInfoOverwrites
+                        deptAnnounceOverwrites
                     );
-                    const infoRes = await reconcileWebhookOnChannel(deptInfo, `${dept.name} Info`, botId, false, this.logger);
-                    if (infoRes.activeId !== null) {
-                        activeWebhookIds.add(infoRes.activeId);
+                    if (deptAnnounce.name !== announceName) {
+                        await deptAnnounce.setName(announceName, "Rename to department announcements").catch(() => undefined);
                     }
-                    deletedWebhooks.push(...infoRes.deletedNames);
-                    const infoWebhookUrl = infoRes.activeUrl;
+                    const announceRes = await reconcileWebhookOnChannel(
+                        deptAnnounce,
+                        `${dept.name} Announcements`,
+                        botId,
+                        false,
+                        this.logger
+                    );
+                    if (announceRes.activeId !== null) {
+                        activeWebhookIds.add(announceRes.activeId);
+                    }
+                    deletedWebhooks.push(...announceRes.deletedNames);
+                    const announceWebhookUrl = announceRes.activeUrl;
 
                     // 2. Apply channel (<prefix>-apply)
                     const applyName = `${prefix}-apply`;
@@ -990,8 +1022,8 @@ export class ServerProvisioner {
                         discordCategoryId: category.id,
                         discordForumId: deptForum.id,
                         discordChatChannelId: deptChat.id,
-                        discordInfoChannelId: deptInfo.id,
-                        discordInfoWebhookUrl: infoWebhookUrl,
+                        discordInfoChannelId: deptAnnounce.id,
+                        discordInfoWebhookUrl: announceWebhookUrl,
                         discordLogsChannelId: deptLogs.id,
                         discordLogsWebhookUrl: logsWebhookUrl,
                         discordApplyChannelId: deptApply.id
@@ -1002,7 +1034,7 @@ export class ServerProvisioner {
                         departmentName: dept.name,
                         categoryName: category.name,
                         forumName: tasksForumName,
-                        channels: [`#${infoName}`, `#${applyName}`, tasksForumName, `#${deptChat.name}`, `#${logsName}`, deptVoice.name]
+                        channels: [`#${announceName}`, `#${applyName}`, tasksForumName, `#${deptChat.name}`, `#${logsName}`, deptVoice.name]
                     });
                 }
             } catch (err: unknown) {

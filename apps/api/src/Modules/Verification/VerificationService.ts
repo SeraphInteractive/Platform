@@ -170,6 +170,7 @@ export class VerificationService {
                     type: NotificationType.UserRoleChanged,
                     user: personOfUser(updated),
                     role: updated.role,
+                    previousRole: user.role,
                     specialties: updated.specialties,
                     actor: personOfUser(updated)
                 });

@@ -108,6 +108,7 @@ export class BallotsService {
                 type: NotificationType.UserRoleChanged,
                 user: personOfUser(promotedUser),
                 role: promotedUser.role,
+                previousRole: Role.Member,
                 specialties: promotedUser.specialties,
                 actor: personOfUser(promotedUser)
             });

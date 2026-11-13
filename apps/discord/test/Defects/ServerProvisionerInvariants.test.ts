@@ -743,4 +743,74 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
         expect(externalVoice.setParent).not.toHaveBeenCalled();
         expect(externalText.setParent).not.toHaveBeenCalled();
     });
+
+    it("renames legacy department info channels to announcements", async () => {
+        const rolesColl = new Collection<string, Role>();
+        const everyoneRole = {
+            id: "everyone-role-id",
+            name: "@everyone",
+            setPermissions: vi.fn().mockResolvedValue(undefined)
+        } as unknown as Role;
+        rolesColl.set(everyoneRole.id, everyoneRole);
+
+        const artCategory = mockChannel("cat-art", "Art and Writing", ChannelType.GuildCategory);
+        const legacyArtInfo = mockChannel("chan-art-info", "art-info", ChannelType.GuildText, "cat-art");
+        const channels = new Collection<string, GuildBasedChannel>();
+        channels.set(artCategory.id, artCategory as never);
+        channels.set(legacyArtInfo.id, legacyArtInfo as never);
+
+        const mockGuild = {
+            id: "guild-1",
+            client: { user: { id: "bot-user-1" } },
+            roles: {
+                everyone: everyoneRole,
+                fetch: vi.fn().mockResolvedValue(rolesColl),
+                cache: rolesColl,
+                setPositions: vi.fn().mockResolvedValue(new Collection()),
+                create: vi.fn().mockImplementation((opts: { name: string }) =>
+                    Promise.resolve({
+                        id: `role-${opts.name}`,
+                        name: opts.name,
+                        hoist: false,
+                        setHoist: vi.fn(),
+                        setPermissions: vi.fn()
+                    })
+                )
+            },
+            channels: {
+                fetch: vi.fn().mockResolvedValue(channels),
+                create: vi.fn().mockImplementation((opts: { name: string; type: ChannelType; parent?: string }) => {
+                    const chan = mockChannel(`chan-${opts.name}`, opts.name, opts.type, opts.parent);
+                    channels.set(chan.id, chan as never);
+                    return Promise.resolve(chan);
+                })
+            },
+            fetchWebhooks: vi.fn().mockResolvedValue(new Collection())
+        } as unknown as Guild;
+
+        const mockApi = {
+            listDepartments: vi.fn().mockResolvedValue([
+                {
+                    id: "dept-1",
+                    name: "Art and Writing",
+                    slug: "art-and-writing",
+                    contributorSpecialties: ["concept_artist"],
+                    supervisorSpecialties: ["art_director"]
+                }
+            ]),
+            bindDepartmentDiscordMap: vi.fn().mockResolvedValue(undefined),
+            updateDiscordSettings: vi.fn().mockResolvedValue({}),
+            getDocument: vi.fn().mockRejectedValue(new Error("no docs"))
+        };
+
+        const provisioner = new ServerProvisioner(
+            settings,
+            { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } as never,
+            undefined,
+            mockApi as never
+        );
+        await provisioner.provision(mockGuild);
+
+        expect(legacyArtInfo.setName).toHaveBeenCalledWith("art-announcements", "Rename to department announcements");
+    });
 });

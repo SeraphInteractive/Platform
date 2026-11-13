@@ -158,8 +158,8 @@ describe("telemetry alerts", () => {
         );
     });
 
-    it("renders user role updates", () => {
-        const { text } = only({
+    it("renders user role updates, promotions, and demotions", () => {
+        const update = only({
             type: NotificationType.UserRoleChanged,
             occurredAt,
             user: voter,
@@ -167,8 +167,39 @@ describe("telemetry alerts", () => {
             specialties: [Specialty.Animator, Specialty.Rigger],
             actor: admin
         });
-        expect(text).toBe(
-            ["**User role updated**", "<@215537065863938049> is now Contributor (Animator, Rigger), by <@212401207694721024>"].join("\n")
+        expect(update.text).toBe(
+            ["**User Role Updated**", "<@215537065863938049> is now **Contributor** (Animator, Rigger), by <@212401207694721024>"].join(
+                "\n"
+            )
+        );
+
+        const demotion = only({
+            type: NotificationType.UserRoleChanged,
+            occurredAt,
+            user: voter,
+            role: Role.Voter,
+            previousRole: Role.Contributor,
+            specialties: [],
+            actor: admin
+        });
+        expect(demotion.text).toBe(
+            ["**User Demoted**", "<@215537065863938049> was demoted from **Contributor** to **Voter**, by <@212401207694721024>"].join("\n")
+        );
+
+        const promotion = only({
+            type: NotificationType.UserRoleChanged,
+            occurredAt,
+            user: voter,
+            role: Role.Contributor,
+            previousRole: Role.Voter,
+            specialties: [Specialty.Animator],
+            actor: admin
+        });
+        expect(promotion.text).toBe(
+            [
+                "**User Promoted**",
+                "<@215537065863938049> was promoted from **Voter** to **Contributor** (Animator), by <@212401207694721024>"
+            ].join("\n")
         );
     });
 
@@ -243,7 +274,7 @@ describe("every notification", () => {
             specialties: [Specialty.Animator],
             actor: admin
         },
-        { type: NotificationType.ContributorPromoted, occurredAt, user: voter, actor: admin },
+        { type: NotificationType.ContributorPromoted, occurredAt, user: voter, actor: admin, specialties: [Specialty.Animator] },
         {
             type: NotificationType.RaidAlert,
             occurredAt,

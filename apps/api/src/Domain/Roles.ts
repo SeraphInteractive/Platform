@@ -1,13 +1,15 @@
-import { maximumTotalSpecialties, Role, type Specialty } from "@platform/contracts";
+import { allowedSpecialtiesForRole, maximumTotalSpecialties, rankOfRole, Role, type Specialty } from "@platform/contracts";
 
 export {
     adminSpecialties,
+    allowedSpecialtiesForRole,
     assignableSpecialties,
     contributorSpecialties,
     exclusiveSpecialties,
     maximumSpecialties,
     maximumTotalSpecialties,
     Role,
+    roleRanks,
     selfSelectableSpecialties,
     Specialty,
     specialtyLabel,
@@ -16,25 +18,7 @@ export {
     teamSpecialties
 } from "@platform/contracts";
 
-const roleRanks: Readonly<Record<Role, number>> = Object.freeze({
-    [Role.Member]: 0,
-    [Role.Voter]: 1,
-    [Role.Contributor]: 2,
-    [Role.SeniorContributor]: 3,
-    [Role.Supervisor]: 4,
-    [Role.Admin]: 5,
-    [Role.SuperAdmin]: 6
-});
-
-const specialtyRoles: ReadonlySet<Role> = new Set([
-    Role.SuperAdmin,
-    Role.Admin,
-    Role.Supervisor,
-    Role.SeniorContributor,
-    Role.Contributor,
-    Role.Voter,
-    Role.Member
-]);
+export const rankOf = rankOfRole;
 
 export const maximumSuperAdmins = 2;
 
@@ -49,10 +33,6 @@ export function isGrantable(role: Role): boolean {
     return role !== Role.SuperAdmin;
 }
 
-export function rankOf(role: Role): number {
-    return roleRanks[role];
-}
-
 export function hasAtLeast(role: Role, required: Role): boolean {
     return rankOf(role) >= rankOf(required);
 }
@@ -62,12 +42,14 @@ export function isHigherThan(role: Role, other: Role): boolean {
 }
 
 export function canHoldSpecialties(role: Role): boolean {
-    return specialtyRoles.has(role);
+    return role !== Role.Voter && role !== Role.Member;
 }
 
 export function normalizeSpecialties(role: Role, specialties: readonly Specialty[]): Specialty[] {
-    if (!canHoldSpecialties(role)) {
+    const allowed = allowedSpecialtiesForRole(role);
+    if (allowed.length === 0) {
         return [];
     }
-    return [...new Set(specialties)].slice(0, maximumTotalSpecialties);
+    const filtered = specialties.filter((s) => allowed.includes(s));
+    return [...new Set(filtered)].slice(0, maximumTotalSpecialties);
 }
