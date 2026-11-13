@@ -2,6 +2,7 @@ import { Role } from "@platform/contracts";
 import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder, type ChatInputCommandInteraction } from "discord.js";
 import { Accent, asEdit, ephemeral, panel, pluralize } from "../Discord/Ui.js";
 import { ChannelPurpose } from "../State/SettingsStore.js";
+import { normalizeName } from "../Services/StudioRoles.js";
 import { requireManageGuild, requirePlatformRole, UserFacingError, type BotContext, type SlashCommand } from "./Command.js";
 
 export const botSetupCommand: SlashCommand = {
@@ -17,7 +18,7 @@ export const botSetupCommand: SlashCommand = {
         }
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const summary = await context.provisioner.provision(interaction.guild);
-        const lines: string[] = ["### Server Setup", ""];
+        const lines: string[] = ["## Server Setup", ""];
 
         lines.push("**Roles**");
         if (summary.createdRoles.length === 0) {
@@ -27,6 +28,71 @@ export const botSetupCommand: SlashCommand = {
         }
         lines.push("");
 
+        const deptItemNorms = new Set<string>();
+        if (summary.departments) {
+            for (const dept of summary.departments) {
+                deptItemNorms.add(normalizeName(dept.categoryName));
+                deptItemNorms.add(normalizeName(dept.forumName));
+                for (const ch of dept.channels) {
+                    deptItemNorms.add(normalizeName(ch.replace(/^#/u, "")));
+                }
+            }
+        }
+
+        const isDeptChannel = (name: string): boolean => {
+            const clean = normalizeName(name.replace(/^#/u, ""));
+            return deptItemNorms.has(clean);
+        };
+
+        const staffChannelNames = new Set([
+            "task-logs",
+            "voting-logs",
+            "user-logs",
+            "security-alerts",
+            "telemetry-alerts",
+            "system-logs",
+            "moderation-logs"
+        ]);
+        const productionChannelNames = new Set(["production-announcements", "production-general", "production-management"]);
+        const platformChannelNames = new Set(["announcements"]);
+
+        const allCore = [...summary.boundChannels, ...summary.createdChannels].filter((c) => !isDeptChannel(c));
+        const cleanCore = Array.from(new Set(allCore.map((c) => (c.startsWith("#") ? c : `#${c}`))));
+
+        const staffChannels = cleanCore.filter((c) => staffChannelNames.has(normalizeName(c.replace(/^#/u, ""))));
+        const productionChannels = cleanCore.filter((c) => productionChannelNames.has(normalizeName(c.replace(/^#/u, ""))));
+        const platformChannels = cleanCore.filter((c) => platformChannelNames.has(normalizeName(c.replace(/^#/u, ""))));
+        const otherChannels = cleanCore.filter(
+            (c) =>
+                !staffChannelNames.has(normalizeName(c.replace(/^#/u, ""))) &&
+                !productionChannelNames.has(normalizeName(c.replace(/^#/u, ""))) &&
+                !platformChannelNames.has(normalizeName(c.replace(/^#/u, "")))
+        );
+
+        if (staffChannels.length > 0) {
+            lines.push("**Staff Channels**");
+            lines.push(`- ${staffChannels.join(", ")}`);
+            lines.push("");
+        }
+
+        if (productionChannels.length > 0) {
+            lines.push("**Production Channels**");
+            lines.push(`- ${productionChannels.join(", ")}`);
+            lines.push("");
+        }
+
+        if (platformChannels.length > 0) {
+            lines.push("**Platform Channels**");
+            lines.push(`- ${platformChannels.join(", ")}`);
+            lines.push("");
+        }
+
+        if (otherChannels.length > 0) {
+            lines.push("**Other Channels**");
+            lines.push(`- ${otherChannels.join(", ")}`);
+            lines.push("");
+        }
+
         if (summary.departments && summary.departments.length > 0) {
             lines.push("**Department Channels**");
             for (const dept of summary.departments) {
@@ -35,39 +101,12 @@ export const botSetupCommand: SlashCommand = {
             lines.push("");
         }
 
-        const deptItems = new Set<string>();
-        if (summary.departments) {
-            for (const dept of summary.departments) {
-                deptItems.add(dept.categoryName);
-                deptItems.add(dept.forumName);
-                for (const ch of dept.channels) {
-                    deptItems.add(ch);
-                    deptItems.add(ch.replace(/^#/u, ""));
-                }
-            }
-        }
-
-        const nonDeptCreated = summary.createdChannels.filter((c) => !deptItems.has(c) && !deptItems.has(c.replace(/^#/u, "")));
-        if (nonDeptCreated.length > 0) {
-            lines.push("**Created Core Channels**");
-            lines.push(`- ${nonDeptCreated.join(", ")}`);
-            lines.push("");
-        }
-
-        const nonDeptBound = summary.boundChannels.filter((c) => !deptItems.has(c) && !deptItems.has(c.replace(/^#/u, "")));
-        if (nonDeptBound.length > 0) {
-            lines.push("**Existing Channels Bound**");
-            lines.push(`- ${nonDeptBound.join(", ")}`);
-        }
-
         if (summary.deletedWebhooks && summary.deletedWebhooks.length > 0) {
-            lines.push("");
             lines.push("**Residual Webhooks Cleaned Up**");
             lines.push(`- Removed ${pluralize(summary.deletedWebhooks.length, "residual webhook")}: ${summary.deletedWebhooks.join(", ")}`);
         } else {
-            lines.push("");
             lines.push("**Webhooks**");
-            lines.push("- All channel webhooks synced to database with zero residual webhooks.");
+            lines.push("- All channel webhooks synced with zero residual webhooks.");
         }
 
         await interaction.editReply(asEdit(ephemeral(panel(null, lines.join("\n").trim()))));
@@ -117,5 +156,23 @@ export const setAnnouncementsCommand: SlashCommand = {
             settings.channels[ChannelPurpose.Announcements] = channel.id;
         });
         await interaction.reply(ephemeral(panel(Accent.Success, `Announcements channel bound to <#${channel.id}>.`)));
+    }
+};
+
+export const testLoggingCommand: SlashCommand = {
+    definition: new SlashCommandBuilder()
+        .setName("test-logging")
+        .setDescription("Send a test message titled 'test' across all staff logging webhooks")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+        .toJSON(),
+    async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
+        requireManageGuild(interaction);
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const results = await context.dispatcher.sendStaffTestProbe();
+        const lines: string[] = ["## Staff Logging Probe", ""];
+        for (const res of results) {
+            lines.push(`• **${res.name}:** ${res.success ? "Delivered" : `Failed (${res.error ?? "unresolved"})`}`);
+        }
+        await interaction.editReply(asEdit(ephemeral(panel(Accent.Info, lines.join("\n")))));
     }
 };

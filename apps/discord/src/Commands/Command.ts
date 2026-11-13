@@ -11,6 +11,7 @@ import {
 } from "discord.js";
 import type { Logger } from "pino";
 import type { NotificationConsumer } from "../Api/NotificationConsumer.js";
+import type { NotificationDispatcher } from "../Services/NotificationDispatcher.js";
 import { PlatformApiError, type ActingApiClient, type DiscordIdentity, type PlatformApiClient } from "../Api/PlatformApiClient.js";
 import type { BotConfiguration } from "../Configuration/BotConfiguration.js";
 import { Accent, notice } from "../Discord/Ui.js";
@@ -30,6 +31,7 @@ export interface BotContext {
     readonly api: PlatformApiClient;
     readonly settings: SettingsStore;
     readonly forum: TaskForum;
+    readonly dispatcher: NotificationDispatcher;
     readonly provisioner: ServerProvisioner;
     readonly consumer: NotificationConsumer;
     readonly reminders: ReminderStore;

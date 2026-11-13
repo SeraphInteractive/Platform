@@ -22,6 +22,8 @@ describe("ProfanityFilter pattern matching", () => {
         expect(detectProfanity("b!tch please").matched).toBe(true);
         expect(detectProfanity("what the f0ck").matched).toBe(true);
         expect(detectProfanity("total sh!t").matched).toBe(true);
+        expect(detectProfanity("total sh*t").matched).toBe(true);
+        expect(detectProfanity("g o o n").matched).toBe(true);
         expect(detectProfanity("you a$$hole").matched).toBe(true);
     });
 
@@ -79,6 +81,10 @@ describe("ProfanityFilter pattern matching", () => {
         expect(detectProfanity("scrap this shot").matched).toBe(false);
         expect(detectProfanity("shift the keyframes").matched).toBe(false);
         expect(detectProfanity("hello everyone, welcome!").matched).toBe(false);
+        expect(detectProfanity("go on").matched).toBe(false);
+        expect(detectProfanity("go on then").matched).toBe(false);
+        expect(detectProfanity("let's hit the road").matched).toBe(false);
+        expect(detectProfanity("it's hit").matched).toBe(false);
     });
 
     it("normalizes special unicode and accents", () => {

@@ -133,8 +133,13 @@ export interface ProvisionSummary {
 
 export interface ServerProvisionerWebhooks {
     readonly telemetry?: string;
+    readonly securityAlerts?: string;
     readonly moderationLogs?: string;
     readonly rules?: string;
+    readonly taskLogs?: string;
+    readonly votingLogs?: string;
+    readonly userLogs?: string;
+    readonly systemLogs?: string;
 }
 
 export const forumTagNames: Readonly<Record<ShotStatus, string>> = {
@@ -145,20 +150,38 @@ export const forumTagNames: Readonly<Record<ShotStatus, string>> = {
 };
 
 type SystemChannelPurpose =
-    ChannelPurpose.Announcements | ChannelPurpose.ProductionAnnouncements | ChannelPurpose.Telemetry | ChannelPurpose.ModerationLogs;
+    | ChannelPurpose.Announcements
+    | ChannelPurpose.ProductionAnnouncements
+    | ChannelPurpose.Telemetry
+    | ChannelPurpose.SecurityAlerts
+    | ChannelPurpose.ModerationLogs
+    | ChannelPurpose.TaskLogs
+    | ChannelPurpose.VotingLogs
+    | ChannelPurpose.UserLogs
+    | ChannelPurpose.SystemLogs;
 
 const channelNames: Readonly<Record<SystemChannelPurpose, string>> = {
     [ChannelPurpose.Announcements]: "announcements",
     [ChannelPurpose.ProductionAnnouncements]: "production-announcements",
     [ChannelPurpose.Telemetry]: "telemetry-alerts",
-    [ChannelPurpose.ModerationLogs]: "moderation-logs"
+    [ChannelPurpose.SecurityAlerts]: "security-alerts",
+    [ChannelPurpose.ModerationLogs]: "moderation-logs",
+    [ChannelPurpose.TaskLogs]: "task-logs",
+    [ChannelPurpose.VotingLogs]: "voting-logs",
+    [ChannelPurpose.UserLogs]: "user-logs",
+    [ChannelPurpose.SystemLogs]: "system-logs"
 };
 
 const channelAliases: Readonly<Record<SystemChannelPurpose, readonly string[]>> = {
     [ChannelPurpose.Announcements]: ["announcements", "announcement", "studio-announcements"],
     [ChannelPurpose.ProductionAnnouncements]: ["production-announcements", "production-news", "contributor-announcements"],
-    [ChannelPurpose.Telemetry]: ["telemetry-alerts", "telemetry", "bot-alerts", "alerts"],
-    [ChannelPurpose.ModerationLogs]: ["moderation-logs", "mod-logs", "supervisor-logs", "mod-log"]
+    [ChannelPurpose.Telemetry]: ["telemetry-alerts", "telemetry", "security-alerts", "bot-alerts", "alerts"],
+    [ChannelPurpose.SecurityAlerts]: ["security-alerts", "telemetry-alerts", "telemetry", "bot-alerts", "alerts"],
+    [ChannelPurpose.ModerationLogs]: ["moderation-logs", "mod-logs", "supervisor-logs", "mod-log"],
+    [ChannelPurpose.TaskLogs]: ["task-logs", "tasks-logs", "tasks", "grabbox-logs"],
+    [ChannelPurpose.VotingLogs]: ["voting-logs", "vote-logs", "voting"],
+    [ChannelPurpose.UserLogs]: ["user-logs", "users-logs", "role-logs", "users"],
+    [ChannelPurpose.SystemLogs]: ["system-logs", "pipeline-logs", "system"]
 };
 
 function toPermissionOverwriteOptions(item: OverwriteResolvable): { id: string; options: PermissionOverwriteOptions } | null {
@@ -216,7 +239,12 @@ export class ServerProvisioner {
                 [ChannelPurpose.Announcements]: platformCategory?.id,
                 [ChannelPurpose.ProductionAnnouncements]: productionCategory?.id,
                 [ChannelPurpose.Telemetry]: staffCategory?.id,
-                [ChannelPurpose.ModerationLogs]: staffCategory?.id
+                [ChannelPurpose.SecurityAlerts]: staffCategory?.id,
+                [ChannelPurpose.ModerationLogs]: staffCategory?.id,
+                [ChannelPurpose.TaskLogs]: staffCategory?.id,
+                [ChannelPurpose.VotingLogs]: staffCategory?.id,
+                [ChannelPurpose.UserLogs]: staffCategory?.id,
+                [ChannelPurpose.SystemLogs]: staffCategory?.id
             };
 
             for (const purpose of Object.keys(channelAliases) as SystemChannelPurpose[]) {
@@ -586,56 +614,89 @@ export class ServerProvisioner {
         deletedWebhooks.push(...announcementsRes.deletedNames);
         const announcementsWebhookUrl = announcementsRes.activeUrl;
 
-        // telemetry channel (skip creating if webhook URL configured and channel not found)
-        const telemetryExisting = channels.find(
-            (channel) =>
-                channel !== null &&
-                channel.type === ChannelType.GuildText &&
-                channel.parentId === staff.id &&
-                channelAliases[ChannelPurpose.Telemetry].some((alias) => normalizeName(alias) === normalizeName(channel.name))
-        ) as TextChannel | undefined;
-        const telemetry =
-            this.webhooks?.telemetry !== undefined && telemetryExisting === undefined
-                ? undefined
-                : await ensureText(ChannelPurpose.Telemetry, staff, "Voting activity, bans and raid alerts.", privateOverwrites);
-
-        let telemetryWebhookUrl: string | null = null;
-        if (telemetry !== undefined) {
-            const telemetryRes = await reconcileWebhookOnChannel(telemetry, "Studio Telemetry", botId, true, this.logger);
-            if (telemetryRes.activeId !== null) {
-                activeWebhookIds.add(telemetryRes.activeId);
-            }
-            deletedWebhooks.push(...telemetryRes.deletedNames);
-            telemetryWebhookUrl = telemetryRes.activeUrl;
+        // 1. Task logs channel
+        const taskLogs = await ensureText(
+            ChannelPurpose.TaskLogs,
+            staff,
+            "Global task activity, claims, submissions, and supervisor reviews.",
+            privateOverwrites
+        );
+        const taskLogsRes = await reconcileWebhookOnChannel(taskLogs, "Stairway Tasks", botId, true, this.logger);
+        if (taskLogsRes.activeId !== null) {
+            activeWebhookIds.add(taskLogsRes.activeId);
         }
+        deletedWebhooks.push(...taskLogsRes.deletedNames);
+        const taskLogsWebhookUrl = taskLogsRes.activeUrl;
 
-        // moderation logs channel (skip creating if webhook URL configured and channel not found)
-        const modLogsExisting = channels.find(
-            (channel) =>
-                channel !== null &&
-                channel.type === ChannelType.GuildText &&
-                channel.parentId === staff.id &&
-                channelAliases[ChannelPurpose.ModerationLogs].some((alias) => normalizeName(alias) === normalizeName(channel.name))
-        ) as TextChannel | undefined;
-        const moderationLogs =
-            this.webhooks?.moderationLogs !== undefined && modLogsExisting === undefined
-                ? undefined
-                : await ensureText(
-                      ChannelPurpose.ModerationLogs,
-                      staff,
-                      "Profanity warnings, timeouts, and AutoMod incident logs.",
-                      privateOverwrites
-                  );
-
-        let modLogsWebhookUrl: string | null = null;
-        if (moderationLogs !== undefined) {
-            const modLogsRes = await reconcileWebhookOnChannel(moderationLogs, "Studio Moderation", botId, true, this.logger);
-            if (modLogsRes.activeId !== null) {
-                activeWebhookIds.add(modLogsRes.activeId);
-            }
-            deletedWebhooks.push(...modLogsRes.deletedNames);
-            modLogsWebhookUrl = modLogsRes.activeUrl;
+        // 2. Voting logs channel
+        const votingLogs = await ensureText(
+            ChannelPurpose.VotingLogs,
+            staff,
+            "Ballots cast, round state transitions, and entry status updates.",
+            privateOverwrites
+        );
+        const votingLogsRes = await reconcileWebhookOnChannel(votingLogs, "Stairway Voting", botId, true, this.logger);
+        if (votingLogsRes.activeId !== null) {
+            activeWebhookIds.add(votingLogsRes.activeId);
         }
+        deletedWebhooks.push(...votingLogsRes.deletedNames);
+        const votingLogsWebhookUrl = votingLogsRes.activeUrl;
+
+        // 3. User logs channel
+        const userLogs = await ensureText(
+            ChannelPurpose.UserLogs,
+            staff,
+            "Role updates, promotions, demotions, and voter blacklists.",
+            privateOverwrites
+        );
+        const userLogsRes = await reconcileWebhookOnChannel(userLogs, "Stairway Users", botId, true, this.logger);
+        if (userLogsRes.activeId !== null) {
+            activeWebhookIds.add(userLogsRes.activeId);
+        }
+        deletedWebhooks.push(...userLogsRes.deletedNames);
+        const userLogsWebhookUrl = userLogsRes.activeUrl;
+
+        // 4. Security alerts channel (adopting telemetry-alerts)
+        const securityAlerts = await ensureText(
+            ChannelPurpose.SecurityAlerts,
+            staff,
+            "Raid alerts, quarantine actions, and AI signature detections.",
+            privateOverwrites
+        );
+        const securityAlertsRes = await reconcileWebhookOnChannel(securityAlerts, "Stairway Security", botId, true, this.logger);
+        if (securityAlertsRes.activeId !== null) {
+            activeWebhookIds.add(securityAlertsRes.activeId);
+        }
+        deletedWebhooks.push(...securityAlertsRes.deletedNames);
+        const securityAlertsWebhookUrl = securityAlertsRes.activeUrl;
+
+        // 5. System logs channel
+        const systemLogs = await ensureText(
+            ChannelPurpose.SystemLogs,
+            staff,
+            "Pipeline progress, crew surveys, and system maintenance logs.",
+            privateOverwrites
+        );
+        const systemLogsRes = await reconcileWebhookOnChannel(systemLogs, "Stairway System", botId, true, this.logger);
+        if (systemLogsRes.activeId !== null) {
+            activeWebhookIds.add(systemLogsRes.activeId);
+        }
+        deletedWebhooks.push(...systemLogsRes.deletedNames);
+        const systemLogsWebhookUrl = systemLogsRes.activeUrl;
+
+        // 6. Moderation logs channel
+        const moderationLogs = await ensureText(
+            ChannelPurpose.ModerationLogs,
+            staff,
+            "Profanity warnings, timeouts, and AutoMod incident logs.",
+            privateOverwrites
+        );
+        const modLogsRes = await reconcileWebhookOnChannel(moderationLogs, "Studio Moderation", botId, true, this.logger);
+        if (modLogsRes.activeId !== null) {
+            activeWebhookIds.add(modLogsRes.activeId);
+        }
+        deletedWebhooks.push(...modLogsRes.deletedNames);
+        const modLogsWebhookUrl = modLogsRes.activeUrl;
 
         const contributorRoles = studioRoles
             .filter((role) => role.tier <= StudioTier.Contributor)
@@ -1034,7 +1095,7 @@ export class ServerProvisioner {
                         departmentName: dept.name,
                         categoryName: category.name,
                         forumName: tasksForumName,
-                        channels: [`#${announceName}`, `#${applyName}`, tasksForumName, `#${deptChat.name}`, `#${logsName}`, deptVoice.name]
+                        channels: [`#${announceName}`, `#${applyName}`, `#${deptChat.name}`, `#${logsName}`, deptVoice.name]
                     });
                 }
             } catch (err: unknown) {
@@ -1050,11 +1111,52 @@ export class ServerProvisioner {
             systemWebhooks[ChannelPurpose.ProductionAnnouncements] = prodAnnouncementsWebhookUrl;
             systemWebhooks["production-announcements"] = prodAnnouncementsWebhookUrl;
         }
-        if (telemetryWebhookUrl !== null) {
-            systemWebhooks.telemetry = telemetryWebhookUrl;
+        if (taskLogsWebhookUrl !== null) {
+            systemWebhooks[ChannelPurpose.TaskLogs] = taskLogsWebhookUrl;
+            systemWebhooks["task-logs"] = taskLogsWebhookUrl;
+        }
+        if (votingLogsWebhookUrl !== null) {
+            systemWebhooks[ChannelPurpose.VotingLogs] = votingLogsWebhookUrl;
+            systemWebhooks["voting-logs"] = votingLogsWebhookUrl;
+        }
+        if (userLogsWebhookUrl !== null) {
+            systemWebhooks[ChannelPurpose.UserLogs] = userLogsWebhookUrl;
+            systemWebhooks["user-logs"] = userLogsWebhookUrl;
+        }
+        if (securityAlertsWebhookUrl !== null) {
+            systemWebhooks.telemetry = securityAlertsWebhookUrl;
+            systemWebhooks["telemetry-alerts"] = securityAlertsWebhookUrl;
+            systemWebhooks[ChannelPurpose.SecurityAlerts] = securityAlertsWebhookUrl;
+            systemWebhooks["security-alerts"] = securityAlertsWebhookUrl;
+        }
+        if (systemLogsWebhookUrl !== null) {
+            systemWebhooks[ChannelPurpose.SystemLogs] = systemLogsWebhookUrl;
+            systemWebhooks["system-logs"] = systemLogsWebhookUrl;
         }
         if (modLogsWebhookUrl !== null) {
             systemWebhooks.moderationLogs = modLogsWebhookUrl;
+            systemWebhooks["moderation-logs"] = modLogsWebhookUrl;
+        }
+        if (this.webhooks?.telemetry && !systemWebhooks.telemetry) {
+            systemWebhooks.telemetry = this.webhooks.telemetry;
+        }
+        if (this.webhooks?.securityAlerts && !systemWebhooks.securityAlerts) {
+            systemWebhooks.securityAlerts = this.webhooks.securityAlerts;
+        }
+        if (this.webhooks?.moderationLogs && !systemWebhooks.moderationLogs) {
+            systemWebhooks.moderationLogs = this.webhooks.moderationLogs;
+        }
+        if (this.webhooks?.taskLogs && !systemWebhooks.taskLogs) {
+            systemWebhooks.taskLogs = this.webhooks.taskLogs;
+        }
+        if (this.webhooks?.votingLogs && !systemWebhooks.votingLogs) {
+            systemWebhooks.votingLogs = this.webhooks.votingLogs;
+        }
+        if (this.webhooks?.userLogs && !systemWebhooks.userLogs) {
+            systemWebhooks.userLogs = this.webhooks.userLogs;
+        }
+        if (this.webhooks?.systemLogs && !systemWebhooks.systemLogs) {
+            systemWebhooks.systemLogs = this.webhooks.systemLogs;
         }
 
         await this.settings.update((settings) => {
@@ -1069,12 +1171,14 @@ export class ServerProvisioner {
 
             settings.channels[ChannelPurpose.Announcements] = announcements.id;
             settings.channels[ChannelPurpose.ProductionAnnouncements] = prodAnnouncements.id;
-            if (telemetry !== undefined) {
-                settings.channels[ChannelPurpose.Telemetry] = telemetry.id;
-            }
-            if (moderationLogs !== undefined) {
-                settings.channels[ChannelPurpose.ModerationLogs] = moderationLogs.id;
-            }
+            settings.channels[ChannelPurpose.Telemetry] = securityAlerts.id;
+            settings.channels[ChannelPurpose.SecurityAlerts] = securityAlerts.id;
+            settings.channels[ChannelPurpose.TaskLogs] = taskLogs.id;
+            settings.channels[ChannelPurpose.VotingLogs] = votingLogs.id;
+            settings.channels[ChannelPurpose.UserLogs] = userLogs.id;
+            settings.channels[ChannelPurpose.SystemLogs] = systemLogs.id;
+            settings.channels[ChannelPurpose.ModerationLogs] = moderationLogs.id;
+
             settings.roles[BoundRole.Member] = roleIds.get("Members")?.id;
             settings.roles[BoundRole.Voter] = roleIds.get("Voters")?.id;
             settings.roles[BoundRole.Contributor] = roleIds.get(contributorRoleName)?.id;

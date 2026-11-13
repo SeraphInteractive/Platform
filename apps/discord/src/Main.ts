@@ -44,7 +44,12 @@ async function main(): Promise<void> {
     const forum = new TaskForum(client, configuration.guildId, settings, api, logger);
     const webhookUrls = {
         telemetry: configuration.telemetryWebhookUrl ?? settings.webhook("telemetry"),
-        moderationLogs: configuration.moderationLogsWebhookUrl ?? settings.webhook("moderationLogs")
+        securityAlerts: settings.webhook("securityAlerts") ?? settings.webhook("telemetry"),
+        moderationLogs: configuration.moderationLogsWebhookUrl ?? settings.webhook("moderationLogs"),
+        taskLogs: settings.webhook("taskLogs"),
+        votingLogs: settings.webhook("votingLogs"),
+        userLogs: settings.webhook("userLogs"),
+        systemLogs: settings.webhook("systemLogs")
     };
     const dispatcher = new NotificationDispatcher(
         client,
@@ -93,6 +98,7 @@ async function main(): Promise<void> {
         api,
         settings,
         forum,
+        dispatcher,
         provisioner,
         consumer,
         reminders,

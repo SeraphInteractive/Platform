@@ -80,7 +80,7 @@ describe("telemetry alerts", () => {
             voter,
             reason: "Suspected botting script"
         });
-        expect(purpose).toBe(ChannelPurpose.Telemetry);
+        expect(purpose).toBe(ChannelPurpose.VotingLogs);
         expect(text).toBe(
             [
                 "**Blocked vote in Binary Test Round**",
@@ -238,7 +238,7 @@ describe("telemetry alerts", () => {
             flags: ["Stable Diffusion generation parameters", "Negative prompt parameter"],
             snippet: "A high quality render of a staircase"
         });
-        expect(purpose).toBe(ChannelPurpose.Telemetry);
+        expect(purpose).toBe(ChannelPurpose.SecurityAlerts);
         expect(text).toContain('**AI signatures detected:** Round Entry "Option Beta"');
         expect(text).toContain("<@215537065863938049>");
         expect(text).toContain("• Stable Diffusion generation parameters");
@@ -483,7 +483,7 @@ describe("every notification", () => {
         );
         expect(rendered).toHaveLength(2);
         const announcement = rendered.find((r) => r.purpose === ChannelPurpose.Announcements);
-        const telemetry = rendered.find((r) => r.purpose === ChannelPurpose.Telemetry);
+        const telemetry = rendered.find((r) => r.purpose === ChannelPurpose.SystemLogs);
         expect(announcement).toBeDefined();
         expect(telemetry).toBeDefined();
         expect(texts((announcement as RenderedNotification).message).join("\n")).toContain("## Phase 2 Unlocked: Phase 2: LookDev");
@@ -503,7 +503,7 @@ describe("every notification", () => {
             isPhaseTransition: false,
             actor: supervisor
         });
-        expect(stepProgress.purpose).toBe(ChannelPurpose.Telemetry);
+        expect(stepProgress.purpose).toBe(ChannelPurpose.SystemLogs);
         expect(stepProgress.text).toContain("Rigging and Deformation");
         expect(stepProgress.text).toContain("Phase 2: LookDev");
         expect(stepProgress.text).toContain("41% completed");
@@ -515,7 +515,7 @@ describe("every notification", () => {
             occurredAt,
             shot
         });
-        expect(created.purpose).toBe(ChannelPurpose.Telemetry);
+        expect(created.purpose).toBe(ChannelPurpose.TaskLogs);
         expect(created.text).toContain("Task created: [SC01\\_A1B2](https://dev-app.projectstairway.net/grabbox/SC01_A1B2) - Opening pan");
         expect(created.text).toContain("Difficulty: Hard | Scene: 1");
 
@@ -526,7 +526,7 @@ describe("every notification", () => {
             claimant: voter,
             deadlineAt: "2026-10-01T00:00:00.000Z"
         });
-        expect(claimed.purpose).toBe(ChannelPurpose.Telemetry);
+        expect(claimed.purpose).toBe(ChannelPurpose.TaskLogs);
         expect(claimed.text).toContain("Task claimed: [SC01\\_A1B2](https://dev-app.projectstairway.net/grabbox/SC01_A1B2) - Opening pan");
         expect(claimed.text).toContain("Claimed by <@215537065863938049>");
 
@@ -537,7 +537,7 @@ describe("every notification", () => {
             actor: voter,
             reason: "Hardware issue"
         });
-        expect(released.purpose).toBe(ChannelPurpose.Telemetry);
+        expect(released.purpose).toBe(ChannelPurpose.TaskLogs);
         expect(released.text).toContain("Task released: [SC01\\_A1B2](https://dev-app.projectstairway.net/grabbox/SC01_A1B2)");
         expect(released.text).toContain("Hardware issue");
 
@@ -552,7 +552,7 @@ describe("every notification", () => {
             reviewer: supervisor,
             notes: "Looks clean"
         });
-        expect(reviewed.purpose).toBe(ChannelPurpose.Telemetry);
+        expect(reviewed.purpose).toBe(ChannelPurpose.TaskLogs);
         expect(reviewed.text).toContain(
             "Deliverable approved: [SC01\\_A1B2](https://dev-app.projectstairway.net/grabbox/SC01_A1B2) - Opening pan (v2)"
         );
@@ -566,7 +566,7 @@ describe("every notification", () => {
             author: supervisor,
             channels: ["1100000000000000001"]
         });
-        expect(announcement.purpose).toBe(ChannelPurpose.Telemetry);
+        expect(announcement.purpose).toBe(ChannelPurpose.SystemLogs);
         expect(announcement.text).toContain("Announcement published: Production Milestone");
         expect(announcement.text).toContain("Target: 1100000000000000001");
         expect(announcement.text).toContain("Published by <@364539598942240768>");

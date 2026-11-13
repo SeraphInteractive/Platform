@@ -362,10 +362,19 @@ export async function syncMemberStudioRoles(
     }
 
     if (toRemove.length > 0) {
-        await member.roles.remove(toRemove, reason.slice(0, 400));
+        await member.roles.remove(toRemove, reason.slice(0, 400)).catch(async () => {
+            // fallback: remove roles individually if batch removal fails due to role hierarchy
+            for (const roleId of toRemove) {
+                await member.roles.remove(roleId, reason.slice(0, 400)).catch(() => undefined);
+            }
+        });
     }
     if (toAdd.length > 0) {
-        await member.roles.add(toAdd, reason.slice(0, 400));
+        await member.roles.add(toAdd, reason.slice(0, 400)).catch(async () => {
+            for (const roleId of toAdd) {
+                await member.roles.add(roleId, reason.slice(0, 400)).catch(() => undefined);
+            }
+        });
     }
 
     return {

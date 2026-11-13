@@ -18,13 +18,18 @@ import { Accent, capitalize, message, panel, person, plain, when } from "../Disc
 import { discordRestOptions, isSafeDiscordWebhookUrl } from "../Discord/Rest.js";
 import { renderNotification } from "../Views/NotificationViews.js";
 import { reviewCard, threadUpdate } from "../Views/TaskViews.js";
-import { syncMemberStudioRoles } from "./StudioRoles.js";
+import { normalizeName, syncMemberStudioRoles } from "./StudioRoles.js";
 import type { TaskForum } from "./TaskForum.js";
 
 export interface WebhookEndpoints {
     readonly telemetry?: string;
     readonly moderationLogs?: string;
     readonly rules?: string;
+    readonly taskLogs?: string;
+    readonly votingLogs?: string;
+    readonly userLogs?: string;
+    readonly securityAlerts?: string;
+    readonly systemLogs?: string;
 }
 
 function collectDiscordIds(notification: PlatformNotification): string[] {
@@ -56,13 +61,19 @@ export class NotificationDispatcher {
     ) {
         // bypass node 24 undici symbol headers crash
         const webhookOptions = discordRestOptions;
-        const telemetryHook = webhooks.telemetry ?? settings.webhook("telemetry");
-        if (telemetryHook && isSafeDiscordWebhookUrl(telemetryHook)) {
-            this.webhookClients[ChannelPurpose.Telemetry] = new WebhookClient({ url: telemetryHook }, webhookOptions);
-        }
-        const modLogsHook = webhooks.moderationLogs ?? settings.webhook("moderationLogs");
-        if (modLogsHook && isSafeDiscordWebhookUrl(modLogsHook)) {
-            this.webhookClients[ChannelPurpose.ModerationLogs] = new WebhookClient({ url: modLogsHook }, webhookOptions);
+        const mapping: [ChannelPurpose, string | undefined][] = [
+            [ChannelPurpose.Telemetry, webhooks.telemetry ?? settings.webhook("telemetry")],
+            [ChannelPurpose.ModerationLogs, webhooks.moderationLogs ?? settings.webhook("moderationLogs")],
+            [ChannelPurpose.TaskLogs, webhooks.taskLogs ?? settings.webhook("taskLogs")],
+            [ChannelPurpose.VotingLogs, webhooks.votingLogs ?? settings.webhook("votingLogs")],
+            [ChannelPurpose.UserLogs, webhooks.userLogs ?? settings.webhook("userLogs")],
+            [ChannelPurpose.SecurityAlerts, webhooks.securityAlerts ?? settings.webhook("securityAlerts")],
+            [ChannelPurpose.SystemLogs, webhooks.systemLogs ?? settings.webhook("systemLogs")]
+        ];
+        for (const [purpose, url] of mapping) {
+            if (url && isSafeDiscordWebhookUrl(url)) {
+                this.webhookClients[purpose] = new WebhookClient({ url }, webhookOptions);
+            }
         }
     }
 
@@ -99,12 +110,23 @@ export class NotificationDispatcher {
 
     private displayNameFor(purpose: ChannelPurpose): string {
         switch (purpose) {
-            case ChannelPurpose.Telemetry:
-                return "Project Stairway Telemetry";
-            case ChannelPurpose.ModerationLogs:
-                return "Project Stairway Moderation";
+            case ChannelPurpose.Announcements:
+                return "Studio Announcements";
             case ChannelPurpose.ProductionAnnouncements:
-                return "Project Stairway Announcements";
+                return "Production Announcements";
+            case ChannelPurpose.Telemetry:
+            case ChannelPurpose.SecurityAlerts:
+                return "Stairway Security";
+            case ChannelPurpose.ModerationLogs:
+                return "Studio Moderation";
+            case ChannelPurpose.TaskLogs:
+                return "Stairway Tasks";
+            case ChannelPurpose.VotingLogs:
+                return "Stairway Voting";
+            case ChannelPurpose.UserLogs:
+                return "Stairway Users";
+            case ChannelPurpose.SystemLogs:
+                return "Stairway System";
             default:
                 return "Project Stairway";
         }
@@ -165,7 +187,20 @@ export class NotificationDispatcher {
             return client;
         }
         if (channel !== null) {
-            return this.getOrCreateWebhook(channel, purpose);
+            const created = await this.getOrCreateWebhook(channel, purpose);
+            if (created !== null) {
+                return created;
+            }
+        }
+        if (
+            this.webhookClients[ChannelPurpose.Telemetry] !== undefined &&
+            (purpose === ChannelPurpose.SecurityAlerts ||
+                purpose === ChannelPurpose.VotingLogs ||
+                purpose === ChannelPurpose.TaskLogs ||
+                purpose === ChannelPurpose.UserLogs ||
+                purpose === ChannelPurpose.SystemLogs)
+        ) {
+            return this.webhookClients[ChannelPurpose.Telemetry];
         }
         return null;
     }
@@ -181,12 +216,14 @@ export class NotificationDispatcher {
             this.webhookClients[purpose] = client;
             return client;
         }
-        const targetName = this.displayNameFor(purpose);
-        const editPayload: { name: string } = { name: targetName };
         const ch = channel as {
+            name?: string;
             fetchWebhooks?: () => Promise<Collection<string, Webhook>>;
             createWebhook?: (options: { name: string }) => Promise<Webhook>;
         };
+        const isTelemetryChannel = ch.name === "telemetry-alerts" || purpose === ChannelPurpose.Telemetry;
+        const targetName = isTelemetryChannel ? "Project Stairway Telemetry" : this.displayNameFor(purpose);
+        const editPayload: { name: string } = { name: targetName };
         if (typeof ch.fetchWebhooks === "function") {
             try {
                 const webhooks = await ch.fetchWebhooks();
@@ -241,7 +278,11 @@ export class NotificationDispatcher {
                         components: rendered.message.components,
                         allowedMentions: rendered.message.allowedMentions,
                         withComponents: true,
-                        username: this.displayNameFor(rendered.purpose),
+                        username:
+                            webhook === this.webhookClients[ChannelPurpose.Telemetry] ||
+                            (channel !== null && (channel as { name?: string }).name === "telemetry-alerts")
+                                ? "Project Stairway Telemetry"
+                                : this.displayNameFor(rendered.purpose),
                         avatarURL: this.avatarUrl()
                     });
                     continue;
@@ -249,11 +290,24 @@ export class NotificationDispatcher {
                     this.logger.warn({ err: error, purpose: rendered.purpose }, "webhook dispatch failed");
                 }
             } else if (channel !== null) {
-                // telemetry and moderation logs must never post under bot user identity
-                const webhookOnlyPurposes = new Set([ChannelPurpose.Telemetry, ChannelPurpose.ModerationLogs]);
+                // telemetry, alerts, and logs must never post under bot user identity
+                const webhookOnlyPurposes = new Set([
+                    ChannelPurpose.Telemetry,
+                    ChannelPurpose.SecurityAlerts,
+                    ChannelPurpose.ModerationLogs,
+                    ChannelPurpose.TaskLogs,
+                    ChannelPurpose.VotingLogs,
+                    ChannelPurpose.UserLogs,
+                    ChannelPurpose.SystemLogs
+                ]);
                 if (!webhookOnlyPurposes.has(rendered.purpose)) {
                     await channel.send(rendered.message);
                 }
+            } else {
+                this.logger.warn(
+                    { purpose: rendered.purpose, type: notification.type },
+                    "dropped notification: channel and webhook unresolved"
+                );
             }
         }
     }
@@ -528,7 +582,37 @@ export class NotificationDispatcher {
     }
 
     private async channel(purpose: ChannelPurpose): Promise<SendableChannels | null> {
-        const id = this.settings.channel(purpose);
+        let id = this.settings.channel(purpose);
+        if (id === undefined) {
+            const guild =
+                this.client.guilds?.cache?.get?.(this.guildId) ?? (await this.client.guilds?.fetch?.(this.guildId).catch(() => null));
+            if (guild !== null && guild !== undefined && guild.channels?.cache !== undefined) {
+                const purposeAliases: Record<string, readonly string[]> = {
+                    [ChannelPurpose.Announcements]: ["announcements", "announcement", "studio-announcements"],
+                    [ChannelPurpose.ProductionAnnouncements]: ["production-announcements", "production-news", "contributor-announcements"],
+                    [ChannelPurpose.Telemetry]: ["telemetry-alerts", "telemetry", "security-alerts", "bot-alerts", "alerts"],
+                    [ChannelPurpose.SecurityAlerts]: ["security-alerts", "telemetry-alerts", "telemetry", "bot-alerts", "alerts"],
+                    [ChannelPurpose.ModerationLogs]: ["moderation-logs", "mod-logs", "supervisor-logs", "mod-log"],
+                    [ChannelPurpose.TaskLogs]: ["task-logs", "tasks-logs", "tasks", "grabbox-logs"],
+                    [ChannelPurpose.VotingLogs]: ["voting-logs", "vote-logs", "voting"],
+                    [ChannelPurpose.UserLogs]: ["user-logs", "users-logs", "role-logs", "users"],
+                    [ChannelPurpose.SystemLogs]: ["system-logs", "pipeline-logs", "system"]
+                };
+                const aliases = purposeAliases[purpose] ?? [purpose.toLowerCase()];
+                const found = guild.channels.cache.find(
+                    (ch) =>
+                        ch?.isTextBased?.() &&
+                        !ch?.isDMBased?.() &&
+                        aliases.some((alias) => normalizeName(alias) === normalizeName(ch.name))
+                );
+                if (found !== undefined) {
+                    id = found.id;
+                    void this.settings.update((s) => {
+                        s.channels[purpose] = found.id;
+                    });
+                }
+            }
+        }
         if (id === undefined) {
             return null;
         }
@@ -537,5 +621,45 @@ export class NotificationDispatcher {
             return null;
         }
         return channel;
+    }
+
+    public async sendStaffTestProbe(): Promise<{ name: string; success: boolean; error?: string }[]> {
+        const testPurposes: [ChannelPurpose, string][] = [
+            [ChannelPurpose.TaskLogs, "#task-logs"],
+            [ChannelPurpose.VotingLogs, "#voting-logs"],
+            [ChannelPurpose.UserLogs, "#user-logs"],
+            [ChannelPurpose.SecurityAlerts, "#security-alerts"],
+            [ChannelPurpose.SystemLogs, "#system-logs"],
+            [ChannelPurpose.ModerationLogs, "#moderation-logs"]
+        ];
+
+        const testContent = message(panel(Accent.Info, "**test**", "Verification probe across staff logging channels."));
+
+        const results: { name: string; success: boolean; error?: string }[] = [];
+
+        for (const [purpose, label] of testPurposes) {
+            try {
+                const channel = await this.channel(purpose);
+                const webhook = await this.resolveWebhook(purpose, channel);
+                if (webhook !== null) {
+                    await webhook.send({
+                        flags: testContent.flags,
+                        components: testContent.components,
+                        allowedMentions: { parse: [] },
+                        withComponents: true,
+                        username: this.displayNameFor(purpose),
+                        avatarURL: this.avatarUrl()
+                    });
+                    results.push({ name: label, success: true });
+                } else {
+                    results.push({ name: label, success: false, error: "Webhook or channel unconfigured" });
+                }
+            } catch (err: unknown) {
+                const errMsg = err instanceof Error ? err.message : "Dispatch failed";
+                results.push({ name: label, success: false, error: errMsg });
+            }
+        }
+
+        return results;
     }
 }

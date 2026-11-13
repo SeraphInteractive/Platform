@@ -118,6 +118,17 @@ export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceConta
                     );
                 }
                 webhookTargets.push({ name: "global", url: globalWebhook });
+            } else if (target === "production") {
+                const [settings] = await database.select().from(discordSettings).limit(1);
+                const prodWebhook = settings?.webhooks?.productionAnnouncements ?? settings?.webhooks?.["production-announcements"];
+                if (!prodWebhook) {
+                    throw new ApplicationError(
+                        400,
+                        ErrorCode.BadRequest,
+                        "Production announcements webhook is not configured in Discord settings."
+                    );
+                }
+                webhookTargets.push({ name: "production-announcements", url: prodWebhook });
             } else if (target === "all_departments") {
                 const rows = await database
                     .select({
@@ -135,7 +146,7 @@ export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceConta
                 }
 
                 if (webhookTargets.length === 0) {
-                    throw new ApplicationError(400, ErrorCode.BadRequest, "No department info webhooks are configured yet.");
+                    throw new ApplicationError(400, ErrorCode.BadRequest, "No department announcement webhooks are configured yet.");
                 }
             } else if (target.startsWith("department:")) {
                 const slug = target.replace(/^department:/u, "").trim();
@@ -153,7 +164,11 @@ export const announcementsRoutes: FastifyPluginAsyncZod<{ services: ServiceConta
                     throw new NotFoundError("Department");
                 }
                 if (!row.webhookUrl) {
-                    throw new ApplicationError(400, ErrorCode.BadRequest, `No info webhook is configured for department ${row.deptName}.`);
+                    throw new ApplicationError(
+                        400,
+                        ErrorCode.BadRequest,
+                        `No announcement webhook is configured for department ${row.deptName}.`
+                    );
                 }
                 webhookTargets.push({ name: row.deptName, url: row.webhookUrl });
             } else {

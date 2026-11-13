@@ -109,15 +109,19 @@ export function describeWinner(notification: NotificationOf<NotificationType.Rou
 }
 
 export function renderNotification(notification: PlatformNotification, context: NotificationContext): RenderedNotification[] {
-    const telemetry = ChannelPurpose.Telemetry;
+    const userLogs = ChannelPurpose.UserLogs;
+    const votingLogs = ChannelPurpose.VotingLogs;
+    const securityAlerts = ChannelPurpose.SecurityAlerts;
+    const taskLogs = ChannelPurpose.TaskLogs;
+    const systemLogs = ChannelPurpose.SystemLogs;
     const isMember = context.isMember;
     switch (notification.type) {
         case NotificationType.BallotSubmitted:
-            return [post(telemetry, null, `**Vote in ${plain(notification.round.title)}**`, describeBallot(notification, context))];
+            return [post(votingLogs, null, `**Vote in ${plain(notification.round.title)}**`, describeBallot(notification, context))];
         case NotificationType.BallotBlocked:
             return [
                 post(
-                    telemetry,
+                    votingLogs,
                     Accent.Danger,
                     `**Blocked vote in ${plain(notification.round.title)}**`,
                     `${person(notification.voter, isMember)} is banned from voting.`,
@@ -127,7 +131,7 @@ export function renderNotification(notification: PlatformNotification, context: 
         case NotificationType.UserBlacklisted:
             return [
                 post(
-                    telemetry,
+                    userLogs,
                     Accent.Danger,
                     "**Banned from voting**",
                     `${person(notification.user, isMember)}, by ${person(notification.actor, isMember)}`,
@@ -137,7 +141,7 @@ export function renderNotification(notification: PlatformNotification, context: 
         case NotificationType.UserReinstated:
             return [
                 post(
-                    telemetry,
+                    userLogs,
                     Accent.Success,
                     "**Voting ban lifted**",
                     `${person(notification.user, isMember)}, by ${person(notification.actor, isMember)}`
@@ -153,7 +157,7 @@ export function renderNotification(notification: PlatformNotification, context: 
             if (prev !== undefined && rankOfRole(notification.role) < rankOfRole(prev)) {
                 return [
                     post(
-                        telemetry,
+                        userLogs,
                         Accent.Warning,
                         "**User Demoted**",
                         `${userText} was demoted from **${roleLabel(prev)}** to **${role}**, by ${actorText}`
@@ -164,7 +168,7 @@ export function renderNotification(notification: PlatformNotification, context: 
             if (prev !== undefined && rankOfRole(notification.role) > rankOfRole(prev)) {
                 return [
                     post(
-                        telemetry,
+                        userLogs,
                         Accent.Success,
                         "**User Promoted**",
                         `${userText} was promoted from **${roleLabel(prev)}** to **${role}**${specialties}, by ${actorText}`
@@ -172,14 +176,14 @@ export function renderNotification(notification: PlatformNotification, context: 
                 ];
             }
 
-            return [post(telemetry, Accent.Info, "**User Role Updated**", `${userText} is now **${role}**${specialties}, by ${actorText}`)];
+            return [post(userLogs, Accent.Info, "**User Role Updated**", `${userText} is now **${role}**${specialties}, by ${actorText}`)];
         }
         case NotificationType.ContributorPromoted:
-            return [post(telemetry, Accent.Success, `${person(notification.user, isMember)} is now a senior contributor.`)];
+            return [post(userLogs, Accent.Success, `${person(notification.user, isMember)} is now a senior contributor.`)];
         case NotificationType.RaidAlert:
             return [
                 post(
-                    telemetry,
+                    securityAlerts,
                     notification.quarantined ? Accent.Danger : Accent.Warning,
                     `**${notification.quarantined ? "Quarantined" : "Unusual voting on"} ${plain(notification.entry.title)}**`,
                     `In ${plain(notification.round.title)}. ${describeRaid(notification)}`
@@ -188,7 +192,7 @@ export function renderNotification(notification: PlatformNotification, context: 
         case NotificationType.RoundCreated:
             return [
                 post(
-                    telemetry,
+                    votingLogs,
                     Accent.Info,
                     `**New round: ${plain(notification.round.title)}**`,
                     `${notification.round.pollType === PollType.Binary ? "Binary" : "Ranked choice"}, ${describeSchedule(notification.opensAt, notification.closesAt)}`,
@@ -198,7 +202,7 @@ export function renderNotification(notification: PlatformNotification, context: 
         case NotificationType.RoundUpdated:
             return [
                 post(
-                    telemetry,
+                    votingLogs,
                     Accent.Info,
                     `**Round updated: ${plain(notification.round.title)}**`,
                     `${notification.round.pollType === PollType.Binary ? "Binary" : "Ranked choice"}, ${describeSchedule(notification.opensAt, notification.closesAt)}`,
@@ -208,7 +212,7 @@ export function renderNotification(notification: PlatformNotification, context: 
         case NotificationType.RoundDeleted:
             return [
                 post(
-                    telemetry,
+                    votingLogs,
                     Accent.Warning,
                     `**Round deleted: ${plain(notification.round.title)}**`,
                     `-# Deleted by ${person(notification.actor, isMember)}`
@@ -217,7 +221,7 @@ export function renderNotification(notification: PlatformNotification, context: 
         case NotificationType.RoundStatusChanged: {
             const posts: RenderedNotification[] = [
                 post(
-                    telemetry,
+                    votingLogs,
                     notification.to === RoundStatus.Voting || notification.to === RoundStatus.Open ? Accent.Success : null,
                     `**${plain(notification.round.title)} ${statusVerbs[notification.to]}**`,
                     `-# By ${person(notification.actor, isMember)}`
@@ -260,7 +264,7 @@ export function renderNotification(notification: PlatformNotification, context: 
         case NotificationType.EntrySubmitted:
             return [
                 post(
-                    telemetry,
+                    votingLogs,
                     null,
                     `**New entry in ${plain(notification.round.title)}**`,
                     `${plain(notification.entry.title)} by ${person(notification.author, isMember)}`,
@@ -271,7 +275,7 @@ export function renderNotification(notification: PlatformNotification, context: 
         case NotificationType.EntryUpdated:
             return [
                 post(
-                    telemetry,
+                    votingLogs,
                     Accent.Info,
                     `**Entry updated in ${plain(notification.round.title)}**`,
                     plain(notification.entry.title),
@@ -282,7 +286,7 @@ export function renderNotification(notification: PlatformNotification, context: 
         case NotificationType.EntryDeleted:
             return [
                 post(
-                    telemetry,
+                    votingLogs,
                     Accent.Warning,
                     `**Entry deleted in ${plain(notification.round.title)}**`,
                     plain(notification.entry.title),
@@ -293,7 +297,7 @@ export function renderNotification(notification: PlatformNotification, context: 
             const headline = entryStatusHeadlines[notification.status];
             return [
                 post(
-                    telemetry,
+                    votingLogs,
                     headline.accent,
                     `**${headline.title}**`,
                     `${plain(notification.entry.title)} in ${plain(notification.round.title)}`,
@@ -305,7 +309,7 @@ export function renderNotification(notification: PlatformNotification, context: 
         case NotificationType.EntryReinstated:
             return [
                 post(
-                    telemetry,
+                    votingLogs,
                     Accent.Success,
                     "**Entry reinstated**",
                     `${plain(notification.entry.title)} is back on the ballot in ${plain(notification.round.title)}.`,
@@ -317,7 +321,7 @@ export function renderNotification(notification: PlatformNotification, context: 
             const link = taskLink(notification.shot.code, context.webAppUrl);
             return [
                 post(
-                    telemetry,
+                    taskLogs,
                     Accent.Info,
                     `**Task created: ${link} - ${plain(notification.shot.title)}**`,
                     `Difficulty: ${capitalize(notification.shot.difficulty)} | Scene: ${notification.shot.sceneNumber}`
@@ -328,7 +332,7 @@ export function renderNotification(notification: PlatformNotification, context: 
             const link = taskLink(notification.shot.code, context.webAppUrl);
             return [
                 post(
-                    telemetry,
+                    taskLogs,
                     Accent.Info,
                     `**Task updated: ${link} - ${plain(notification.shot.title)}**`,
                     `Difficulty: ${capitalize(notification.shot.difficulty)} | Scene: ${notification.shot.sceneNumber}`
@@ -338,7 +342,7 @@ export function renderNotification(notification: PlatformNotification, context: 
         case NotificationType.ShotDeleted: {
             return [
                 post(
-                    telemetry,
+                    taskLogs,
                     Accent.Warning,
                     `**Task deleted: ${plain(notification.shot.code)} - ${plain(notification.shot.title)}**`,
                     `Scene: ${notification.shot.sceneNumber}`
@@ -349,7 +353,7 @@ export function renderNotification(notification: PlatformNotification, context: 
             const link = taskLink(notification.shot.code, context.webAppUrl);
             return [
                 post(
-                    telemetry,
+                    taskLogs,
                     Accent.Info,
                     `**Task claimed: ${link} - ${plain(notification.shot.title)}**`,
                     `Claimed by ${person(notification.claimant, isMember)}.`,
@@ -362,7 +366,7 @@ export function renderNotification(notification: PlatformNotification, context: 
             const reasonLine = notification.reason ? `\n> ${plain(notification.reason)}` : "";
             return [
                 post(
-                    telemetry,
+                    taskLogs,
                     Accent.Warning,
                     `**Task released: ${link} - ${plain(notification.shot.title)}**`,
                     `Released by ${person(notification.actor, isMember)}. The task is open again.${reasonLine}`
@@ -374,7 +378,7 @@ export function renderNotification(notification: PlatformNotification, context: 
             const who = notification.claimant ? ` Claim by ${person(notification.claimant, isMember)} expired.` : " Claim expired.";
             return [
                 post(
-                    telemetry,
+                    taskLogs,
                     Accent.Danger,
                     `**Task claim expired: ${link} - ${plain(notification.shot.title)}**`,
                     `${who} The task is open again.`
@@ -386,7 +390,7 @@ export function renderNotification(notification: PlatformNotification, context: 
             const notesLine = notification.notes ? `\n> ${plain(notification.notes)}` : "";
             return [
                 post(
-                    telemetry,
+                    taskLogs,
                     Accent.Info,
                     `**Deliverable submitted: ${link} - ${plain(notification.shot.title)} (v${notification.version})**`,
                     `Submitted by ${person(notification.contributor, isMember)} for supervisor review.${notesLine}`
@@ -401,7 +405,7 @@ export function renderNotification(notification: PlatformNotification, context: 
             const notesLine = notification.notes ? `\n> ${plain(notification.notes)}` : "";
             return [
                 post(
-                    telemetry,
+                    taskLogs,
                     accent,
                     `**${title}: ${link} - ${plain(notification.shot.title)} (v${notification.version})**`,
                     `Reviewed by ${person(notification.reviewer, isMember)}. Contributor: ${person(notification.contributor, isMember)}.${notesLine}`
@@ -410,7 +414,7 @@ export function renderNotification(notification: PlatformNotification, context: 
         }
         case NotificationType.PipelineUpdated: {
             const telemetryPost = post(
-                telemetry,
+                systemLogs,
                 Accent.Info,
                 `**Pipeline update: Step ${plain(notification.stepId)} - ${plain(notification.stepTitle)}**`,
                 `In **${plain(notification.phaseTitle)}** (${notification.progressPercent}% completed).`,
@@ -435,7 +439,7 @@ export function renderNotification(notification: PlatformNotification, context: 
             const flagLines = notification.flags.map((flag) => `• ${plain(flag, 120)}`).join("\n");
             return [
                 post(
-                    ChannelPurpose.Telemetry,
+                    securityAlerts,
                     Accent.Warning,
                     `**AI signatures detected:** ${kindLabel} "${plain(notification.title, 80)}"`,
                     `Uploaded by ${person(notification.author, isMember)}`,
@@ -445,7 +449,7 @@ export function renderNotification(notification: PlatformNotification, context: 
             ];
         }
         case NotificationType.TicketConfigUpdated:
-            return [post(telemetry, Accent.Info, "**Desk Configuration Updated**", `Updated by ${person(notification.actor, isMember)}`)];
+            return [post(systemLogs, Accent.Info, "**Desk Configuration Updated**", `Updated by ${person(notification.actor, isMember)}`)];
         case NotificationType.TicketActivity: {
             const targetDesc = notification.target !== null ? ` for ${person(notification.target, isMember)}` : "";
             const stageDesc = notification.stage !== null ? ` (Stage: ${notification.stage})` : "";
@@ -462,7 +466,7 @@ export function renderNotification(notification: PlatformNotification, context: 
         case NotificationType.FeedbackSurveyOpened:
             return [
                 post(
-                    telemetry,
+                    systemLogs,
                     Accent.Info,
                     "**Feedback Survey Opened**",
                     `Survey \`${notification.surveyId.slice(0, 8)}\` is now open for responses.`
@@ -470,15 +474,20 @@ export function renderNotification(notification: PlatformNotification, context: 
             ];
         case NotificationType.FeedbackSurveyClosed:
             return [
-                post(telemetry, Accent.Info, "**Feedback Survey Closed**", `Survey \`${notification.surveyId.slice(0, 8)}\` has concluded.`)
+                post(
+                    systemLogs,
+                    Accent.Info,
+                    "**Feedback Survey Closed**",
+                    `Survey \`${notification.surveyId.slice(0, 8)}\` is now closed.`
+                )
             ];
         case NotificationType.FeedbackOutcomeRecorded:
             return [
                 post(
-                    telemetry,
+                    systemLogs,
                     Accent.Success,
                     "**Feedback Outcome Recorded**",
-                    `Survey \`${notification.surveyId.slice(0, 8)}\` results compiled.`
+                    `Survey \`${notification.surveyId.slice(0, 8)}\` outcome has been finalized.`
                 )
             ];
         case NotificationType.DocumentUpdated: {
@@ -486,7 +495,7 @@ export function renderNotification(notification: PlatformNotification, context: 
                 notification.note !== null && notification.note.trim().length > 0 ? `\n-# Note: ${plain(notification.note, 200)}` : "";
             return [
                 post(
-                    ChannelPurpose.Telemetry,
+                    systemLogs,
                     Accent.Info,
                     `**${plain(notification.title)} Published (Rev #${notification.revision})**`,
                     `Published by ${person(notification.actor, isMember)}${noteText}`
@@ -497,7 +506,7 @@ export function renderNotification(notification: PlatformNotification, context: 
             const dest = notification.channels && notification.channels.length > 0 ? notification.channels.join(", ") : notification.target;
             return [
                 post(
-                    telemetry,
+                    systemLogs,
                     Accent.Info,
                     `**Announcement published: ${plain(notification.title)}**`,
                     `Target: ${dest}`,
