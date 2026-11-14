@@ -6,7 +6,6 @@ import {
     type CategoryChannel,
     type ForumChannel,
     type Guild,
-    type GuildBasedChannel,
     type OverwriteResolvable,
     type PermissionOverwriteOptions,
     type Role as DiscordRole,
@@ -219,6 +218,11 @@ export class ServerProvisioner {
             delete settings.channels.welcome;
             delete settings.channels.taskSubmissions;
             delete settings.channels.taskForum;
+            delete settings.channels.rules;
+            delete settings.rulesMessageId;
+            if (settings.webhooks) {
+                delete settings.webhooks.rules;
+            }
 
             const member = roles.find((role) => findStudioRole(role.name)?.name === "Members");
             const voter = roles.find((role) => findStudioRole(role.name)?.name === "Voters");
@@ -226,8 +230,12 @@ export class ServerProvisioner {
             settings.roles[BoundRole.Member] ??= member?.id;
             settings.roles[BoundRole.Voter] ??= voter?.id;
             settings.roles[BoundRole.Contributor] ??= contributor?.id;
+            const infoBoardAliases = ["information-board", "informationboard", "information", "info-board", "infoboard", "platform"];
             const platformCategory = channels.find(
-                (channel) => channel !== null && channel.type === ChannelType.GuildCategory && normalizeName(channel.name) === "platform"
+                (channel) =>
+                    channel !== null &&
+                    channel.type === ChannelType.GuildCategory &&
+                    infoBoardAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
             );
             const staffCategory = channels.find(
                 (channel) => channel !== null && channel.type === ChannelType.GuildCategory && normalizeName(channel.name) === "staff"
@@ -449,10 +457,6 @@ export class ServerProvisioner {
         const everyone = guild.roles.everyone.id;
         const channels = await guild.channels.fetch();
 
-        const find = (name: string, type: ChannelType): GuildBasedChannel | undefined =>
-            channels.find((channel) => channel !== null && channel.type === type && normalizeName(channel.name) === normalizeName(name)) ??
-            undefined;
-
         const applyOverwrites = async (
             channel: TextChannel | VoiceChannel | CategoryChannel,
             overwrites: OverwriteResolvable[]
@@ -467,8 +471,18 @@ export class ServerProvisioner {
             }
         };
 
-        const ensureCategory = async (name: string, overwrites: OverwriteResolvable[]): Promise<CategoryChannel> => {
-            const existing = find(name, ChannelType.GuildCategory);
+        const ensureCategory = async (
+            name: string,
+            overwrites: OverwriteResolvable[],
+            aliases: readonly string[] = []
+        ): Promise<CategoryChannel> => {
+            const allAliases = [name, ...aliases];
+            const existing = channels.find(
+                (channel) =>
+                    channel !== null &&
+                    channel.type === ChannelType.GuildCategory &&
+                    allAliases.some((alias) => normalizeName(alias) === normalizeName(channel.name))
+            ) as CategoryChannel | undefined;
             if (existing?.type === ChannelType.GuildCategory) {
                 if (overwrites.length > 0) {
                     await applyOverwrites(existing, overwrites);
@@ -489,7 +503,8 @@ export class ServerProvisioner {
             aliases: readonly string[],
             parent: CategoryChannel,
             topic: string,
-            overwrites: OverwriteResolvable[]
+            overwrites: OverwriteResolvable[],
+            preserveExistingConfig = false
         ): Promise<TextChannel> => {
             const existing = channels.find((channel) => {
                 if (channel === null || channel.type !== ChannelType.GuildText || channel.parentId !== parent.id) {
@@ -501,11 +516,13 @@ export class ServerProvisioner {
 
             if (existing !== undefined) {
                 // leave parent intact to preserve existing channel hierarchy
-                if (existing.name !== name) {
+                if (!preserveExistingConfig && existing.name !== name) {
                     await existing.setName(name, "Normalize channel name").catch(() => undefined);
                 }
                 boundChannels.push(`#${existing.name}`);
-                await applyOverwrites(existing, overwrites);
+                if (!preserveExistingConfig) {
+                    await applyOverwrites(existing, overwrites);
+                }
                 return existing;
             }
             createdChannels.push(`#${name}`);
@@ -556,16 +573,19 @@ export class ServerProvisioner {
             purpose: SystemChannelPurpose,
             parent: CategoryChannel,
             topic: string,
-            overwrites: OverwriteResolvable[]
+            overwrites: OverwriteResolvable[],
+            preserveExistingConfig = false
         ): Promise<TextChannel> => {
             const configuredId = this.settings.channel(purpose);
             const channelById = configuredId !== undefined ? channels.get(configuredId) : undefined;
             if (channelById?.type === ChannelType.GuildText) {
                 boundChannels.push(`#${channelById.name}`);
-                await applyOverwrites(channelById, overwrites);
+                if (!preserveExistingConfig) {
+                    await applyOverwrites(channelById, overwrites);
+                }
                 return channelById;
             }
-            return ensureNamedText(channelNames[purpose], channelAliases[purpose], parent, topic, overwrites);
+            return ensureNamedText(channelNames[purpose], channelAliases[purpose], parent, topic, overwrites, preserveExistingConfig);
         };
 
         const botAccess: OverwriteResolvable = {
@@ -597,14 +617,19 @@ export class ServerProvisioner {
 
         // retain legacy channels to prevent destructive loss during setup
 
-        const platform = await ensureCategory("Platform", []);
-        const staff = await ensureCategory("Staff", privateOverwrites);
+        const platform = await ensureCategory(
+            "Information Board",
+            [],
+            ["information-board", "information", "info-board", "platform", "infoboard"]
+        );
+        const staff = await ensureCategory("Staff", privateOverwrites, ["staff"]);
 
         const announcements = await ensureText(
             ChannelPurpose.Announcements,
             platform,
             "Round results and studio news.",
-            readOnlyOverwrites
+            readOnlyOverwrites,
+            true
         );
 
         const announcementsRes = await reconcileWebhookOnChannel(announcements, "Studio Announcements", botId, true, this.logger);
@@ -712,7 +737,7 @@ export class ServerProvisioner {
             botAccess
         ];
 
-        const production = await ensureCategory("Production", productionCategoryOverwrites);
+        const production = await ensureCategory("Production", productionCategoryOverwrites, ["production"]);
 
         // production announcements channel (webhook-driven, read-only for contributors)
         const productionAnnouncementsOverwrites: OverwriteResolvable[] = [
@@ -803,7 +828,7 @@ export class ServerProvisioner {
                 const depts = await this.api.listDepartments();
                 for (const dept of depts) {
                     const prefix = departmentChannelPrefix[dept.slug] ?? dept.slug;
-                    const category = await ensureCategory(dept.name, []);
+                    const category = await ensureCategory(dept.name, [], [dept.slug]);
 
                     const deptSpecialties = new Set([...dept.contributorSpecialties, ...dept.supervisorSpecialties]);
                     const deptRoles = studioRoles
@@ -1204,8 +1229,13 @@ export class ServerProvisioner {
                     if (typeof hook.delete !== "function") {
                         continue;
                     }
+                    // preserve all webhooks in non-announcements channels under Information Board
+                    const hookChannel = channels.get(hook.channelId);
+                    if (hookChannel?.parentId === platform.id && hook.channelId !== announcements.id) {
+                        continue;
+                    }
                     const isBotOwned = botId !== undefined && hook.owner?.id === botId;
-                    const isStudioNamed = /studio|stairway|grabbox|rules/i.test(hook.name);
+                    const isStudioNamed = /studio|stairway|grabbox/i.test(hook.name);
                     if (hook.name === "Stairway Tickets") {
                         continue;
                     }

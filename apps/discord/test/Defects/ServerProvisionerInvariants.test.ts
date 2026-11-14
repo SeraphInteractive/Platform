@@ -11,6 +11,12 @@ interface MockChannelData {
     name: string;
     type: ChannelType;
     parentId?: string;
+    permissionOverwrites: {
+        create: ReturnType<typeof vi.fn>;
+        set: ReturnType<typeof vi.fn>;
+    };
+    setName: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
     [key: string]: unknown;
 }
 
@@ -812,5 +818,102 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
         await provisioner.provision(mockGuild);
 
         expect(legacyArtInfo.setName).toHaveBeenCalledWith("art-announcements", "Rename to department announcements");
+    });
+
+    it("preserves preexisting information board channels and configures announcements webhook without renaming or overwriting perms", async () => {
+        const infoBoardCategory = mockChannel("info-board-id", "Information Board", ChannelType.GuildCategory);
+        const rulesChan = mockChannel("rules-id", "📜rules", ChannelType.GuildText, infoBoardCategory.id);
+        const projInfoChan = mockChannel("proj-id", "📝project-information", ChannelType.GuildText, infoBoardCategory.id);
+        const faqChan = mockChannel("faq-id", "🔍faq", ChannelType.GuildText, infoBoardCategory.id);
+        const announceChan = mockChannel("announce-id", "📢announcements", ChannelType.GuildText, infoBoardCategory.id);
+        const qnaChan = mockChannel("qna-id", "🤔qna", ChannelType.GuildText, infoBoardCategory.id);
+        const ticketsChan = mockChannel("tickets-id", "🎟️tickets", ChannelType.GuildText, infoBoardCategory.id);
+        const stairboardChan = mockChannel("stairboard-id", "🪜stairboard", ChannelType.GuildText, infoBoardCategory.id);
+
+        const customTicketsHook = {
+            id: "custom-tickets-hook-id",
+            name: "Ticket Dispatcher",
+            channelId: ticketsChan.id,
+            url: "https://discord.com/api/webhooks/100000000000000099/mock_token",
+            delete: vi.fn().mockResolvedValue(undefined)
+        };
+
+        const channels = new Collection<string, GuildBasedChannel>();
+        for (const ch of [infoBoardCategory, rulesChan, projInfoChan, faqChan, announceChan, qnaChan, ticketsChan, stairboardChan]) {
+            channels.set(ch.id, ch as never);
+        }
+
+        const guildWebhooks = new Collection<string, unknown>();
+        guildWebhooks.set(customTicketsHook.id, customTicketsHook);
+
+        const mockGuild = {
+            id: "guild-1",
+            client: { user: { id: "bot-user-1" } },
+            roles: {
+                everyone: { id: "everyone-role-id" },
+                fetch: vi.fn().mockResolvedValue(new Collection<string, Role>()),
+                create: vi.fn().mockImplementation((opts: { name: string }) =>
+                    Promise.resolve({
+                        id: `role-${opts.name}`,
+                        name: opts.name,
+                        hoist: false,
+                        setHoist: vi.fn(),
+                        setPermissions: vi.fn()
+                    })
+                )
+            },
+            channels: {
+                fetch: vi.fn().mockResolvedValue(channels),
+                create: vi.fn().mockImplementation((opts: { name: string; type: ChannelType; parent?: string }) => {
+                    const chan = mockChannel(`chan-${opts.name}`, opts.name, opts.type, opts.parent);
+                    channels.set(chan.id, chan as never);
+                    return Promise.resolve(chan);
+                })
+            },
+            fetchWebhooks: vi.fn().mockResolvedValue(guildWebhooks)
+        } as unknown as Guild;
+
+        const mockApi = {
+            listDepartments: vi.fn().mockResolvedValue([]),
+            bindDepartmentDiscordMap: vi.fn().mockResolvedValue(undefined),
+            updateDiscordSettings: vi.fn().mockResolvedValue({}),
+            getDocument: vi.fn().mockRejectedValue(new Error("no docs"))
+        };
+
+        const provisioner = new ServerProvisioner(
+            settings,
+            { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } as never,
+            undefined,
+            mockApi as never
+        );
+
+        const summary = await provisioner.provision(mockGuild);
+
+        // invariant: information board category was discovered and not recreated as platform
+        const createdCategoryNames = (mockGuild.channels.create as ReturnType<typeof vi.fn>).mock.calls
+            .filter((c: unknown[]) => (c[0] as { type: ChannelType }).type === ChannelType.GuildCategory)
+            .map((c: unknown[]) => (c[0] as { name: string }).name);
+        expect(createdCategoryNames).not.toContain("Platform");
+        expect(createdCategoryNames).not.toContain("Information Board");
+
+        // invariant: announcements was bound with custom emoji name preserved and perms not overwritten
+        expect(announceChan.setName).not.toHaveBeenCalled();
+        expect(announceChan.permissionOverwrites.create).not.toHaveBeenCalled();
+        expect(summary.boundChannels).toContain("#📢announcements");
+
+        // invariant: preexisting channels under information board were never modified or bound
+        for (const untouched of [rulesChan, projInfoChan, faqChan, qnaChan, ticketsChan, stairboardChan]) {
+            expect(untouched.setName).not.toHaveBeenCalled();
+            expect(untouched.delete).not.toHaveBeenCalled();
+            expect(untouched.permissionOverwrites.create).not.toHaveBeenCalled();
+            expect(summary.boundChannels).not.toContain(`#${untouched.name}`);
+        }
+
+        // invariant: webhooks on preexisting information board channels were untouched
+        expect(customTicketsHook.delete).not.toHaveBeenCalled();
+
+        // invariant: settings bound announcements and discarded rules
+        expect(settings.channel(ChannelPurpose.Announcements)).toBe(announceChan.id);
+        expect(settings.channel(ChannelPurpose.Rules)).toBeUndefined();
     });
 });

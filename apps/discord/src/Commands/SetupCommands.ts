@@ -54,19 +54,19 @@ export const botSetupCommand: SlashCommand = {
             "moderation-logs"
         ]);
         const productionChannelNames = new Set(["production-announcements", "production-general", "production-management"]);
-        const platformChannelNames = new Set(["announcements"]);
+        const infoBoardChannelNames = new Set(["announcements"]);
 
         const allCore = [...summary.boundChannels, ...summary.createdChannels].filter((c) => !isDeptChannel(c));
         const cleanCore = Array.from(new Set(allCore.map((c) => (c.startsWith("#") ? c : `#${c}`))));
 
         const staffChannels = cleanCore.filter((c) => staffChannelNames.has(normalizeName(c.replace(/^#/u, ""))));
         const productionChannels = cleanCore.filter((c) => productionChannelNames.has(normalizeName(c.replace(/^#/u, ""))));
-        const platformChannels = cleanCore.filter((c) => platformChannelNames.has(normalizeName(c.replace(/^#/u, ""))));
+        const infoBoardChannels = cleanCore.filter((c) => infoBoardChannelNames.has(normalizeName(c.replace(/^#/u, ""))));
         const otherChannels = cleanCore.filter(
             (c) =>
                 !staffChannelNames.has(normalizeName(c.replace(/^#/u, ""))) &&
                 !productionChannelNames.has(normalizeName(c.replace(/^#/u, ""))) &&
-                !platformChannelNames.has(normalizeName(c.replace(/^#/u, "")))
+                !infoBoardChannelNames.has(normalizeName(c.replace(/^#/u, "")))
         );
 
         if (staffChannels.length > 0) {
@@ -81,9 +81,9 @@ export const botSetupCommand: SlashCommand = {
             lines.push("");
         }
 
-        if (platformChannels.length > 0) {
-            lines.push("**Platform Channels**");
-            lines.push(`- ${platformChannels.join(", ")}`);
+        if (infoBoardChannels.length > 0) {
+            lines.push("**Information Board Channels**");
+            lines.push(`- ${infoBoardChannels.join(", ")}`);
             lines.push("");
         }
 
