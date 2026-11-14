@@ -10,7 +10,8 @@ export default tseslint.config(
             "**/*.config.ts",
             "eslint.config.js",
             "apps/web/**",
-            "apps/script/**"
+            "apps/script/**",
+            "apps/landing/**"
         ]
     },
     eslint.configs.recommended,

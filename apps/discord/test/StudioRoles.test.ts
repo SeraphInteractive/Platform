@@ -57,13 +57,13 @@ function createMockMember(
 }
 
 describe("targetStudioRoleNames", () => {
-    it("returns Members for base members", () => {
-        const names = targetStudioRoleNames(Role.Member, []);
+    it("returns Members for base members and ignores craft specialties", () => {
+        const names = targetStudioRoleNames(Role.Member, [Specialty.Animator]);
         expect(names).toEqual(new Set(["Members"]));
     });
 
-    it("returns Voters for verified voters", () => {
-        const names = targetStudioRoleNames(Role.Voter, []);
+    it("returns Voters for verified voters and ignores craft specialties", () => {
+        const names = targetStudioRoleNames(Role.Voter, [Specialty.Animator, Specialty.Modeler3d]);
         expect(names).toEqual(new Set(["Voters"]));
     });
 
@@ -94,7 +94,7 @@ describe("targetStudioRoleNames", () => {
         expect(producerAdminNames).toEqual(new Set(["Admin", "Producer"]));
 
         const adminWithCraftSpecialty = targetStudioRoleNames(Role.Admin, [Specialty.Animator]);
-        expect(adminWithCraftSpecialty).toEqual(new Set(["Admin", "Animators"]));
+        expect(adminWithCraftSpecialty).toEqual(new Set(["Admin"]));
     });
 });
 
@@ -126,7 +126,7 @@ describe("syncMemberStudioRoles", () => {
         const guildRoles = new Map<string, DiscordRole>([
             ["10", createMockDiscordRole("10", "Observer")],
             ["20", createMockDiscordRole("20", "Supervisors")],
-            ["30", createMockDiscordRole("30", "Animator")],
+            ["30", createMockDiscordRole("30", "Art Director")],
             ["99", createMockDiscordRole("99", "VIP")]
         ]);
 
@@ -137,11 +137,37 @@ describe("syncMemberStudioRoles", () => {
 
         const { member, added, removed } = createMockMember(heldRoles, guildRoles);
 
-        await syncMemberStudioRoles(member, Role.Supervisor, [Specialty.Animator]);
+        await syncMemberStudioRoles(member, Role.Supervisor, [Specialty.ArtDirector]);
 
         expect(removed).toEqual(["10"]);
         expect(new Set(added)).toEqual(new Set(["20", "30"]));
         expect(heldRoles.has("99")).toBe(true);
+    });
+
+    it("strips craft and contributor roles on demotion from Contributor to Voter", async () => {
+        const guildRoles = new Map<string, DiscordRole>([
+            ["1", createMockDiscordRole("1", "Voters")],
+            ["2", createMockDiscordRole("2", "General Contributors")],
+            ["3", createMockDiscordRole("3", "Animators")],
+            ["99", createMockDiscordRole("99", "Server Booster")]
+        ]);
+
+        const heldRoles = new Map<string, DiscordRole>([
+            ["2", guildRoles.get("2")!],
+            ["3", guildRoles.get("3")!],
+            ["99", guildRoles.get("99")!]
+        ]);
+
+        const { member, added, removed } = createMockMember(heldRoles, guildRoles);
+
+        await syncMemberStudioRoles(member, Role.Voter, []);
+
+        expect(new Set(removed)).toEqual(new Set(["2", "3"]));
+        expect(added).toEqual(["1"]);
+        expect(heldRoles.has("99")).toBe(true);
+        expect(heldRoles.has("1")).toBe(true);
+        expect(heldRoles.has("2")).toBe(false);
+        expect(heldRoles.has("3")).toBe(false);
     });
 });
 
@@ -307,8 +333,8 @@ describe("ServerProvisioner hierarchy", () => {
         };
 
         const mockCategory = { id: "cat-1", name: "Animation", type: 4 }; // ChannelType.GuildCategory = 4
-        const mockForum = { id: "forum-1", name: "animation-tasks", type: 15 }; // ChannelType.GuildForum = 15
-        const mockChat = { id: "chat-1", name: "animation", type: 0 }; // ChannelType.GuildText = 0
+        const mockForum = { id: "forum-1", name: "animation-tasks", type: 15, parentId: "cat-1" }; // ChannelType.GuildForum = 15
+        const mockChat = { id: "chat-1", name: "animation", type: 0, parentId: "cat-1" }; // ChannelType.GuildText = 0
 
         function createMockCollection<T>(items: Map<string, T>): {
             find(fn: (item: T) => boolean): T | undefined;
@@ -384,9 +410,9 @@ describe("ServerProvisioner hierarchy", () => {
         };
 
         const mockCategoryAssets = { id: "cat-assets", name: "Assets", type: 4 };
-        const mockForumAssets = { id: "forum-assets", name: "Assets-GrabBox", type: 15 };
+        const mockForumAssets = { id: "forum-assets", name: "Assets-GrabBox", type: 15, parentId: "cat-assets" };
         const mockCategoryVfx = { id: "cat-vfx", name: "Lighting and VFX", type: 4 };
-        const mockForumVfx = { id: "forum-vfx", name: "Lighting-VFX-GrabBox", type: 15 };
+        const mockForumVfx = { id: "forum-vfx", name: "Lighting-VFX-GrabBox", type: 15, parentId: "cat-vfx" };
 
         function createMockCollection<T>(items: Map<string, T>): {
             find(fn: (item: T) => boolean): T | undefined;

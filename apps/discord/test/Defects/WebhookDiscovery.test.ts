@@ -185,7 +185,7 @@ describe("b13: Webhook auto-discovery and bot user fallback", () => {
 
         const dispatcher = new NotificationDispatcher(mockClient, "guild-1", settings, mockForum, mockLogger as never, {
             telemetry:
-                "https://discord.com/api/webhooks/1559537699273179156/3Dn7dB6u4d2sjjfy8NQ1-cuPyDrvrakRWnXUeBXZ5RQuAjC_BfHOdQMW94emdzDlNJ9A"
+                "https://discord.com/api/webhooks/100000000000000001/mock_telemetry_webhook_token_000000000000000000000000000000000000000"
         });
 
         const sampleNotification: PlatformNotification = {
@@ -300,7 +300,7 @@ describe("b13: Webhook auto-discovery and bot user fallback", () => {
                     name: "Assets",
                     slug: "assets",
                     discordLogsWebhookUrl:
-                        "https://discord.com/api/webhooks/1559537699273179157/3Dn7dB6u4d2sjjfy8NQ1-cuPyDrvrakRWnXUeBXZ5RQuAjC_BfHOdQMW94emdzDlNJ9B"
+                        "https://discord.com/api/webhooks/100000000000000002/mock_department_webhook_token_00000000000000000000000000000000000000"
                 }
             ])
         };
@@ -371,7 +371,7 @@ describe("b13: Webhook auto-discovery and bot user fallback", () => {
                     name: "Assets",
                     slug: "assets",
                     discordLogsWebhookUrl:
-                        "https://discord.com/api/webhooks/1559537699273179157/3Dn7dB6u4d2sjjfy8NQ1-cuPyDrvrakRWnXUeBXZ5RQuAjC_BfHOdQMW94emdzDlNJ9B"
+                        "https://discord.com/api/webhooks/100000000000000002/mock_department_webhook_token_00000000000000000000000000000000000000"
                 }
             ])
         };

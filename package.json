@@ -13,12 +13,13 @@
     "scripts": {
         "build": "tsc -b",
         "clean": "tsc -b --clean",
-        "typecheck": "tsc -b && tsc -p tsconfig.eslint.json && npm run typecheck -w @platform/web && npm run typecheck -w @platform/script",
+        "typecheck": "tsc -b && tsc -p tsconfig.eslint.json && npm run typecheck -w @platform/web && npm run typecheck -w @platform/script && npm run typecheck -w @platform/landing",
         "lint": "tsc -b packages/scoring packages/contracts && eslint . && npm run lint -w @platform/web",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "test": "tsc -b packages/scoring packages/contracts && vitest run",
-        "verify": "npm run format:check && npm run lint && npm run typecheck && npm test",
+        "security:secrets": "tsx scripts/CheckSecrets.ts",
+        "verify": "npm run security:secrets && npm run format:check && npm run lint && npm run typecheck && npm test",
         "dev": "tsc -b packages/scoring packages/contracts && npm run dev -w @platform/api",
         "db:generate": "npm run db:generate -w @platform/api",
         "db:migrate": "npm run db:migrate -w @platform/api",
@@ -28,16 +29,18 @@
         "build:web": "tsc -b packages/scoring packages/contracts && npm run build -w @platform/web",
         "dev:script": "tsc -b packages/scoring packages/contracts && npm run dev -w @platform/script",
         "build:script": "tsc -b packages/scoring packages/contracts && npm run build -w @platform/script",
+        "dev:landing": "npm run dev -w @platform/landing",
+        "build:landing": "npm run build -w @platform/landing",
         "dev:discord": "tsc -b packages/scoring packages/contracts && npm run dev -w @platform/discord"
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
-        "@types/node": "^24.19.0",
-        "eslint": "^10.13.0",
+        "@types/node": "^24.19.2",
+        "eslint": "^10.14.0",
         "prettier": "^3.9.10",
         "typescript": "~6.0",
-        "typescript-eslint": "^8.72.0",
-        "vitest": "^5.0.5"
+        "typescript-eslint": "^8.72.1",
+        "vitest": "^5.1.0"
     },
     "overrides": {
         "@esbuild-kit/core-utils": {

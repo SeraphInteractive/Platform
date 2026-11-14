@@ -20,6 +20,14 @@ import { MemberAvatar, MemberPicker, RoleMultiSelect, useDiscordDirectory } from
 import { useSession } from "@/Hooks/UseSession";
 import { cn } from "@/Lib/Utils";
 
+const departmentPrefix: Record<string, string> = {
+    animation: "anim",
+    "art-and-writing": "art",
+    assets: "assets",
+    "lighting-and-vfx": "vfx",
+    "post-production": "post"
+};
+
 export function AnnouncementPublisher(): ReactNode {
     const { user } = useSession();
     const directory = useDiscordDirectory();
@@ -90,10 +98,11 @@ export function AnnouncementPublisher(): ReactNode {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="global">Global Announcements (#announcements)</SelectItem>
-                                    <SelectItem value="all_departments">All Departments (all *-info channels)</SelectItem>
+                                    <SelectItem value="production">Production Announcements (#production-announcements)</SelectItem>
+                                    <SelectItem value="all_departments">All Departments (all *-announcements channels)</SelectItem>
                                     {departments.data?.map((dept) => (
                                         <SelectItem key={dept.id} value={`department:${dept.slug}`}>
-                                            {dept.name} ({dept.slug}-info)
+                                            {dept.name} (#{departmentPrefix[dept.slug] ?? dept.slug}-announcements)
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

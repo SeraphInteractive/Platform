@@ -21,6 +21,20 @@ export const roleLabels: Readonly<Record<Role, string>> = {
     [Role.SuperAdmin]: "Super admin"
 };
 
+export const roleRanks: Readonly<Record<Role, number>> = Object.freeze({
+    [Role.Member]: 0,
+    [Role.Voter]: 1,
+    [Role.Contributor]: 2,
+    [Role.SeniorContributor]: 3,
+    [Role.Supervisor]: 4,
+    [Role.Admin]: 5,
+    [Role.SuperAdmin]: 6
+});
+
+export function rankOfRole(role: Role): number {
+    return roleRanks[role] ?? 0;
+}
+
 export function roleLabel(role: Role): string {
     return roleLabels[role] ?? role;
 }
@@ -177,12 +191,12 @@ export const shotTypeRequiredSpecialties: Readonly<Record<ShotType, readonly Spe
 
 export const supervisorGrantableSpecialties: Readonly<Partial<Record<Specialty, readonly Specialty[]>>> = Object.freeze({
     [Specialty.ArtDirector]: [Specialty.ConceptArtist, Specialty.Screenwriter],
-    [Specialty.ModelingAndSurfacingLead]: [Specialty.SurfaceTextureArtist, Specialty.Modeler3d],
+    [Specialty.ModelingAndSurfacingLead]: [Specialty.SurfaceTextureArtist, Specialty.Modeler3d, Specialty.Rigger],
     [Specialty.ModellingSupervisor]: [Specialty.Modeler3d],
-    [Specialty.RiggingSupervisor]: [Specialty.Rigger],
+    [Specialty.RiggingSupervisor]: [Specialty.Rigger, Specialty.Modeler3d],
     [Specialty.SurfacingLookDevLead]: [Specialty.SurfaceTextureArtist, Specialty.Modeler3d, Specialty.Rigger],
-    [Specialty.LayoutPrevisLead]: [Specialty.LayoutArtist],
-    [Specialty.AnimationSupervisor]: [Specialty.Animator, Specialty.VideoEditor],
+    [Specialty.LayoutPrevisLead]: [Specialty.LayoutArtist, Specialty.Animator],
+    [Specialty.AnimationSupervisor]: [Specialty.Animator, Specialty.LayoutArtist, Specialty.VideoEditor],
     [Specialty.LightingAndVfxLead]: [Specialty.LightingArtist, Specialty.VfxArtist],
     [Specialty.CfxVfxSupervisor]: [Specialty.VfxArtist],
     [Specialty.LightingCompositingSupervisor]: [Specialty.LightingArtist, Specialty.VfxArtist],
@@ -225,6 +239,8 @@ export const selfSelectableSpecialties: readonly Specialty[] = [
     Specialty.VideoEditor
 ];
 
+export const contributorSpecialties: readonly Specialty[] = selfSelectableSpecialties;
+
 export const adminSpecialties: readonly Specialty[] = [
     Specialty.Producer,
     Specialty.CreativeDirector,
@@ -247,7 +263,28 @@ export const exclusiveSpecialties: readonly Specialty[] = [...adminSpecialties, 
 
 export const teamSpecialties: readonly Specialty[] = [Specialty.MediaTeam];
 
-export const assignableSpecialties: readonly Specialty[] = [...adminSpecialties, ...supervisorSpecialties, ...teamSpecialties];
+export const assignableSpecialties: readonly Specialty[] = [
+    ...adminSpecialties,
+    ...supervisorSpecialties,
+    ...teamSpecialties,
+    ...contributorSpecialties
+];
+
+export function allowedSpecialtiesForRole(role: Role): readonly Specialty[] {
+    switch (role) {
+        case Role.SuperAdmin:
+        case Role.Admin:
+            return [...adminSpecialties, ...teamSpecialties];
+        case Role.Supervisor:
+            return [...supervisorSpecialties, ...teamSpecialties];
+        case Role.SeniorContributor:
+        case Role.Contributor:
+            return [...contributorSpecialties, ...teamSpecialties];
+        case Role.Voter:
+        case Role.Member:
+            return [];
+    }
+}
 
 export function specialtyLabel(specialty: Specialty): string {
     if (specialty === Specialty.LightingAndVfxLead) {
