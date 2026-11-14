@@ -1,25 +1,40 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-process.loadEnvFile(fileURLToPath(new URL("../.env", import.meta.url)));
+try {
+    process.loadEnvFile(fileURLToPath(new URL("../.env", import.meta.url)));
+} catch {
+    // env file optional
+}
+
+const allowedDiscordHosts = new Set(["discord.com", "discordapp.com", "canary.discord.com", "ptb.discord.com"]);
+
+interface WebhookTarget {
+    label: string;
+    url: URL;
+}
+
+function sanitizeDiscordWebhookUrl(rawUrl: string): URL | null {
+    try {
+        const parsed = new URL(rawUrl.trim());
+        if (parsed.protocol !== "https:") {
+            return null;
+        }
+        const host = parsed.hostname.toLowerCase();
+        if (!allowedDiscordHosts.has(host)) {
+            return null;
+        }
+        if (!/^\/api\/webhooks\/\d{17,20}\/[A-Za-z0-9_-]{20,80}$/.test(parsed.pathname)) {
+            return null;
+        }
+        parsed.search = "with_components=true";
+        parsed.hash = "";
+        return parsed;
+    } catch {
+        return null;
+    }
+}
 
 async function main(): Promise<void> {
-    const dataDir = process.env.DATA_DIRECTORY ?? "./data";
-    const settingsPath = join(dataDir, "settings.json");
-
-    let webhooks: Record<string, string> = {};
-
-    try {
-        const raw = await readFile(settingsPath, "utf8");
-        const parsed = JSON.parse(raw) as { webhooks?: Record<string, string> };
-        if (parsed && typeof parsed.webhooks === "object" && parsed.webhooks !== null) {
-            webhooks = parsed.webhooks;
-        }
-    } catch {
-        process.stdout.write("could not read settings.json from data directory, checking env...\n");
-    }
-
     const staffWebhookKeys = [
         "taskLogs",
         "task-logs",
@@ -36,19 +51,32 @@ async function main(): Promise<void> {
         "moderation-logs"
     ];
 
-    const targets: { label: string; url: string }[] = [];
+    const targets: WebhookTarget[] = [];
     const seenUrls = new Set<string>();
 
+    const cliUrls = process.argv.slice(2);
+    for (const [index, raw] of cliUrls.entries()) {
+        const parsed = sanitizeDiscordWebhookUrl(raw);
+        if (parsed && !seenUrls.has(parsed.href)) {
+            seenUrls.add(parsed.href);
+            targets.push({ label: `cli-arg-${index + 1}`, url: parsed });
+        }
+    }
+
     for (const key of staffWebhookKeys) {
-        const url = webhooks[key] ?? process.env[`WEBHOOK_${key.toUpperCase().replace(/-/g, "_")}`];
-        if (url && typeof url === "string" && !seenUrls.has(url)) {
-            seenUrls.add(url);
-            targets.push({ label: key, url });
+        const envVal = process.env[`WEBHOOK_${key.toUpperCase().replace(/-/g, "_")}`];
+        if (typeof envVal === "string" && envVal.length > 0) {
+            const parsed = sanitizeDiscordWebhookUrl(envVal);
+            if (parsed && !seenUrls.has(parsed.href)) {
+                seenUrls.add(parsed.href);
+                targets.push({ label: key, url: parsed });
+            }
         }
     }
 
     if (targets.length === 0) {
-        process.stdout.write("no staff webhooks found in settings.json or env variables.\n");
+        process.stdout.write("no valid discord staff webhooks found in arguments or env variables.\n");
+        process.stdout.write("usage: npx tsx scripts/TestStaffWebhooks.ts <webhook_url...> or define WEBHOOK_<PURPOSE>\n");
         return;
     }
 
@@ -70,9 +98,19 @@ async function main(): Promise<void> {
     };
 
     for (const target of targets) {
-        const targetUrl = target.url.includes("?") ? `${target.url}&with_components=true` : `${target.url}?with_components=true`;
+        // redundant host check for static analysis and ssrf guard
+        if (
+            target.url.protocol !== "https:" ||
+            (target.url.hostname !== "discord.com" &&
+                target.url.hostname !== "discordapp.com" &&
+                target.url.hostname !== "canary.discord.com" &&
+                target.url.hostname !== "ptb.discord.com")
+        ) {
+            continue;
+        }
+
         try {
-            const res = await fetch(targetUrl, {
+            const res = await fetch(target.url.href, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
