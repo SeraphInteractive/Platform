@@ -179,7 +179,7 @@ type SystemChannelPurpose =
 const channelNames: Readonly<Record<SystemChannelPurpose, string>> = {
     [ChannelPurpose.Announcements]: "announcements",
     [ChannelPurpose.ProductionAnnouncements]: "production-announcements",
-    [ChannelPurpose.Telemetry]: "telemetry-alerts",
+    [ChannelPurpose.Telemetry]: "security-alerts",
     [ChannelPurpose.SecurityAlerts]: "security-alerts",
     [ChannelPurpose.ModerationLogs]: "moderation-logs",
     [ChannelPurpose.TaskLogs]: "task-logs",
@@ -191,7 +191,7 @@ const channelNames: Readonly<Record<SystemChannelPurpose, string>> = {
 const channelAliases: Readonly<Record<SystemChannelPurpose, readonly string[]>> = {
     [ChannelPurpose.Announcements]: ["announcements", "announcement", "studio-announcements"],
     [ChannelPurpose.ProductionAnnouncements]: ["production-announcements", "production-news", "contributor-announcements"],
-    [ChannelPurpose.Telemetry]: ["telemetry-alerts", "telemetry", "security-alerts", "bot-alerts", "alerts"],
+    [ChannelPurpose.Telemetry]: ["security-alerts", "telemetry-alerts", "telemetry", "bot-alerts", "alerts"],
     [ChannelPurpose.SecurityAlerts]: ["security-alerts", "telemetry-alerts", "telemetry", "bot-alerts", "alerts"],
     [ChannelPurpose.ModerationLogs]: ["moderation-logs", "mod-logs", "supervisor-logs", "mod-log"],
     [ChannelPurpose.TaskLogs]: ["task-logs", "tasks-logs", "tasks", "grabbox-logs"],
@@ -585,8 +585,10 @@ export class ServerProvisioner {
                 // leave parent intact to preserve existing channel hierarchy
                 if (!preserveExistingConfig && existing.name !== name) {
                     await existing.setName(name, "Normalize channel name").catch(() => undefined);
+                    boundChannels.push(`#${name}`);
+                } else {
+                    boundChannels.push(`#${existing.name}`);
                 }
-                boundChannels.push(`#${existing.name}`);
                 if (!preserveExistingConfig) {
                     await applyOverwrites(existing, overwrites);
                 }
@@ -643,16 +645,30 @@ export class ServerProvisioner {
             overwrites: OverwriteResolvable[],
             preserveExistingConfig = false
         ): Promise<TextChannel> => {
-            const configuredId = this.settings.channel(purpose);
+            const configuredId =
+                purpose === ChannelPurpose.SecurityAlerts
+                    ? (this.settings.rawChannel(purpose) ?? this.settings.rawChannel(ChannelPurpose.Telemetry))
+                    : this.settings.rawChannel(purpose);
             const channelById = configuredId !== undefined ? channels.get(configuredId) : undefined;
-            if (channelById?.type === ChannelType.GuildText) {
-                boundChannels.push(`#${channelById.name}`);
+            const targetName = channelNames[purpose];
+            const isValidExisting =
+                channelById?.type === ChannelType.GuildText &&
+                channelById.parentId === parent.id &&
+                channelAliases[purpose].some((alias) => normalizeName(alias) === normalizeName(channelById.name));
+
+            if (isValidExisting && channelById) {
+                if (!preserveExistingConfig && channelById.name !== targetName) {
+                    await channelById.setName(targetName, "Normalize channel name").catch(() => undefined);
+                    boundChannels.push(`#${targetName}`);
+                } else {
+                    boundChannels.push(`#${channelById.name}`);
+                }
                 if (!preserveExistingConfig) {
                     await applyOverwrites(channelById, overwrites);
                 }
                 return channelById;
             }
-            return ensureNamedText(channelNames[purpose], channelAliases[purpose], parent, topic, overwrites, preserveExistingConfig);
+            return ensureNamedText(targetName, channelAliases[purpose], parent, topic, overwrites, preserveExistingConfig);
         };
 
         const botAccess: OverwriteResolvable = {

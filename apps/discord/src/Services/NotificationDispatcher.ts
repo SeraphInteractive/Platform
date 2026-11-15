@@ -623,8 +623,8 @@ export class NotificationDispatcher {
         return channel;
     }
 
-    public async sendStaffTestProbe(): Promise<{ name: string; success: boolean; error?: string }[]> {
-        const testPurposes: [ChannelPurpose, string][] = [
+    public async sendStaffTestProbe(targetPurpose?: ChannelPurpose): Promise<{ name: string; success: boolean; error?: string }[]> {
+        const allPurposes: [ChannelPurpose, string][] = [
             [ChannelPurpose.TaskLogs, "#task-logs"],
             [ChannelPurpose.VotingLogs, "#voting-logs"],
             [ChannelPurpose.UserLogs, "#user-logs"],
@@ -633,7 +633,9 @@ export class NotificationDispatcher {
             [ChannelPurpose.ModerationLogs, "#moderation-logs"]
         ];
 
-        const testContent = message(panel(Accent.Info, "**test**", "Verification probe across staff logging channels."));
+        const testPurposes = targetPurpose !== undefined ? allPurposes.filter(([purpose]) => purpose === targetPurpose) : allPurposes;
+
+        const testContent = message(panel(Accent.Info, "### test", "Verification probe across staff logging channels."));
 
         const results: { name: string; success: boolean; error?: string }[] = [];
 

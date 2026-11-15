@@ -979,4 +979,77 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
         expect(forum.permissionOverwrites.create).not.toHaveBeenCalledWith(everyoneId, expect.anything(), expect.anything());
         expect(forum.permissionOverwrites.create).not.toHaveBeenCalledWith(botId, expect.anything(), expect.anything());
     });
+
+    it("renames existing telemetry-alerts to security-alerts and provisions separate staff logging channels", async () => {
+        const staffCategory = mockChannel("staff-cat-id", "Staff", ChannelType.GuildCategory);
+        const telemetryChannel = mockChannel("telemetry-chan-id", "telemetry-alerts", ChannelType.GuildText, staffCategory.id);
+        const moderationChannel = mockChannel("mod-chan-id", "moderation-logs", ChannelType.GuildText, staffCategory.id);
+
+        const channels = new Collection<string, GuildBasedChannel>();
+        channels.set(staffCategory.id, staffCategory as never);
+        channels.set(telemetryChannel.id, telemetryChannel as never);
+        channels.set(moderationChannel.id, moderationChannel as never);
+
+        const createdChannelNames: string[] = [];
+        const mockGuild = {
+            id: "guild-1",
+            client: { user: { id: "bot-user-1" } },
+            roles: {
+                everyone: {
+                    id: "everyone-role-id",
+                    setPermissions: vi.fn().mockResolvedValue(undefined),
+                    permissions: { equals: vi.fn().mockReturnValue(true) }
+                },
+                fetch: vi.fn().mockResolvedValue(new Collection<string, Role>()),
+                create: vi.fn().mockImplementation((opts: { name: string }) =>
+                    Promise.resolve({
+                        id: `role-${opts.name}`,
+                        name: opts.name,
+                        hoist: false,
+                        setHoist: vi.fn(),
+                        setPermissions: vi.fn()
+                    })
+                )
+            },
+            channels: {
+                fetch: vi.fn().mockResolvedValue(channels),
+                create: vi.fn().mockImplementation((opts: { name: string; type: ChannelType; parent?: string }) => {
+                    createdChannelNames.push(opts.name);
+                    const chan = mockChannel(`chan-${opts.name}`, opts.name, opts.type, opts.parent);
+                    channels.set(chan.id, chan as never);
+                    return Promise.resolve(chan);
+                })
+            }
+        } as unknown as Guild;
+
+        const mockApi = {
+            listDepartments: vi.fn().mockResolvedValue([]),
+            bindDepartmentDiscordMap: vi.fn().mockResolvedValue(undefined),
+            updateDiscordSettings: vi.fn().mockResolvedValue({}),
+            getDocument: vi.fn().mockRejectedValue(new Error("no docs"))
+        };
+
+        const mockLogger = {
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            debug: vi.fn()
+        };
+
+        const provisioner = new ServerProvisioner(settings, mockLogger as never, undefined, mockApi as never);
+        const summary = await provisioner.provision(mockGuild);
+
+        // telemetry-alerts must be renamed to security-alerts
+        expect(telemetryChannel.setName).toHaveBeenCalledWith("security-alerts", "Normalize channel name");
+
+        // separate staff channels must be created rather than collapsed
+        expect(createdChannelNames).toContain("task-logs");
+        expect(createdChannelNames).toContain("voting-logs");
+        expect(createdChannelNames).toContain("user-logs");
+        expect(createdChannelNames).toContain("system-logs");
+
+        // bound channels must include security-alerts and moderation-logs
+        expect(summary.boundChannels).toContain("#security-alerts");
+        expect(summary.boundChannels).toContain("#moderation-logs");
+    });
 });

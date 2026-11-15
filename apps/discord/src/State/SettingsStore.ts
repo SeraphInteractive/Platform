@@ -83,6 +83,10 @@ export class SettingsStore {
         }
     }
 
+    public rawChannel(purpose: ChannelPurpose): string | undefined {
+        return this.settings.channels[purpose];
+    }
+
     public channel(purpose: ChannelPurpose): string | undefined {
         const direct = this.settings.channels[purpose];
         if (direct !== undefined) {
@@ -95,7 +99,7 @@ export class SettingsStore {
             purpose === ChannelPurpose.UserLogs ||
             purpose === ChannelPurpose.SystemLogs
         ) {
-            return this.settings.channels[ChannelPurpose.Telemetry];
+            return this.settings.channels[ChannelPurpose.Telemetry] ?? this.settings.channels[ChannelPurpose.SecurityAlerts];
         }
         if (purpose === ChannelPurpose.Telemetry) {
             return this.settings.channels[ChannelPurpose.SecurityAlerts];
@@ -154,7 +158,9 @@ export class SettingsStore {
                     this.settings.webhooks.taskLogs ??
                     this.settings.webhooks["task-logs"] ??
                     this.settings.webhooks.telemetry ??
-                    this.settings.webhooks["telemetry-alerts"]
+                    this.settings.webhooks["telemetry-alerts"] ??
+                    this.settings.webhooks.securityAlerts ??
+                    this.settings.webhooks["security-alerts"]
                 );
             case "votingLogs":
             case "voting-logs":
@@ -162,7 +168,9 @@ export class SettingsStore {
                     this.settings.webhooks.votingLogs ??
                     this.settings.webhooks["voting-logs"] ??
                     this.settings.webhooks.telemetry ??
-                    this.settings.webhooks["telemetry-alerts"]
+                    this.settings.webhooks["telemetry-alerts"] ??
+                    this.settings.webhooks.securityAlerts ??
+                    this.settings.webhooks["security-alerts"]
                 );
             case "userLogs":
             case "user-logs":
@@ -170,7 +178,9 @@ export class SettingsStore {
                     this.settings.webhooks.userLogs ??
                     this.settings.webhooks["user-logs"] ??
                     this.settings.webhooks.telemetry ??
-                    this.settings.webhooks["telemetry-alerts"]
+                    this.settings.webhooks["telemetry-alerts"] ??
+                    this.settings.webhooks.securityAlerts ??
+                    this.settings.webhooks["security-alerts"]
                 );
             case "systemLogs":
             case "system-logs":
@@ -178,7 +188,9 @@ export class SettingsStore {
                     this.settings.webhooks.systemLogs ??
                     this.settings.webhooks["system-logs"] ??
                     this.settings.webhooks.telemetry ??
-                    this.settings.webhooks["telemetry-alerts"]
+                    this.settings.webhooks["telemetry-alerts"] ??
+                    this.settings.webhooks.securityAlerts ??
+                    this.settings.webhooks["security-alerts"]
                 );
             default:
                 return undefined;

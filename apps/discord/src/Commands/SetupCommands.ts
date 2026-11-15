@@ -170,20 +170,77 @@ export const setAnnouncementsCommand: SlashCommand = {
     }
 };
 
+async function executeTestLogs(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
+    requireManageGuild(interaction);
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const target = interaction.options.getString("channel") ?? "all";
+    const targetPurpose =
+        target === "task-logs"
+            ? ChannelPurpose.TaskLogs
+            : target === "voting-logs"
+              ? ChannelPurpose.VotingLogs
+              : target === "user-logs"
+                ? ChannelPurpose.UserLogs
+                : target === "security-alerts"
+                  ? ChannelPurpose.SecurityAlerts
+                  : target === "system-logs"
+                    ? ChannelPurpose.SystemLogs
+                    : target === "moderation-logs"
+                      ? ChannelPurpose.ModerationLogs
+                      : undefined;
+
+    const results = await context.dispatcher.sendStaffTestProbe(targetPurpose);
+    const lines: string[] = ["## Staff Logging Probe", ""];
+    for (const res of results) {
+        lines.push(`• **${res.name}:** ${res.success ? "Delivered" : `Failed (${res.error ?? "unresolved"})`}`);
+    }
+    await interaction.editReply(asEdit(ephemeral(panel(Accent.Info, lines.join("\n")))));
+}
+
+export const testLogsCommand: SlashCommand = {
+    definition: new SlashCommandBuilder()
+        .setName("test-logs")
+        .setDescription("Send a test message titled 'test' to staff logging webhooks")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+        .addStringOption((option) =>
+            option
+                .setName("channel")
+                .setDescription("Staff logging channel to probe (defaults to all)")
+                .setRequired(false)
+                .addChoices(
+                    { name: "All Channels", value: "all" },
+                    { name: "#task-logs", value: "task-logs" },
+                    { name: "#voting-logs", value: "voting-logs" },
+                    { name: "#user-logs", value: "user-logs" },
+                    { name: "#security-alerts", value: "security-alerts" },
+                    { name: "#system-logs", value: "system-logs" },
+                    { name: "#moderation-logs", value: "moderation-logs" }
+                )
+        )
+        .toJSON(),
+    execute: executeTestLogs
+};
+
 export const testLoggingCommand: SlashCommand = {
     definition: new SlashCommandBuilder()
         .setName("test-logging")
-        .setDescription("Send a test message titled 'test' across all staff logging webhooks")
+        .setDescription("Send a test message titled 'test' to staff logging webhooks")
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+        .addStringOption((option) =>
+            option
+                .setName("channel")
+                .setDescription("Staff logging channel to probe (defaults to all)")
+                .setRequired(false)
+                .addChoices(
+                    { name: "All Channels", value: "all" },
+                    { name: "#task-logs", value: "task-logs" },
+                    { name: "#voting-logs", value: "voting-logs" },
+                    { name: "#user-logs", value: "user-logs" },
+                    { name: "#security-alerts", value: "security-alerts" },
+                    { name: "#system-logs", value: "system-logs" },
+                    { name: "#moderation-logs", value: "moderation-logs" }
+                )
+        )
         .toJSON(),
-    async execute(interaction: ChatInputCommandInteraction, context: BotContext): Promise<void> {
-        requireManageGuild(interaction);
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        const results = await context.dispatcher.sendStaffTestProbe();
-        const lines: string[] = ["## Staff Logging Probe", ""];
-        for (const res of results) {
-            lines.push(`• **${res.name}:** ${res.success ? "Delivered" : `Failed (${res.error ?? "unresolved"})`}`);
-        }
-        await interaction.editReply(asEdit(ephemeral(panel(Accent.Info, lines.join("\n")))));
-    }
+    execute: executeTestLogs
 };
