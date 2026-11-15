@@ -17,99 +17,110 @@ export const botSetupCommand: SlashCommand = {
             throw new UserFacingError("Run this inside the server.");
         }
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        const summary = await context.provisioner.provision(interaction.guild);
-        const lines: string[] = ["## Server Setup", ""];
+        try {
+            const summary = await context.provisioner.provision(interaction.guild);
+            const lines: string[] = ["## Server Setup", ""];
 
-        lines.push("**Roles**");
-        if (summary.createdRoles.length === 0) {
-            lines.push("- All studio roles already configured.");
-        } else {
-            lines.push(`- Created ${pluralize(summary.createdRoles.length, "role")}: ${summary.createdRoles.join(", ")}`);
-        }
-        lines.push("");
+            lines.push("**Roles**");
+            if (summary.createdRoles.length === 0) {
+                lines.push("- All studio roles already configured.");
+            } else {
+                lines.push(`- Created ${pluralize(summary.createdRoles.length, "role")}: ${summary.createdRoles.join(", ")}`);
+            }
+            lines.push("");
 
-        const deptItemNorms = new Set<string>();
-        if (summary.departments) {
-            for (const dept of summary.departments) {
-                deptItemNorms.add(normalizeName(dept.categoryName));
-                deptItemNorms.add(normalizeName(dept.forumName));
-                for (const ch of dept.channels) {
-                    deptItemNorms.add(normalizeName(ch.replace(/^#/u, "")));
+            const deptItemNorms = new Set<string>();
+            if (summary.departments) {
+                for (const dept of summary.departments) {
+                    deptItemNorms.add(normalizeName(dept.categoryName));
+                    deptItemNorms.add(normalizeName(dept.forumName));
+                    for (const ch of dept.channels) {
+                        deptItemNorms.add(normalizeName(ch.replace(/^#/u, "")));
+                    }
                 }
             }
-        }
 
-        const isDeptChannel = (name: string): boolean => {
-            const clean = normalizeName(name.replace(/^#/u, ""));
-            return deptItemNorms.has(clean);
-        };
+            const isDeptChannel = (name: string): boolean => {
+                const clean = normalizeName(name.replace(/^#/u, ""));
+                return deptItemNorms.has(clean);
+            };
 
-        const staffChannelNames = new Set([
-            "task-logs",
-            "voting-logs",
-            "user-logs",
-            "security-alerts",
-            "telemetry-alerts",
-            "system-logs",
-            "moderation-logs"
-        ]);
-        const productionChannelNames = new Set(["production-announcements", "production-general", "production-management"]);
-        const infoBoardChannelNames = new Set(["announcements"]);
+            const staffChannelNames = new Set([
+                "task-logs",
+                "voting-logs",
+                "user-logs",
+                "security-alerts",
+                "telemetry-alerts",
+                "system-logs",
+                "moderation-logs"
+            ]);
+            const productionChannelNames = new Set(["production-announcements", "production-general", "production-management"]);
+            const infoBoardChannelNames = new Set(["announcements"]);
 
-        const allCore = [...summary.boundChannels, ...summary.createdChannels].filter((c) => !isDeptChannel(c));
-        const cleanCore = Array.from(new Set(allCore.map((c) => (c.startsWith("#") ? c : `#${c}`))));
+            const allCore = [...summary.boundChannels, ...summary.createdChannels].filter((c) => !isDeptChannel(c));
+            const cleanCore = Array.from(new Set(allCore.map((c) => (c.startsWith("#") ? c : `#${c}`))));
 
-        const staffChannels = cleanCore.filter((c) => staffChannelNames.has(normalizeName(c.replace(/^#/u, ""))));
-        const productionChannels = cleanCore.filter((c) => productionChannelNames.has(normalizeName(c.replace(/^#/u, ""))));
-        const infoBoardChannels = cleanCore.filter((c) => infoBoardChannelNames.has(normalizeName(c.replace(/^#/u, ""))));
-        const otherChannels = cleanCore.filter(
-            (c) =>
-                !staffChannelNames.has(normalizeName(c.replace(/^#/u, ""))) &&
-                !productionChannelNames.has(normalizeName(c.replace(/^#/u, ""))) &&
-                !infoBoardChannelNames.has(normalizeName(c.replace(/^#/u, "")))
-        );
+            const staffChannels = cleanCore.filter((c) => staffChannelNames.has(normalizeName(c.replace(/^#/u, ""))));
+            const productionChannels = cleanCore.filter((c) => productionChannelNames.has(normalizeName(c.replace(/^#/u, ""))));
+            const infoBoardChannels = cleanCore.filter((c) => infoBoardChannelNames.has(normalizeName(c.replace(/^#/u, ""))));
+            const otherChannels = cleanCore.filter(
+                (c) =>
+                    !staffChannelNames.has(normalizeName(c.replace(/^#/u, ""))) &&
+                    !productionChannelNames.has(normalizeName(c.replace(/^#/u, ""))) &&
+                    !infoBoardChannelNames.has(normalizeName(c.replace(/^#/u, "")))
+            );
 
-        if (staffChannels.length > 0) {
-            lines.push("**Staff Channels**");
-            lines.push(`- ${staffChannels.join(", ")}`);
-            lines.push("");
-        }
-
-        if (productionChannels.length > 0) {
-            lines.push("**Production Channels**");
-            lines.push(`- ${productionChannels.join(", ")}`);
-            lines.push("");
-        }
-
-        if (infoBoardChannels.length > 0) {
-            lines.push("**Information Board Channels**");
-            lines.push(`- ${infoBoardChannels.join(", ")}`);
-            lines.push("");
-        }
-
-        if (otherChannels.length > 0) {
-            lines.push("**Other Channels**");
-            lines.push(`- ${otherChannels.join(", ")}`);
-            lines.push("");
-        }
-
-        if (summary.departments && summary.departments.length > 0) {
-            lines.push("**Department Channels**");
-            for (const dept of summary.departments) {
-                lines.push(`- **${dept.departmentName}:** ${dept.forumName}, ${dept.channels.join(", ")}`);
+            if (staffChannels.length > 0) {
+                lines.push("**Staff Channels**");
+                lines.push(`- ${staffChannels.join(", ")}`);
+                lines.push("");
             }
-            lines.push("");
-        }
 
-        if (summary.deletedWebhooks && summary.deletedWebhooks.length > 0) {
-            lines.push("**Residual Webhooks Cleaned Up**");
-            lines.push(`- Removed ${pluralize(summary.deletedWebhooks.length, "residual webhook")}: ${summary.deletedWebhooks.join(", ")}`);
-        } else {
-            lines.push("**Webhooks**");
-            lines.push("- All channel webhooks synced with zero residual webhooks.");
-        }
+            if (productionChannels.length > 0) {
+                lines.push("**Production Channels**");
+                lines.push(`- ${productionChannels.join(", ")}`);
+                lines.push("");
+            }
 
-        await interaction.editReply(asEdit(ephemeral(panel(null, lines.join("\n").trim()))));
+            if (infoBoardChannels.length > 0) {
+                lines.push("**Information Board Channels**");
+                lines.push(`- ${infoBoardChannels.join(", ")}`);
+                lines.push("");
+            }
+
+            if (otherChannels.length > 0) {
+                lines.push("**Other Channels**");
+                lines.push(`- ${otherChannels.join(", ")}`);
+                lines.push("");
+            }
+
+            if (summary.departments && summary.departments.length > 0) {
+                lines.push("**Department Channels**");
+                for (const dept of summary.departments) {
+                    lines.push(`- **${dept.departmentName}:** ${dept.forumName}, ${dept.channels.join(", ")}`);
+                }
+                lines.push("");
+            }
+
+            if (summary.deletedWebhooks && summary.deletedWebhooks.length > 0) {
+                lines.push("**Residual Webhooks Cleaned Up**");
+                lines.push(
+                    `- Removed ${pluralize(summary.deletedWebhooks.length, "residual webhook")}: ${summary.deletedWebhooks.join(", ")}`
+                );
+            } else {
+                lines.push("**Webhooks**");
+                lines.push("- All channel webhooks synced with zero residual webhooks.");
+            }
+
+            await interaction.editReply(asEdit(ephemeral(panel(null, lines.join("\n").trim()))));
+        } catch (error: unknown) {
+            context.logger.error({ err: error }, "bot-setup command failed");
+            const messageText =
+                error instanceof UserFacingError
+                    ? error.message
+                    : "Server setup failed. Verify the bot has Manage Channels, Manage Roles, and Manage Webhooks permissions.";
+            await interaction.editReply(asEdit(ephemeral(panel(Accent.Danger, `## Server Setup Failed\n${messageText}`))));
+        }
     }
 };
 

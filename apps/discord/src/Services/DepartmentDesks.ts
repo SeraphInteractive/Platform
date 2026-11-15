@@ -1,5 +1,5 @@
 import type { DepartmentDto } from "@platform/contracts";
-import type { Role, TextChannel } from "discord.js";
+import { PermissionFlagsBits, type Role, type TextChannel } from "discord.js";
 import type { Logger } from "pino";
 import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
 import { findStudioRole, StudioTier } from "./StudioRoles.js";
@@ -21,24 +21,41 @@ export function departmentStaffRoleIds(department: Pick<DepartmentDto, "supervis
 
 export async function prepareApplyChannel(channel: TextChannel, botId: string): Promise<void> {
     const reason = "Let applicants talk in their private ticket threads";
-    await channel.permissionOverwrites.edit(
-        channel.guild.roles.everyone,
-        { SendMessagesInThreads: true, ManageThreads: false, CreatePublicThreads: false, CreatePrivateThreads: false },
-        { reason }
-    );
-    await channel.permissionOverwrites.edit(
-        botId,
-        {
-            ViewChannel: true,
-            SendMessages: true,
-            ReadMessageHistory: true,
-            SendMessagesInThreads: true,
-            CreatePrivateThreads: true,
-            ManageThreads: true,
-            ManageWebhooks: true
-        },
-        { reason }
-    );
+    const everyone = channel.guild.roles.everyone;
+    const everyoneOv = channel.permissionOverwrites?.cache?.get(everyone.id);
+    const everyoneNeedsEdit =
+        !everyoneOv ||
+        !everyoneOv.allow.has(PermissionFlagsBits.SendMessagesInThreads) ||
+        everyoneOv.allow.has(PermissionFlagsBits.ManageThreads);
+    if (everyoneNeedsEdit && typeof channel.permissionOverwrites?.edit === "function") {
+        await channel.permissionOverwrites
+            .edit(
+                everyone,
+                { SendMessagesInThreads: true, ManageThreads: false, CreatePublicThreads: false, CreatePrivateThreads: false },
+                { reason }
+            )
+            .catch(() => undefined);
+    }
+    const botOv = channel.permissionOverwrites?.cache?.get(botId);
+    const botNeedsEdit =
+        !botOv || !botOv.allow.has(PermissionFlagsBits.SendMessagesInThreads) || !botOv.allow.has(PermissionFlagsBits.CreatePrivateThreads);
+    if (botNeedsEdit && typeof channel.permissionOverwrites?.edit === "function") {
+        await channel.permissionOverwrites
+            .edit(
+                botId,
+                {
+                    ViewChannel: true,
+                    SendMessages: true,
+                    ReadMessageHistory: true,
+                    SendMessagesInThreads: true,
+                    CreatePrivateThreads: true,
+                    ManageThreads: true,
+                    ManageWebhooks: true
+                },
+                { reason }
+            )
+            .catch(() => undefined);
+    }
 }
 
 export async function setUpDepartmentDesk(

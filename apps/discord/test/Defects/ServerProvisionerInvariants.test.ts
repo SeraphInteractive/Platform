@@ -916,4 +916,67 @@ describe("b8: ServerProvisioner non-destructive setup invariants", () => {
         expect(settings.channel(ChannelPurpose.Announcements)).toBe(announceChan.id);
         expect(settings.channel(ChannelPurpose.Rules)).toBeUndefined();
     });
+
+    it("skips permission overwrite creation when cached forum overwrites already match expected bitfields", async () => {
+        const botId = "bot-user-1";
+        const everyoneId = "everyone-role-id";
+        const forum = {
+            id: "forum-1",
+            name: "tasks-forum",
+            type: ChannelType.GuildForum,
+            guild: {
+                client: { user: { id: botId } },
+                roles: {
+                    everyone: { id: everyoneId },
+                    fetch: vi.fn().mockResolvedValue(new Collection())
+                }
+            },
+            permissionOverwrites: {
+                cache: new Collection<string, { id: string; allow: { bitfield: bigint }; deny: { bitfield: bigint } }>(),
+                create: vi.fn().mockResolvedValue(undefined),
+                set: vi.fn().mockResolvedValue(undefined)
+            }
+        };
+
+        const everyoneAllow = PermissionFlagsBits.ViewChannel | PermissionFlagsBits.ReadMessageHistory;
+        const everyoneDeny =
+            PermissionFlagsBits.SendMessagesInThreads |
+            PermissionFlagsBits.UseApplicationCommands |
+            PermissionFlagsBits.SendMessages |
+            PermissionFlagsBits.CreatePublicThreads |
+            PermissionFlagsBits.CreatePrivateThreads;
+
+        forum.permissionOverwrites.cache.set(everyoneId, {
+            id: everyoneId,
+            allow: { bitfield: everyoneAllow },
+            deny: { bitfield: everyoneDeny }
+        });
+
+        const botAllow =
+            PermissionFlagsBits.ViewChannel |
+            PermissionFlagsBits.ReadMessageHistory |
+            PermissionFlagsBits.SendMessages |
+            PermissionFlagsBits.SendMessagesInThreads |
+            PermissionFlagsBits.CreatePublicThreads |
+            PermissionFlagsBits.ManageThreads;
+
+        forum.permissionOverwrites.cache.set(botId, {
+            id: botId,
+            allow: { bitfield: botAllow },
+            deny: { bitfield: 0n }
+        });
+
+        const mockLogger = {
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            debug: vi.fn()
+        };
+
+        const provisioner = new ServerProvisioner(settings, mockLogger as never);
+        await provisioner.ensureForumPermissions(forum as never, false);
+
+        expect(forum.permissionOverwrites.create).not.toHaveBeenCalledWith(everyoneId, expect.anything(), expect.anything());
+        expect(forum.permissionOverwrites.create).not.toHaveBeenCalledWith(botId, expect.anything(), expect.anything());
+    });
 });

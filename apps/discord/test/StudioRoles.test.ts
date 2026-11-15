@@ -169,6 +169,57 @@ describe("syncMemberStudioRoles", () => {
         expect(heldRoles.has("2")).toBe(false);
         expect(heldRoles.has("3")).toBe(false);
     });
+
+    it("preserves manually assigned non-platform roles upon supervisor demotion to contributor", async () => {
+        const guildRoles = new Map<string, DiscordRole>([
+            ["1", createMockDiscordRole("1", "Supervisor")],
+            ["2", createMockDiscordRole("2", "General Contributors")],
+            ["3", createMockDiscordRole("3", "Animators")],
+            ["99", createMockDiscordRole("99", "Custom Donor Role")],
+            ["100", createMockDiscordRole("100", "Server Booster")],
+            ["101", createMockDiscordRole("101", "DJ")]
+        ]);
+
+        const heldRoles = new Map<string, DiscordRole>([
+            ["1", guildRoles.get("1")!],
+            ["99", guildRoles.get("99")!],
+            ["100", guildRoles.get("100")!],
+            ["101", guildRoles.get("101")!]
+        ]);
+
+        const { member, added, removed } = createMockMember(heldRoles, guildRoles);
+
+        await syncMemberStudioRoles(member, Role.Contributor, [Specialty.Animator]);
+
+        expect(removed).toEqual(["1"]);
+        expect(new Set(added)).toEqual(new Set(["2", "3"]));
+        expect(heldRoles.has("99")).toBe(true);
+        expect(heldRoles.has("100")).toBe(true);
+        expect(heldRoles.has("101")).toBe(true);
+    });
+
+    it("preserves manually assigned non-platform roles upon demotion from contributor to member", async () => {
+        const guildRoles = new Map<string, DiscordRole>([
+            ["1", createMockDiscordRole("1", "Members")],
+            ["2", createMockDiscordRole("2", "General Contributors")],
+            ["3", createMockDiscordRole("3", "Animators")],
+            ["99", createMockDiscordRole("99", "External Partner")]
+        ]);
+
+        const heldRoles = new Map<string, DiscordRole>([
+            ["2", guildRoles.get("2")!],
+            ["3", guildRoles.get("3")!],
+            ["99", guildRoles.get("99")!]
+        ]);
+
+        const { member, added, removed } = createMockMember(heldRoles, guildRoles);
+
+        await syncMemberStudioRoles(member, Role.Member, []);
+
+        expect(new Set(removed)).toEqual(new Set(["2", "3"]));
+        expect(added).toEqual(["1"]);
+        expect(heldRoles.has("99")).toBe(true);
+    });
 });
 
 describe("NotificationDispatcher moderation and role sync side effects", () => {

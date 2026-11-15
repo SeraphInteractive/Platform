@@ -4,13 +4,15 @@ import {
     PermissionFlagsBits,
     PermissionsBitField,
     type CategoryChannel,
+    type Collection,
     type ForumChannel,
     type Guild,
     type OverwriteResolvable,
     type PermissionOverwriteOptions,
     type Role as DiscordRole,
     type TextChannel,
-    type VoiceChannel
+    type VoiceChannel,
+    type Webhook
 } from "discord.js";
 import type { Logger } from "pino";
 import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
@@ -54,18 +56,24 @@ async function reconcileWebhookOnChannel(
     canonicalName: string,
     botId: string | undefined,
     exclusiveSystemChannel: boolean,
-    logger: Logger
+    logger: Logger,
+    cachedWebhooks?: Collection<string, Webhook>
 ): Promise<ReconcileWebhookResult> {
     const deletedNames: string[] = [];
     let activeUrl: string | null = null;
     let activeId: string | null = null;
 
-    if (typeof channel.fetchWebhooks !== "function") {
-        return { activeUrl, activeId, deletedNames };
-    }
-
     try {
-        const webhooks = await channel.fetchWebhooks();
+        let webhooks: Collection<string, Webhook>;
+        const fromGuild = cachedWebhooks?.filter((hook) => hook.channelId === channel.id);
+        if (fromGuild !== undefined && fromGuild.size > 0) {
+            webhooks = fromGuild;
+        } else if (typeof channel.fetchWebhooks === "function") {
+            webhooks = await channel.fetchWebhooks();
+        } else {
+            return { activeUrl, activeId, deletedNames };
+        }
+
         const matching = webhooks.filter((hook) => hook.name.toLowerCase() === canonicalName.toLowerCase());
         const validMatching = matching.filter((hook) => typeof hook.url === "string" && isSafeDiscordWebhookUrl(hook.url));
 
@@ -80,6 +88,9 @@ async function reconcileWebhookOnChannel(
                 if (hook.id !== activeHook.id && typeof hook.delete === "function") {
                     await hook.delete("Residual duplicate webhook cleanup").catch(() => undefined);
                     deletedNames.push(`${hook.name} (duplicate on #${channel.name})`);
+                    if (cachedWebhooks !== undefined) {
+                        cachedWebhooks.delete(hook.id);
+                    }
                 }
             }
         } else if (typeof channel.createWebhook === "function") {
@@ -90,6 +101,9 @@ async function reconcileWebhookOnChannel(
             activeHook = created;
             activeUrl = created.url;
             activeId = created.id;
+            if (cachedWebhooks !== undefined) {
+                cachedWebhooks.set(created.id, created);
+            }
         }
 
         // remove stray or unauthorized webhooks from managed channel
@@ -106,6 +120,9 @@ async function reconcileWebhookOnChannel(
             if (exclusiveSystemChannel || isBotOwned || isStudioNamed) {
                 await hook.delete("Residual studio webhook cleanup").catch(() => undefined);
                 deletedNames.push(`${hook.name} (residual on #${channel.name})`);
+                if (cachedWebhooks !== undefined) {
+                    cachedWebhooks.delete(hook.id);
+                }
             }
         }
     } catch (err: unknown) {
@@ -213,7 +230,11 @@ export class ServerProvisioner {
 
     public async bindExisting(guild: Guild): Promise<void> {
         const botId = guild.client?.user?.id;
-        const [roles, channels] = await Promise.all([guild.roles.fetch(), guild.channels.fetch()]);
+        const [roles, channels, guildWebhooks] = await Promise.all([
+            guild.roles.fetch(),
+            guild.channels.fetch(),
+            typeof guild.fetchWebhooks === "function" ? guild.fetchWebhooks().catch(() => undefined) : Promise.resolve(undefined)
+        ]);
         await this.settings.update((settings) => {
             delete settings.channels.welcome;
             delete settings.channels.taskSubmissions;
@@ -368,13 +389,21 @@ export class ServerProvisioner {
                                 `${dept.name} Announcements`,
                                 botId,
                                 false,
-                                this.logger
+                                this.logger,
+                                guildWebhooks
                             );
                             infoWebhookUrl = infoRes.activeUrl;
                         }
                         let logsWebhookUrl = dept.discordLogsWebhookUrl ?? null;
                         if (deptLogs) {
-                            const logsRes = await reconcileWebhookOnChannel(deptLogs, `${dept.name} Logs`, botId, false, this.logger);
+                            const logsRes = await reconcileWebhookOnChannel(
+                                deptLogs,
+                                `${dept.name} Logs`,
+                                botId,
+                                false,
+                                this.logger,
+                                guildWebhooks
+                            );
                             logsWebhookUrl = logsRes.activeUrl;
                         }
 
@@ -418,35 +447,54 @@ export class ServerProvisioner {
         const boundChannels: string[] = [];
         const deletedWebhooks: string[] = [];
         const activeWebhookIds = new Set<string>();
-        const existingRoles = await guild.roles.fetch();
+        const [existingRoles, guildWebhooks] = await Promise.all([
+            guild.roles.fetch(),
+            typeof guild.fetchWebhooks === "function" ? guild.fetchWebhooks().catch(() => undefined) : Promise.resolve(undefined)
+        ]);
         const roleIds = new Map<string, DiscordRole>();
 
         for (const definition of studioRoles) {
             const permissions = permissionsForRole(definition);
             const existing = existingRoles.find((role) => findStudioRole(role.name)?.name === definition.name);
             if (existing !== undefined) {
-                if (existing.hoist !== (definition.tier !== StudioTier.Community)) {
-                    await existing.setHoist(definition.tier !== StudioTier.Community, "Studio role setup").catch(() => undefined);
+                const targetHoist = definition.tier !== StudioTier.Community;
+                if (existing.hoist !== targetHoist) {
+                    await existing.setHoist(targetHoist, "Studio role setup").catch(() => undefined);
                 }
-                await existing.setPermissions(permissions, "Studio role setup").catch(() => undefined);
+                const targetPerms = new PermissionsBitField(permissions);
+                const rolePerms = existing.permissions;
+                if (!rolePerms || typeof rolePerms.equals !== "function" || !rolePerms.equals(targetPerms)) {
+                    await existing.setPermissions(permissions, "Studio role setup").catch(() => undefined);
+                }
                 roleIds.set(definition.name, existing);
                 continue;
             }
-            const created = await guild.roles.create({
-                name: definition.name,
-                colors: { primaryColor: definition.color },
-                hoist: definition.tier !== StudioTier.Community,
-                mentionable: definition.tier !== StudioTier.Community,
-                permissions: [...permissions],
-                reason: "Studio role setup"
-            });
-            roleIds.set(definition.name, created);
-            createdRoles.push(created.name);
+            const created = await guild.roles
+                .create({
+                    name: definition.name,
+                    colors: { primaryColor: definition.color },
+                    hoist: definition.tier !== StudioTier.Community,
+                    mentionable: definition.tier !== StudioTier.Community,
+                    permissions: [...permissions],
+                    reason: "Studio role setup"
+                })
+                .catch((err: unknown) => {
+                    this.logger.warn({ err, role: definition.name }, "failed to create studio role");
+                    return null;
+                });
+            if (created !== null) {
+                roleIds.set(definition.name, created);
+                createdRoles.push(created.name);
+            }
         }
 
-        await this.enforceRoleHierarchy(guild);
+        await this.enforceRoleHierarchy(guild, existingRoles);
         if (typeof guild.roles.everyone?.setPermissions === "function") {
-            await guild.roles.everyone.setPermissions(memberPermissions, "Studio base permissions").catch(() => undefined);
+            const targetPerms = new PermissionsBitField(memberPermissions);
+            const everyonePerms = guild.roles.everyone?.permissions;
+            if (!everyonePerms || typeof everyonePerms.equals !== "function" || !everyonePerms.equals(targetPerms)) {
+                await guild.roles.everyone.setPermissions(memberPermissions, "Studio base permissions").catch(() => undefined);
+            }
         }
 
         const staffRoles = studioRoles
@@ -463,11 +511,30 @@ export class ServerProvisioner {
         ): Promise<void> => {
             for (const item of overwrites) {
                 const parsed = toPermissionOverwriteOptions(item);
-                if (parsed !== null) {
-                    await channel.permissionOverwrites
-                        .create(parsed.id, parsed.options, { reason: "Configure studio channel permissions" })
-                        .catch(() => undefined);
+                if (parsed === null) {
+                    continue;
                 }
+                const existing = channel.permissionOverwrites?.cache?.get(parsed.id);
+                if (existing !== undefined) {
+                    let targetAllow = 0n;
+                    let targetDeny = 0n;
+                    for (const [perm, val] of Object.entries(parsed.options)) {
+                        const flag = (PermissionFlagsBits as Record<string, bigint>)[perm];
+                        if (flag !== undefined) {
+                            if (val === true) {
+                                targetAllow |= flag;
+                            } else if (val === false) {
+                                targetDeny |= flag;
+                            }
+                        }
+                    }
+                    if (existing.allow.bitfield === targetAllow && existing.deny.bitfield === targetDeny) {
+                        continue;
+                    }
+                }
+                await channel.permissionOverwrites
+                    .create(parsed.id, parsed.options, { reason: "Configure studio channel permissions" })
+                    .catch(() => undefined);
             }
         };
 
@@ -632,7 +699,14 @@ export class ServerProvisioner {
             true
         );
 
-        const announcementsRes = await reconcileWebhookOnChannel(announcements, "Studio Announcements", botId, true, this.logger);
+        const announcementsRes = await reconcileWebhookOnChannel(
+            announcements,
+            "Studio Announcements",
+            botId,
+            true,
+            this.logger,
+            guildWebhooks
+        );
         if (announcementsRes.activeId !== null) {
             activeWebhookIds.add(announcementsRes.activeId);
         }
@@ -646,7 +720,7 @@ export class ServerProvisioner {
             "Global task activity, claims, submissions, and supervisor reviews.",
             privateOverwrites
         );
-        const taskLogsRes = await reconcileWebhookOnChannel(taskLogs, "Stairway Tasks", botId, true, this.logger);
+        const taskLogsRes = await reconcileWebhookOnChannel(taskLogs, "Stairway Tasks", botId, true, this.logger, guildWebhooks);
         if (taskLogsRes.activeId !== null) {
             activeWebhookIds.add(taskLogsRes.activeId);
         }
@@ -660,7 +734,7 @@ export class ServerProvisioner {
             "Ballots cast, round state transitions, and entry status updates.",
             privateOverwrites
         );
-        const votingLogsRes = await reconcileWebhookOnChannel(votingLogs, "Stairway Voting", botId, true, this.logger);
+        const votingLogsRes = await reconcileWebhookOnChannel(votingLogs, "Stairway Voting", botId, true, this.logger, guildWebhooks);
         if (votingLogsRes.activeId !== null) {
             activeWebhookIds.add(votingLogsRes.activeId);
         }
@@ -674,7 +748,7 @@ export class ServerProvisioner {
             "Role updates, promotions, demotions, and voter blacklists.",
             privateOverwrites
         );
-        const userLogsRes = await reconcileWebhookOnChannel(userLogs, "Stairway Users", botId, true, this.logger);
+        const userLogsRes = await reconcileWebhookOnChannel(userLogs, "Stairway Users", botId, true, this.logger, guildWebhooks);
         if (userLogsRes.activeId !== null) {
             activeWebhookIds.add(userLogsRes.activeId);
         }
@@ -688,7 +762,14 @@ export class ServerProvisioner {
             "Raid alerts, quarantine actions, and AI signature detections.",
             privateOverwrites
         );
-        const securityAlertsRes = await reconcileWebhookOnChannel(securityAlerts, "Stairway Security", botId, true, this.logger);
+        const securityAlertsRes = await reconcileWebhookOnChannel(
+            securityAlerts,
+            "Stairway Security",
+            botId,
+            true,
+            this.logger,
+            guildWebhooks
+        );
         if (securityAlertsRes.activeId !== null) {
             activeWebhookIds.add(securityAlertsRes.activeId);
         }
@@ -702,7 +783,7 @@ export class ServerProvisioner {
             "Pipeline progress, crew surveys, and system maintenance logs.",
             privateOverwrites
         );
-        const systemLogsRes = await reconcileWebhookOnChannel(systemLogs, "Stairway System", botId, true, this.logger);
+        const systemLogsRes = await reconcileWebhookOnChannel(systemLogs, "Stairway System", botId, true, this.logger, guildWebhooks);
         if (systemLogsRes.activeId !== null) {
             activeWebhookIds.add(systemLogsRes.activeId);
         }
@@ -716,7 +797,7 @@ export class ServerProvisioner {
             "Profanity warnings, timeouts, and AutoMod incident logs.",
             privateOverwrites
         );
-        const modLogsRes = await reconcileWebhookOnChannel(moderationLogs, "Studio Moderation", botId, true, this.logger);
+        const modLogsRes = await reconcileWebhookOnChannel(moderationLogs, "Studio Moderation", botId, true, this.logger, guildWebhooks);
         if (modLogsRes.activeId !== null) {
             activeWebhookIds.add(modLogsRes.activeId);
         }
@@ -766,7 +847,14 @@ export class ServerProvisioner {
             productionAnnouncementsOverwrites
         );
 
-        const prodAnnounceRes = await reconcileWebhookOnChannel(prodAnnouncements, "Production Announcements", botId, true, this.logger);
+        const prodAnnounceRes = await reconcileWebhookOnChannel(
+            prodAnnouncements,
+            "Production Announcements",
+            botId,
+            true,
+            this.logger,
+            guildWebhooks
+        );
         if (prodAnnounceRes.activeId !== null) {
             activeWebhookIds.add(prodAnnounceRes.activeId);
         }
@@ -894,7 +982,8 @@ export class ServerProvisioner {
                         `${dept.name} Announcements`,
                         botId,
                         false,
-                        this.logger
+                        this.logger,
+                        guildWebhooks
                     );
                     if (announceRes.activeId !== null) {
                         activeWebhookIds.add(announceRes.activeId);
@@ -1066,7 +1155,14 @@ export class ServerProvisioner {
                         `${dept.name} task updates, claims, submissions, and reviews.`,
                         deptLogsOverwrites
                     );
-                    const logsRes = await reconcileWebhookOnChannel(deptLogs, `${dept.name} Logs`, botId, false, this.logger);
+                    const logsRes = await reconcileWebhookOnChannel(
+                        deptLogs,
+                        `${dept.name} Logs`,
+                        botId,
+                        false,
+                        this.logger,
+                        guildWebhooks
+                    );
                     if (logsRes.activeId !== null) {
                         activeWebhookIds.add(logsRes.activeId);
                     }
@@ -1219,10 +1315,11 @@ export class ServerProvisioner {
         }
 
         // remove residual guild-wide webhooks not bound to active configuration
-        if (typeof guild.fetchWebhooks === "function") {
+        const allWebhooks =
+            guildWebhooks ?? (typeof guild.fetchWebhooks === "function" ? await guild.fetchWebhooks().catch(() => undefined) : undefined);
+        if (allWebhooks !== undefined) {
             try {
-                const guildWebhooks = await guild.fetchWebhooks();
-                for (const hook of guildWebhooks.values()) {
+                for (const hook of allWebhooks.values()) {
                     if (activeWebhookIds.has(hook.id)) {
                         continue;
                     }
@@ -1245,7 +1342,7 @@ export class ServerProvisioner {
                     }
                 }
             } catch (err: unknown) {
-                this.logger.warn({ err }, "failed to fetch guild webhooks for residual cleanup");
+                this.logger.warn({ err }, "failed to process guild webhooks for residual cleanup");
             }
         }
 
@@ -1262,13 +1359,17 @@ export class ServerProvisioner {
         const missing = Object.values(ShotStatus).filter(
             (status) => !forum.availableTags.some((tag) => tag.name === forumTagNames[status])
         );
-        const updated =
-            missing.length === 0
-                ? forum
-                : await forum.setAvailableTags(
-                      [...forum.availableTags, ...missing.map((status) => ({ name: forumTagNames[status], moderated: true }))],
-                      "Task status tags"
-                  );
+        let updated = forum;
+        if (missing.length > 0 && typeof forum.setAvailableTags === "function") {
+            try {
+                updated = await forum.setAvailableTags(
+                    [...forum.availableTags, ...missing.map((status) => ({ name: forumTagNames[status], moderated: true }))],
+                    "Task status tags"
+                );
+            } catch (err: unknown) {
+                this.logger.warn({ err, forum: forum.name }, "failed to set forum available tags");
+            }
+        }
         if (isDefaultTaskForum) {
             await this.settings.update((settings) => {
                 for (const status of Object.values(ShotStatus)) {
@@ -1373,14 +1474,32 @@ export class ServerProvisioner {
 
         // apply role overwrites without wiping existing custom overwrites
         for (const item of overwrites) {
+            const existing = forum.permissionOverwrites?.cache?.get(item.id);
+            if (existing !== undefined) {
+                let targetAllow = 0n;
+                let targetDeny = 0n;
+                for (const [perm, val] of Object.entries(item.options)) {
+                    const flag = (PermissionFlagsBits as Record<string, bigint>)[perm];
+                    if (flag !== undefined) {
+                        if (val === true) {
+                            targetAllow |= flag;
+                        } else if (val === false) {
+                            targetDeny |= flag;
+                        }
+                    }
+                }
+                if (existing.allow.bitfield === targetAllow && existing.deny.bitfield === targetDeny) {
+                    continue;
+                }
+            }
             await forum.permissionOverwrites
                 .create(item.id, item.options, { reason: "Configure task forum permissions" })
                 .catch(() => undefined);
         }
     }
 
-    public async enforceRoleHierarchy(guild: Guild): Promise<number> {
-        const guildRoles = await guild.roles.fetch();
+    public async enforceRoleHierarchy(guild: Guild, existingRoles?: Collection<string, DiscordRole>): Promise<number> {
+        const guildRoles = existingRoles ?? (await guild.roles.fetch());
         const roleList: (DiscordRole | null)[] = Array.from(guildRoles.values());
         const positions: { role: string; position: number }[] = [];
 
@@ -1395,7 +1514,18 @@ export class ServerProvisioner {
                 position++;
             }
         }
-        if (positions.length > 0 && typeof guild.roles.setPositions === "function") {
+
+        let alreadyOrdered = true;
+        for (let i = 0; i < positions.length - 1; i++) {
+            const r1 = guildRoles.get(positions[i]?.role ?? "");
+            const r2 = guildRoles.get(positions[i + 1]?.role ?? "");
+            if (!r1 || !r2 || typeof r1.position !== "number" || typeof r2.position !== "number" || r1.position >= r2.position) {
+                alreadyOrdered = false;
+                break;
+            }
+        }
+
+        if (!alreadyOrdered && positions.length > 0 && typeof guild.roles.setPositions === "function") {
             await guild.roles.setPositions(positions).catch((err: unknown) => {
                 this.logger.warn({ err }, "failed to set role hierarchy positions");
             });
