@@ -1,5 +1,5 @@
 import { NotificationType, Role } from "@platform/contracts";
-import { ActivityType, Client, Events, GatewayIntentBits, REST, Routes, type SendableChannels } from "discord.js";
+import { ActivityType, AuditLogEvent, Client, Events, GatewayIntentBits, REST, Routes, type SendableChannels } from "discord.js";
 import { NotificationConsumer } from "./Api/NotificationConsumer.js";
 import { PlatformApiClient } from "./Api/PlatformApiClient.js";
 import type { BotContext } from "./Commands/Command.js";
@@ -14,7 +14,12 @@ import { RoleReconciliationService } from "./Services/RoleReconciliationService.
 import { RoleSyncScheduler } from "./Services/RoleSyncScheduler.js";
 import { ProfanityFilter } from "./Services/ProfanityFilter.js";
 import { ServerProvisioner } from "./Services/ServerProvisioner.js";
-import { syncMemberStudioRoles } from "./Services/StudioRoles.js";
+import {
+    isStudioOrLegacyRole,
+    recentlyManagedMemberIds,
+    studioRoleAndSpecialtiesOf,
+    syncMemberStudioRoles
+} from "./Services/StudioRoles.js";
 import { TaskForum } from "./Services/TaskForum.js";
 import { TicketDesk } from "./Services/TicketDesk.js";
 import { CrewCheckIns } from "./Services/CrewCheckIns.js";
@@ -235,6 +240,60 @@ async function main(): Promise<void> {
                                 )
                                 .catch(() => undefined);
                         }
+                    }
+                }
+            }
+
+            // sync manual role edits from discord back to platform
+            const oldRoleIds = new Set(oldMember.roles.cache.keys());
+            const newRoleIds = new Set(newMember.roles.cache.keys());
+            const addedRoleIds = [...newRoleIds].filter((id) => !oldRoleIds.has(id));
+            const removedRoleIds = [...oldRoleIds].filter((id) => !newRoleIds.has(id));
+
+            if (addedRoleIds.length > 0 || removedRoleIds.length > 0) {
+                const changedRoles = [...addedRoleIds, ...removedRoleIds]
+                    .map((id) => newMember.guild.roles.cache.get(id) ?? oldMember.guild.roles.cache.get(id))
+                    .filter((r) => r !== undefined && isStudioOrLegacyRole(r.name));
+
+                if (changedRoles.length > 0) {
+                    const lastBotSync = recentlyManagedMemberIds.get(newMember.id);
+                    if (lastBotSync !== undefined && Date.now() - lastBotSync < 10000) {
+                        return;
+                    }
+
+                    const auditLogs = await newMember.guild
+                        .fetchAuditLogs({
+                            type: AuditLogEvent.MemberRoleUpdate,
+                            limit: 1
+                        })
+                        .catch(() => null);
+                    const entry = auditLogs?.entries.first();
+                    const isRecent = entry !== undefined && Date.now() - entry.createdTimestamp < 10000;
+                    const isTargetMember = entry?.targetId === newMember.id;
+                    if (isRecent && isTargetMember && entry.executorId === client.user?.id) {
+                        return;
+                    }
+
+                    try {
+                        const mapped = studioRoleAndSpecialtiesOf(newMember);
+                        const executorUser = entry?.executor;
+                        const executor =
+                            executorUser !== null && executorUser !== undefined
+                                ? {
+                                      id: executorUser.id,
+                                      username: executorUser.globalName ?? executorUser.username ?? "Unknown",
+                                      avatar: executorUser.avatar ?? null
+                                  }
+                                : undefined;
+                        const clientToUse = executor !== undefined ? api.as(executor) : api;
+                        await clientToUse.setRole(
+                            newMember.id,
+                            mapped.role,
+                            mapped.specialties,
+                            newMember.user.globalName ?? newMember.user.username
+                        );
+                    } catch (err: unknown) {
+                        logger.warn({ err, memberId: newMember.id }, "failed to sync manual discord role update to api");
                     }
                 }
             }

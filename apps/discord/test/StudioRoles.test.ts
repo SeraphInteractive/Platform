@@ -3,7 +3,12 @@ import type { Collection, GuildMember, Role as DiscordRole } from "discord.js";
 import { describe, expect, it, vi } from "vitest";
 import { NotificationDispatcher } from "../src/Services/NotificationDispatcher.js";
 import { ServerProvisioner } from "../src/Services/ServerProvisioner.js";
-import { contributorRoleName, syncMemberStudioRoles, targetStudioRoleNames } from "../src/Services/StudioRoles.js";
+import {
+    contributorRoleName,
+    studioRoleAndSpecialtiesOf,
+    syncMemberStudioRoles,
+    targetStudioRoleNames
+} from "../src/Services/StudioRoles.js";
 import { SettingsStore } from "../src/State/SettingsStore.js";
 
 function createMockDiscordRole(id: string, name: string): DiscordRole {
@@ -95,6 +100,83 @@ describe("targetStudioRoleNames", () => {
 
         const adminWithCraftSpecialty = targetStudioRoleNames(Role.Admin, [Specialty.Animator]);
         expect(adminWithCraftSpecialty).toEqual(new Set(["Admin"]));
+    });
+});
+
+describe("studioRoleAndSpecialtiesOf", () => {
+    it("maps craft roles to contributor role with specialties", () => {
+        const roleMap = new Map<string, DiscordRole>([
+            ["1", createMockDiscordRole("1", "Animators")],
+            ["2", createMockDiscordRole("2", "Riggers")],
+            ["3", createMockDiscordRole("3", "Nitro Booster")] // non-studio role
+        ]);
+        const member = {
+            roles: {
+                cache: {
+                    map: (fn: (r: DiscordRole) => unknown) => Array.from(roleMap.values()).map(fn)
+                }
+            }
+        } as unknown as GuildMember;
+
+        const result = studioRoleAndSpecialtiesOf(member);
+        expect(result.role).toBe(Role.Contributor);
+        expect(result.specialties).toEqual([Specialty.Animator, Specialty.Rigger]);
+    });
+
+    it("maps department lead to supervisor role with department specialty", () => {
+        const roleMap = new Map<string, DiscordRole>([
+            ["1", createMockDiscordRole("1", "Animation Supervisor")],
+            ["2", createMockDiscordRole("2", "Animators")] // lower tier specialty ignored
+        ]);
+        const member = {
+            roles: {
+                cache: {
+                    map: (fn: (r: DiscordRole) => unknown) => Array.from(roleMap.values()).map(fn)
+                }
+            }
+        } as unknown as GuildMember;
+
+        const result = studioRoleAndSpecialtiesOf(member);
+        expect(result.role).toBe(Role.Supervisor);
+        expect(result.specialties).toEqual([Specialty.AnimationSupervisor]);
+    });
+
+    it("maps executive roles to admin role", () => {
+        const roleMap = new Map<string, DiscordRole>([
+            ["1", createMockDiscordRole("1", "Admin")],
+            ["2", createMockDiscordRole("2", "Producer")]
+        ]);
+        const member = {
+            roles: {
+                cache: {
+                    map: (fn: (r: DiscordRole) => unknown) => Array.from(roleMap.values()).map(fn)
+                }
+            }
+        } as unknown as GuildMember;
+
+        const result = studioRoleAndSpecialtiesOf(member);
+        expect(result.role).toBe(Role.Admin);
+        expect(result.specialties).toEqual([Specialty.Producer]);
+    });
+
+    it("maps community roles to voter or member", () => {
+        const voterMember = {
+            roles: {
+                cache: {
+                    map: (fn: (r: DiscordRole) => unknown) => [createMockDiscordRole("1", "Voters")].map(fn)
+                }
+            }
+        } as unknown as GuildMember;
+        expect(studioRoleAndSpecialtiesOf(voterMember)).toEqual({ role: Role.Voter, specialties: [] });
+
+        const baseMember = {
+            roles: {
+                cache: {
+                    map: (fn: (r: DiscordRole) => unknown) => [createMockDiscordRole("1", "Members")].map(fn)
+                }
+            }
+        } as unknown as GuildMember;
+        expect(studioRoleAndSpecialtiesOf(baseMember)).toEqual({ role: Role.Member, specialties: [] });
     });
 });
 

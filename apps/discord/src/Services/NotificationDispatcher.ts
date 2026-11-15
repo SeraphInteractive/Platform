@@ -9,7 +9,15 @@ import {
     shotTypeToDepartment,
     type PlatformNotification
 } from "@platform/contracts";
-import { WebhookClient, type Client, type Collection, type ContainerBuilder, type SendableChannels, type Webhook } from "discord.js";
+import {
+    ChannelType,
+    WebhookClient,
+    type Client,
+    type Collection,
+    type ContainerBuilder,
+    type SendableChannels,
+    type Webhook
+} from "discord.js";
 import type { Logger } from "pino";
 import type { PlatformApiClient } from "../Api/PlatformApiClient.js";
 import { BoundRole, ChannelPurpose, type SettingsStore } from "../State/SettingsStore.js";
@@ -193,14 +201,26 @@ export class NotificationDispatcher {
             }
         }
         if (
-            this.webhookClients[ChannelPurpose.Telemetry] !== undefined &&
-            (purpose === ChannelPurpose.SecurityAlerts ||
-                purpose === ChannelPurpose.VotingLogs ||
-                purpose === ChannelPurpose.TaskLogs ||
-                purpose === ChannelPurpose.UserLogs ||
-                purpose === ChannelPurpose.SystemLogs)
+            purpose === ChannelPurpose.SecurityAlerts ||
+            purpose === ChannelPurpose.VotingLogs ||
+            purpose === ChannelPurpose.TaskLogs ||
+            purpose === ChannelPurpose.UserLogs ||
+            purpose === ChannelPurpose.SystemLogs
         ) {
-            return this.webhookClients[ChannelPurpose.Telemetry];
+            if (this.webhookClients[ChannelPurpose.Telemetry] !== undefined) {
+                return this.webhookClients[ChannelPurpose.Telemetry];
+            }
+            if (this.webhookClients[ChannelPurpose.SecurityAlerts] !== undefined) {
+                return this.webhookClients[ChannelPurpose.SecurityAlerts];
+            }
+            const fallbackPurpose = purpose === ChannelPurpose.SecurityAlerts ? ChannelPurpose.Telemetry : ChannelPurpose.SecurityAlerts;
+            const fallbackChannel = await this.channel(fallbackPurpose);
+            if (fallbackChannel !== null && fallbackChannel !== channel) {
+                const fallbackClient = await this.resolveWebhook(fallbackPurpose, fallbackChannel);
+                if (fallbackClient !== null) {
+                    return fallbackClient;
+                }
+            }
         }
         return null;
     }
@@ -217,7 +237,9 @@ export class NotificationDispatcher {
             return client;
         }
         const ch = channel as {
+            id?: string;
             name?: string;
+            guild?: { fetchWebhooks?: () => Promise<Collection<string, Webhook>> };
             fetchWebhooks?: () => Promise<Collection<string, Webhook>>;
             createWebhook?: (options: { name: string }) => Promise<Webhook>;
         };
@@ -253,6 +275,24 @@ export class NotificationDispatcher {
                 }
             } catch (err: unknown) {
                 this.logger.warn({ err, purpose }, "failed to auto-discover or create webhook for channel");
+            }
+        }
+        if (ch.id && typeof ch.guild?.fetchWebhooks === "function") {
+            try {
+                const guildWebhooks = await ch.guild.fetchWebhooks();
+                const match = guildWebhooks.find(
+                    (w) => w.channelId === ch.id && typeof w.url === "string" && isSafeDiscordWebhookUrl(w.url)
+                );
+                if (match?.url) {
+                    const client = new WebhookClient({ url: match.url }, discordRestOptions);
+                    this.webhookClients[purpose] = client;
+                    void this.settings.update((s) => {
+                        s.webhooks[purpose] = match.url;
+                    });
+                    return client;
+                }
+            } catch {
+                // ignore guild webhook fetch error
             }
         }
         return null;
@@ -302,6 +342,11 @@ export class NotificationDispatcher {
                 ]);
                 if (!webhookOnlyPurposes.has(rendered.purpose)) {
                     await channel.send(rendered.message);
+                } else {
+                    this.logger.warn(
+                        { purpose: rendered.purpose, type: notification.type, channelId: (channel as { id?: string }).id },
+                        "dropped notification: webhook required for staff logging route but could not be resolved"
+                    );
                 }
             } else {
                 this.logger.warn(
@@ -582,11 +627,26 @@ export class NotificationDispatcher {
     }
 
     private async channel(purpose: ChannelPurpose): Promise<SendableChannels | null> {
-        let id = this.settings.channel(purpose);
-        if (id === undefined) {
-            const guild =
-                this.client.guilds?.cache?.get?.(this.guildId) ?? (await this.client.guilds?.fetch?.(this.guildId).catch(() => null));
-            if (guild !== null && guild !== undefined && guild.channels?.cache !== undefined) {
+        // check direct configuration in settings first
+        const directId = this.settings.rawChannel(purpose);
+        if (directId !== undefined) {
+            const directChannel = await this.client.channels.fetch(directId).catch(() => null);
+            if (
+                directChannel !== null &&
+                directChannel.isSendable() &&
+                !directChannel.isDMBased() &&
+                directChannel.guildId === this.guildId
+            ) {
+                return directChannel;
+            }
+        }
+
+        // auto-discover dedicated channel by alias on live guild
+        const guild = this.client.guilds?.cache?.get?.(this.guildId) ?? (await this.client.guilds?.fetch?.(this.guildId).catch(() => null));
+        if (guild !== null && guild !== undefined) {
+            const fetched = typeof guild.channels?.fetch === "function" ? await guild.channels.fetch().catch(() => null) : null;
+            const channelCollection = fetched ?? guild.channels?.cache;
+            if (channelCollection !== undefined && channelCollection !== null) {
                 const purposeAliases: Record<string, readonly string[]> = {
                     [ChannelPurpose.Announcements]: ["announcements", "announcement", "studio-announcements"],
                     [ChannelPurpose.ProductionAnnouncements]: ["production-announcements", "production-news", "contributor-announcements"],
@@ -599,28 +659,55 @@ export class NotificationDispatcher {
                     [ChannelPurpose.SystemLogs]: ["system-logs", "pipeline-logs", "system"]
                 };
                 const aliases = purposeAliases[purpose] ?? [purpose.toLowerCase()];
-                const found = guild.channels.cache.find(
-                    (ch) =>
-                        ch?.isTextBased?.() &&
-                        !ch?.isDMBased?.() &&
-                        aliases.some((alias) => normalizeName(alias) === normalizeName(ch.name))
-                );
-                if (found !== undefined) {
-                    id = found.id;
-                    void this.settings.update((s) => {
-                        s.channels[purpose] = found.id;
-                    });
+                for (const raw of channelCollection.values()) {
+                    if (raw === null || raw === undefined) {
+                        continue;
+                    }
+                    const ch = raw as unknown as {
+                        id: string;
+                        name: string;
+                        guildId?: string;
+                        isTextBased?: () => boolean;
+                        isDMBased?: () => boolean;
+                        isSendable?: () => boolean;
+                        type?: number;
+                    };
+                    const isText = typeof ch.isTextBased === "function" ? ch.isTextBased() : ch.type === ChannelType.GuildText;
+                    const notDm = typeof ch.isDMBased === "function" ? !ch.isDMBased() : true;
+                    if (isText && notDm && aliases.some((alias) => normalizeName(alias) === normalizeName(ch.name))) {
+                        void this.settings.update((s) => {
+                            s.channels[purpose] = ch.id;
+                        });
+                        const sendable = ch as unknown as SendableChannels;
+                        if (
+                            typeof sendable.isSendable === "function" &&
+                            sendable.isSendable() &&
+                            (typeof sendable.isDMBased !== "function" || !sendable.isDMBased()) &&
+                            "guildId" in sendable &&
+                            sendable.guildId === this.guildId
+                        ) {
+                            return sendable;
+                        }
+                    }
                 }
             }
         }
-        if (id === undefined) {
-            return null;
+
+        // fallback to parent / telemetry / security alerts channel
+        const fallbackId = this.settings.channel(purpose);
+        if (fallbackId !== undefined && fallbackId !== directId) {
+            const fallbackChannel = await this.client.channels.fetch(fallbackId).catch(() => null);
+            if (
+                fallbackChannel !== null &&
+                fallbackChannel.isSendable() &&
+                !fallbackChannel.isDMBased() &&
+                fallbackChannel.guildId === this.guildId
+            ) {
+                return fallbackChannel;
+            }
         }
-        const channel = await this.client.channels.fetch(id).catch(() => null);
-        if (channel === null || !channel.isSendable() || channel.isDMBased() || channel.guildId !== this.guildId) {
-            return null;
-        }
-        return channel;
+
+        return null;
     }
 
     public async sendStaffTestProbe(targetPurpose?: ChannelPurpose): Promise<{ name: string; success: boolean; error?: string }[]> {

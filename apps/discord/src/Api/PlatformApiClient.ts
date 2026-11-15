@@ -506,6 +506,15 @@ export class PlatformApiClient {
         }
         return parsed.data;
     }
+
+    public async setRole(discordId: string, role: Role, specialties: readonly Specialty[], discordUsername: string): Promise<UserDto> {
+        return (
+            await this.send(`/users/by-discord/${discordId}/role`, dataEnvelope(userSchema), {
+                method: "PUT",
+                body: { role, specialties, discordUsername: discordUsername.slice(0, 64) }
+            })
+        ).data;
+    }
 }
 
 export class ActingApiClient {

@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DifficultyTier, NotificationType, ShotType, type PlatformNotification } from "@platform/contracts";
+import { DifficultyTier, NotificationType, Role, ShotType, Specialty, type PlatformNotification } from "@platform/contracts";
 import { ChannelType, Collection, WebhookClient, type Client } from "discord.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NotificationDispatcher } from "../../src/Services/NotificationDispatcher.js";
@@ -407,6 +407,123 @@ describe("b13: Webhook auto-discovery and bot user fallback", () => {
             expect.objectContaining({
                 username: "Project Stairway Assets",
                 avatarURL: "https://cdn.discordapp.com/embed/avatars/0.png"
+            })
+        );
+        sendSpy.mockRestore();
+    });
+
+    it("must auto-discover #user-logs by alias and dispatch UserRoleChanged alert when not directly mapped in settings", async () => {
+        const sendSpy = vi.spyOn(WebhookClient.prototype, "send").mockResolvedValue({ id: "mock-msg-id" } as never);
+
+        const validToken3 = "a".repeat(68);
+        const mockUserLogsChannel = {
+            id: "user-logs-channel-id",
+            name: "user-logs",
+            type: ChannelType.GuildText,
+            guildId: "guild-1",
+            isSendable: () => true,
+            isTextBased: () => true,
+            isDMBased: () => false,
+            fetchWebhooks: vi.fn().mockResolvedValue(new Collection()),
+            createWebhook: vi.fn().mockResolvedValue({ url: `https://discord.com/api/webhooks/100000000000000003/${validToken3}` }),
+            send: vi.fn()
+        };
+
+        const channelsCollection = new Collection();
+        channelsCollection.set("user-logs-channel-id", mockUserLogsChannel);
+
+        const mockClient = {
+            user: { avatar: null, displayAvatarURL: vi.fn().mockReturnValue("https://cdn.discordapp.com/embed/avatars/0.png") },
+            channels: { fetch: vi.fn().mockResolvedValue(mockUserLogsChannel) },
+            guilds: {
+                fetch: vi.fn().mockResolvedValue({
+                    channels: { fetch: vi.fn().mockResolvedValue(channelsCollection) },
+                    members: { fetch: vi.fn().mockResolvedValue(null) }
+                })
+            }
+        } as unknown as Client;
+
+        const mockForum = { threadFor: vi.fn().mockReturnValue(undefined) } as unknown as TaskForum;
+        const mockLogger = { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() };
+
+        const dispatcher = new NotificationDispatcher(mockClient, "guild-1", settings, mockForum, mockLogger as never, {});
+
+        const roleChangeNotification: PlatformNotification = {
+            type: NotificationType.UserRoleChanged,
+            occurredAt: new Date().toISOString(),
+            user: { discordId: "100000000000000002", username: "animator_user" },
+            role: Role.Contributor,
+            previousRole: Role.Voter,
+            specialties: [Specialty.Animator],
+            actor: { discordId: "100000000000000001", username: "supervisor" }
+        } as unknown as PlatformNotification;
+
+        await dispatcher.handle(roleChangeNotification);
+
+        expect(sendSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                username: "Stairway Users",
+                withComponents: true
+            })
+        );
+        sendSpy.mockRestore();
+    });
+
+    it("must fall back to telemetry/security-alerts webhook for UserRoleChanged when #user-logs is missing", async () => {
+        const sendSpy = vi.spyOn(WebhookClient.prototype, "send").mockResolvedValue({ id: "mock-msg-id" } as never);
+
+        const validToken4 = "b".repeat(68);
+        const mockSecurityAlertsChannel = {
+            id: "security-alerts-channel-id",
+            name: "security-alerts",
+            type: ChannelType.GuildText,
+            guildId: "guild-1",
+            isSendable: () => true,
+            isTextBased: () => true,
+            isDMBased: () => false,
+            fetchWebhooks: vi.fn().mockResolvedValue(new Collection()),
+            createWebhook: vi.fn().mockResolvedValue({ url: `https://discord.com/api/webhooks/100000000000000004/${validToken4}` }),
+            send: vi.fn()
+        };
+
+        const channelsCollection = new Collection();
+        channelsCollection.set("security-alerts-channel-id", mockSecurityAlertsChannel);
+
+        await settings.update((s) => {
+            s.channels[ChannelPurpose.SecurityAlerts] = "security-alerts-channel-id";
+        });
+
+        const mockClient = {
+            user: { avatar: null, displayAvatarURL: vi.fn().mockReturnValue("https://cdn.discordapp.com/embed/avatars/0.png") },
+            channels: { fetch: vi.fn().mockResolvedValue(mockSecurityAlertsChannel) },
+            guilds: {
+                fetch: vi.fn().mockResolvedValue({
+                    channels: { fetch: vi.fn().mockResolvedValue(channelsCollection) },
+                    members: { fetch: vi.fn().mockResolvedValue(null) }
+                })
+            }
+        } as unknown as Client;
+
+        const mockForum = { threadFor: vi.fn().mockReturnValue(undefined) } as unknown as TaskForum;
+        const mockLogger = { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() };
+
+        const dispatcher = new NotificationDispatcher(mockClient, "guild-1", settings, mockForum, mockLogger as never, {});
+
+        const roleChangeNotification: PlatformNotification = {
+            type: NotificationType.UserRoleChanged,
+            occurredAt: new Date().toISOString(),
+            user: { discordId: "100000000000000002", username: "animator_user" },
+            role: Role.Contributor,
+            previousRole: Role.Voter,
+            specialties: [Specialty.Animator],
+            actor: { discordId: "100000000000000001", username: "supervisor" }
+        } as unknown as PlatformNotification;
+
+        await dispatcher.handle(roleChangeNotification);
+
+        expect(sendSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                withComponents: true
             })
         );
         sendSpy.mockRestore();

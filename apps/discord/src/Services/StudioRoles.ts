@@ -305,6 +305,44 @@ export interface MemberRoleSyncResult {
     readonly removed: readonly string[];
 }
 
+// track members recently modified by bot to suppress echo events in guildMemberUpdate
+export const recentlyManagedMemberIds = new Map<string, number>();
+
+export function studioRoleAndSpecialtiesOf(member: GuildMember): { role: Role; specialties: Specialty[] } {
+    const heldStudio = member.roles.cache.map((r) => findStudioRole(r.name)).filter((r): r is StudioRole => r !== undefined);
+
+    let role = Role.Member;
+    if (heldStudio.some((r) => r.tier === StudioTier.Executive)) {
+        role = Role.Admin;
+    } else if (heldStudio.some((r) => r.tier === StudioTier.Department)) {
+        role = Role.Supervisor;
+    } else if (heldStudio.some((r) => r.tier === StudioTier.Contributor)) {
+        role = Role.Contributor;
+    } else if (heldStudio.some((r) => r.name === "Voters")) {
+        role = Role.Voter;
+    }
+
+    const targetTier =
+        role === Role.Admin
+            ? StudioTier.Executive
+            : role === Role.Supervisor
+              ? StudioTier.Department
+              : role === Role.Contributor
+                ? StudioTier.Contributor
+                : null;
+
+    const specialties: Specialty[] = [];
+    if (targetTier !== null) {
+        for (const held of heldStudio) {
+            if (held.tier === targetTier && held.specialty !== undefined && !specialties.includes(held.specialty)) {
+                specialties.push(held.specialty);
+            }
+        }
+    }
+
+    return { role, specialties };
+}
+
 export async function syncMemberStudioRoles(
     member: GuildMember,
     role: Role,
@@ -377,9 +415,13 @@ export async function syncMemberStudioRoles(
         });
     }
 
-    return {
+    const result: MemberRoleSyncResult = {
         modified: toAdd.length > 0 || toRemove.length > 0,
         added: toAdd,
         removed: toRemove
     };
+    if (result.modified) {
+        recentlyManagedMemberIds.set(member.id, Date.now());
+    }
+    return result;
 }
