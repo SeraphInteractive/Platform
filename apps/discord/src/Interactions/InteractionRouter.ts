@@ -4,7 +4,13 @@ import { docsCommand, helpCommand, statusCommand } from "../Commands/InfoCommand
 import { assignRoleCommand, blacklistCommand } from "../Commands/ModerationCommands.js";
 import { reminderCommand } from "../Commands/ReminderCommands.js";
 import { entryPageHandler, roundCommands, roundSelectHandler } from "../Commands/RoundCommands.js";
-import { botSetupCommand, setAnnouncementsCommand, syncRolesCommand } from "../Commands/SetupCommands.js";
+import {
+    botSetupCommand,
+    setAnnouncementsCommand,
+    syncRolesCommand,
+    testLoggingCommand,
+    testLogsCommand
+} from "../Commands/SetupCommands.js";
 import {
     availableTasksCommand,
     claimTaskButtonHandler,
@@ -26,6 +32,18 @@ import {
     banApologyCommand
 } from "../Commands/ApologyReviewHandlers.js";
 import { modResetButtonHandler, modStatusCommand, modStepDownButtonHandler } from "../Commands/ModStatusCommands.js";
+import { feedbackAnswerHandler, feedbackFormHandler } from "../Commands/FeedbackHandlers.js";
+import {
+    ticketActionHandler,
+    ticketApplyHandler,
+    ticketCategoryHandler,
+    ticketCommand,
+    ticketFormHandler,
+    ticketHubHandler,
+    ticketJoinHandler,
+    ticketNoteHandler,
+    ticketTypeHandler
+} from "../Commands/TicketHandlers.js";
 
 export const slashCommands: readonly SlashCommand[] = [
     helpCommand,
@@ -40,12 +58,15 @@ export const slashCommands: readonly SlashCommand[] = [
     submitTaskCommand,
     syncTaskCommand,
     botSetupCommand,
+    testLogsCommand,
+    testLoggingCommand,
     setAnnouncementsCommand,
     syncRolesCommand,
     statusCommand,
     reminderCommand,
     banApologyCommand,
-    modStatusCommand
+    modStatusCommand,
+    ticketCommand
 ];
 
 const componentHandlers: readonly ComponentHandler[] = [
@@ -59,7 +80,17 @@ const componentHandlers: readonly ComponentHandler[] = [
     apologyModalHandler,
     apologyDecisionButtonHandler,
     modStepDownButtonHandler,
-    modResetButtonHandler
+    modResetButtonHandler,
+    ticketCategoryHandler,
+    ticketTypeHandler,
+    ticketHubHandler,
+    ticketApplyHandler,
+    ticketFormHandler,
+    ticketJoinHandler,
+    ticketActionHandler,
+    ticketNoteHandler,
+    feedbackAnswerHandler,
+    feedbackFormHandler
 ];
 
 export class InteractionRouter {

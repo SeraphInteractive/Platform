@@ -1,5 +1,5 @@
 {
-  "id": "9e4fd43b-1912-44c4-8613-57eae056306b",
+  "id": "76100c41-c48a-486e-9dfa-a9cef03c6329",
   "prevId": "80e49220-3ffb-4ff7-ade2-ae8f6422f974",
   "version": "7",
   "dialect": "postgresql",
@@ -406,568 +406,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.cla_events": {
-      "name": "cla_events",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "signature_id": {
-          "name": "signature_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sequence": {
-          "name": "sequence",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "type": {
-          "name": "type",
-          "type": "cla_event_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "actor_kind": {
-          "name": "actor_kind",
-          "type": "cla_actor_kind",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "actor_user_id": {
-          "name": "actor_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "details": {
-          "name": "details",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "previous_hash": {
-          "name": "previous_hash",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "hash": {
-          "name": "hash",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "occurred_at": {
-          "name": "occurred_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "cla_events_signature_sequence": {
-          "name": "cla_events_signature_sequence",
-          "columns": [
-            {
-              "expression": "signature_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "sequence",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "cla_events_signature_id_cla_signatures_id_fk": {
-          "name": "cla_events_signature_id_cla_signatures_id_fk",
-          "tableFrom": "cla_events",
-          "tableTo": "cla_signatures",
-          "columnsFrom": [
-            "signature_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "cla_events_actor_user_id_users_id_fk": {
-          "name": "cla_events_actor_user_id_users_id_fk",
-          "tableFrom": "cla_events",
-          "tableTo": "users",
-          "columnsFrom": [
-            "actor_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "cla_events_sequence_positive": {
-          "name": "cla_events_sequence_positive",
-          "value": "\"cla_events\".\"sequence\" > 0"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.cla_pii_access_log": {
-      "name": "cla_pii_access_log",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "signature_id": {
-          "name": "signature_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "accessor_kind": {
-          "name": "accessor_kind",
-          "type": "cla_actor_kind",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "accessor_user_id": {
-          "name": "accessor_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "purpose": {
-          "name": "purpose",
-          "type": "varchar(300)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "fields": {
-          "name": "fields",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "accessed_at": {
-          "name": "accessed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "cla_pii_access_log_signature_idx": {
-          "name": "cla_pii_access_log_signature_idx",
-          "columns": [
-            {
-              "expression": "signature_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "accessed_at",
-              "isExpression": false,
-              "asc": false,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "cla_pii_access_log_accessed_idx": {
-          "name": "cla_pii_access_log_accessed_idx",
-          "columns": [
-            {
-              "expression": "accessed_at",
-              "isExpression": false,
-              "asc": false,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "cla_pii_access_log_signature_id_cla_signatures_id_fk": {
-          "name": "cla_pii_access_log_signature_id_cla_signatures_id_fk",
-          "tableFrom": "cla_pii_access_log",
-          "tableTo": "cla_signatures",
-          "columnsFrom": [
-            "signature_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "cla_pii_access_log_accessor_user_id_users_id_fk": {
-          "name": "cla_pii_access_log_accessor_user_id_users_id_fk",
-          "tableFrom": "cla_pii_access_log",
-          "tableTo": "users",
-          "columnsFrom": [
-            "accessor_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.cla_signatures": {
-      "name": "cla_signatures",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "cla_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "document_revision": {
-          "name": "document_revision",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "document_hash": {
-          "name": "document_hash",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "country": {
-          "name": "country",
-          "type": "varchar(2)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "region": {
-          "name": "region",
-          "type": "varchar(8)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "age_of_majority": {
-          "name": "age_of_majority",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "is_minor": {
-          "name": "is_minor",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "contributor_pii": {
-          "name": "contributor_pii",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "signed_at": {
-          "name": "signed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "guardian_pii": {
-          "name": "guardian_pii",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "guardian_token_hash": {
-          "name": "guardian_token_hash",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "guardian_requested_at": {
-          "name": "guardian_requested_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "guardian_expires_at": {
-          "name": "guardian_expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "guardian_decided_at": {
-          "name": "guardian_decided_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "guardian_decision_pii": {
-          "name": "guardian_decision_pii",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "activated_at": {
-          "name": "activated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "revoked_at": {
-          "name": "revoked_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "revoked_by": {
-          "name": "revoked_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "revocation_reason": {
-          "name": "revocation_reason",
-          "type": "varchar(300)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "purge_after": {
-          "name": "purge_after",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pii_purged_at": {
-          "name": "pii_purged_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "cla_signatures_user_signed_idx": {
-          "name": "cla_signatures_user_signed_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "signed_at",
-              "isExpression": false,
-              "asc": false,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "cla_signatures_status_signed_idx": {
-          "name": "cla_signatures_status_signed_idx",
-          "columns": [
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "signed_at",
-              "isExpression": false,
-              "asc": false,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "cla_signatures_one_open_per_user": {
-          "name": "cla_signatures_one_open_per_user",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"cla_signatures\".\"status\" IN ('pending_guardian', 'active')",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "cla_signatures_guardian_expiry_idx": {
-          "name": "cla_signatures_guardian_expiry_idx",
-          "columns": [
-            {
-              "expression": "guardian_expires_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"cla_signatures\".\"status\" = 'pending_guardian'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "cla_signatures_purge_idx": {
-          "name": "cla_signatures_purge_idx",
-          "columns": [
-            {
-              "expression": "purge_after",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"cla_signatures\".\"pii_purged_at\" IS NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "cla_signatures_user_id_users_id_fk": {
-          "name": "cla_signatures_user_id_users_id_fk",
-          "tableFrom": "cla_signatures",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "cla_signatures_revoked_by_users_id_fk": {
-          "name": "cla_signatures_revoked_by_users_id_fk",
-          "tableFrom": "cla_signatures",
-          "tableTo": "users",
-          "columnsFrom": [
-            "revoked_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "cla_signatures_guardian_token_hash_unique": {
-          "name": "cla_signatures_guardian_token_hash_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "guardian_token_hash"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "cla_signatures_active_has_activation": {
-          "name": "cla_signatures_active_has_activation",
-          "value": "\"cla_signatures\".\"status\" <> 'active' OR \"cla_signatures\".\"activated_at\" IS NOT NULL"
-        },
-        "cla_signatures_revoked_has_time": {
-          "name": "cla_signatures_revoked_has_time",
-          "value": "\"cla_signatures\".\"status\" <> 'revoked' OR \"cla_signatures\".\"revoked_at\" IS NOT NULL"
-        },
-        "cla_signatures_pending_is_minor": {
-          "name": "cla_signatures_pending_is_minor",
-          "value": "\"cla_signatures\".\"status\" <> 'pending_guardian' OR \"cla_signatures\".\"is_minor\""
-        },
-        "cla_signatures_country_code": {
-          "name": "cla_signatures_country_code",
-          "value": "\"cla_signatures\".\"country\" ~ '^[A-Z]{2}$'"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.deleted_storage_objects": {
       "name": "deleted_storage_objects",
       "schema": "",
@@ -1022,6 +460,72 @@
           "with": {}
         }
       },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.discord_settings": {
+      "name": "discord_settings",
+      "schema": "",
+      "columns": {
+        "guild_id": {
+          "name": "guild_id",
+          "type": "varchar(20)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "channels": {
+          "name": "channels",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "roles": {
+          "name": "roles",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "forum_tags": {
+          "name": "forum_tags",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "notification_cursor": {
+          "name": "notification_cursor",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rules_message_id": {
+          "name": "rules_message_id",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -2946,45 +2450,6 @@
     }
   },
   "enums": {
-    "public.cla_actor_kind": {
-      "name": "cla_actor_kind",
-      "schema": "public",
-      "values": [
-        "contributor",
-        "guardian",
-        "staff",
-        "system"
-      ]
-    },
-    "public.cla_event_type": {
-      "name": "cla_event_type",
-      "schema": "public",
-      "values": [
-        "signed",
-        "guardian_requested",
-        "guardian_email_resent",
-        "guardian_approved",
-        "guardian_rejected",
-        "guardian_expired",
-        "activated",
-        "superseded",
-        "revoked",
-        "receipt_sent",
-        "pii_purged"
-      ]
-    },
-    "public.cla_status": {
-      "name": "cla_status",
-      "schema": "public",
-      "values": [
-        "pending_guardian",
-        "active",
-        "guardian_rejected",
-        "guardian_expired",
-        "superseded",
-        "revoked"
-      ]
-    },
     "public.difficulty_tier": {
       "name": "difficulty_tier",
       "schema": "public",

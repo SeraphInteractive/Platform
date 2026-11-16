@@ -1,11 +1,12 @@
-import { Role } from "@platform/contracts";
-import { ActivityType, Client, Events, GatewayIntentBits, REST, Routes, type SendableChannels } from "discord.js";
+import { NotificationType, Role } from "@platform/contracts";
+import { ActivityType, AuditLogEvent, Client, Events, GatewayIntentBits, REST, Routes, type SendableChannels } from "discord.js";
 import { NotificationConsumer } from "./Api/NotificationConsumer.js";
 import { PlatformApiClient } from "./Api/PlatformApiClient.js";
 import type { BotContext } from "./Commands/Command.js";
 import { createLogger } from "./Common/Logger.js";
 import { ConfigurationError, loadBotConfiguration } from "./Configuration/BotConfiguration.js";
 import { Accent, message, panel } from "./Discord/Ui.js";
+import { discordRest, discordRestOptions } from "./Discord/Rest.js";
 import { InteractionRouter, slashCommands } from "./Interactions/InteractionRouter.js";
 import { NotificationDispatcher } from "./Services/NotificationDispatcher.js";
 import { ReminderScheduler } from "./Services/ReminderScheduler.js";
@@ -13,8 +14,15 @@ import { RoleReconciliationService } from "./Services/RoleReconciliationService.
 import { RoleSyncScheduler } from "./Services/RoleSyncScheduler.js";
 import { ProfanityFilter } from "./Services/ProfanityFilter.js";
 import { ServerProvisioner } from "./Services/ServerProvisioner.js";
-import { syncMemberStudioRoles } from "./Services/StudioRoles.js";
+import {
+    isStudioOrLegacyRole,
+    recentlyManagedMemberIds,
+    studioRoleAndSpecialtiesOf,
+    syncMemberStudioRoles
+} from "./Services/StudioRoles.js";
 import { TaskForum } from "./Services/TaskForum.js";
+import { TicketDesk } from "./Services/TicketDesk.js";
+import { CrewCheckIns } from "./Services/CrewCheckIns.js";
 import { ReminderStore } from "./State/ReminderStore.js";
 import { ChannelPurpose, SettingsStore } from "./State/SettingsStore.js";
 import { WarningStore } from "./State/WarningStore.js";
@@ -22,10 +30,11 @@ import { WarningStore } from "./State/WarningStore.js";
 async function main(): Promise<void> {
     const configuration = loadBotConfiguration();
     const logger = createLogger(configuration.logLevel, configuration.logFormat === "pretty");
-    const settings = new SettingsStore(configuration.dataDirectory);
+    const api = new PlatformApiClient(configuration.apiBaseUrl, configuration.serviceToken, logger);
+    const settings = new SettingsStore(configuration.dataDirectory, api, configuration.guildId);
     await settings.load();
 
-    const warnings = new WarningStore(configuration.dataDirectory);
+    const warnings = new WarningStore(configuration.dataDirectory, api);
     await warnings.load();
 
     const client = new Client({
@@ -34,18 +43,54 @@ async function main(): Promise<void> {
             GatewayIntentBits.GuildMembers,
             GatewayIntentBits.GuildMessages,
             GatewayIntentBits.MessageContent
-        ]
+        ],
+        ...discordRestOptions
     });
-    const api = new PlatformApiClient(configuration.apiBaseUrl, configuration.serviceToken, logger);
     const forum = new TaskForum(client, configuration.guildId, settings, api, logger);
     const webhookUrls = {
-        telemetry: configuration.telemetryWebhookUrl,
-        taskLogs: configuration.taskLogsWebhookUrl,
-        moderationLogs: configuration.moderationLogsWebhookUrl,
-        rules: configuration.rulesWebhookUrl
+        telemetry: configuration.telemetryWebhookUrl ?? settings.webhook("telemetry"),
+        securityAlerts: settings.webhook("securityAlerts") ?? settings.webhook("telemetry"),
+        moderationLogs: configuration.moderationLogsWebhookUrl ?? settings.webhook("moderationLogs"),
+        taskLogs: settings.webhook("taskLogs"),
+        votingLogs: settings.webhook("votingLogs"),
+        userLogs: settings.webhook("userLogs"),
+        systemLogs: settings.webhook("systemLogs")
     };
-    const dispatcher = new NotificationDispatcher(client, configuration.guildId, settings, forum, logger, webhookUrls);
-    const consumer = new NotificationConsumer(api, settings, (notification) => dispatcher.handle(notification), logger);
+    const dispatcher = new NotificationDispatcher(
+        client,
+        configuration.guildId,
+        settings,
+        forum,
+        logger,
+        webhookUrls,
+        api,
+        configuration.webAppUrl
+    );
+    const tickets = new TicketDesk(client, configuration.guildId, api, logger, configuration.webAppUrl);
+    const checkIns = new CrewCheckIns(client, configuration.guildId, api, logger);
+    const consumer = new NotificationConsumer(
+        api,
+        settings,
+        (notification) => {
+            if (notification.type === NotificationType.TicketConfigUpdated) {
+                return tickets.onConfigChanged(notification);
+            }
+            if (notification.type === NotificationType.TicketActivity) {
+                return tickets.handleActivity(notification);
+            }
+            if (notification.type === NotificationType.FeedbackSurveyOpened) {
+                return checkIns.opened(notification.surveyId);
+            }
+            if (notification.type === NotificationType.FeedbackSurveyClosed) {
+                return checkIns.closed(notification.surveyId);
+            }
+            if (notification.type === NotificationType.FeedbackOutcomeRecorded) {
+                return checkIns.outcome(notification.surveyId);
+            }
+            return dispatcher.handle(notification);
+        },
+        logger
+    );
     const provisioner = new ServerProvisioner(settings, logger, configuration.announcementsChannelId, api, webhookUrls);
     const reminders = new ReminderStore(configuration.dataDirectory);
     await reminders.load();
@@ -58,6 +103,7 @@ async function main(): Promise<void> {
         api,
         settings,
         forum,
+        dispatcher,
         provisioner,
         consumer,
         reminders,
@@ -66,11 +112,12 @@ async function main(): Promise<void> {
         roleScheduler,
         warnings,
         profanityFilter,
+        tickets,
         logger
     };
     const router = new InteractionRouter(context);
 
-    await new REST({ version: "10" })
+    await new REST({ version: "10", ...discordRest })
         .setToken(configuration.discordToken)
         .put(Routes.applicationGuildCommands(configuration.clientId, configuration.guildId), {
             body: slashCommands.map((command) => command.definition)
@@ -92,6 +139,10 @@ async function main(): Promise<void> {
             await forum.load().catch((error: unknown) => {
                 logger.warn({ err: error }, "failed to load task thread bindings");
             });
+            await tickets.start(guild).catch((error: unknown) => {
+                logger.warn({ err: error }, "failed to start the ticket desk");
+            });
+            await checkIns.start();
             consumer.start();
             reminderScheduler.start();
             roleScheduler.start();
@@ -113,10 +164,16 @@ async function main(): Promise<void> {
 
     client.on(Events.MessageCreate, (msg) => {
         void profanityFilter.inspectMessage(msg);
+        void tickets.recordMessage(msg);
     });
 
     client.on(Events.MessageUpdate, (_oldMsg, newMsg) => {
         void profanityFilter.inspectMessage(newMsg);
+        void tickets.recordEdit(newMsg);
+    });
+
+    client.on(Events.MessageDelete, (msg) => {
+        void tickets.recordDelete(msg);
     });
 
     client.on(Events.GuildMemberAdd, (member) => {
@@ -131,6 +188,7 @@ async function main(): Promise<void> {
                     logger.info({ member: member.id }, "banned blacklisted member upon joining");
                     return;
                 }
+                tickets.scheduleDirectorySync(member.guild);
                 if (user !== null) {
                     await syncMemberStudioRoles(member, user.role, user.specialties, "Member joined/rejoined");
                 } else {
@@ -185,7 +243,90 @@ async function main(): Promise<void> {
                     }
                 }
             }
+
+            // sync manual role edits from discord back to platform
+            const oldRoleIds = new Set(oldMember.roles.cache.keys());
+            const newRoleIds = new Set(newMember.roles.cache.keys());
+            const addedRoleIds = [...newRoleIds].filter((id) => !oldRoleIds.has(id));
+            const removedRoleIds = [...oldRoleIds].filter((id) => !newRoleIds.has(id));
+
+            if (addedRoleIds.length > 0 || removedRoleIds.length > 0) {
+                const changedRoles = [...addedRoleIds, ...removedRoleIds]
+                    .map((id) => newMember.guild.roles.cache.get(id) ?? oldMember.guild.roles.cache.get(id))
+                    .filter((r) => r !== undefined && isStudioOrLegacyRole(r.name));
+
+                if (changedRoles.length > 0) {
+                    const lastBotSync = recentlyManagedMemberIds.get(newMember.id);
+                    if (lastBotSync !== undefined && Date.now() - lastBotSync < 10000) {
+                        return;
+                    }
+
+                    const auditLogs = await newMember.guild
+                        .fetchAuditLogs({
+                            type: AuditLogEvent.MemberRoleUpdate,
+                            limit: 1
+                        })
+                        .catch(() => null);
+                    const entry = auditLogs?.entries.first();
+                    const isRecent = entry !== undefined && Date.now() - entry.createdTimestamp < 10000;
+                    const isTargetMember = entry?.targetId === newMember.id;
+                    if (isRecent && isTargetMember && entry.executorId === client.user?.id) {
+                        return;
+                    }
+
+                    try {
+                        const mapped = studioRoleAndSpecialtiesOf(newMember);
+                        const executorUser = entry?.executor;
+                        const executor =
+                            executorUser !== null && executorUser !== undefined
+                                ? {
+                                      id: executorUser.id,
+                                      username: executorUser.globalName ?? executorUser.username ?? "Unknown",
+                                      avatar: executorUser.avatar ?? null
+                                  }
+                                : undefined;
+                        const clientToUse = executor !== undefined ? api.as(executor) : api;
+                        await clientToUse.setRole(
+                            newMember.id,
+                            mapped.role,
+                            mapped.specialties,
+                            newMember.user.globalName ?? newMember.user.username
+                        );
+                    } catch (err: unknown) {
+                        logger.warn({ err, memberId: newMember.id }, "failed to sync manual discord role update to api");
+                    }
+                }
+            }
         })();
+    });
+
+    client.on(Events.ChannelCreate, (channel) => {
+        tickets.scheduleDirectorySync(channel.guild);
+    });
+    client.on(Events.ChannelUpdate, (_previous, channel) => {
+        if (!channel.isDMBased()) {
+            tickets.scheduleDirectorySync(channel.guild);
+        }
+    });
+    client.on(Events.ChannelDelete, (channel) => {
+        if (!channel.isDMBased()) {
+            tickets.scheduleDirectorySync(channel.guild);
+        }
+    });
+    client.on(Events.GuildRoleCreate, (role) => {
+        tickets.scheduleDirectorySync(role.guild);
+    });
+    client.on(Events.GuildRoleUpdate, (_previous, role) => {
+        tickets.scheduleDirectorySync(role.guild);
+    });
+    client.on(Events.GuildMemberUpdate, (_previous, member) => {
+        tickets.scheduleDirectorySync(member.guild);
+    });
+    client.on(Events.GuildMemberRemove, (member) => {
+        tickets.scheduleDirectorySync(member.guild);
+    });
+    client.on(Events.GuildRoleDelete, (role) => {
+        tickets.scheduleDirectorySync(role.guild);
     });
 
     client.on(Events.Error, (error) => {
@@ -207,6 +348,7 @@ async function main(): Promise<void> {
         reminderScheduler.stop();
         roleScheduler.stop();
         profanityFilter.stop();
+        tickets.stop();
         void client.destroy().finally(() => process.exit(0));
     };
     process.once("SIGTERM", () => {

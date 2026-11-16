@@ -18,6 +18,9 @@ export enum ErrorCode {
     ShotUnavailable = "SHOT_UNAVAILABLE",
     SeniorPriorityLock = "SENIOR_PRIORITY_LOCK",
     SubmissionNotPending = "SUBMISSION_NOT_PENDING",
+    TicketUnavailable = "TICKET_UNAVAILABLE",
+    DuplicateTicket = "DUPLICATE_TICKET",
+    TicketClosed = "TICKET_CLOSED",
     UploadMissing = "UPLOAD_MISSING",
     InvalidLoginCode = "INVALID_LOGIN_CODE",
     TermsNotAccepted = "TERMS_NOT_ACCEPTED",
@@ -28,6 +31,8 @@ export enum ErrorCode {
     GuardianRequired = "GUARDIAN_REQUIRED",
     PayloadTooLarge = "PAYLOAD_TOO_LARGE",
     UnsupportedMediaType = "UNSUPPORTED_MEDIA_TYPE",
+    SpecialtyRequired = "SPECIALTY_REQUIRED",
+    UnauthorizedDepartment = "UNAUTHORIZED_DEPARTMENT",
     TooManyRequests = "TOO_MANY_REQUESTS",
     ServiceUnavailable = "SERVICE_UNAVAILABLE",
     InternalError = "INTERNAL_ERROR"

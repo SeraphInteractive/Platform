@@ -1,7 +1,7 @@
 import { Role, type Specialty } from "@platform/contracts";
-import { MessageFlags, SlashCommandBuilder, type ChatInputCommandInteraction, type GuildMember } from "discord.js";
+import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder, type ChatInputCommandInteraction, type GuildMember } from "discord.js";
 import { asEdit, ephemeral, message, panel, plain } from "../Discord/Ui.js";
-import { findStudioRole, isLeadership, platformRoleFor } from "../Services/StudioRoles.js";
+import { findStudioRole, isLeadership, platformRoleFor, StudioTier, syncMemberStudioRoles } from "../Services/StudioRoles.js";
 import { actingAs, requirePlatformRole, UserFacingError, type BotContext, type SlashCommand } from "./Command.js";
 
 export const blacklistCommand: SlashCommand = {
@@ -40,6 +40,7 @@ export const assignRoleCommand: SlashCommand = {
     definition: new SlashCommandBuilder()
         .setName("assign-role")
         .setDescription("Give someone a studio role and matching platform access")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
         .addUserOption((option) => option.setName("member").setDescription("Who gets the role").setRequired(true))
         .addRoleOption((option) => option.setName("role").setDescription("Studio role").setRequired(true))
         .addStringOption((option) => option.setName("reason").setDescription("Why (kept in the audit log)").setMaxLength(300))
@@ -62,6 +63,7 @@ export const assignRoleCommand: SlashCommand = {
             throw new UserFacingError("That person isn't in this server.");
         }
         await interaction.deferReply();
+        await requirePlatformRole(interaction, context, Role.Supervisor);
         const api = actingAs(interaction, context);
         const reason = `${interaction.options.getString("reason") ?? "Assigned with /assign-role"} (by ${interaction.user.username})`;
 
@@ -74,6 +76,14 @@ export const assignRoleCommand: SlashCommand = {
             return [...new Set(extra === undefined ? specialties : [extra, ...specialties])].slice(0, 2);
         };
 
+        const targetRole = platformRoleFor(studio.tier);
+        const isCommunity = studio.tier === StudioTier.Community;
+        const targetSpecialties = isCommunity
+            ? []
+            : studio.specialty !== undefined
+              ? [studio.specialty]
+              : specialtiesOf(member, studio.specialty);
+
         const previous: GuildMember[] = [];
         if (isLeadership(studio.tier)) {
             await guild.members.fetch();
@@ -85,26 +95,17 @@ export const assignRoleCommand: SlashCommand = {
                     (held) => held.id !== role.id && isLeadership(findStudioRole(held.name)?.tier ?? 3)
                 );
                 if (!keepsLeadership) {
-                    await api.setRole(
-                        holder.id,
-                        Role.Contributor,
-                        specialtiesOf(holder, undefined, role.id),
-                        holder.user.globalName ?? holder.user.username
-                    );
+                    const demotedSpecs = specialtiesOf(holder, undefined, role.id);
+                    await api.setRole(holder.id, Role.Contributor, demotedSpecs, holder.user.globalName ?? holder.user.username);
+                    await syncMemberStudioRoles(holder, Role.Contributor, demotedSpecs, reason).catch(() => undefined);
+                } else {
+                    await holder.roles.remove(role.id, reason.slice(0, 400)).catch(() => undefined);
                 }
                 previous.push(holder);
             }
         }
-        await api.setRole(
-            member.id,
-            platformRoleFor(studio.tier),
-            specialtiesOf(member, studio.specialty),
-            member.user.globalName ?? member.user.username
-        );
-        for (const holder of previous) {
-            await holder.roles.remove(role.id, reason.slice(0, 400));
-        }
-        await member.roles.add(role.id, reason.slice(0, 400));
+        const updatedUser = await api.setRole(member.id, targetRole, targetSpecialties, member.user.globalName ?? member.user.username);
+        await syncMemberStudioRoles(member, updatedUser?.role ?? targetRole, updatedUser?.specialties ?? targetSpecialties, reason);
 
         const lines = [
             `<@${member.id}> now has <@&${role.id}>.`,

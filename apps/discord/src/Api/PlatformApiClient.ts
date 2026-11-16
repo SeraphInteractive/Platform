@@ -3,6 +3,8 @@ import {
     autoModRuleSchema,
     ballotSchema,
     dataEnvelope,
+    departmentSchema,
+    type DepartmentDto,
     documentSchema,
     entrySchema,
     leaderboardSchema,
@@ -42,10 +44,39 @@ import {
     type ShotDetailDto,
     type ShotDto,
     type ShotThreadMapDto,
+    type ShotType,
     type Specialty,
     type SubmissionDto,
     type UserDto,
-    type AutoModRuleDto
+    type AutoModRuleDto,
+    discordSettingsSchema,
+    type DiscordSettingsDto,
+    type UpdateDiscordSettingsDto,
+    userModerationRecordSchema,
+    type UserModerationRecordDto,
+    type UpdateUserModerationRecordDto,
+    departmentDeskSchema,
+    discordDirectorySchema,
+    type DepartmentDeskDto,
+    type EnsureDepartmentDeskDto,
+    feedbackSurveySchema,
+    type FeedbackResponseInputDto,
+    type FeedbackSurveyDto,
+    ticketConfigSchema,
+    ticketSchema,
+    ticketHubSchema,
+    ticketLimits,
+    TicketStatus,
+    type BindTicketDto,
+    type CloseTicketDto,
+    type OpenTicketDto,
+    type TicketConfigDto,
+    type TicketDto,
+    type AddTicketMemberDto,
+    type AssignTicketDto,
+    type RecordTicketMessageDto,
+    type TicketStageInputDto,
+    type UpdateDiscordDirectoryDto
 } from "@platform/contracts";
 
 import type { Logger } from "pino";
@@ -158,6 +189,21 @@ export class PlatformApiClient {
         return shots;
     }
 
+    public async searchShots(params?: { q?: string; status?: string; departmentId?: string; limit?: number }): Promise<readonly ShotDto[]> {
+        const query: Record<string, string | number> = { page: 1, perPage: params?.limit ?? 25 };
+        if (params?.q) {
+            query.search = params.q;
+        }
+        if (params?.status) {
+            query.status = params.status;
+        }
+        if (params?.departmentId) {
+            query.departmentId = params.departmentId;
+        }
+        const result = await this.send("/shots", pageEnvelope(shotSchema), { query });
+        return result.data;
+    }
+
     public async listAllUsers(): Promise<readonly ModeratedUserDto[]> {
         const users: ModeratedUserDto[] = [];
         for (let page = 1; page <= 100; page++) {
@@ -187,6 +233,199 @@ export class PlatformApiClient {
 
     public async listAutoModRules(): Promise<readonly AutoModRuleDto[]> {
         return (await this.send("/automod", dataEnvelope(z.array(autoModRuleSchema)))).data;
+    }
+
+    public async getDiscordSettings(guildId: string): Promise<DiscordSettingsDto | null> {
+        try {
+            return (await this.send(`/discord/settings/${guildId}`, dataEnvelope(discordSettingsSchema))).data;
+        } catch (error: unknown) {
+            if (error instanceof PlatformApiError && error.status === 404) {
+                return null;
+            }
+            throw error;
+        }
+    }
+
+    public async updateDiscordSettings(guildId: string, input: UpdateDiscordSettingsDto): Promise<DiscordSettingsDto> {
+        return (
+            await this.send(`/discord/settings/${guildId}`, dataEnvelope(discordSettingsSchema), {
+                method: "PUT",
+                body: input
+            })
+        ).data;
+    }
+
+    public async listDepartments(): Promise<readonly DepartmentDto[]> {
+        return (await this.send("/departments", dataEnvelope(z.array(departmentSchema)))).data;
+    }
+
+    public async getDepartment(idOrSlug: string): Promise<DepartmentDto> {
+        return (await this.send(`/departments/${encodeURIComponent(idOrSlug)}`, dataEnvelope(departmentSchema))).data;
+    }
+
+    public async bindDepartmentDiscordMap(
+        departmentId: string,
+        map: {
+            discordCategoryId: string;
+            discordForumId: string;
+            discordChatChannelId?: string | null;
+            discordInfoChannelId?: string | null;
+            discordInfoWebhookUrl?: string | null;
+            discordLogsChannelId?: string | null;
+            discordLogsWebhookUrl?: string | null;
+            discordApplyChannelId?: string | null;
+        }
+    ): Promise<DepartmentDto> {
+        return (
+            await this.send(`/departments/${departmentId}/discord-map`, dataEnvelope(departmentSchema), {
+                method: "PUT",
+                body: map
+            })
+        ).data;
+    }
+
+    public async listModerationRecords(query?: {
+        offenceLevel?: number;
+        apologyStatus?: string;
+    }): Promise<readonly UserModerationRecordDto[]> {
+        const search = new URLSearchParams();
+        if (query?.offenceLevel !== undefined) {
+            search.set("offenceLevel", String(query.offenceLevel));
+        }
+        if (query?.apologyStatus !== undefined) {
+            search.set("apologyStatus", query.apologyStatus);
+        }
+        const qs = search.toString();
+        const path = `/discord/moderation${qs ? `?${qs}` : ""}`;
+        return (await this.send(path, dataEnvelope(z.array(userModerationRecordSchema)))).data;
+    }
+
+    public async getModerationRecord(userId: string): Promise<UserModerationRecordDto> {
+        return (await this.send(`/discord/moderation/${userId}`, dataEnvelope(userModerationRecordSchema))).data;
+    }
+
+    public async updateModerationRecord(userId: string, input: UpdateUserModerationRecordDto): Promise<UserModerationRecordDto> {
+        return (
+            await this.send(`/discord/moderation/${userId}`, dataEnvelope(userModerationRecordSchema), {
+                method: "PUT",
+                body: input
+            })
+        ).data;
+    }
+
+    public async deleteModerationRecord(userId: string): Promise<boolean> {
+        return (
+            await this.send(`/discord/moderation/${userId}`, dataEnvelope(z.object({ deleted: z.boolean() })), {
+                method: "DELETE"
+            })
+        ).data.deleted;
+    }
+
+    public async getTicketConfig(): Promise<TicketConfigDto> {
+        return (await this.send("/tickets/config", dataEnvelope(ticketConfigSchema))).data;
+    }
+
+    public async ensureDepartmentDesk(departmentId: string, input: EnsureDepartmentDeskDto): Promise<DepartmentDeskDto> {
+        return (
+            await this.send(`/tickets/departments/${departmentId}/desk`, dataEnvelope(departmentDeskSchema), { method: "PUT", body: input })
+        ).data;
+    }
+
+    public async bindTicketHub(hubId: string, messageId: string | null): Promise<void> {
+        await this.send(`/tickets/hubs/${hubId}/message`, dataEnvelope(ticketHubSchema), { method: "PUT", body: { messageId } });
+    }
+
+    public async openTicket(input: OpenTicketDto): Promise<TicketDto> {
+        return (await this.send("/tickets", dataEnvelope(ticketSchema), { method: "POST", body: input })).data;
+    }
+
+    public async getTicket(ticketId: string): Promise<TicketDto> {
+        return (await this.send(`/tickets/${ticketId}`, dataEnvelope(ticketSchema))).data;
+    }
+
+    public async getTicketByThread(threadId: string): Promise<TicketDto | null> {
+        try {
+            return (await this.send(`/tickets/by-thread/${threadId}`, dataEnvelope(ticketSchema))).data;
+        } catch (error: unknown) {
+            if (error instanceof PlatformApiError && error.status === 404) {
+                return null;
+            }
+            throw error;
+        }
+    }
+
+    public async findOpenTicket(typeId: string, openerDiscordId: string): Promise<TicketDto | null> {
+        const page = await this.send("/tickets", pageEnvelope(ticketSchema), {
+            query: { typeId, openerDiscordId, status: TicketStatus.Open, perPage: 1 }
+        });
+        return page.data[0] ?? null;
+    }
+
+    public async openTicketThreads(): Promise<readonly { ticketId: string; threadId: string }[]> {
+        return (await this.send("/tickets/open-threads", dataEnvelope(z.array(z.object({ ticketId: z.string(), threadId: z.string() })))))
+            .data;
+    }
+
+    public async bindTicket(ticketId: string, input: BindTicketDto): Promise<TicketDto> {
+        return (await this.send(`/tickets/${ticketId}`, dataEnvelope(ticketSchema), { method: "PATCH", body: input })).data;
+    }
+
+    public async setTicketStage(ticketId: string, input: TicketStageInputDto): Promise<TicketDto> {
+        return (await this.send(`/tickets/${ticketId}/stage`, dataEnvelope(ticketSchema), { method: "POST", body: input })).data;
+    }
+
+    public async closeTicket(ticketId: string, input: CloseTicketDto): Promise<TicketDto> {
+        return (await this.send(`/tickets/${ticketId}/close`, dataEnvelope(ticketSchema), { method: "POST", body: input })).data;
+    }
+
+    public async assignTicket(ticketId: string, input: AssignTicketDto): Promise<TicketDto> {
+        return (await this.send(`/tickets/${ticketId}/assign`, dataEnvelope(ticketSchema), { method: "POST", body: input })).data;
+    }
+
+    public async addTicketMember(ticketId: string, input: AddTicketMemberDto): Promise<TicketDto> {
+        return (await this.send(`/tickets/${ticketId}/members`, dataEnvelope(ticketSchema), { method: "POST", body: input })).data;
+    }
+
+    public async recordTicketMessages(ticketId: string, messages: readonly RecordTicketMessageDto[]): Promise<void> {
+        for (let index = 0; index < messages.length; index += ticketLimits.messageBatch) {
+            await this.send(`/tickets/${ticketId}/messages`, dataEnvelope(z.object({ recorded: z.number() })), {
+                method: "PUT",
+                body: { messages: messages.slice(index, index + ticketLimits.messageBatch) }
+            });
+        }
+    }
+
+    public async deleteTicketMessage(ticketId: string, discordMessageId: string): Promise<void> {
+        await this.send(`/tickets/${ticketId}/messages/${discordMessageId}`, emptySchema, { method: "DELETE" });
+    }
+
+    public async linkTicketReply(ticketId: string, messageId: string, discordMessageId: string): Promise<void> {
+        await this.send(`/tickets/${ticketId}/replies/${messageId}/link`, emptySchema, { method: "PUT", body: { discordMessageId } });
+    }
+
+    public async getFeedbackSurvey(surveyId: string): Promise<FeedbackSurveyDto> {
+        return (await this.send(`/feedback/surveys/${surveyId}`, dataEnvelope(feedbackSurveySchema))).data;
+    }
+
+    public async openFeedbackSurveys(): Promise<readonly FeedbackSurveyDto[]> {
+        return (await this.send("/feedback/open-surveys", dataEnvelope(z.array(feedbackSurveySchema)))).data;
+    }
+
+    public async recordFeedbackResponse(surveyId: string, input: FeedbackResponseInputDto): Promise<{ updated: boolean }> {
+        return (
+            await this.send(`/feedback/surveys/${surveyId}/responses`, dataEnvelope(z.object({ updated: z.boolean() })), {
+                method: "PUT",
+                body: input
+            })
+        ).data;
+    }
+
+    public async bindFeedbackSurvey(surveyId: string, messageId: string | null): Promise<void> {
+        await this.send(`/feedback/surveys/${surveyId}/message`, emptySchema, { method: "PUT", body: { messageId } });
+    }
+
+    public async replaceDirectory(input: UpdateDiscordDirectoryDto): Promise<void> {
+        await this.send("/discord/directory", dataEnvelope(discordDirectorySchema), { method: "PUT", body: input });
     }
 
     public async isHealthy(): Promise<{ healthy: boolean; latencyMs: number }> {
@@ -267,6 +506,15 @@ export class PlatformApiClient {
         }
         return parsed.data;
     }
+
+    public async setRole(discordId: string, role: Role, specialties: readonly Specialty[], discordUsername: string): Promise<UserDto> {
+        return (
+            await this.send(`/users/by-discord/${discordId}/role`, dataEnvelope(userSchema), {
+                method: "PUT",
+                body: { role, specialties, discordUsername: discordUsername.slice(0, 64) }
+            })
+        ).data;
+    }
 }
 
 export class ActingApiClient {
@@ -318,6 +566,7 @@ export class ActingApiClient {
         difficultyTier: DifficultyTier;
         description: string | null;
         seniorPriorityHours: number;
+        shotType?: ShotType;
     }): Promise<ShotDto> {
         return (await this.request("/shots", dataEnvelope(shotSchema), { method: "POST", body: input })).data;
     }

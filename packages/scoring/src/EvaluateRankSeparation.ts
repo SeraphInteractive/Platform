@@ -24,7 +24,12 @@ export function evaluateRankSeparation(
     let pValue = 1;
     let isDecisive = false;
 
-    if (standardError > 1e-9) {
+    if (totalBallots <= 1) {
+        // sample size is insufficient to reject null hypothesis or declare a decisive lead
+        zScore = 0;
+        pValue = 1;
+        isDecisive = false;
+    } else if (standardError > 1e-9) {
         zScore = deltaScore / standardError;
         pValue = approximateTwoTailedPValue(zScore);
         isDecisive = zScore >= zThreshold;

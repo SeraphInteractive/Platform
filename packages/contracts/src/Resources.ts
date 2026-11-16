@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
     DifficultyTier,
+    DepartmentSlug,
     DocumentSlug,
     documentLimits,
     EntryStatus,
@@ -13,6 +14,7 @@ import {
     SeparationAction,
     SeparationStatus,
     ShotStatus,
+    ShotType,
     Specialty,
     SubmissionStatus
 } from "./Enums.js";
@@ -218,6 +220,27 @@ export const raidTelemetrySchema = z
     })
     .meta({ id: "RaidTelemetry" });
 
+export const departmentSchema = z
+    .object({
+        id: uuidSchema,
+        name: z.string(),
+        slug: z.enum(DepartmentSlug),
+        supervisorSpecialties: z.array(z.enum(Specialty)),
+        contributorSpecialties: z.array(z.enum(Specialty)),
+        shotTypes: z.array(z.enum(ShotType)),
+        discordCategoryId: snowflakeSchema.nullable().optional(),
+        discordForumId: snowflakeSchema.nullable().optional(),
+        discordChatChannelId: snowflakeSchema.nullable().optional(),
+        discordInfoChannelId: snowflakeSchema.nullable().optional(),
+        discordInfoWebhookUrl: z.string().nullable().optional(),
+        discordLogsChannelId: snowflakeSchema.nullable().optional(),
+        discordLogsWebhookUrl: z.string().nullable().optional(),
+        discordApplyChannelId: snowflakeSchema.nullable().optional(),
+        createdAt: timestampSchema,
+        updatedAt: timestampSchema
+    })
+    .meta({ id: "Department" });
+
 export const shotSchema = z
     .object({
         id: uuidSchema,
@@ -228,8 +251,11 @@ export const shotSchema = z
         description: z.string().nullable(),
         difficultyTier: z.enum(DifficultyTier),
         tierDays: z.number().int(),
+        shotType: z.enum(ShotType),
+        departmentId: uuidSchema.nullable().optional(),
         status: z.enum(ShotStatus),
         claimer: userSummarySchema.nullable(),
+        creator: userSummarySchema.nullable().default(null),
         claimedAt: timestampSchema.nullable(),
         deadlineAt: timestampSchema.nullable(),
         seniorPriorityUntil: timestampSchema.nullable(),
@@ -315,6 +341,7 @@ export type LeaderboardDto = z.infer<typeof leaderboardSchema>;
 export type SeparationDto = z.infer<typeof separationSchema>;
 export type RoundResultDto = z.infer<typeof roundResultSchema>;
 export type RaidTelemetryDto = z.infer<typeof raidTelemetrySchema>;
+export type DepartmentDto = z.infer<typeof departmentSchema>;
 export type ShotDto = z.infer<typeof shotSchema>;
 export type SubmissionDto = z.infer<typeof submissionSchema>;
 export type ShotDetailDto = z.infer<typeof shotDetailSchema>;
@@ -552,3 +579,122 @@ export type ScreenplayDto = z.infer<typeof screenplaySchema>;
 export type CreateScreenplayDto = z.input<typeof createScreenplaySchema>;
 export type UpdateScreenplayDto = z.input<typeof updateScreenplaySchema>;
 export type ScreenplayEventDto = z.infer<typeof screenplayEventSchema>;
+
+export const discordSettingsSchema = z
+    .object({
+        guildId: snowflakeSchema,
+        channels: z.record(z.string(), snowflakeSchema).default({}),
+        webhooks: z.record(z.string(), z.string()).default({}),
+        roles: z.record(z.string(), snowflakeSchema).default({}),
+        forumTags: z.record(z.string(), snowflakeSchema).default({}),
+        notificationCursor: z.string().nullable().default(null),
+        rulesMessageId: snowflakeSchema.nullable().default(null),
+        createdAt: timestampSchema.optional(),
+        updatedAt: timestampSchema.optional()
+    })
+    .meta({ id: "DiscordSettings" });
+
+export const updateDiscordSettingsSchema = z
+    .object({
+        channels: z.record(z.string(), snowflakeSchema).optional(),
+        webhooks: z.record(z.string(), z.string()).optional(),
+        roles: z.record(z.string(), snowflakeSchema).optional(),
+        forumTags: z.record(z.string(), snowflakeSchema).optional(),
+        notificationCursor: z.string().nullable().optional(),
+        rulesMessageId: snowflakeSchema.nullable().optional()
+    })
+    .meta({ id: "UpdateDiscordSettings" });
+
+export type DiscordSettingsDto = z.infer<typeof discordSettingsSchema>;
+export type UpdateDiscordSettingsDto = z.input<typeof updateDiscordSettingsSchema>;
+
+export const infractionSchema = z
+    .object({
+        id: z.string(),
+        timestamp: z.string(),
+        reason: z.string(),
+        channelId: z.string(),
+        messageSnippet: z.string()
+    })
+    .meta({ id: "Infraction" });
+
+export const timeoutRecordSchema = z
+    .object({
+        id: z.string(),
+        timestamp: z.string(),
+        durationMs: z.number(),
+        reason: z.string(),
+        level: z.number().default(1)
+    })
+    .meta({ id: "TimeoutRecord" });
+
+export const apologyRecordSchema = z
+    .object({
+        status: z.enum(["none", "pending", "approved", "rejected"]).default("none"),
+        text: z.string().nullable().default(null),
+        submittedAt: z.string().nullable().default(null),
+        reviewedBy: z.string().nullable().optional(),
+        reviewedAt: z.string().nullable().optional()
+    })
+    .meta({ id: "ApologyRecord" });
+
+export const userModerationRecordSchema = z
+    .object({
+        userId: snowflakeSchema,
+        offenceLevel: z.number().int().default(0),
+        stageWarnings: z.number().int().default(0),
+        infractions: z.array(infractionSchema).default([]),
+        timeouts: z.array(timeoutRecordSchema).default([]),
+        apology: apologyRecordSchema.default({ status: "none", text: null, submittedAt: null }),
+        createdAt: timestampSchema.optional(),
+        updatedAt: timestampSchema.optional()
+    })
+    .meta({ id: "UserModerationRecord" });
+
+export const updateUserModerationRecordSchema = z
+    .object({
+        offenceLevel: z.number().int().optional(),
+        stageWarnings: z.number().int().optional(),
+        infractions: z.array(infractionSchema).optional(),
+        timeouts: z.array(timeoutRecordSchema).optional(),
+        apology: apologyRecordSchema.optional()
+    })
+    .meta({ id: "UpdateUserModerationRecord" });
+
+export type InfractionDto = z.infer<typeof infractionSchema>;
+export type TimeoutRecordDto = z.infer<typeof timeoutRecordSchema>;
+export type ApologyRecordDto = z.infer<typeof apologyRecordSchema>;
+export type UserModerationRecordDto = z.infer<typeof userModerationRecordSchema>;
+export type UpdateUserModerationRecordDto = z.input<typeof updateUserModerationRecordSchema>;
+
+export const announcementPingsSchema = z
+    .object({
+        everyone: z.boolean().optional(),
+        here: z.boolean().optional(),
+        roleIds: z.array(snowflakeSchema).max(20).optional(),
+        userIds: z.array(snowflakeSchema).max(50).optional()
+    })
+    .meta({ id: "AnnouncementPings" });
+
+export type AnnouncementPingsDto = z.infer<typeof announcementPingsSchema>;
+
+export const publishAnnouncementSchema = z
+    .object({
+        target: z.string().min(1).max(64),
+        title: z.string().min(1).max(256),
+        content: z.string().min(1).max(4000),
+        pings: announcementPingsSchema.optional()
+    })
+    .meta({ id: "PublishAnnouncement" });
+
+export type PublishAnnouncementDto = z.infer<typeof publishAnnouncementSchema>;
+
+export const announcementPublishResultSchema = z
+    .object({
+        target: z.string(),
+        dispatchedCount: z.number().int(),
+        channels: z.array(z.string())
+    })
+    .meta({ id: "AnnouncementPublishResult" });
+
+export type AnnouncementPublishResultDto = z.infer<typeof announcementPublishResultSchema>;

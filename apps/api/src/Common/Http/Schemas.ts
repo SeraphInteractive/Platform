@@ -58,3 +58,23 @@ export const errorResponses = {
     429: problemSchema,
     503: problemSchema
 } as const;
+
+const allowedDiscordWebhookHosts = new Set(["discord.com", "discordapp.com", "canary.discord.com", "ptb.discord.com"]);
+
+export function isSafeDiscordWebhookUrl(value: string): boolean {
+    try {
+        const url = new URL(value);
+        if (url.protocol !== "https:") {
+            return false;
+        }
+        const host = url.hostname.toLowerCase();
+        return allowedDiscordWebhookHosts.has(host) && url.pathname.startsWith("/api/webhooks/");
+    } catch {
+        return false;
+    }
+}
+
+export const discordWebhookUrlSchema = z
+    .string()
+    .url()
+    .refine(isSafeDiscordWebhookUrl, { message: "Webhook URL must be a valid https://discord.com/api/webhooks/ URL." });

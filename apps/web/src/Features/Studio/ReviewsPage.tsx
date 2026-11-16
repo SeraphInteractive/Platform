@@ -217,7 +217,7 @@ export function ReviewsPage(): ReactNode {
             <Tabs defaultValue="tasks" className="space-y-6">
                 <TabsList>
                     <TabsTrigger value="tasks">Task Deliverables</TabsTrigger>
-                    <TabsTrigger value="proposals">Round Proposals</TabsTrigger>
+                    <TabsTrigger value="proposals">Entry Proposals</TabsTrigger>
                 </TabsList>
                 <TabsContent value="tasks">
                     <ReviewQueue />

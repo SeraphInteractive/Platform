@@ -70,6 +70,9 @@ export function SubmitEntryDialog({ round }: { readonly round: RoundDetailDto })
         },
         onSuccess: (entry) => {
             void queryClient.invalidateQueries({ queryKey: queryKeys.round(round.id) });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.myEntries });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.approvedEntries(round.id) });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.entriesAll(round.id) });
             toast.success(
                 entry.status === EntryStatus.Approved ? "Entry added to the ballot." : "Entry submitted. A supervisor will review it."
             );

@@ -84,6 +84,8 @@ export const modStatusCommand: SlashCommand = {
             throw new UserFacingError("Only department supervisors and administrators can inspect moderation status.");
         }
 
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
         const targetUser = interaction.options.getUser("user", true);
         const guild = interaction.guild ?? (await interaction.client.guilds.fetch(context.configuration.guildId).catch(() => null));
 
@@ -109,10 +111,16 @@ export const modStatusCommand: SlashCommand = {
             isBanned
         );
 
-        await interaction.reply({
-            components: [panel(Accent.Info, text), row],
-            flags: MessageFlags.Ephemeral
-        });
+        if (typeof interaction.editReply === "function") {
+            await interaction.editReply({
+                components: [panel(Accent.Info, text), row]
+            });
+        } else {
+            await interaction.reply({
+                components: [panel(Accent.Info, text), row],
+                flags: MessageFlags.Ephemeral
+            });
+        }
     }
 };
 
@@ -136,6 +144,8 @@ export const modStepDownButtonHandler: ComponentHandler = {
             await interaction.reply(notice("Server could not be reached.", Accent.Danger));
             return;
         }
+
+        await interaction.deferUpdate();
 
         const updated = context.warnings.stepDownStage(targetUserId);
         const targetMember = await guild.members.fetch(targetUserId).catch(() => null);
@@ -176,9 +186,15 @@ export const modStepDownButtonHandler: ComponentHandler = {
             isBanned
         );
 
-        await interaction.update({
-            components: [panel(Accent.Info, text), row]
-        });
+        if (typeof interaction.editReply === "function") {
+            await interaction.editReply({
+                components: [panel(Accent.Info, text), row]
+            });
+        } else {
+            await interaction.update({
+                components: [panel(Accent.Info, text), row]
+            });
+        }
     }
 };
 
@@ -202,6 +218,8 @@ export const modResetButtonHandler: ComponentHandler = {
             await interaction.reply(notice("Server could not be reached.", Accent.Danger));
             return;
         }
+
+        await interaction.deferUpdate();
 
         context.warnings.resetUser(targetUserId);
         const updated = context.warnings.getRecord(targetUserId);
@@ -242,8 +260,14 @@ export const modResetButtonHandler: ComponentHandler = {
             isBanned
         );
 
-        await interaction.update({
-            components: [panel(Accent.Info, text), row]
-        });
+        if (typeof interaction.editReply === "function") {
+            await interaction.editReply({
+                components: [panel(Accent.Info, text), row]
+            });
+        } else {
+            await interaction.update({
+                components: [panel(Accent.Info, text), row]
+            });
+        }
     }
 };

@@ -21,7 +21,9 @@ import { Progress } from "@/Components/Ui/progress";
 import { useNow } from "@/Hooks/UseNow";
 import { useSession } from "@/Hooks/UseSession";
 import { hasAtLeast } from "@/Lib/Roles";
+import { AnnouncementPublisher } from "./AnnouncementPublisher";
 import { AutoModDialog } from "./AutoModDialog";
+import { GlobalActivityLog } from "./GlobalActivityLog";
 
 function useActiveRounds(): { readonly rounds: readonly RoundDto[]; readonly isPending: boolean } {
     const results = useQueries({
@@ -94,26 +96,26 @@ function Dashboard(): ReactNode {
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
                 <StatTile
                     label="Entries to review"
-                    value={active.isPending ? "–" : pendingTotal}
+                    value={active.isPending ? "-" : pendingTotal}
                     href="/studio/rounds"
                     emphasis={pendingTotal > 0}
                 />
                 {isSupervisor && (
                     <StatTile
                         label="Submissions to review"
-                        value={reviews.data?.meta.total ?? "–"}
+                        value={reviews.data?.meta.total ?? "-"}
                         href="/studio/reviews"
                         emphasis={(reviews.data?.meta.total ?? 0) > 0}
                     />
                 )}
-                <StatTile label="Open rounds" value={active.isPending ? "–" : openRounds.length} href="/studio/rounds" />
+                <StatTile label="Open rounds" value={active.isPending ? "-" : openRounds.length} href="/studio/rounds" />
                 <StatTile
                     label="Overdue claims"
-                    value={claimed.isPending ? "–" : overdue.length}
+                    value={claimed.isPending ? "-" : overdue.length}
                     href="/studio/tasks"
                     emphasis={overdue.length > 0}
                 />
-                <StatTile label="Available tasks" value={available.data?.meta.total ?? "–"} href="/grabbox" />
+                <StatTile label="Available tasks" value={available.data?.meta.total ?? "-"} href="/grabbox" />
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
@@ -258,6 +260,8 @@ function Dashboard(): ReactNode {
                     </Section>
                 )}
             </div>
+            <AnnouncementPublisher />
+            <GlobalActivityLog />
         </div>
     );
 }
@@ -267,7 +271,7 @@ export function DashboardPage(): ReactNode {
     const isAdmin = hasAtLeast(user, Role.Admin);
 
     return (
-        <RequireRole role={Role.Moderator}>
+        <RequireRole role={Role.Supervisor}>
             <PageHeader title="Studio" actions={isAdmin ? <AutoModDialog /> : undefined} />
             <Dashboard />
         </RequireRole>

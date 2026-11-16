@@ -163,6 +163,7 @@ export class NotificationConsumer {
                 await this.handler(notification.data);
             } catch (error: unknown) {
                 this.logger.error({ err: error, type: notification.data.type, id: event.id }, "notification handler failed");
+                return;
             }
         } else {
             this.logger.warn({ id: event.id }, "skipping notification that does not match the contract");

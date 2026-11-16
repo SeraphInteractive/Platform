@@ -14,6 +14,7 @@ export interface NotificationReader {
 export interface NotificationLog {
     append(payload: string): Promise<string>;
     latestId(): Promise<string>;
+    recent(count: number): Promise<NotificationLogEntry[]>;
     openReader(): NotificationReader;
 }
 

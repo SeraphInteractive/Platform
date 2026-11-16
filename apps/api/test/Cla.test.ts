@@ -1,4 +1,4 @@
-import { ageOfMajorityFor, ageOn, ClaStatus, GuardianRelationship } from "@platform/contracts";
+import { ageOfMajorityFor, ageOn, ClaStatus, GuardianRelationship, Specialty } from "@platform/contracts";
 import { eq, sql } from "drizzle-orm";
 import type { LightMyRequestResponse } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -131,7 +131,7 @@ describe("contributor license agreement", () => {
     });
 
     it("lets an adult sign, gates contributions until then and emails a receipt", async () => {
-        const member = await context.createUser(Role.Member);
+        const member = await context.createUser(Role.Contributor, { specialties: [Specialty.Animator] });
         const blocked = await claim(member);
         expect(blocked.statusCode).toBe(403);
         expect(json<{ code: string }>(blocked).code).toBe("CLA_REQUIRED");
@@ -179,7 +179,7 @@ describe("contributor license agreement", () => {
     });
 
     it("activates a minor's agreement only after the guardian consents", async () => {
-        const teen = await context.createUser(Role.Member);
+        const teen = await context.createUser(Role.Contributor, { specialties: [Specialty.Animator] });
         const signed = await sign(teen, minor("guardian.one@example.org"));
         expect(signed.statusCode).toBe(201);
         const agreement = json<Envelope<Agreement>>(signed).data;
@@ -317,9 +317,9 @@ describe("contributor license agreement", () => {
     });
 
     it("keeps staff tools to admins", async () => {
-        const moderator = await context.createUser(Role.Moderator);
+        const supervisor = await context.createUser(Role.Supervisor);
         expect(
-            (await context.application.inject({ method: "GET", url: "/api/v1/cla/signatures", headers: moderator.headers })).statusCode
+            (await context.application.inject({ method: "GET", url: "/api/v1/cla/signatures", headers: supervisor.headers })).statusCode
         ).toBe(403);
         const listed = await context.application.inject({ method: "GET", url: "/api/v1/cla/signatures", headers: admin.headers });
         expect(listed.statusCode).toBe(200);

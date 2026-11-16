@@ -11,6 +11,7 @@ import {
 } from "discord.js";
 import type { Logger } from "pino";
 import type { NotificationConsumer } from "../Api/NotificationConsumer.js";
+import type { NotificationDispatcher } from "../Services/NotificationDispatcher.js";
 import { PlatformApiError, type ActingApiClient, type DiscordIdentity, type PlatformApiClient } from "../Api/PlatformApiClient.js";
 import type { BotConfiguration } from "../Configuration/BotConfiguration.js";
 import { Accent, notice } from "../Discord/Ui.js";
@@ -20,6 +21,7 @@ import type { RoleSyncScheduler } from "../Services/RoleSyncScheduler.js";
 import type { ProfanityFilter } from "../Services/ProfanityFilter.js";
 import type { ServerProvisioner } from "../Services/ServerProvisioner.js";
 import type { TaskForum } from "../Services/TaskForum.js";
+import type { TicketDesk } from "../Services/TicketDesk.js";
 import type { ReminderStore } from "../State/ReminderStore.js";
 import type { SettingsStore } from "../State/SettingsStore.js";
 import type { WarningStore } from "../State/WarningStore.js";
@@ -29,6 +31,7 @@ export interface BotContext {
     readonly api: PlatformApiClient;
     readonly settings: SettingsStore;
     readonly forum: TaskForum;
+    readonly dispatcher: NotificationDispatcher;
     readonly provisioner: ServerProvisioner;
     readonly consumer: NotificationConsumer;
     readonly reminders: ReminderStore;
@@ -37,6 +40,7 @@ export interface BotContext {
     readonly roleScheduler: RoleSyncScheduler;
     readonly warnings: WarningStore;
     readonly profanityFilter: ProfanityFilter;
+    readonly tickets: TicketDesk;
     readonly logger: Logger;
 }
 
@@ -60,7 +64,6 @@ const roleOrder: readonly Role[] = [
     Role.Voter,
     Role.Contributor,
     Role.SeniorContributor,
-    Role.Moderator,
     Role.Supervisor,
     Role.Admin,
     Role.SuperAdmin

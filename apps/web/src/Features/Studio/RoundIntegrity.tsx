@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Scale, ShieldAlert } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { platformApi } from "@/Api/PlatformApi";
+import { ApiError } from "@/Api/ApiClient";
 import { queryKeys } from "@/Api/QueryKeys";
 import { RelativeTime } from "@/Components/Common/RelativeTime";
 import { Section } from "@/Components/Common/Section";
@@ -185,7 +186,11 @@ export function RoundIntegrity({ roundId, live, defaultTab = "raid", activeTab, 
                         {telemetry.isPending ? (
                             <LoadingRows rows={4} />
                         ) : telemetry.isError ? (
-                            <ErrorState error={telemetry.error} onRetry={() => void telemetry.refetch()} />
+                            telemetry.error instanceof ApiError && telemetry.error.status === 404 ? (
+                                <EmptyState title="No telemetry recorded for this round yet" />
+                            ) : (
+                                <ErrorState error={telemetry.error} onRetry={() => void telemetry.refetch()} />
+                            )
                         ) : telemetry.data.length === 0 ? (
                             <EmptyState title="No checks yet" />
                         ) : (
@@ -217,7 +222,7 @@ export function RoundIntegrity({ roundId, live, defaultTab = "raid", activeTab, 
                                                         {formatPercent(row.breakdown.topRankShare * 100)}
                                                     </TableCell>
                                                     <TableCell className="text-muted-foreground text-xs">
-                                                        {row.flags.map((flag) => flagLabels[flag]).join(", ") || "–"}
+                                                        {row.flags.map((flag) => flagLabels[flag]).join(", ") || "-"}
                                                     </TableCell>
                                                     <TableCell className="text-muted-foreground text-right text-xs whitespace-nowrap">
                                                         <RelativeTime value={row.createdAt} />
@@ -236,7 +241,11 @@ export function RoundIntegrity({ roundId, live, defaultTab = "raid", activeTab, 
                         {leaderboard.isPending ? (
                             <LoadingRows rows={4} />
                         ) : leaderboard.isError ? (
-                            <ErrorState error={leaderboard.error} onRetry={() => void leaderboard.refetch()} />
+                            leaderboard.error instanceof ApiError && leaderboard.error.status === 404 ? (
+                                <EmptyState title="No leaderboard data recorded for this round yet" />
+                            ) : (
+                                <ErrorState error={leaderboard.error} onRetry={() => void leaderboard.refetch()} />
+                            )
                         ) : leaderboard.data === undefined || leaderboard.data.items.length === 0 ? (
                             <EmptyState title="No entries to evaluate" />
                         ) : (

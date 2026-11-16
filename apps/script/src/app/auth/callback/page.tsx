@@ -4,6 +4,12 @@ import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StairwayLoader } from "@/components/StairwayLoader";
 
+const safePathPattern = /^\/(?![/\\])(?!.*\/\/)(?!.*%(?:2f|5c))[A-Za-z0-9\-._~!$&'()*+,;=:@%/]{0,511}$/iu;
+
+function safePathOr(value: unknown, fallback = "/"): string {
+    return typeof value === "string" && safePathPattern.test(value) ? value : fallback;
+}
+
 export default function AuthCallbackPage() {
     const router = useRouter();
     const started = useRef(false);
@@ -17,7 +23,8 @@ export default function AuthCallbackPage() {
             const params = new URLSearchParams(window.location.search);
             const code = params.get("code");
             const err = params.get("error");
-            const returnTo = params.get("returnTo") || "/";
+            const rawReturnTo = params.get("returnTo");
+            const returnTo = safePathOr(rawReturnTo, "/");
 
             if (err) {
                 setError("Discord authorization was cancelled or failed.");
@@ -42,7 +49,7 @@ export default function AuthCallbackPage() {
                     return;
                 }
 
-                window.location.href = returnTo;
+                router.replace(returnTo);
             } catch {
                 setError("Network error communicating with authentication service.");
             }

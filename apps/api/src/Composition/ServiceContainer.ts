@@ -29,6 +29,9 @@ import { AutoModService } from "../Modules/AutoMod/AutoModService.js";
 import { ScriptsService } from "../Modules/Scripts/ScriptsService.js";
 import { ClaService } from "../Modules/Cla/ClaService.js";
 import { PiiCipher } from "../Common/Security/PiiCipher.js";
+import { FeedbackService } from "../Modules/CrewFeedback/FeedbackService.js";
+import { TicketConfigService } from "../Modules/Tickets/TicketConfigService.js";
+import { TicketsService } from "../Modules/Tickets/TicketsService.js";
 
 export interface Infrastructure {
     readonly database: Database;
@@ -68,6 +71,9 @@ export interface ServiceContainer extends Infrastructure {
     readonly autoModService: AutoModService;
     readonly scriptsService: ScriptsService;
     readonly claService: ClaService;
+    readonly ticketConfigService: TicketConfigService;
+    readonly ticketsService: TicketsService;
+    readonly feedbackService: FeedbackService;
 }
 
 export function createServiceContainer(
@@ -80,6 +86,7 @@ export function createServiceContainer(
     const leaderboardCache = new LeaderboardCache(keyValueStore);
     const tokenService = new TokenService(database, configuration.security, logger);
     const documentsService = new DocumentsService(database, notifier);
+    const ticketConfigService = new TicketConfigService(database, notifier);
     const raidMonitor = new RaidMonitor(database, keyValueStore, eventBus, notifier, leaderboardCache, logger, options.raidMonitor);
 
     return {
@@ -121,6 +128,9 @@ export function createServiceContainer(
             configuration.security.corsOrigins[0] ?? configuration.security.appUrl,
             logger
         ),
+        ticketConfigService,
+        ticketsService: new TicketsService(database, notifier, ticketConfigService),
+        feedbackService: new FeedbackService(database, notifier, configuration.security.appKey),
         verificationService: new VerificationService(
             database,
             keyValueStore,

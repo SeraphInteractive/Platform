@@ -47,12 +47,13 @@ export function useStudioAccess(user: UserDto | null): boolean {
     return isAdmin || Boolean(hasAccess);
 }
 
-export function isVisible(item: NavigationItem, user: UserDto | null, hasStudioAccess = false): boolean {
+export function isVisible(item: NavigationItem, user: UserDto | null, _hasStudioAccess = false): boolean {
     if (item.requiresSession === true && user === null) {
         return false;
     }
     if (item.href === "/studio/script") {
-        return hasStudioAccess || hasAtLeast(user, Role.Admin);
+        // screenplay studio access is restricted strictly to admin and super_admin
+        return hasAtLeast(user, Role.Admin);
     }
     return item.minimumRole === undefined || hasAtLeast(user, item.minimumRole);
 }

@@ -1,9 +1,5 @@
-import type { Metadata } from "next";
-import type { ReactNode } from "react";
-import { MeView } from "@/Features/Me/MeView";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "My work" };
-
-export default function MePage(): ReactNode {
-    return <MeView />;
+export default function MePage(): never {
+    redirect("/profile");
 }

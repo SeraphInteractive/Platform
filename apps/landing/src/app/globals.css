@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@font-face {
+    font-family: "Minecraft";
+    src: url("/fonts/Minecraft-Bold.otf") format("opentype");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Minecraft";
+    src: url("/fonts/Minecraft.otf") format("opentype");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+.font-minecraft {
+    font-family: "Minecraft", monospace;
+    letter-spacing: 0.04em;
+}
+
+:root {
+    --background: #090a0f;
+    --foreground: #f4f4f5;
+}
+
+html,
+body {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+    display: none;
+}
+
+@keyframes float-breathe {
+    0%,
+    100% {
+        transform: translateY(0);
+        opacity: 0.35;
+    }
+    50% {
+        transform: translateY(8px);
+        opacity: 0.95;
+    }
+}
+
+.animate-breathe {
+    animation: float-breathe 2.4s ease-in-out infinite;
+}

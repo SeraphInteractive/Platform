@@ -1,13 +1,16 @@
 "use client";
 
 import {
+    departmentDefinitions,
     DifficultyTier,
     fieldRules,
     type MediaContentType,
     problemOf,
     Role,
     ShotStatus,
+    ShotType,
     textLimits,
+    type DepartmentDto,
     type ShotDto
 } from "@platform/contracts";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -43,7 +46,7 @@ import { Progress } from "@/Components/Ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/Ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/Components/Ui/table";
 import { useSession } from "@/Hooks/UseSession";
-import { difficultyLabels, shotStatusLabels } from "@/Lib/Format";
+import { difficultyLabels, shotStatusLabels, shotTypeLabels } from "@/Lib/Format";
 import { hasAtLeast } from "@/Lib/Roles";
 
 const anyValue = "any";
@@ -67,6 +70,7 @@ interface ShotDraft {
     readonly title: string;
     readonly description: string;
     readonly difficultyTier: DifficultyTier;
+    readonly shotType: ShotType;
     readonly seniorPriorityHours: string;
 }
 
@@ -77,6 +81,7 @@ function draftOf(shot: ShotDto | undefined): ShotDraft {
         title: shot?.title ?? "",
         description: shot?.description ?? "",
         difficultyTier: shot?.difficultyTier ?? DifficultyTier.Medium,
+        shotType: shot?.shotType ?? ShotType.Animation,
         seniorPriorityHours: "0"
     };
 }
@@ -122,6 +127,7 @@ function toInput(draft: ShotDraft): CreateShotInput | null {
         title,
         description: description.length === 0 ? null : description,
         difficultyTier: draft.difficultyTier,
+        shotType: draft.shotType,
         seniorPriorityHours
     };
 }
@@ -145,6 +151,51 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
     const input = toInput(draft);
     const problems = problemsOf(draft);
 
+    const { user } = useSession();
+    const departments = useQuery({
+        queryKey: queryKeys.departments,
+        queryFn: () => platformApi.departments(),
+        staleTime: 300_000
+    });
+
+    const manageableDepartments = ((): readonly DepartmentDto[] => {
+        if (departments.data === undefined) {
+            return [];
+        }
+        // ensure effective shotTypes resolves even if remote backend hasn't run migration yet
+        const effective = departments.data.map((dept) => {
+            if (dept.shotTypes.length > 0) {
+                return dept;
+            }
+            const def = departmentDefinitions.find((d) => d.slug === dept.slug);
+            return def && def.shotTypes.length > 0 ? { ...dept, shotTypes: [...def.shotTypes] } : dept;
+        });
+        if (hasAtLeast(user, Role.Admin)) {
+            return effective.filter((d) => d.shotTypes.length > 0);
+        }
+        return effective.filter(
+            (dept) => dept.shotTypes.length > 0 && dept.supervisorSpecialties.some((s) => user?.specialties?.includes(s))
+        );
+    })();
+
+    const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
+
+    const currentDepartment =
+        manageableDepartments.find((d) => d.id === selectedDepartmentId) ??
+        manageableDepartments.find((d) => shot !== undefined && d.shotTypes.includes(shot.shotType)) ??
+        manageableDepartments[0];
+
+    const availableShotTypes = currentDepartment?.shotTypes ?? [];
+
+    const handleDepartmentChange = (deptId: string): void => {
+        setSelectedDepartmentId(deptId);
+        const nextDept = manageableDepartments.find((d) => d.id === deptId);
+        const firstType = nextDept?.shotTypes[0];
+        if (firstType !== undefined && !nextDept?.shotTypes.includes(draft.shotType)) {
+            setDraft((current) => ({ ...current, shotType: firstType }));
+        }
+    };
+
     const onOpenChange = (next: boolean): void => {
         if (save.isPending) {
             return;
@@ -152,6 +203,21 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
         setOpen(next);
         if (next) {
             setDraft(draftOf(shot));
+            const firstDept = manageableDepartments[0];
+            if (shot !== undefined) {
+                const found = departments.data?.find((d) => d.shotTypes.includes(shot.shotType));
+                if (found !== undefined) {
+                    setSelectedDepartmentId(found.id);
+                } else if (firstDept !== undefined) {
+                    setSelectedDepartmentId(firstDept.id);
+                }
+            } else if (firstDept !== undefined) {
+                setSelectedDepartmentId(firstDept.id);
+                const firstType = firstDept.shotTypes[0];
+                if (firstType !== undefined) {
+                    setDraft((cur) => ({ ...cur, shotType: firstType }));
+                }
+            }
             setImages(
                 shot?.imageUrls.map((url, i) => ({
                     id: `existing-${i}-${url}`,
@@ -231,6 +297,7 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
 
             const payload: CreateShotInput = {
                 ...value,
+                departmentId: currentDepartment?.id ?? null,
                 imageKeys: resolvedKeys
             };
 
@@ -243,6 +310,8 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
                 title: payload.title,
                 description: payload.description,
                 difficultyTier: payload.difficultyTier,
+                shotType: payload.shotType,
+                departmentId: payload.departmentId,
                 imageKeys: resolvedKeys
             });
         },
@@ -285,7 +354,7 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
                     <DialogTitle>{shot === undefined ? "New task" : `Edit ${shot.shotCode}`}</DialogTitle>
                 </DialogHeader>
                 <form id={formId} onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-4">
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 sm:col-span-2">
                         <Label htmlFor={`${formId}-scene`}>Scene</Label>
                         <Input
                             id={`${formId}-scene`}
@@ -300,7 +369,7 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
                             onChange={field("sceneNumber")}
                         />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 sm:col-span-2">
                         <Label htmlFor={`${formId}-code`}>Code</Label>
                         <Input
                             id={`${formId}-code`}
@@ -313,6 +382,45 @@ function TaskFormDialog({ shot, trigger }: { readonly shot?: ShotDto; readonly t
                             title={problems.shotCode ?? undefined}
                             onChange={field("shotCode")}
                         />
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor={`${formId}-department`}>Department</Label>
+                        <Select
+                            value={currentDepartment?.id ?? ""}
+                            onValueChange={handleDepartmentChange}
+                            disabled={manageableDepartments.length <= 1}
+                        >
+                            <SelectTrigger id={`${formId}-department`} className="w-full">
+                                <SelectValue placeholder="Select department" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {manageableDepartments.map((dept) => (
+                                    <SelectItem key={dept.id} value={dept.id}>
+                                        {dept.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor={`${formId}-shot-type`}>Task type</Label>
+                        <Select
+                            value={draft.shotType}
+                            onValueChange={(value) => {
+                                setDraft((current) => ({ ...current, shotType: value as ShotType }));
+                            }}
+                        >
+                            <SelectTrigger id={`${formId}-shot-type`} className="w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {availableShotTypes.map((type) => (
+                                    <SelectItem key={type} value={type}>
+                                        {shotTypeLabels[type]}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                     <div className="space-y-1.5 sm:col-span-2">
                         <Label htmlFor={`${formId}-difficulty`}>Difficulty</Label>
@@ -589,14 +697,32 @@ function ConfirmDialog({ title, description, confirmLabel, destructive, onConfir
 
 function TasksTable(): ReactNode {
     const siteConfig = useSiteConfig();
+    const [departmentId, setDepartmentId] = useState<string>(anyValue);
+    const [shotType, setShotType] = useState<ShotType | typeof anyValue>(anyValue);
     const [status, setStatus] = useState<ShotStatus | typeof anyValue>(anyValue);
     const [difficulty, setDifficulty] = useState<DifficultyTier | typeof anyValue>(anyValue);
     const [page, setPage] = useState(1);
+
+    const departments = useQuery({
+        queryKey: queryKeys.departments,
+        queryFn: () => platformApi.departments(),
+        staleTime: 300_000
+    });
+
+    const activeDepartment = departmentId === anyValue ? undefined : departments.data?.find((d) => d.id === departmentId);
+    const activeDeptShotTypes =
+        activeDepartment?.shotTypes && activeDepartment.shotTypes.length > 0
+            ? activeDepartment.shotTypes
+            : departmentDefinitions.find((def) => def.slug === activeDepartment?.slug)?.shotTypes;
+    const availableShotTypes = activeDeptShotTypes && activeDeptShotTypes.length > 0 ? activeDeptShotTypes : Object.values(ShotType);
+
     const query = {
         page,
         perPage: 25,
         status: status === anyValue ? undefined : status,
-        difficultyTier: difficulty === anyValue ? undefined : difficulty
+        difficultyTier: difficulty === anyValue ? undefined : difficulty,
+        shotType: shotType === anyValue ? undefined : shotType,
+        departmentId: departmentId === anyValue ? undefined : departmentId
     };
     const shots = useQuery({
         queryKey: queryKeys.shots(query),
@@ -615,6 +741,47 @@ function TasksTable(): ReactNode {
                     )
                 }
             >
+                {departments.data !== undefined && departments.data.length > 0 && (
+                    <Select
+                        value={departmentId}
+                        onValueChange={(value) => {
+                            setDepartmentId(value);
+                            setShotType(anyValue);
+                            setPage(1);
+                        }}
+                    >
+                        <SelectTrigger size="sm" className="w-36" aria-label="Department">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value={anyValue}>All depts</SelectItem>
+                            {departments.data.map((dept) => (
+                                <SelectItem key={dept.id} value={dept.id}>
+                                    {dept.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                )}
+                <Select
+                    value={shotType}
+                    onValueChange={(value) => {
+                        setShotType(value as ShotType | typeof anyValue);
+                        setPage(1);
+                    }}
+                >
+                    <SelectTrigger size="sm" className="w-36" aria-label="Task type">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value={anyValue}>Any type</SelectItem>
+                        {availableShotTypes.map((item) => (
+                            <SelectItem key={item} value={item}>
+                                {shotTypeLabels[item]}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
                 <Select
                     value={status}
                     onValueChange={(value) => {
@@ -668,9 +835,11 @@ function TasksTable(): ReactNode {
                                 <TableRow>
                                     <TableHead className="w-28">Code</TableHead>
                                     <TableHead>Title</TableHead>
+                                    <TableHead className="w-28">Type</TableHead>
                                     <TableHead className="w-16">Scene</TableHead>
                                     <TableHead className="w-24">Difficulty</TableHead>
                                     <TableHead className="w-28">Status</TableHead>
+                                    <TableHead className="w-36">Created by</TableHead>
                                     <TableHead className="w-36">Claimant</TableHead>
                                     <TableHead className="w-24" />
                                 </TableRow>
@@ -694,13 +863,17 @@ function TasksTable(): ReactNode {
                                                 </div>
                                             </TableCell>
                                             <TableCell className="max-w-80 truncate font-medium">{shot.title}</TableCell>
+                                            <TableCell className="text-muted-foreground text-xs">{shotTypeLabels[shot.shotType]}</TableCell>
                                             <TableCell className="tabular-nums">{shot.sceneNumber}</TableCell>
                                             <TableCell>{difficultyLabels[shot.difficultyTier]}</TableCell>
                                             <TableCell>
                                                 <ShotStatusBadge status={shot.status} />
                                             </TableCell>
                                             <TableCell className="text-muted-foreground max-w-36 truncate">
-                                                {shot.claimer?.username ?? "–"}
+                                                {shot.creator?.username ?? "Studio"}
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground max-w-36 truncate">
+                                                {shot.claimer?.username ?? "-"}
                                             </TableCell>
                                             <TableCell>
                                                 <TaskRowActions

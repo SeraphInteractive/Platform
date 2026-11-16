@@ -91,7 +91,6 @@ const environmentObject = z.object({
     ),
     ADMIN_DISCORD_IDS: snowflakeList,
     SUPERVISOR_DISCORD_IDS: snowflakeList,
-    MODERATOR_DISCORD_IDS: snowflakeList,
     SENIOR_DISCORD_IDS: snowflakeList,
 
     S3_ENDPOINT: z
@@ -119,18 +118,7 @@ const environmentObject = z.object({
         .number()
         .int()
         .min(1024)
-        .default(2 * 1024 * 1024 * 1024),
-    NEXTCLOUD_URL: z
-        .url({ protocol: /^https?$/u })
-        .optional()
-        .or(z.literal("").transform(() => undefined)),
-    NEXTCLOUD_USERNAME: optionalString,
-    NEXTCLOUD_PASSWORD: optionalString,
-    NEXTCLOUD_BASE_PATH: z.string().default("/remote.php/dav/files"),
-    NEXTCLOUD_PUBLIC_URL: z
-        .url({ protocol: /^https?$/u })
-        .optional()
-        .or(z.literal("").transform(() => undefined))
+        .default(2 * 1024 * 1024 * 1024)
 });
 
 export const databaseEnvironmentSchema = environmentObject.pick({
@@ -150,6 +138,9 @@ export const environmentSchema = environmentObject.superRefine((value, context) 
     const insecure = [value.APP_URL, value.DISCORD_REDIRECT_URI, ...value.CORS_ORIGINS].filter((url) => url.startsWith("http:"));
     if (insecure.length > 0) {
         context.addIssue({ code: "custom", path: ["APP_URL"], message: `production URLs must use https: ${insecure.join(", ")}` });
+    }
+    if (value.REDIS_HOST === "memory") {
+        context.addIssue({ code: "custom", path: ["REDIS_HOST"], message: "in-memory state is for development only" });
     }
     for (const key of ["REDIS_PASSWORD", "RESEND_API_KEY", "EMAIL_FROM", "TURNSTILE_SECRET_KEY", "PII_ENCRYPTION_KEY"] as const) {
         if (value[key] === undefined) {

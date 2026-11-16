@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { parseServerSentEvents } from "../src/Api/NotificationConsumer.js";
 import { loadBotConfiguration } from "../src/Configuration/BotConfiguration.js";
 import { ChannelPurpose, SettingsStore } from "../src/State/SettingsStore.js";
+import { WarningStore } from "../src/State/WarningStore.js";
 
 describe("server-sent event parsing", () => {
     it("splits complete events and keeps partial ones", () => {
@@ -50,6 +51,117 @@ describe("settings store", () => {
             rulesMessageId: "100000000000000003"
         });
     });
+
+    it("loads from remote API and syncs updates", async () => {
+        directory = await mkdtemp(join(tmpdir(), "platform-discord-"));
+        let remoteSettings: Record<string, unknown> = {
+            guildId: "100000000000000001",
+            channels: { [ChannelPurpose.Rules]: "200000000000000001" },
+            roles: {},
+            forumTags: {},
+            notificationCursor: "5-0",
+            rulesMessageId: null
+        };
+        const mockApi = {
+            getDiscordSettings: async () => remoteSettings as never,
+            updateDiscordSettings: async (_guildId: string, input: Record<string, unknown>) => {
+                remoteSettings = { ...remoteSettings, ...input };
+                return remoteSettings as never;
+            }
+        };
+        const store = new SettingsStore(directory, mockApi as never, "100000000000000001");
+        await store.load();
+        expect(store.channel(ChannelPurpose.Rules)).toBe("200000000000000001");
+        expect(store.notificationCursor).toBe("5-0");
+
+        await store.update((settings) => {
+            settings.channels[ChannelPurpose.Telemetry] = "200000000000000002";
+        });
+        await store.flush();
+        expect((remoteSettings.channels as Record<string, string>)[ChannelPurpose.Telemetry]).toBe("200000000000000002");
+    });
+
+    it("isolates staff logging channel rawChannels and falls back to telemetry at runtime", async () => {
+        directory = await mkdtemp(join(tmpdir(), "platform-discord-fallback-"));
+        const store = new SettingsStore(directory);
+        await store.load();
+        await store.update((settings) => {
+            settings.channels[ChannelPurpose.Telemetry] = "111111111111111111";
+            settings.webhooks.telemetry = "https://discord.com/api/webhooks/1/a";
+        });
+
+        // SecurityAlerts aliases with Telemetry
+        expect(store.channel(ChannelPurpose.SecurityAlerts)).toBe("111111111111111111");
+        expect(store.rawChannel(ChannelPurpose.SecurityAlerts)).toBeUndefined();
+        expect(store.webhook("securityAlerts")).toBe("https://discord.com/api/webhooks/1/a");
+
+        // Specific logging channels isolate rawChannel for provisioning
+        expect(store.rawChannel(ChannelPurpose.TaskLogs)).toBeUndefined();
+        expect(store.rawChannel(ChannelPurpose.VotingLogs)).toBeUndefined();
+        expect(store.rawChannel(ChannelPurpose.UserLogs)).toBeUndefined();
+        expect(store.rawChannel(ChannelPurpose.SystemLogs)).toBeUndefined();
+
+        // At runtime, unconfigured channels fall back to telemetry
+        expect(store.channel(ChannelPurpose.TaskLogs)).toBe("111111111111111111");
+        expect(store.channel(ChannelPurpose.VotingLogs)).toBe("111111111111111111");
+        expect(store.webhook("taskLogs")).toBe("https://discord.com/api/webhooks/1/a");
+        expect(store.webhook("votingLogs")).toBe("https://discord.com/api/webhooks/1/a");
+    });
+});
+
+describe("warning store remote sync", () => {
+    let directory = "";
+
+    afterEach(async () => {
+        await rm(directory, { recursive: true, force: true });
+    });
+
+    it("loads from remote API and syncs mutations and resets", async () => {
+        directory = await mkdtemp(join(tmpdir(), "platform-warnings-"));
+        const remoteRecords = new Map<string, Record<string, unknown>>([
+            [
+                "user1",
+                {
+                    userId: "user1",
+                    offenceLevel: 1,
+                    stageWarnings: 2,
+                    infractions: [],
+                    timeouts: [],
+                    apology: { status: "none", text: null, submittedAt: null }
+                }
+            ]
+        ]);
+
+        const mockApi = {
+            listModerationRecords: async () => Array.from(remoteRecords.values()) as never,
+            updateModerationRecord: async (userId: string, input: Record<string, unknown>) => {
+                remoteRecords.set(userId, { ...remoteRecords.get(userId), ...input, userId });
+                return remoteRecords.get(userId) as never;
+            },
+            deleteModerationRecord: async (userId: string) => {
+                remoteRecords.delete(userId);
+                return true;
+            }
+        };
+
+        const store = new WarningStore(directory, mockApi as never);
+        await store.load();
+
+        const record = store.getRecord("user1");
+        expect(record?.offenceLevel).toBe(1);
+        expect(record?.stageWarnings).toBe(2);
+
+        // mutate user1 (reaches 3 warnings in stage 1, promoting to stage 2)
+        store.addWarning("user1", "bad language", "chan1", "snippet");
+        await store.flush();
+        expect(remoteRecords.get("user1")?.offenceLevel).toBe(2);
+        expect(remoteRecords.get("user1")?.stageWarnings).toBe(0);
+
+        // reset user1
+        store.resetUser("user1");
+        await store.flush();
+        expect(remoteRecords.has("user1")).toBe(false);
+    });
 });
 
 describe("configuration", () => {
@@ -77,13 +189,11 @@ describe("configuration", () => {
             ...valid,
             DISCORD_ANNOUNCEMENTS_CHANNEL_ID: "",
             DISCORD_TELEMETRY_WEBHOOK_URL: "https://discord.com/api/webhooks/2/telemetry-token",
-            DISCORD_TASK_LOGS_WEBHOOK_URL: "",
             DISCORD_MODERATION_LOGS_WEBHOOK_URL: "https://discord.com/api/webhooks/3/mod-token",
             DISCORD_RULES_WEBHOOK_URL: "https://discord.com/api/webhooks/4/rules-token"
         });
         expect(config.announcementsChannelId).toBeUndefined();
         expect(config.telemetryWebhookUrl).toBe("https://discord.com/api/webhooks/2/telemetry-token");
-        expect(config.taskLogsWebhookUrl).toBeUndefined();
         expect(config.moderationLogsWebhookUrl).toBe("https://discord.com/api/webhooks/3/mod-token");
         expect(config.rulesWebhookUrl).toBe("https://discord.com/api/webhooks/4/rules-token");
     });

@@ -55,7 +55,7 @@ services:
     logging: *logging
 
   redis:
-    image: redis:8.10-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
+    image: redis:8.10-alpine@sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537
     restart: unless-stopped
     command:
       - sh
@@ -148,7 +148,6 @@ services:
       SUPER_ADMIN_DISCORD_IDS: ${SUPER_ADMIN_DISCORD_IDS:-}
       ADMIN_DISCORD_IDS: ${ADMIN_DISCORD_IDS:-}
       SUPERVISOR_DISCORD_IDS: ${SUPERVISOR_DISCORD_IDS:-}
-      MODERATOR_DISCORD_IDS: ${MODERATOR_DISCORD_IDS:-}
       SENIOR_DISCORD_IDS: ${SENIOR_DISCORD_IDS:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:-}
@@ -196,7 +195,6 @@ services:
       SERVICE_TOKEN: ${SERVICE_TOKEN:?SERVICE_TOKEN is required}
       WEB_APP_URL: ${WEB_APP_URL:?WEB_APP_URL is required}
       DISCORD_TELEMETRY_WEBHOOK_URL: ${DISCORD_TELEMETRY_WEBHOOK_URL:-}
-      DISCORD_TASK_LOGS_WEBHOOK_URL: ${DISCORD_TASK_LOGS_WEBHOOK_URL:-}
       DISCORD_MODERATION_LOGS_WEBHOOK_URL: ${DISCORD_MODERATION_LOGS_WEBHOOK_URL:-}
       DISCORD_RULES_WEBHOOK_URL: ${DISCORD_RULES_WEBHOOK_URL:-}
     volumes:
@@ -261,6 +259,20 @@ services:
     depends_on:
       api:
         condition: service_healthy
+
+  landing:
+    <<: *api-hardening
+    image: platform-landing
+    build:
+      context: .
+      target: landing
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+    networks:
+      - edge
 
 networks:
   backend:

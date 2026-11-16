@@ -42,8 +42,10 @@ export class ReminderScheduler {
             return;
         }
 
-        // clamp to at least 1s to avoid tight loops on past-due reminders
-        const delay = Math.max(next.getTime() - Date.now(), 1_000);
+        const rawDelay = next.getTime() - Date.now();
+        // cap at 32-bit signed integer limit (24.8 days) so node does not overflow to 1ms busy loop
+        const maxTimeoutMs = 2_147_483_647;
+        const delay = Math.min(Math.max(rawDelay, 1_000), maxTimeoutMs);
         this.timer = setTimeout(() => {
             void this.fire();
         }, delay);
@@ -56,7 +58,7 @@ export class ReminderScheduler {
         for (const reminder of fired) {
             try {
                 const user = await this.client.users.fetch(reminder.userId);
-                await user.send(`⏰ **Reminder:** ${reminder.message}`);
+                await user.send(`**Reminder:** ${reminder.message}`);
             } catch (error: unknown) {
                 this.logger.warn({ err: error, userId: reminder.userId, reminderId: reminder.id }, "failed to DM reminder");
             }

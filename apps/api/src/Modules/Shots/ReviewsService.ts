@@ -1,10 +1,13 @@
+import { shotTypeToDepartment } from "@platform/contracts";
 import { asc, count, eq } from "drizzle-orm";
 import { ConflictError, ErrorCode, ForbiddenError, NotFoundError } from "../../Common/Errors/ApplicationError.js";
 import { createPage, offsetOf, type Page, type PaginationQuery } from "../../Common/Http/Schemas.js";
 import type { UserActor } from "../../Common/Security/Principal.js";
 import { ReviewDecision, ShotStatus, SubmissionStatus } from "../../Domain/Enums.js";
+import { hasAtLeast, Role } from "../../Domain/Roles.js";
 import type { Database } from "../../Infrastructure/Database/Database.js";
 import {
+    departments,
     shots,
     submissions,
     users,
@@ -106,6 +109,26 @@ export class ReviewsService {
             const [lockedShot] = await transaction.select().from(shots).where(eq(shots.id, current.shotId)).limit(1).for("update");
             if (lockedShot === undefined) {
                 throw new NotFoundError("Shot");
+            }
+
+            if (!hasAtLeast(reviewer.role, Role.Admin)) {
+                // review authority is scoped to the shot's department
+                const [dept] = await transaction
+                    .select({ supervisorSpecialties: departments.supervisorSpecialties })
+                    .from(departments)
+                    .where(
+                        lockedShot.departmentId !== null
+                            ? eq(departments.id, lockedShot.departmentId)
+                            : eq(departments.slug, shotTypeToDepartment[lockedShot.shotType])
+                    )
+                    .limit(1);
+
+                if (dept === undefined || !reviewer.specialties.some((s) => dept.supervisorSpecialties.includes(s))) {
+                    throw new ForbiddenError(
+                        "You are not authorized to review tasks for this department.",
+                        ErrorCode.UnauthorizedDepartment
+                    );
+                }
             }
 
             const approved = decision === ReviewDecision.Approved;

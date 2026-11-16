@@ -26,12 +26,9 @@ let memoryInvites: StudioInvite[] = [];
 
 function ensureStorage(): void {
     try {
-        if (!fs.existsSync(STORAGE_DIR)) {
-            fs.mkdirSync(STORAGE_DIR, { recursive: true });
-        }
-        if (!fs.existsSync(STORAGE_FILE)) {
-            fs.writeFileSync(STORAGE_FILE, JSON.stringify([], null, 2), "utf-8");
-        }
+        fs.mkdirSync(STORAGE_DIR, { recursive: true });
+        // wx flag writes atomically only if file does not exist
+        fs.writeFileSync(STORAGE_FILE, JSON.stringify([], null, 2), { encoding: "utf-8", flag: "wx" });
     } catch {}
 }
 

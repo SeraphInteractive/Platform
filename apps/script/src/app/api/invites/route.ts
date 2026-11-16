@@ -5,6 +5,12 @@ import { sendDiscordDm, fetchDiscordUser } from "@/server/DiscordBot";
 
 export const dynamic = "force-dynamic";
 
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isUuid(val: unknown): val is string {
+    return typeof val === "string" && uuidPattern.test(val);
+}
+
 async function getCallerUser(request: NextRequest): Promise<{ id: string; username: string; discordId?: string; role: string } | null> {
     const token = readSessionToken(request);
     if (!token) return null;
@@ -147,18 +153,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }
 
         // sync collaborator to postgresql if script and user uuid are resolved
-        if (scriptId && resolvedPlatformId) {
+        if (isUuid(scriptId) && isUuid(resolvedPlatformId)) {
+            const safeScriptId = scriptId;
+            const safeUserId = resolvedPlatformId;
             try {
                 const authHeader = token ? `Bearer ${token}` : serviceToken ? `Bearer ${serviceToken}` : undefined;
                 if (authHeader) {
-                    await fetch(`${apiUrl}/api/v1/scripts/${encodeURIComponent(scriptId)}/collaborators`, {
+                    await fetch(`${apiUrl}/api/v1/scripts/${encodeURIComponent(safeScriptId)}/collaborators`, {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
                             Authorization: authHeader
                         },
                         body: JSON.stringify({
-                            userId: resolvedPlatformId,
+                            userId: safeUserId,
                             role
                         })
                     });
@@ -240,20 +248,19 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     const removed = removeInvite(id);
 
     // remove collaborator from backend database if script and target are known
-    if (targetInvite?.scriptId && targetInvite.targetId) {
+    if (isUuid(targetInvite?.scriptId) && isUuid(targetInvite?.targetId)) {
+        const scriptId = targetInvite.scriptId;
+        const targetId = targetInvite.targetId;
         const apiUrl = process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || "https://dev-api.projectstairway.net";
         const token = readSessionToken(request);
         const serviceToken = process.env.SERVICE_TOKEN;
         const authHeader = token ? `Bearer ${token}` : serviceToken ? `Bearer ${serviceToken}` : undefined;
-        if (authHeader && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetInvite.targetId)) {
+        if (authHeader) {
             try {
-                await fetch(
-                    `${apiUrl}/api/v1/scripts/${encodeURIComponent(targetInvite.scriptId)}/collaborators/${encodeURIComponent(targetInvite.targetId)}`,
-                    {
-                        method: "DELETE",
-                        headers: { Authorization: authHeader }
-                    }
-                );
+                await fetch(`${apiUrl}/api/v1/scripts/${encodeURIComponent(scriptId)}/collaborators/${encodeURIComponent(targetId)}`, {
+                    method: "DELETE",
+                    headers: { Authorization: authHeader }
+                });
             } catch {}
         }
     }
@@ -283,15 +290,14 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
 
     if (action === "decline") {
         const removed = removeInvite(inviteId);
-        if (targetInvite?.scriptId && caller.id) {
+        if (isUuid(targetInvite?.scriptId) && isUuid(caller.id)) {
+            const scriptId = targetInvite.scriptId;
+            const callerId = caller.id;
             try {
-                await fetch(
-                    `${apiUrl}/api/v1/scripts/${encodeURIComponent(targetInvite.scriptId)}/collaborators/${encodeURIComponent(caller.id)}`,
-                    {
-                        method: "DELETE",
-                        headers: { Authorization: `Bearer ${token}` }
-                    }
-                );
+                await fetch(`${apiUrl}/api/v1/scripts/${encodeURIComponent(scriptId)}/collaborators/${encodeURIComponent(callerId)}`, {
+                    method: "DELETE",
+                    headers: { Authorization: `Bearer ${token}` }
+                });
             } catch {}
         }
         return NextResponse.json({ success: removed, action: "decline" });
@@ -303,19 +309,22 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     }
 
     // ensure collaborator row exists in postgresql when accepted
-    if (accepted.scriptId && caller.id) {
+    if (isUuid(accepted.scriptId) && isUuid(caller.id)) {
+        const scriptId = accepted.scriptId;
+        const callerId = caller.id;
+        const role = accepted.role === "viewer" ? "viewer" : "editor";
         try {
             const authHeader = serviceToken ? `Bearer ${serviceToken}` : token ? `Bearer ${token}` : undefined;
             if (authHeader) {
-                await fetch(`${apiUrl}/api/v1/scripts/${encodeURIComponent(accepted.scriptId)}/collaborators`, {
+                await fetch(`${apiUrl}/api/v1/scripts/${encodeURIComponent(scriptId)}/collaborators`, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
                         Authorization: authHeader
                     },
                     body: JSON.stringify({
-                        userId: caller.id,
-                        role: accepted.role
+                        userId: callerId,
+                        role
                     })
                 });
             }
