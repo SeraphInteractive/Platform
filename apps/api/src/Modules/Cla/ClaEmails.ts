@@ -10,12 +10,24 @@ export function escapeHtml(value: string): string {
     return value.replace(/&/gu, "&amp;").replace(/</gu, "&lt;").replace(/>/gu, "&gt;").replace(/"/gu, "&quot;").replace(/'/gu, "&#39;");
 }
 
+// strip tags until none remain, so nested input like "<<b>script>" can't reassemble into a tag after one pass
+function stripTags(value: string): string {
+    let previous: string;
+    let current = value;
+    do {
+        previous = current;
+        current = current.replace(/<[^<>]*>/gu, "");
+    } while (current !== previous);
+    return current;
+}
+
 function htmlToText(html: string): string {
-    return html
+    const withBreaks = html
         .replace(/<br\s*\/?>/giu, "\n")
         .replace(/<\/(?:p|li|h[1-6]|tr|blockquote)>/giu, "\n")
-        .replace(/<li[^>]*>/giu, "- ")
-        .replace(/<[^>]+>/gu, "")
+        .replace(/<li[^>]*>/giu, "- ");
+    // entities are decoded after stripping, with &amp; last, so encoded text is never re-read as markup
+    return stripTags(withBreaks)
         .replace(/&nbsp;/gu, " ")
         .replace(/&lt;/gu, "<")
         .replace(/&gt;/gu, ">")
