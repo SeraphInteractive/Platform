@@ -13,7 +13,8 @@ const nextConfig: NextConfig = {
     async redirects() {
         return [
             {
-                source: "/:path((?!logo\\.jpg|wordmark\\.svg|stairway-title\\.png|title-left\\.png|title-right\\.png|valley-bg\\.mp4|valley-frames|favicon\\.ico|_next|sequence|partners|fonts).+)",
+                // anything that isn't a static file or a next internal goes to the studio app
+                source: "/:path((?!_next/)(?!.*\\.[A-Za-z0-9]+$).+)",
                 destination: "https://app.projectstairway.net/:path",
                 permanent: false
             }

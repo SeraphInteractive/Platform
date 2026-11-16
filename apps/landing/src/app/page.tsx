@@ -1,339 +1,200 @@
-"use client";
-
+import { Clapperboard, Users, Vote, type LucideIcon } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useState, type ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
-import { ScrollytellingCanvas } from "./ScrollytellingCanvas";
-import { Footer } from "./Footer";
+import type { ReactNode } from "react";
+import { APP_URL, DISCORD_URL, GOALS, PARTNERS, PIPELINE_STEPS, ROLES } from "./content";
+import { LegalBlock } from "./SiteChrome";
 
-const TOTAL_FRAMES = 720;
+const GOAL_ICONS: readonly LucideIcon[] = [Users, Vote, Clapperboard];
 
-interface FaqItem {
-    readonly id: number;
-    readonly side: "right" | "left";
-    readonly question: string;
-    readonly answer: string;
-    readonly startFrame: number;
-    readonly peakStart: number;
-    readonly peakEnd: number;
-    readonly endFrame: number;
+const primaryButton =
+    "focus-ring inline-flex h-11 items-center justify-center rounded-md bg-blue-600 px-5 text-sm font-semibold text-white shadow-lg shadow-black/25 transition-colors hover:bg-blue-700";
+const secondaryButton =
+    "focus-ring inline-flex h-11 items-center justify-center rounded-md border border-white/35 bg-white/10 px-5 text-sm font-semibold text-white transition-colors hover:bg-white/20";
+const card = "rounded-xl border border-white/15 bg-white/[0.06] p-6 shadow-[inset_0_1px_0_rgb(255_255_255/0.08)]";
+
+function NewTabHint(): ReactNode {
+    return <span className="sr-only"> (opens in a new tab)</span>;
 }
 
-const FAQ_ITEMS: readonly FaqItem[] = [
-    {
-        id: 1,
-        side: "right",
-        question: "What is Project Stairway?",
-        answer: "An open, community-built animated motion picture. Anyone can pick up scenes, submit animation passes, and help build a feature film in the open.",
-        startFrame: 110,
-        peakStart: 135,
-        peakEnd: 180,
-        endFrame: 205
-    },
-    {
-        id: 2,
-        side: "left",
-        question: "How do I vote?",
-        answer: "Sign in to the studio platform with Discord. Verified contributors vote on key story decisions, script elements, and community animation cuts to decide what makes the film.",
-        startFrame: 220,
-        peakStart: 245,
-        peakEnd: 290,
-        endFrame: 315
-    },
-    {
-        id: 3,
-        side: "right",
-        question: "How can I contribute?",
-        answer: "We need Blender animators, Blockbench modelers, voice actors, 2D artists, video editors, and sound designers. We don't take open writing, but the community gets to vote on key story elements and all animation shots are up for grabs in the Grab-box.",
-        startFrame: 330,
-        peakStart: 355,
-        peakEnd: 400,
-        endFrame: 425
-    },
-    {
-        id: 4,
-        side: "left",
-        question: "How does the pipeline look?",
-        answer: "It is pretty straightforward. You claim an open scene in the Grab-box, download the blend files and rigs, and animate your shot. Once you upload your pass, supervisors and the community review it. If it passes consensus, it gets affirmed straight into the master cut.",
-        startFrame: 440,
-        peakStart: 465,
-        peakEnd: 510,
-        endFrame: 535
-    },
-    {
-        id: 5,
-        side: "right",
-        question: "Will this be free to watch?",
-        answer: "Yes. The entire film will be released for free on YouTube on our official channel.",
-        startFrame: 550,
-        peakStart: 575,
-        peakEnd: 620,
-        endFrame: 645
-    }
-];
+interface ContentSectionProps {
+    readonly id: string;
+    readonly title: string;
+    readonly lead: string;
+    readonly children: ReactNode;
+}
 
-function calculateFaqMotion(
-    currentFrame: number,
-    start: number,
-    peakStart: number,
-    peakEnd: number,
-    end: number,
-    side: "right" | "left" | "center" = "center"
-): { opacity: number; transform: string; pointerEvents: "auto" | "none"; visible: boolean } {
-    if (currentFrame < start || currentFrame > end) {
-        return { opacity: 0, transform: "none", pointerEvents: "none", visible: false };
-    }
-
-    let opacity = 1;
-    let translateX = 0;
-    let translateY = 0;
-    const slideDistance = 140;
-
-    if (currentFrame < peakStart) {
-        const factor = (peakStart - currentFrame) / (peakStart - start);
-        opacity = 1 - factor;
-        if (side === "center") {
-            translateY = factor * 30;
-        } else {
-            const sign = side === "right" ? 1 : -1;
-            translateX = sign * factor * slideDistance;
-        }
-    } else if (currentFrame > peakEnd) {
-        const factor = (currentFrame - peakEnd) / (end - peakEnd);
-        opacity = 1 - factor;
-        if (side === "center") {
-            translateY = -factor * 30;
-        } else {
-            const sign = side === "right" ? 1 : -1;
-            translateX = sign * factor * slideDistance;
-        }
-    }
-
-    const clampedOpacity = Math.max(0, Math.min(1, opacity));
-    return {
-        opacity: clampedOpacity,
-        transform: `translate3d(${translateX}px, ${translateY}px, 0)`,
-        pointerEvents: clampedOpacity > 0.3 ? "auto" : "none",
-        visible: clampedOpacity > 0.005
-    };
+// every section after the hero sits on the shared blur stage (see globals.css)
+function ContentSection({ id, title, lead, children }: ContentSectionProps): ReactNode {
+    const headingId = `${id}-heading`;
+    return (
+        <section id={id} aria-labelledby={headingId} className="flex min-h-dvh items-center">
+            <div className="w-full max-w-6xl px-5 py-20 sm:px-8 md:px-12 md:py-36 lg:px-16">
+                <div className="max-w-2xl">
+                    <h2 id={headingId} className="text-3xl font-extrabold tracking-wide text-white uppercase sm:text-4xl">
+                        {title}
+                    </h2>
+                    <p className="mt-4 text-base leading-relaxed text-zinc-200 sm:text-lg">{lead}</p>
+                </div>
+                <div className="mt-10">{children}</div>
+            </div>
+        </section>
+    );
 }
 
 export default function LandingPage(): ReactNode {
-    const [currentFrame, setCurrentFrame] = useState(1);
-
-    useEffect(() => {
-        const handleScroll = (): void => {
-            const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-            const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-            if (maxScroll <= 0) {
-                return;
-            }
-
-            const rawProgress = Math.min(1, Math.max(0, scrollY / maxScroll));
-            const frame = Math.min(TOTAL_FRAMES, Math.max(1, Math.round(1 + rawProgress * (TOTAL_FRAMES - 1))));
-
-            setCurrentFrame(frame);
-        };
-
-        window.addEventListener("scroll", handleScroll, { passive: true });
-        document.addEventListener("scroll", handleScroll, { passive: true });
-        window.addEventListener("resize", handleScroll, { passive: true });
-        handleScroll();
-        return () => {
-            window.removeEventListener("scroll", handleScroll);
-            document.removeEventListener("scroll", handleScroll);
-            window.removeEventListener("resize", handleScroll);
-        };
-    }, []);
-
-    // title split calculation: starts splitting after frame 12, fully parted by frame 90
-    const splitProgress = Math.max(0, Math.min(1, (currentFrame - 12) / 78));
-    const heroElementsOpacity = Math.max(0, 1 - splitProgress * 1.3);
-
-    // finale visibility (frames 655 to 720)
-    const finaleMotion = calculateFaqMotion(currentFrame, 650, 675, 720, 720);
-
     return (
-        <div className="relative min-h-[7500px] w-full bg-zinc-950 text-zinc-100 select-none overflow-x-hidden">
-            {/* hidden h1 heading for screen readers */}
-            <h1 className="sr-only">Project Stairway</h1>
-
-            {/* scroll-scrubbed canvas background */}
-            <ScrollytellingCanvas currentFrame={currentFrame} totalFrames={TOTAL_FRAMES} dampeningOpacity={heroElementsOpacity} />
-
-            {/* hero section: bigger split title and clean register now button */}
-            <header className="fixed inset-0 z-20 flex flex-col items-center justify-center p-6 text-center pointer-events-none">
-                <div className="relative flex flex-col items-center gap-8 sm:gap-10 w-full max-w-6xl">
-                    <div className="flex flex-col items-center gap-4 sm:gap-5 w-full">
-                        {/* cinematic eyebrow above title */}
-                        <div
-                            className="transition-all duration-75 ease-out select-none"
-                            style={{
-                                opacity: heroElementsOpacity,
-                                transform: `translate3d(0, -${splitProgress * 20}px, 0)`
-                            }}
-                        >
-                            <p className="text-[10px] sm:text-xs md:text-sm font-light tracking-[0.38em] sm:tracking-[0.48em] text-zinc-400 uppercase drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
-                                AN INDEPENDENT MOTION PICTURE
-                            </p>
-                        </div>
-
-                        {/* title split container */}
-                        <div aria-hidden="true" className="relative flex items-center justify-center w-full px-2 sm:px-6">
-                            {/* ambient cyan glow */}
-                            <div
-                                className="pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 h-56 w-[36rem] rounded-full bg-cyan-500/25 blur-3xl transition-opacity duration-75"
-                                style={{ opacity: heroElementsOpacity }}
+        <main id="main" tabIndex={-1} className="relative isolate outline-none md:pl-56">
+            <div aria-hidden="true" className="blur-stage">
+                <div />
+                <div />
+                <div />
+                <div />
+                <div />
+                <div />
+            </div>
+            <section id="home" aria-labelledby="home-heading" className="flex min-h-[calc(100dvh-6rem)] flex-col md:min-h-dvh">
+                <div className="flex flex-1 items-center justify-center px-5 pt-10 sm:px-8">
+                    <div className="w-full max-w-[780px]">
+                        <h1 id="home-heading">
+                            <Image
+                                src="/brand/title.png"
+                                alt="Project Stairway"
+                                width={780}
+                                height={78}
+                                priority
+                                className="h-auto w-full drop-shadow-[0_4px_18px_rgba(0,0,0,0.45)]"
                             />
-
-                            {/* left half: "PROJECT" */}
-                            <div
-                                className="relative flex justify-end will-change-transform transition-transform duration-75 ease-out"
-                                style={{
-                                    transform: `translate3d(-${splitProgress * 75}vw, 0, 0)`,
-                                    opacity: 1 - splitProgress
-                                }}
-                            >
-                                <Image
-                                    src="/title-left.png"
-                                    alt=""
-                                    width={484}
-                                    height={101}
-                                    priority
-                                    unoptimized
-                                    className="h-10 sm:h-14 md:h-18 lg:h-22 w-auto object-contain select-none drop-shadow-[0_0_45px_rgba(0,229,255,0.45)]"
-                                />
-                            </div>
-
-                            {/* right half: "STAIRWAY" */}
-                            <div
-                                className="relative flex justify-start will-change-transform transition-transform duration-75 ease-out"
-                                style={{
-                                    transform: `translate3d(${splitProgress * 75}vw, 0, 0)`,
-                                    opacity: 1 - splitProgress
-                                }}
-                            >
-                                <Image
-                                    src="/title-right.png"
-                                    alt=""
-                                    width={526}
-                                    height={101}
-                                    priority
-                                    unoptimized
-                                    className="h-10 sm:h-14 md:h-18 lg:h-22 w-auto object-contain select-none drop-shadow-[0_0_45px_rgba(0,229,255,0.45)]"
-                                />
-                            </div>
-                        </div>
+                        </h1>
+                        <p className="mt-2 flex justify-end pr-[4%]">
+                            <Image
+                                src="/brand/tagline.png"
+                                alt="A community effort."
+                                width={270}
+                                height={23}
+                                priority
+                                className="h-auto w-[35%] drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
+                            />
+                        </p>
                     </div>
-
-                    {/* clean register button with physical transparent design */}
-                    <div
-                        className="flex flex-col items-center transition-all duration-75 ease-out"
-                        style={{
-                            opacity: heroElementsOpacity,
-                            transform: `translate3d(0, ${splitProgress * 25}px, 0)`,
-                            pointerEvents: heroElementsOpacity > 0.2 ? "auto" : "none"
-                        }}
-                    >
-                        <a
-                            href="https://app.projectstairway.net"
-                            className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-white/[0.05] px-8 py-3 text-xs sm:text-sm font-medium tracking-[0.2em] uppercase text-zinc-200 backdrop-blur-md shadow-[inset_0_1px_0_0_rgba(255,255,255,0.15),0_2px_8px_rgba(0,0,0,0.4)] transition-all duration-150 hover:border-white/30 hover:bg-white/[0.1] hover:text-white active:translate-y-0.5 active:bg-white/[0.03] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40"
-                        >
-                            Register Now
+                </div>
+                <div className="px-5 pb-14 text-center sm:px-8 md:pb-20">
+                    <p className="mx-auto max-w-xl text-base leading-relaxed text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.6)] sm:text-lg">
+                        An independent, community-made Minecraft animated film, built in the open by artists from around the world.
+                    </p>
+                    <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                        <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className={primaryButton}>
+                            Join the Discord
+                            <NewTabHint />
+                        </a>
+                        <a href="#goal" className={secondaryButton}>
+                            Learn more
                         </a>
                     </div>
                 </div>
+            </section>
 
-                {/* scroll down indicator */}
-                <div
-                    className="absolute bottom-8 flex items-center justify-center transition-opacity duration-75 pointer-events-none"
-                    style={{ opacity: heroElementsOpacity }}
-                    aria-hidden="true"
-                >
-                    <div className="animate-breathe flex items-center justify-center">
-                        <ChevronDown className="h-7 w-7 sm:h-8 sm:w-8 text-cyan-400 drop-shadow-[0_0_12px_rgba(0,229,255,0.65)] stroke-[2.25]" />
+            <ContentSection
+                id="goal"
+                title="The Goal"
+                lead="Project Stairway is an open, community-built animated motion picture: a feature film made together, scene by scene."
+            >
+                <ul className="grid gap-4 md:grid-cols-3">
+                    {GOALS.map((goal, index) => {
+                        const Icon = GOAL_ICONS[index] ?? Users;
+                        return (
+                            <li key={goal.title} className={card}>
+                                <span className="flex size-10 items-center justify-center rounded-lg bg-sky-400/15 text-sky-300">
+                                    <Icon aria-hidden="true" className="size-5" />
+                                </span>
+                                <h3 className="mt-5 text-lg font-semibold text-white">{goal.title}</h3>
+                                <p className="mt-2 text-sm leading-relaxed text-zinc-200">{goal.body}</p>
+                            </li>
+                        );
+                    })}
+                </ul>
+            </ContentSection>
+
+            <ContentSection
+                id="pipeline"
+                title="Pipeline"
+                lead="It is pretty straightforward. Every shot moves through the same four steps on the studio platform."
+            >
+                <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {PIPELINE_STEPS.map((step, index) => (
+                        <li key={step.title} className={card}>
+                            <span className="font-mono text-sm font-semibold text-sky-300">
+                                <span className="sr-only">Step </span>
+                                {String(index + 1).padStart(2, "0")}
+                            </span>
+                            <h3 className="mt-3 text-lg font-semibold text-white">{step.title}</h3>
+                            <p className="mt-2 text-sm leading-relaxed text-zinc-200">{step.body}</p>
+                        </li>
+                    ))}
+                </ol>
+            </ContentSection>
+
+            <ContentSection
+                id="contribute"
+                title="Contribute"
+                lead="All animation shots are up for grabs in the Grab-box. We don't take open writing, but the community votes on key story elements."
+            >
+                <div className="grid gap-4 lg:grid-cols-5">
+                    <div className={`${card} lg:col-span-3`}>
+                        <h3 className="text-lg font-semibold text-white">Who we&apos;re looking for</h3>
+                        <ul className="mt-4 flex flex-wrap gap-2">
+                            {ROLES.map((role) => (
+                                <li
+                                    key={role}
+                                    className="rounded-md border border-white/20 bg-white/[0.06] px-3 py-1.5 text-sm text-zinc-100"
+                                >
+                                    {role}
+                                </li>
+                            ))}
+                        </ul>
                     </div>
-                </div>
-            </header>
-
-            {/* reworked faqs: alternating right/left with cool slide-in animations & minecraft font */}
-            {FAQ_ITEMS.map((item) => {
-                const motion = calculateFaqMotion(currentFrame, item.startFrame, item.peakStart, item.peakEnd, item.endFrame, item.side);
-
-                if (!motion.visible) {
-                    return null;
-                }
-
-                const isRight = item.side === "right";
-
-                return (
-                    <div
-                        key={item.id}
-                        className={`fixed inset-y-0 z-20 flex items-center p-6 sm:p-12 lg:p-24 w-full pointer-events-none transition-transform duration-75 ease-out ${
-                            isRight ? "right-0 justify-end text-right" : "left-0 justify-start text-left"
-                        }`}
-                        style={{
-                            opacity: motion.opacity,
-                            transform: motion.transform,
-                            pointerEvents: motion.pointerEvents
-                        }}
-                    >
-                        <div
-                            className={`relative flex flex-col max-w-xl sm:max-w-2xl ${
-                                isRight ? "items-end text-right" : "items-start text-left"
-                            }`}
-                        >
-                            {/* minecraft font question */}
-                            <h2 className="font-minecraft text-2xl sm:text-4xl lg:text-5xl text-white tracking-wide uppercase leading-snug drop-shadow-[0_4px_24px_rgba(0,0,0,1)] [text-shadow:2px_2px_0_#000,4px_4px_0_rgba(0,0,0,0.85)]">
-                                {item.question}
-                            </h2>
-
-                            {/* human answer with strong readability against undamped scenery */}
-                            <p className="mt-4 sm:mt-6 text-sm sm:text-base lg:text-lg text-zinc-100 font-normal leading-relaxed drop-shadow-[0_2px_12px_rgba(0,0,0,1)] [text-shadow:1px_1px_0_#000]">
-                                {item.answer}
+                    <div className={`${card} flex flex-col justify-between gap-5 lg:col-span-2`}>
+                        <div>
+                            <h3 className="text-lg font-semibold text-white">Get started</h3>
+                            <p className="mt-2 text-sm leading-relaxed text-zinc-200">
+                                Join the Discord, then sign in to the studio with your Discord account to claim your first shot.
                             </p>
                         </div>
-                    </div>
-                );
-            })}
-
-            {/* finale: join the community */}
-            <div
-                className="fixed inset-0 z-20 flex items-center justify-center p-6 text-center transition-transform duration-75 ease-out"
-                style={{
-                    opacity: finaleMotion.opacity,
-                    transform: finaleMotion.transform,
-                    pointerEvents: finaleMotion.pointerEvents
-                }}
-            >
-                <div className="relative flex flex-col items-center max-w-2xl">
-                    <span className="font-minecraft text-xs sm:text-sm uppercase tracking-[0.25em] text-cyan-400 mb-3 drop-shadow-[0_2px_8px_rgba(0,0,0,1)] [text-shadow:1px_1px_0_#000]">
-                        The Stairway is Open
-                    </span>
-                    <h2 className="font-minecraft text-3xl sm:text-5xl lg:text-6xl text-white uppercase tracking-wide leading-snug drop-shadow-[0_4px_30px_rgba(0,0,0,0.95)] [text-shadow:3px_3px_0_#000,5px_5px_0_rgba(0,0,0,0.85)]">
-                        Shape The Story
-                    </h2>
-                    <p className="mt-4 text-base sm:text-lg text-zinc-200 leading-relaxed drop-shadow-[0_2px_20px_rgba(0,0,0,0.95)] [text-shadow:1px_1px_0_#000] max-w-xl">
-                        Claim an open scene, give feedback on active cuts, and help make an animated film.
-                    </p>
-
-                    <div className="mt-8 flex flex-wrap items-center justify-center">
-                        <a
-                            href="https://discord.gg/WP7dhVzkaV"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-minecraft inline-flex items-center justify-center rounded-lg border border-white/15 bg-white/[0.05] px-8 py-3.5 text-xs sm:text-sm font-medium tracking-[0.2em] uppercase text-zinc-200 backdrop-blur-md shadow-[inset_0_1px_0_0_rgba(255,255,255,0.15),0_2px_8px_rgba(0,0,0,0.4)] transition-all duration-150 hover:border-white/30 hover:bg-white/[0.1] hover:text-white active:translate-y-0.5 active:bg-white/[0.03] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40 [text-shadow:1px_1px_0_rgba(0,0,0,0.8)]"
-                        >
-                            JOIN THE COMMUNITY
-                        </a>
+                        <div className="flex flex-wrap gap-3">
+                            <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className={primaryButton}>
+                                Join the Discord
+                                <NewTabHint />
+                            </a>
+                            <a href={APP_URL} className={secondaryButton}>
+                                Sign in to the studio
+                            </a>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            {/* bottom pinned footer */}
-            <div className="absolute bottom-0 left-0 right-0 z-30">
-                <Footer />
-            </div>
-        </div>
+                <div className="mt-12 flex flex-wrap items-center gap-x-8 gap-y-4">
+                    <h3 className="text-xs font-semibold tracking-wider text-zinc-300 uppercase">Supported by</h3>
+                    <ul className="flex flex-wrap items-center gap-8">
+                        {PARTNERS.map((partner) => (
+                            <li key={partner.name}>
+                                <a href={partner.href} target="_blank" rel="noopener noreferrer" className="focus-ring block rounded-sm">
+                                    <Image
+                                        src={partner.src}
+                                        alt={partner.name}
+                                        width={partner.width}
+                                        height={partner.height}
+                                        className="h-8 w-auto opacity-85 transition-opacity hover:opacity-100"
+                                    />
+                                    <NewTabHint />
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            </ContentSection>
+
+            <footer className="border-t border-white/10 px-5 py-8 md:hidden">
+                <LegalBlock tone="dark" />
+            </footer>
+        </main>
     );
 }
