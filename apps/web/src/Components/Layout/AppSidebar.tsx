@@ -2,6 +2,7 @@
 
 import { Role, RoundStatus, ShotStatus, type UserDto } from "@platform/contracts";
 import { useQueryClient, useQuery, type QueryClient } from "@tanstack/react-query";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -81,8 +82,16 @@ export function AppSidebar(): ReactNode {
     return (
         <Sidebar collapsible="icon">
             <SidebarHeader className="box-content h-12 justify-center border-b px-4 py-0 group-data-[collapsible=icon]:px-2">
-                <Link href="/" className="truncate text-[15px] leading-6 font-semibold tracking-tight group-data-[collapsible=icon]:hidden">
-                    Project Stairway
+                <Link href="/" className="flex items-center gap-2.5 truncate text-[15px] leading-6 font-semibold tracking-tight">
+                    <Image src="/branding/logo.png" alt="" width={24} height={24} className="size-6 shrink-0 rounded-sm object-contain" />
+                    <Image
+                        src="/branding/title.png"
+                        alt="Project Stairway"
+                        width={780}
+                        height={78}
+                        className="h-4 w-auto object-contain group-data-[collapsible=icon]:hidden"
+                        priority
+                    />
                 </Link>
             </SidebarHeader>
             <SidebarContent>

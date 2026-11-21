@@ -40,7 +40,11 @@ export const metadata: Metadata = {
         description: SITE_DESCRIPTION,
         images: ["/og-image.jpg"]
     },
-    robots: { index: true, follow: true }
+    robots: { index: true, follow: true },
+    icons: {
+        icon: "/brand/logo.png",
+        apple: "/brand/logo.png"
+    }
 };
 
 export const viewport: Viewport = {
@@ -56,7 +60,7 @@ const structuredData = {
             "@id": `${SITE_URL}/#organization`,
             name: SITE_TITLE,
             url: SITE_URL,
-            logo: `${SITE_URL}/brand/title.png`,
+            logo: `${SITE_URL}/brand/logo.png`,
             sameAs: [DISCORD_URL, YOUTUBE_URL]
         },
         {

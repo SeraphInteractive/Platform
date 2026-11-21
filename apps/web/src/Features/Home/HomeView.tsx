@@ -2,7 +2,7 @@
 
 import { RoundStatus, ShotStatus } from "@platform/contracts";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, ChevronRight, Film, Map as MapIcon, Vote, type LucideIcon } from "lucide-react";
+import { ArrowRight, Check, ChevronRight, Film, Map as MapIcon, Vote, type LucideIcon } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -13,10 +13,10 @@ import { StatTile } from "@/Components/Common/StatTile";
 import { Badge } from "@/Components/Ui/badge";
 import { Button } from "@/Components/Ui/button";
 import { Card } from "@/Components/Ui/card";
-import { Progress } from "@/Components/Ui/progress";
 import { Skeleton } from "@/Components/Ui/skeleton";
 import { useMyShots } from "@/Features/Grabbox/UseMyShots";
 import { useSession } from "@/Hooks/UseSession";
+import { pipelinePhases } from "@/Lib/Pipeline";
 import { cn } from "@/Lib/Utils";
 
 const PLACEHOLDER = "–";
@@ -64,14 +64,26 @@ function WorkflowPanel({ title, icon, href, cta, description, metrics, emptyMess
     const loaded = metrics.every((metric) => metric.value !== null);
     const isEmpty = loaded && metrics.every((metric) => metric.value === 0);
     return (
-        <Panel title={title} icon={icon} className="h-full">
+        <Panel title={title} icon={icon} className="flex h-full flex-col justify-between transition-colors hover:border-border/80">
             <div className="flex flex-1 flex-col gap-4 p-4">
                 <p className="text-muted-foreground text-[13px] leading-relaxed text-pretty">{description}</p>
-                <dl className={cn("grid divide-x rounded-md border", metrics.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
+                <dl
+                    className={cn(
+                        "grid divide-x rounded-md border border-border/80 bg-muted/20",
+                        metrics.length === 3 ? "grid-cols-3" : "grid-cols-2"
+                    )}
+                >
                     {metrics.map((metric) => (
-                        <div key={metric.label} className="min-w-0 px-3 py-2.5">
-                            <dt className="text-muted-foreground truncate text-xs">{metric.label}</dt>
-                            <dd className={cn("text-lg font-semibold tabular-nums", metric.value === 0 && "text-muted-foreground")}>
+                        <div key={metric.label} className="min-w-0 px-3.5 py-2.5">
+                            <dt className="text-muted-foreground truncate text-[11px] font-medium tracking-wider uppercase">
+                                {metric.label}
+                            </dt>
+                            <dd
+                                className={cn(
+                                    "mt-0.5 text-xl font-semibold tabular-nums tracking-tight",
+                                    metric.value === 0 ? "text-muted-foreground/60" : "text-foreground"
+                                )}
+                            >
                                 {metric.value ?? PLACEHOLDER}
                             </dd>
                         </div>
@@ -79,14 +91,21 @@ function WorkflowPanel({ title, icon, href, cta, description, metrics, emptyMess
                 </dl>
                 {isEmpty && <p className="text-muted-foreground text-xs">{emptyMessage}</p>}
             </div>
-            <div className="mt-auto border-t px-4 py-2.5">
-                <Link
-                    href={href}
-                    className="text-primary focus-visible:ring-ring inline-flex items-center gap-1 rounded-sm text-[13px] font-medium hover:underline focus-visible:ring-2 focus-visible:outline-none"
+            <div className="mt-auto border-t bg-muted/15 p-3">
+                <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="group flex w-full items-center justify-between border-border/80 bg-background/60 px-3.5 text-xs font-medium transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
                 >
-                    {cta}
-                    <ArrowRight className="size-3.5" aria-hidden />
-                </Link>
+                    <Link href={href}>
+                        <span className="font-medium text-foreground transition-colors group-hover:text-primary">{cta}</span>
+                        <ArrowRight
+                            className="size-3.5 text-muted-foreground transition-all group-hover:translate-x-1 group-hover:text-primary"
+                            aria-hidden
+                        />
+                    </Link>
+                </Button>
             </div>
         </Panel>
     );
@@ -135,6 +154,9 @@ export function HomeView(): ReactNode {
                     <h1 className="truncate text-2xl font-semibold tracking-tight">
                         {user === null ? "Project Stairway" : `Welcome back, ${user.username}`}
                     </h1>
+                    <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                        AN INDEPENDENT MOTION PICTURE, BY THE COMMUNITY, FOR THE COMMUNITY!
+                    </p>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
                     <Button asChild variant="outline" size="sm">
@@ -211,7 +233,7 @@ export function HomeView(): ReactNode {
                         </Button>
                     }
                 >
-                    <div className="space-y-3 p-4">
+                    <div className="space-y-4 p-4">
                         {pipelineQuery.isPending ? (
                             <div className="space-y-2" aria-busy="true" aria-label="Loading">
                                 <Skeleton className="h-4 w-1/3" />
@@ -221,22 +243,119 @@ export function HomeView(): ReactNode {
                             <p className="text-muted-foreground text-[13px]">Roadmap progress is unavailable right now.</p>
                         ) : (
                             <>
-                                <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-                                    <div className="min-w-0">
-                                        <p className="text-muted-foreground text-xs">{progress.phaseTitle}</p>
-                                        <p className="text-sm font-semibold">
-                                            Step {progress.stepId}: {progress.stepTitle}
-                                        </p>
+                                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 pb-3.5">
+                                    <div className="min-w-0 space-y-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <p className="text-muted-foreground text-xs font-medium">{progress.phaseTitle}</p>
+                                            {progress.isPhaseTransition && (
+                                                <Badge variant="outline" className="text-[10px] font-normal">
+                                                    Phase transition
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <h3 className="text-base font-semibold tracking-tight text-foreground sm:text-lg">
+                                            {progress.stepTitle}
+                                        </h3>
                                     </div>
-                                    <span className="text-2xl font-semibold tabular-nums">{progressPercent}%</span>
+                                    <div className="text-right">
+                                        <div className="text-2xl font-bold tracking-tight text-foreground tabular-nums sm:text-3xl">
+                                            {progressPercent}%
+                                        </div>
+                                        <p className="text-muted-foreground text-[11px]">Production progress</p>
+                                    </div>
                                 </div>
-                                <Progress value={progress.progressPercent} aria-label="Overall film production progress" />
-                                <div className="text-muted-foreground flex flex-wrap items-center justify-between gap-2 text-xs">
-                                    {progress.isPhaseTransition ? (
-                                        <Badge variant="outline">Phase transition</Badge>
-                                    ) : (
-                                        <span>Overall film production</span>
-                                    )}
+
+                                {/* horizontal diamond milestone track */}
+                                <div className="pt-2 pb-1 overflow-x-auto">
+                                    <div className="relative min-w-[500px] sm:min-w-0">
+                                        {/* background rail running from center of first column to center of last column */}
+                                        <div
+                                            className="bg-border absolute top-3.5 -translate-y-1/2 h-[2px]"
+                                            style={{
+                                                left: `calc(100% / ${pipelinePhases.length * 2})`,
+                                                right: `calc(100% / ${pipelinePhases.length * 2})`
+                                            }}
+                                            aria-hidden="true"
+                                        />
+                                        {/* active primary rail */}
+                                        <div
+                                            className="bg-primary absolute top-3.5 -translate-y-1/2 h-[2px] transition-all duration-300"
+                                            style={{
+                                                left: `calc(100% / ${pipelinePhases.length * 2})`,
+                                                width: `calc(${Math.min(1, Math.max(0, progress.phaseNumber / (pipelinePhases.length - 1)))} * (100% - 100% / ${pipelinePhases.length}))`
+                                            }}
+                                            aria-hidden="true"
+                                        />
+
+                                        <div className="relative z-10 flex w-full">
+                                            {pipelinePhases.map((phase) => {
+                                                const isPhaseDone = progress.phaseNumber > phase.number;
+                                                const isPhaseCurrent = progress.phaseNumber === phase.number;
+                                                const shortNames = [
+                                                    "Pre-Prod",
+                                                    "Animatic",
+                                                    "LookDev",
+                                                    "Layout",
+                                                    "Animation",
+                                                    "Lighting",
+                                                    "Sound",
+                                                    "Release"
+                                                ];
+                                                const shortName = shortNames[phase.number] ?? phase.title.replace(/^Phase \d+: /u, "");
+
+                                                return (
+                                                    <div key={phase.number} className="flex flex-1 flex-col items-center text-center">
+                                                        <div className="flex size-7 items-center justify-center bg-card rounded-full">
+                                                            <span
+                                                                className={cn(
+                                                                    "flex size-3.5 rotate-45 items-center justify-center rounded-[1px] border transition-colors sm:size-4",
+                                                                    isPhaseDone && "border-primary bg-primary text-primary-foreground",
+                                                                    isPhaseCurrent &&
+                                                                        "border-primary bg-background text-primary ring-2 ring-primary/20 border-2",
+                                                                    !isPhaseDone &&
+                                                                        !isPhaseCurrent &&
+                                                                        "border-border bg-card text-muted-foreground/30"
+                                                                )}
+                                                                aria-hidden="true"
+                                                            >
+                                                                {isPhaseDone ? (
+                                                                    <Check className="-rotate-45 size-2 sm:size-2.5 stroke-[2.5]" />
+                                                                ) : isPhaseCurrent ? (
+                                                                    <div className="bg-primary size-1 rounded-full" />
+                                                                ) : (
+                                                                    <div className="bg-muted-foreground/30 size-1 rounded-full" />
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                        <span
+                                                            className={cn(
+                                                                "mt-1.5 text-[10px] font-medium leading-tight sm:text-xs",
+                                                                isPhaseCurrent
+                                                                    ? "text-primary font-semibold"
+                                                                    : isPhaseDone
+                                                                      ? "text-foreground"
+                                                                      : "text-muted-foreground/60"
+                                                            )}
+                                                        >
+                                                            {shortName}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="text-muted-foreground flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3 text-xs">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-foreground font-medium">Free YouTube Release</span>
+                                        <span className="text-muted-foreground/40" aria-hidden="true">
+                                            ·
+                                        </span>
+                                        <span>
+                                            Phase {progress.phaseNumber} of {pipelinePhases.length - 1}
+                                        </span>
+                                    </div>
                                     {progress.updatedAt !== null && <RelativeTime value={progress.updatedAt} prefix="Updated" />}
                                 </div>
                             </>

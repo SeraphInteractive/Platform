@@ -23,7 +23,11 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
     title: "Studio · Project Stairway",
-    description: "Studio screenplay editor and story development platform for Project Stairway."
+    description: "Studio screenplay editor and story development platform for Project Stairway.",
+    icons: {
+        icon: "/branding/logo.png",
+        apple: "/branding/logo.png"
+    }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
