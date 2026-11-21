@@ -14,7 +14,9 @@ export const textLimits = {
     sectionTitle: 60,
     documentNote: 200,
     username: 64,
-    email: 254
+    email: 254,
+    legalName: 200,
+    phone: 32
 } as const;
 
 const invisibleRanges: readonly (readonly [number, number])[] = [
@@ -108,6 +110,7 @@ export const fieldRules = {
     sectionTitle: singleLineText(textLimits.sectionTitle, "Section title"),
     documentNote: optionalMultiLineText(textLimits.documentNote, "Note"),
     username: singleLineText(textLimits.username, "Username"),
+    legalName: singleLineText(textLimits.legalName, "Legal name"),
     shotImageKeys: z.array(z.string().max(255)).max(4, "A task can have at most 4 images.")
 } as const;
 

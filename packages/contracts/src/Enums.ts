@@ -21,6 +21,20 @@ export const roleLabels: Readonly<Record<Role, string>> = {
     [Role.SuperAdmin]: "Super admin"
 };
 
+export const roleRanks: Readonly<Record<Role, number>> = Object.freeze({
+    [Role.Member]: 0,
+    [Role.Voter]: 1,
+    [Role.Contributor]: 2,
+    [Role.SeniorContributor]: 3,
+    [Role.Supervisor]: 4,
+    [Role.Admin]: 5,
+    [Role.SuperAdmin]: 6
+});
+
+export function rankOfRole(role: Role): number {
+    return roleRanks[role] ?? 0;
+}
+
 export function roleLabel(role: Role): string {
     return roleLabels[role] ?? role;
 }
@@ -177,12 +191,12 @@ export const shotTypeRequiredSpecialties: Readonly<Record<ShotType, readonly Spe
 
 export const supervisorGrantableSpecialties: Readonly<Partial<Record<Specialty, readonly Specialty[]>>> = Object.freeze({
     [Specialty.ArtDirector]: [Specialty.ConceptArtist, Specialty.Screenwriter],
-    [Specialty.ModelingAndSurfacingLead]: [Specialty.SurfaceTextureArtist, Specialty.Modeler3d],
+    [Specialty.ModelingAndSurfacingLead]: [Specialty.SurfaceTextureArtist, Specialty.Modeler3d, Specialty.Rigger],
     [Specialty.ModellingSupervisor]: [Specialty.Modeler3d],
-    [Specialty.RiggingSupervisor]: [Specialty.Rigger],
+    [Specialty.RiggingSupervisor]: [Specialty.Rigger, Specialty.Modeler3d],
     [Specialty.SurfacingLookDevLead]: [Specialty.SurfaceTextureArtist, Specialty.Modeler3d, Specialty.Rigger],
-    [Specialty.LayoutPrevisLead]: [Specialty.LayoutArtist],
-    [Specialty.AnimationSupervisor]: [Specialty.Animator, Specialty.VideoEditor],
+    [Specialty.LayoutPrevisLead]: [Specialty.LayoutArtist, Specialty.Animator],
+    [Specialty.AnimationSupervisor]: [Specialty.Animator, Specialty.LayoutArtist, Specialty.VideoEditor],
     [Specialty.LightingAndVfxLead]: [Specialty.LightingArtist, Specialty.VfxArtist],
     [Specialty.CfxVfxSupervisor]: [Specialty.VfxArtist],
     [Specialty.LightingCompositingSupervisor]: [Specialty.LightingArtist, Specialty.VfxArtist],
@@ -197,7 +211,8 @@ export enum DocumentSlug {
     Rules = "rules",
     Terms = "terms",
     Privacy = "privacy",
-    AcceptableUse = "acceptable-use"
+    AcceptableUse = "acceptable-use",
+    Cla = "cla"
 }
 
 export const legalDocumentSlugs: readonly DocumentSlug[] = [DocumentSlug.Terms, DocumentSlug.Privacy, DocumentSlug.AcceptableUse];
@@ -225,6 +240,8 @@ export const selfSelectableSpecialties: readonly Specialty[] = [
     Specialty.VideoEditor
 ];
 
+export const contributorSpecialties: readonly Specialty[] = selfSelectableSpecialties;
+
 export const adminSpecialties: readonly Specialty[] = [
     Specialty.Producer,
     Specialty.CreativeDirector,
@@ -247,7 +264,28 @@ export const exclusiveSpecialties: readonly Specialty[] = [...adminSpecialties, 
 
 export const teamSpecialties: readonly Specialty[] = [Specialty.MediaTeam];
 
-export const assignableSpecialties: readonly Specialty[] = [...adminSpecialties, ...supervisorSpecialties, ...teamSpecialties];
+export const assignableSpecialties: readonly Specialty[] = [
+    ...adminSpecialties,
+    ...supervisorSpecialties,
+    ...teamSpecialties,
+    ...contributorSpecialties
+];
+
+export function allowedSpecialtiesForRole(role: Role): readonly Specialty[] {
+    switch (role) {
+        case Role.SuperAdmin:
+        case Role.Admin:
+            return [...adminSpecialties, ...teamSpecialties];
+        case Role.Supervisor:
+            return [...supervisorSpecialties, ...teamSpecialties];
+        case Role.SeniorContributor:
+        case Role.Contributor:
+            return [...contributorSpecialties, ...teamSpecialties];
+        case Role.Voter:
+        case Role.Member:
+            return [];
+    }
+}
 
 export function specialtyLabel(specialty: Specialty): string {
     if (specialty === Specialty.LightingAndVfxLead) {
@@ -325,6 +363,52 @@ export const deliverableContentTypes: Readonly<Record<DeliverableKind, readonly 
     [DeliverableKind.Video]: ["video/mp4", "video/webm", "video/quicktime"],
     [DeliverableKind.Blend]: ["application/x-blender", "application/octet-stream"]
 };
+
+export enum ClaStatus {
+    // Postgres enum order is append-only: add new values at the end.
+    PendingGuardian = "pending_guardian",
+    Active = "active",
+    GuardianRejected = "guardian_rejected",
+    GuardianExpired = "guardian_expired",
+    Superseded = "superseded",
+    Revoked = "revoked"
+}
+
+export const openClaStatuses: readonly ClaStatus[] = [ClaStatus.PendingGuardian, ClaStatus.Active];
+
+export enum ClaEventType {
+    // Postgres enum order is append-only: add new values at the end.
+    Signed = "signed",
+    GuardianRequested = "guardian_requested",
+    GuardianEmailResent = "guardian_email_resent",
+    GuardianApproved = "guardian_approved",
+    GuardianRejected = "guardian_rejected",
+    GuardianExpired = "guardian_expired",
+    Activated = "activated",
+    Superseded = "superseded",
+    Revoked = "revoked",
+    ReceiptSent = "receipt_sent",
+    PiiPurged = "pii_purged"
+}
+
+export enum ClaActorKind {
+    // Postgres enum order is append-only: add new values at the end.
+    Contributor = "contributor",
+    Guardian = "guardian",
+    Staff = "staff",
+    System = "system"
+}
+
+export enum GuardianRelationship {
+    Parent = "parent",
+    LegalGuardian = "legal_guardian",
+    Other = "other"
+}
+
+export enum GuardianDecision {
+    Approve = "approve",
+    Reject = "reject"
+}
 
 export enum ScreenplayRole {
     Editor = "editor",

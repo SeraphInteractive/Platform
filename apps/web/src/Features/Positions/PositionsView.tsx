@@ -10,13 +10,14 @@ import { MarkdownText } from "@/Components/Common/MarkdownText";
 import { PageHeader } from "@/Components/Common/PageHeader";
 import { EmptyState, ErrorState, LoadingRows } from "@/Components/Common/States";
 import { Tone, ToneBadge } from "@/Components/Common/StatusBadge";
+import { Badge } from "@/Components/Ui/badge";
 import { Button } from "@/Components/Ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/Components/Ui/card";
 import { formatDateTime } from "@/Lib/Format";
 import { safeHttpUrl } from "@/Lib/SafeUrl";
 
 const availabilityTones: Readonly<Record<TicketAvailability, Tone>> = {
-    [TicketAvailability.Available]: Tone.Positive,
+    [TicketAvailability.Available]: Tone.Info,
     [TicketAvailability.Disabled]: Tone.Neutral,
     [TicketAvailability.Upcoming]: Tone.Info,
     [TicketAvailability.WindowClosed]: Tone.Warning,
@@ -67,46 +68,58 @@ function PositionCard({ position }: { readonly position: PublicPositionDto }): R
     const window = windowText(position);
     const listing = position.listing;
     const canApply = position.availability === TicketAvailability.Available && applyUrl !== null;
+    const isOpen = position.availability === TicketAvailability.Available;
+
     return (
-        <Card id={position.id}>
-            <CardHeader>
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="min-w-0 space-y-1">
-                        <CardTitle>
-                            {position.emoji !== null && <span className="mr-1.5">{position.emoji}</span>}
-                            {position.name}
-                        </CardTitle>
-                        <CardDescription>
-                            {position.categoryName}
-                            {position.description !== null && ` | ${position.description}`}
-                        </CardDescription>
+        <Card id={position.id} className="transition-colors hover:border-border/80">
+            <CardHeader className="gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <CardTitle className="text-base font-semibold">{position.name}</CardTitle>
+                            <Badge variant="outline" className="border-border/60 text-muted-foreground text-[10px] font-normal">
+                                {position.categoryName}
+                            </Badge>
+                        </div>
+                        {position.description !== null && (
+                            <p className="text-muted-foreground text-xs leading-relaxed">{position.description}</p>
+                        )}
                     </div>
-                    <ToneBadge tone={availabilityTones[position.availability]}>
-                        {position.availability === TicketAvailability.Available ? "Open" : ticketAvailabilityLabels[position.availability]}
-                    </ToneBadge>
+                    {isOpen ? (
+                        <Badge
+                            variant="secondary"
+                            className="border-primary/30 bg-primary/10 text-primary h-5.5 rounded-sm border px-2 text-[11px] font-medium"
+                        >
+                            Open
+                        </Badge>
+                    ) : (
+                        <ToneBadge tone={availabilityTones[position.availability]}>
+                            {ticketAvailabilityLabels[position.availability]}
+                        </ToneBadge>
+                    )}
                 </div>
             </CardHeader>
             <CardContent className="space-y-4">
                 {listing !== null && (
-                    <>
-                        <TextSection title="Position overview" body={listing.overview} />
-                        <ListSection title="Requirements" items={listing.requirements} />
-                        <ListSection title="Responsibilities" items={listing.responsibilities} />
-                        <TextSection title="Application process" body={listing.process} />
-                        <TextSection title="About Project Stairway" body={listing.about} />
-                    </>
+                    <div className="space-y-3.5 divide-y divide-border/60">
+                        {listing.overview && <TextSection title="Position overview" body={listing.overview} />}
+                        {listing.requirements.length > 0 && <ListSection title="Requirements" items={listing.requirements} />}
+                        {listing.responsibilities.length > 0 && <ListSection title="Responsibilities" items={listing.responsibilities} />}
+                        {listing.process && <TextSection title="Application process" body={listing.process} />}
+                        {listing.about && <TextSection title="About Project Stairway" body={listing.about} />}
+                    </div>
                 )}
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3.5">
                     <p className="text-muted-foreground text-xs">
                         {[window, position.openings === null ? null : `${position.filledCount} of ${position.openings} filled`]
                             .filter((part): part is string => part !== null)
-                            .join(" | ") || "Apply through a ticket on our Discord server."}
+                            .join(" · ") || "Apply through a ticket on our Discord server."}
                     </p>
                     {canApply && (
                         <Button asChild size="sm">
                             <a href={applyUrl} target="_blank" rel="noopener noreferrer">
                                 Apply on Discord
-                                <ExternalLink />
+                                <ExternalLink className="size-3.5" />
                             </a>
                         </Button>
                     )}

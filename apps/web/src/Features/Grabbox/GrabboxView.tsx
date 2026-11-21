@@ -59,21 +59,21 @@ function ActiveClaimBanner(): ReactNode {
     );
 }
 
-export function LoadingCards({ count = 8 }: { readonly count?: number }): ReactNode {
+export function LoadingCards({ count = 4 }: { readonly count?: number }): ReactNode {
     return (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-busy="true" aria-label="Loading tasks">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2" aria-busy="true" aria-label="Loading tasks">
             {Array.from({ length: count }, (_, index) => (
                 <div key={index} className="bg-card flex flex-col overflow-hidden rounded-xl border">
                     <Skeleton className="aspect-video w-full rounded-none" />
-                    <div className="flex flex-1 flex-col p-3.5 gap-2.5">
+                    <div className="flex flex-1 flex-col p-5 sm:p-6 gap-3.5">
                         <div className="flex justify-between">
-                            <Skeleton className="h-3.5 w-16" />
-                            <Skeleton className="h-3.5 w-20" />
+                            <Skeleton className="h-4.5 w-24" />
+                            <Skeleton className="h-4.5 w-28" />
                         </div>
-                        <Skeleton className="h-4 w-4/5" />
-                        <Skeleton className="h-3 w-3/5" />
-                        <div className="mt-auto pt-2.5 border-t">
-                            <Skeleton className="h-4 w-1/2" />
+                        <Skeleton className="h-6 w-4/5" />
+                        <Skeleton className="h-4 w-3/5" />
+                        <div className="mt-auto pt-4 border-t">
+                            <Skeleton className="h-4.5 w-1/2" />
                         </div>
                     </div>
                 </div>
@@ -82,8 +82,33 @@ export function LoadingCards({ count = 8 }: { readonly count?: number }): ReactN
     );
 }
 
+function ShotThumbnail({ src, sceneNumber }: { readonly src?: string; readonly sceneNumber: number }): ReactNode {
+    const [imgFailed, setImgFailed] = useState(false);
+    const validUrl = safeHttpUrl(src ?? null);
+
+    if (!validUrl || imgFailed) {
+        return (
+            <div className="bg-muted/30 text-muted-foreground/40 flex size-full flex-col items-center justify-center gap-2">
+                <Film className="size-12 stroke-[1.25]" aria-hidden="true" />
+                <span className="font-mono text-xs font-medium tracking-wide">Scene {sceneNumber}</span>
+            </div>
+        );
+    }
+
+    return (
+        <img
+            src={validUrl}
+            alt=""
+            className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+            loading="lazy"
+            onError={() => setImgFailed(true)}
+        />
+    );
+}
+
 function ShotCard({ shot }: { readonly shot: ShotDto }): ReactNode {
     const claimantAvatar = shot.claimer !== null ? safeHttpUrl(shot.claimer.avatarUrl) : null;
+    const validImages = shot.imageUrls.filter((url) => safeHttpUrl(url) !== null);
 
     return (
         <Link
@@ -91,67 +116,57 @@ function ShotCard({ shot }: { readonly shot: ShotDto }): ReactNode {
             className="group bg-card text-card-foreground hover:border-primary/50 focus-visible:ring-ring flex flex-col overflow-hidden rounded-xl border shadow-xs transition-all duration-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2"
         >
             <div className="relative aspect-video w-full overflow-hidden bg-muted/40 border-b">
-                {shot.imageUrls.length > 0 ? (
-                    <img
-                        src={shot.imageUrls[0]}
-                        alt={shot.title}
-                        className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        loading="lazy"
-                    />
-                ) : (
-                    <div className="flex size-full flex-col items-center justify-center gap-1 text-muted-foreground/40 bg-muted/20">
-                        <Film className="size-8 stroke-[1.25]" aria-hidden="true" />
-                        <span className="font-mono text-[11px] font-medium tracking-wide">Scene {shot.sceneNumber}</span>
-                    </div>
-                )}
-                <div className="absolute top-2 left-2 flex items-center gap-1.5 flex-wrap">
-                    <span className="bg-background/90 text-foreground shadow-xs backdrop-blur-xs rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold tracking-wide border border-border/50">
+                <ShotThumbnail src={validImages[0]} sceneNumber={shot.sceneNumber} />
+                <div className="absolute top-3 left-3 flex items-center gap-2 flex-wrap">
+                    <span className="bg-background/95 text-foreground shadow-xs backdrop-blur-xs rounded-md px-2.5 py-1 font-mono text-xs font-semibold tracking-wide border border-border/60">
                         {shot.shotCode}
                     </span>
-                    <span className="bg-background/80 text-muted-foreground shadow-xs backdrop-blur-xs rounded px-1.5 py-0.5 text-[10px] font-medium border border-border/40">
+                    <span className="bg-background/85 text-muted-foreground shadow-xs backdrop-blur-xs rounded-md px-2.5 py-1 text-xs font-medium border border-border/40">
                         {shotTypeLabels[shot.shotType]}
                     </span>
                 </div>
-                <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                <div className="absolute top-3 right-3 flex items-center gap-2">
                     {shot.isSeniorLocked && shot.seniorPriorityUntil !== null && (
                         <CountdownTimer targetDate={shot.seniorPriorityUntil} prefix="Lock" icon="lock" />
                     )}
                     {shot.status !== ShotStatus.Available && <ShotStatusBadge status={shot.status} />}
                 </div>
-                {shot.imageUrls.length > 1 && (
-                    <span className="bg-background/80 text-muted-foreground shadow-xs backdrop-blur-xs absolute bottom-2 right-2 rounded px-1.5 py-0.5 text-[10px] font-medium border border-border/40 flex items-center gap-1">
-                        <Images className="size-2.5" />
-                        {shot.imageUrls.length}
+                {validImages.length > 1 && (
+                    <span className="bg-background/90 text-muted-foreground shadow-xs backdrop-blur-xs absolute bottom-3 right-3 rounded-md px-2.5 py-1 text-xs font-medium border border-border/40 flex items-center gap-1.5">
+                        <Images className="size-3.5" />
+                        {validImages.length}
                     </span>
                 )}
             </div>
 
-            <div className="flex flex-1 flex-col p-3.5 gap-2">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Scene {shot.sceneNumber}</span>
+            <div className="flex flex-1 flex-col p-5 sm:p-6 gap-3">
+                <div className="flex items-center justify-between text-xs sm:text-sm text-muted-foreground">
+                    <span className="font-medium">Scene {shot.sceneNumber}</span>
                     <span className="font-medium">
                         {difficultyLabels[shot.difficultyTier]} · {shot.tierDays}d
                     </span>
                 </div>
 
-                <h3 className="line-clamp-2 text-sm font-semibold leading-snug group-hover:text-primary transition-colors">{shot.title}</h3>
+                <h3 className="line-clamp-2 text-lg font-semibold leading-snug group-hover:text-primary transition-colors sm:text-xl">
+                    {shot.title}
+                </h3>
 
                 {shot.description !== null && (
-                    <p className="line-clamp-2 text-xs text-muted-foreground/80 leading-relaxed">{shot.description}</p>
+                    <p className="line-clamp-3 text-xs sm:text-sm text-muted-foreground/80 leading-relaxed">{shot.description}</p>
                 )}
 
-                <div className="mt-auto pt-2.5 border-t flex items-center justify-between text-xs text-muted-foreground gap-2">
+                <div className="mt-auto pt-4 border-t flex items-center justify-between text-xs sm:text-sm text-muted-foreground gap-2">
                     {shot.claimer !== null ? (
-                        <div className="flex min-w-0 items-center gap-1.5">
-                            <Avatar size="sm" className="size-5 border">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                            <Avatar size="sm" className="size-6 border">
                                 {claimantAvatar !== null && <AvatarImage src={claimantAvatar} alt="" />}
-                                <AvatarFallback className="text-[9px] font-semibold">
+                                <AvatarFallback className="text-[10px] font-semibold">
                                     {shot.claimer.username.slice(0, 2).toUpperCase()}
                                 </AvatarFallback>
                             </Avatar>
                             <span className="truncate font-medium text-foreground">{shot.claimer.username}</span>
                             {shot.deadlineAt !== null && (
-                                <span className="text-muted-foreground shrink-0 text-[11px]">
+                                <span className="text-muted-foreground shrink-0 text-xs">
                                     · <RelativeTime value={shot.deadlineAt} prefix="due" />
                                 </span>
                             )}
@@ -159,7 +174,10 @@ function ShotCard({ shot }: { readonly shot: ShotDto }): ReactNode {
                     ) : shot.isSeniorLocked ? (
                         <SeniorLock shot={shot} />
                     ) : (
-                        <span className="text-success inline-flex items-center gap-1 text-xs font-medium">● Available</span>
+                        <span className="text-primary inline-flex items-center gap-2 text-xs sm:text-sm font-medium">
+                            <span className="size-2 rounded-full bg-primary" />
+                            Available
+                        </span>
                     )}
                 </div>
             </div>
@@ -242,33 +260,37 @@ export function GrabboxView(): ReactNode {
             />
             <ActiveClaimBanner />
             {departments.data !== undefined && departments.data.length > 0 && (
-                <Tabs
-                    value={departmentId}
-                    onValueChange={(value) => {
-                        setHasSelectedDept(true);
-                        setDepartmentId(value);
-                        setShotType(anyValue);
-                        setPage(1);
-                    }}
-                    className="mb-4"
-                >
-                    <TabsList className="flex flex-wrap h-auto gap-1">
-                        <TabsTrigger value={anyValue}>All departments</TabsTrigger>
-                        {departments.data.map((dept) => {
-                            const isRecommended = recommendedDepartment?.id === dept.id;
-                            return (
-                                <TabsTrigger key={dept.id} value={dept.id} className="gap-1.5">
-                                    <span>{dept.name}</span>
-                                    {isRecommended && (
-                                        <span className="rounded-full bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-medium leading-none">
-                                            For you
-                                        </span>
-                                    )}
-                                </TabsTrigger>
-                            );
-                        })}
-                    </TabsList>
-                </Tabs>
+                <div className="overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
+                    <Tabs
+                        value={departmentId}
+                        onValueChange={(value) => {
+                            setHasSelectedDept(true);
+                            setDepartmentId(value);
+                            setShotType(anyValue);
+                            setPage(1);
+                        }}
+                        className="mb-4"
+                    >
+                        <TabsList className="inline-flex h-auto w-max sm:w-auto flex-nowrap sm:flex-wrap gap-1 p-1">
+                            <TabsTrigger value={anyValue} className="shrink-0">
+                                All departments
+                            </TabsTrigger>
+                            {departments.data.map((dept) => {
+                                const isRecommended = recommendedDepartment?.id === dept.id;
+                                return (
+                                    <TabsTrigger key={dept.id} value={dept.id} className="gap-1.5 shrink-0">
+                                        <span>{dept.name}</span>
+                                        {isRecommended && (
+                                            <span className="rounded-full bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-medium leading-none">
+                                                For you
+                                            </span>
+                                        )}
+                                    </TabsTrigger>
+                                );
+                            })}
+                        </TabsList>
+                    </Tabs>
+                </div>
             )}
             <Toolbar
                 trailing={
@@ -284,7 +306,7 @@ export function GrabboxView(): ReactNode {
                         setPage(1);
                     }}
                 >
-                    <SelectTrigger size="sm" className="w-40" aria-label="Task type">
+                    <SelectTrigger size="sm" className="w-36 shrink-0" aria-label="Task type">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -303,7 +325,7 @@ export function GrabboxView(): ReactNode {
                         setPage(1);
                     }}
                 >
-                    <SelectTrigger size="sm" className="w-36" aria-label="Status">
+                    <SelectTrigger size="sm" className="w-32 shrink-0" aria-label="Status">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -322,7 +344,7 @@ export function GrabboxView(): ReactNode {
                         setPage(1);
                     }}
                 >
-                    <SelectTrigger size="sm" className="w-36" aria-label="Difficulty">
+                    <SelectTrigger size="sm" className="w-32 shrink-0" aria-label="Difficulty">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -340,7 +362,7 @@ export function GrabboxView(): ReactNode {
                     placeholder="Scene"
                     value={scene}
                     maxLength={6}
-                    className="h-8 w-24"
+                    className="h-8 w-20 shrink-0"
                     onChange={(event) => {
                         setScene(event.target.value.replace(/\D/gu, ""));
                         setPage(1);
@@ -348,14 +370,14 @@ export function GrabboxView(): ReactNode {
                 />
             </Toolbar>
             {shots.isPending ? (
-                <LoadingCards count={8} />
+                <LoadingCards count={4} />
             ) : shots.isError ? (
                 <ErrorState error={shots.error} onRetry={() => void shots.refetch()} />
             ) : shots.data.data.length === 0 ? (
                 <EmptyState title="No tasks" />
             ) : (
                 <>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                         {shots.data.data.map((shot) => (
                             <ShotCard key={shot.id} shot={shot} />
                         ))}

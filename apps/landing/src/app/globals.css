@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+@theme {
+    --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+    color-scheme: dark;
+    --background: #0b0d12;
+    --foreground: #f4f4f5;
+}
+
+html {
+    background: var(--background);
+    color: var(--foreground);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    html {
+        scroll-behavior: smooth;
+    }
+}
+
+/* sections land below the mobile sticky bar when jumped to */
+section[id] {
+    scroll-margin-top: 6rem;
+}
+
+@media (min-width: 48rem) {
+    section[id] {
+        scroll-margin-top: 0;
+    }
+}
+
+.focus-ring {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+}
+
+.focus-ring:focus-visible {
+    outline-color: #38bdf8;
+}
+
+.text-legible {
+    text-shadow:
+        0 1px 2px rgb(0 0 0 / 0.55),
+        0 0 18px rgb(0 0 0 / 0.35);
+}
+
+/*
+ * progressive blur: stacked backdrop blurs, each masked to a band so the blur
+ * ramps up smoothly in the direction of --pb-dir. --pb-max scales every layer,
+ * so the same stack works for the strong hero band and the subtle depth layer.
+ */
+.progressive-blur {
+    position: absolute;
+    pointer-events: none;
+    --pb-dir: to bottom;
+    --pb-max: 20px;
+}
+
+.progressive-blur > div {
+    position: absolute;
+    inset: 0;
+}
+
+.progressive-blur > div:nth-child(1) {
+    backdrop-filter: blur(calc(var(--pb-max) * 0.05));
+    mask-image: linear-gradient(var(--pb-dir), transparent 0%, #000 12.5%, #000 25%, transparent 37.5%);
+}
+.progressive-blur > div:nth-child(2) {
+    backdrop-filter: blur(calc(var(--pb-max) * 0.15));
+    mask-image: linear-gradient(var(--pb-dir), transparent 12.5%, #000 25%, #000 37.5%, transparent 50%);
+}
+.progressive-blur > div:nth-child(3) {
+    backdrop-filter: blur(calc(var(--pb-max) * 0.3));
+    mask-image: linear-gradient(var(--pb-dir), transparent 25%, #000 37.5%, #000 50%, transparent 62.5%);
+}
+.progressive-blur > div:nth-child(4) {
+    backdrop-filter: blur(calc(var(--pb-max) * 0.6));
+    mask-image: linear-gradient(var(--pb-dir), transparent 37.5%, #000 50%, #000 62.5%, transparent 75%);
+}
+.progressive-blur > div:nth-child(5) {
+    backdrop-filter: blur(var(--pb-max));
+    mask-image: linear-gradient(var(--pb-dir), transparent 50%, #000 62.5%, #000 100%);
+}
+
+/*
+ * blur stage: one continuous element from the middle of the hero to the end of
+ * the page. it ramps up over --ramp (the lower half of the hero) and then holds
+ * a uniform "total" blur, so there is no seam between sections. the live ramp
+ * layers are only as tall as the ramp; the full-strength layer spans the stage.
+ */
+.blur-stage {
+    --ramp: calc((100dvh - 6rem) / 2);
+    position: absolute;
+    inset: var(--ramp) 0 0 0;
+    z-index: -10;
+    pointer-events: none;
+}
+
+@media (min-width: 48rem) {
+    .blur-stage {
+        --ramp: 50dvh;
+    }
+}
+
+.blur-stage > div {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: var(--ramp);
+}
+
+.blur-stage > div:nth-child(1) {
+    backdrop-filter: blur(1px);
+    mask-image: linear-gradient(to bottom, transparent 0%, #000 12.5%, #000 25%, transparent 37.5%);
+}
+.blur-stage > div:nth-child(2) {
+    backdrop-filter: blur(3px);
+    mask-image: linear-gradient(to bottom, transparent 12.5%, #000 25%, #000 37.5%, transparent 50%);
+}
+.blur-stage > div:nth-child(3) {
+    backdrop-filter: blur(6px);
+    mask-image: linear-gradient(to bottom, transparent 25%, #000 37.5%, #000 50%, transparent 62.5%);
+}
+.blur-stage > div:nth-child(4) {
+    backdrop-filter: blur(12px);
+    mask-image: linear-gradient(to bottom, transparent 37.5%, #000 50%, #000 62.5%, transparent 75%);
+}
+.blur-stage > div:nth-child(5) {
+    height: auto;
+    bottom: 0;
+    backdrop-filter: blur(20px);
+    mask-image: linear-gradient(to bottom, transparent calc(var(--ramp) * 0.5), #000 calc(var(--ramp) * 0.625));
+}
+.blur-stage > div:nth-child(6) {
+    height: auto;
+    bottom: 0;
+    background: linear-gradient(to bottom, transparent 0, rgb(5 7 12 / 0.55) var(--ramp));
+}

@@ -10,7 +10,7 @@ import {
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { dataEnvelope, errorResponses, pageEnvelope, paginationQuerySchema, toIso, uuidSchema } from "../../Common/Http/Schemas.js";
-import { currentUser, optionalUser, requireRole, requireUser, userActorOf } from "../../Common/Security/Authorization.js";
+import { currentUser, optionalUser, requireRole, requireSignedCla, requireUser, userActorOf } from "../../Common/Security/Authorization.js";
 import type { ServiceContainer } from "../../Composition/ServiceContainer.js";
 import { DeliverableKind, DifficultyTier, ReviewDecision, ShotStatus } from "../../Domain/Enums.js";
 import { Role } from "../../Domain/Roles.js";
@@ -95,6 +95,7 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
     const { shotsService, reviewsService, objectStorage, configuration } = services;
     const security = [{ bearer: [] }];
     const supervisor = requireRole(Role.Supervisor);
+    const contributor = requireSignedCla(services.claService);
 
     application.get(
         "/shots",
@@ -242,7 +243,7 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
     application.post(
         "/shots/:shotId/claim",
         {
-            preHandler: requireUser(),
+            preHandler: [requireUser(), contributor],
             schema: {
                 tags: ["Shots"],
                 summary: "Claim an available shot. Users may hold one active claim at a time.",
@@ -281,7 +282,7 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
     application.post(
         "/shots/:shotId/uploads",
         {
-            preHandler: requireUser(),
+            preHandler: [requireUser(), contributor],
             config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
             schema: {
                 tags: ["Shots"],
@@ -308,7 +309,7 @@ export const shotsRoutes: FastifyPluginAsyncZod<{ services: ServiceContainer }> 
     application.post(
         "/shots/:shotId/submissions",
         {
-            preHandler: requireUser(),
+            preHandler: [requireUser(), contributor],
             schema: {
                 tags: ["Shots"],
                 summary: "Submit uploaded deliverables for review. Submitting grants the contributor role.",

@@ -15,7 +15,11 @@ export const metadata: Metadata = {
     title: { default: "Project Stairway", template: "%s · Project Stairway" },
     description:
         "A Minecraft-inspired animated film made by its community. Vote on the story, claim production tasks and follow the roadmap.",
-    robots: { index: false, follow: false }
+    robots: { index: false, follow: false },
+    icons: {
+        icon: "/branding/logo.png",
+        apple: "/branding/logo.png"
+    }
 };
 
 export const viewport: Viewport = {

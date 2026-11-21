@@ -31,8 +31,8 @@ describe("user management", () => {
         expect(json<{ meta: { perPage: number } }>(serviceList).meta.perPage).toBe(5);
     });
 
-    it("lets users choose craft specialties but keeps assigned leadership ones", async () => {
-        const user = await context.createUser(Role.Contributor, { specialties: [Specialty.Producer] });
+    it("lets users choose craft specialties but keeps assigned team ones", async () => {
+        const user = await context.createUser(Role.Contributor, { specialties: [Specialty.MediaTeam] });
         expect(
             json<{ data: { isOnboarded: boolean } }>(
                 await context.application.inject({ method: "GET", url: "/api/v1/auth/me", headers: user.headers })
@@ -55,7 +55,7 @@ describe("user management", () => {
         });
         expect(chosen.statusCode).toBe(200);
         const body = json<{ data: { specialties: string[]; isOnboarded: boolean } }>(chosen).data;
-        expect(body.specialties).toEqual([Specialty.Producer, Specialty.Animator]);
+        expect(body.specialties).toEqual([Specialty.MediaTeam, Specialty.Animator]);
         expect(body.isOnboarded).toBe(true);
     });
 
@@ -236,6 +236,80 @@ describe("user management", () => {
             type: NotificationType.UserRoleChanged,
             user: { discordId: target.record.discordId, username: target.record.discordUsername },
             role: Role.Contributor,
+            previousRole: Role.Voter,
+            specialties: [Specialty.Animator]
+        });
+    });
+
+    it("automatically strips craft and department specialties when demoting a user to Voter or Member", async () => {
+        const admin = await context.createUser(Role.Admin);
+        const contributor = await context.createUser(Role.Contributor, {
+            specialties: [Specialty.Animator, Specialty.Modeler3d]
+        });
+        context.notifier.notifications.length = 0;
+
+        const response = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${contributor.record.id}/role`,
+            headers: admin.headers,
+            payload: { role: Role.Voter }
+        });
+        expect(response.statusCode).toBe(200);
+
+        const updated = json<{ data: { role: string; specialties: string[] } }>(response).data;
+        expect(updated.role).toBe(Role.Voter);
+        expect(updated.specialties).toEqual([]);
+
+        const emitted = context.notifier.notifications.find((n) => n.type === NotificationType.UserRoleChanged);
+        expect(emitted).toBeDefined();
+        expect(emitted).toMatchObject({
+            type: NotificationType.UserRoleChanged,
+            user: { discordId: contributor.record.discordId },
+            role: Role.Voter,
+            previousRole: Role.Contributor,
+            specialties: []
+        });
+
+        // also verify intermediate demotion (supervisor -> contributor wipes specialties)
+        const supervisor = await context.createUser(Role.Supervisor, {
+            specialties: [Specialty.ArtDirector]
+        });
+        const demoteSupervisor = await context.application.inject({
+            method: "PATCH",
+            url: `/api/v1/users/${supervisor.record.id}/role`,
+            headers: admin.headers,
+            payload: { role: Role.Contributor }
+        });
+        expect(demoteSupervisor.statusCode).toBe(200);
+        expect(json<{ data: { role: string; specialties: string[] } }>(demoteSupervisor).data).toMatchObject({
+            role: Role.Contributor,
+            specialties: []
+        });
+    });
+
+    it("retains craft specialties when promoting contributor to senior contributor", async () => {
+        const admin = await context.createUser(Role.Admin);
+        const contributor = await context.createUser(Role.Contributor, {
+            specialties: [Specialty.Animator]
+        });
+        context.notifier.notifications.length = 0;
+
+        const response = await context.application.inject({
+            method: "POST",
+            url: `/api/v1/users/${contributor.record.id}/promote`,
+            headers: admin.headers
+        });
+        expect(response.statusCode).toBe(200);
+        expect(json<{ data: { role: string; specialties: string[] } }>(response).data).toMatchObject({
+            role: Role.SeniorContributor,
+            specialties: [Specialty.Animator]
+        });
+
+        const emitted = context.notifier.notifications.find((n) => n.type === NotificationType.ContributorPromoted);
+        expect(emitted).toBeDefined();
+        expect(emitted).toMatchObject({
+            type: NotificationType.ContributorPromoted,
+            user: { discordId: contributor.record.discordId },
             specialties: [Specialty.Animator]
         });
     });
@@ -397,7 +471,7 @@ describe("user management", () => {
             payload: { role: Role.Voter, specialties: [Specialty.ArtDirector] }
         });
         expect(voterLead.statusCode).toBe(200);
-        expect(json<{ data: { specialties: string[] } }>(voterLead).data.specialties).toEqual([Specialty.ArtDirector]);
+        expect(json<{ data: { specialties: string[] } }>(voterLead).data.specialties).toEqual([]);
     });
 
     it("filters users by secondary role and searches by discord id", async () => {

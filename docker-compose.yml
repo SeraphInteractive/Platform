@@ -55,7 +55,7 @@ services:
     logging: *logging
 
   redis:
-    image: redis:8.10-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
+    image: redis:8.10-alpine@sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537
     restart: unless-stopped
     command:
       - sh
@@ -133,6 +133,7 @@ services:
       TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
       APP_URL: ${APP_URL:?APP_URL is required}
       APP_KEY: ${APP_KEY:?APP_KEY is required}
+      PII_ENCRYPTION_KEY: ${PII_ENCRYPTION_KEY:?PII_ENCRYPTION_KEY is required}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
       WEB_AUTH_CALLBACK_PATH: ${WEB_AUTH_CALLBACK_PATH:-/auth/callback}
       SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
@@ -258,6 +259,20 @@ services:
     depends_on:
       api:
         condition: service_healthy
+
+  landing:
+    <<: *api-hardening
+    image: platform-landing
+    build:
+      context: .
+      target: landing
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+    networks:
+      - edge
 
 networks:
   backend:

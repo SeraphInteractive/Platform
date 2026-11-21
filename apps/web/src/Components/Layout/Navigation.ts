@@ -5,6 +5,8 @@ import {
     BriefcaseBusiness,
     Clapperboard,
     ClipboardCheck,
+    FileCheck,
+    FileSignature,
     FileText,
     Gauge,
     Hammer,
@@ -55,6 +57,13 @@ export const navigationGroups: readonly NavigationGroup[] = [
                 label: "Profile",
                 description: "Your profile, tasks, submissions and standing",
                 icon: UserRound,
+                requiresSession: true
+            },
+            {
+                href: "/cla",
+                label: "Agreement",
+                description: "Sign the contributor license agreement",
+                icon: FileSignature,
                 requiresSession: true
             }
         ]
@@ -131,6 +140,13 @@ export const navigationGroups: readonly NavigationGroup[] = [
                 minimumRole: Role.Admin
             },
             {
+                href: "/studio/agreements",
+                label: "Agreements",
+                description: "Contributor agreements and guardian consent",
+                icon: FileCheck,
+                minimumRole: Role.Admin
+            },
+            {
                 href: "/studio/content",
                 label: "Content",
                 description: "Edit the guidelines and legal pages",
@@ -165,7 +181,10 @@ export const segmentLabels: Readonly<Record<string, string>> = {
     terms: "Terms",
     privacy: "Privacy",
     "acceptable-use": "Acceptable use",
-    verify: "Verify"
+    verify: "Verify",
+    cla: "Agreement",
+    guardian: "Guardian consent",
+    agreements: "Agreements"
 };
 
 export function isActivePath(pathname: string, item: NavigationItem): boolean {

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+    ClaStatus,
     Role,
     ShotStatus,
     shotTypeRequiredSpecialties,
@@ -11,8 +12,9 @@ import {
 } from "@platform/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, ExternalLink, FolderOpen, Lock } from "lucide-react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState, type ComponentProps, type ReactNode } from "react";
 import { toast } from "sonner";
 import { ApiError } from "@/Api/ApiClient";
 import { platformApi } from "@/Api/PlatformApi";
@@ -109,7 +111,14 @@ function ClaimDialog({ shot }: { readonly shot: ShotDetailDto }): ReactNode {
     );
 }
 
-function ReleaseButton({ shot, isClaimant }: { readonly shot: ShotDetailDto; readonly isClaimant: boolean }): ReactNode {
+interface ReleaseButtonProps {
+    readonly shot: ShotDetailDto;
+    readonly isClaimant: boolean;
+    // match the size of a neighbouring primary action when shown as a pair
+    readonly size?: ComponentProps<typeof Button>["size"];
+}
+
+function ReleaseButton({ shot, isClaimant, size = "sm" }: ReleaseButtonProps): ReactNode {
     const queryClient = useQueryClient();
     const release = useMutation({
         mutationFn: () => platformApi.releaseShot(shot.id, null),
@@ -125,6 +134,7 @@ function ReleaseButton({ shot, isClaimant }: { readonly shot: ShotDetailDto; rea
             description={isClaimant ? "It goes back into the grab-box." : "The claimant loses the task and it returns to the grab-box."}
             confirmLabel="Release"
             destructive
+            size={size}
             disabled={release.isPending}
             onConfirm={() => {
                 release.mutate();
@@ -137,6 +147,7 @@ function ReleaseButton({ shot, isClaimant }: { readonly shot: ShotDetailDto; rea
 
 function ActionPanel({ shot, user }: { readonly shot: ShotDetailDto; readonly user: UserDto | null }): ReactNode {
     const pathname = usePathname();
+    const agreement = useQuery({ queryKey: queryKeys.myCla, queryFn: () => platformApi.myCla(), enabled: user !== null });
     const isClaimant = user !== null && shot.claimer?.id === user.id;
     const isStaff = hasAtLeast(user, Role.Supervisor);
     const latest = shot.submissions[0];
@@ -187,9 +198,9 @@ function ActionPanel({ shot, user }: { readonly shot: ShotDetailDto; readonly us
                     )}
                     .{latest?.status === SubmissionStatus.RevisionRequested && " Your reviewer asked for changes; their notes are below."}
                 </p>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <SubmitWorkDialog shot={shot} />
-                    <ReleaseButton shot={shot} isClaimant />
+                    <ReleaseButton shot={shot} isClaimant size="default" />
                 </div>
             </div>
         );
@@ -230,6 +241,16 @@ function ActionPanel({ shot, user }: { readonly shot: ShotDetailDto; readonly us
                 Senior contributors get first pick.
                 {shot.seniorPriorityUntil !== null && <RelativeTime value={shot.seniorPriorityUntil} prefix="Opens to everyone" />}
             </p>
+        );
+    }
+    if (agreement.data !== undefined && agreement.data.current?.status !== ClaStatus.Active) {
+        return (
+            <div className="space-y-3">
+                <p className="text-sm">Sign the contributor license agreement to claim tasks.</p>
+                <Button asChild>
+                    <Link href="/cla">Review and sign</Link>
+                </Button>
+            </div>
         );
     }
     return (

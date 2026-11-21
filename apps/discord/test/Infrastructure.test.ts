@@ -80,6 +80,33 @@ describe("settings store", () => {
         await store.flush();
         expect((remoteSettings.channels as Record<string, string>)[ChannelPurpose.Telemetry]).toBe("200000000000000002");
     });
+
+    it("isolates staff logging channel rawChannels and falls back to telemetry at runtime", async () => {
+        directory = await mkdtemp(join(tmpdir(), "platform-discord-fallback-"));
+        const store = new SettingsStore(directory);
+        await store.load();
+        await store.update((settings) => {
+            settings.channels[ChannelPurpose.Telemetry] = "111111111111111111";
+            settings.webhooks.telemetry = "https://discord.com/api/webhooks/1/a";
+        });
+
+        // SecurityAlerts aliases with Telemetry
+        expect(store.channel(ChannelPurpose.SecurityAlerts)).toBe("111111111111111111");
+        expect(store.rawChannel(ChannelPurpose.SecurityAlerts)).toBeUndefined();
+        expect(store.webhook("securityAlerts")).toBe("https://discord.com/api/webhooks/1/a");
+
+        // Specific logging channels isolate rawChannel for provisioning
+        expect(store.rawChannel(ChannelPurpose.TaskLogs)).toBeUndefined();
+        expect(store.rawChannel(ChannelPurpose.VotingLogs)).toBeUndefined();
+        expect(store.rawChannel(ChannelPurpose.UserLogs)).toBeUndefined();
+        expect(store.rawChannel(ChannelPurpose.SystemLogs)).toBeUndefined();
+
+        // At runtime, unconfigured channels fall back to telemetry
+        expect(store.channel(ChannelPurpose.TaskLogs)).toBe("111111111111111111");
+        expect(store.channel(ChannelPurpose.VotingLogs)).toBe("111111111111111111");
+        expect(store.webhook("taskLogs")).toBe("https://discord.com/api/webhooks/1/a");
+        expect(store.webhook("votingLogs")).toBe("https://discord.com/api/webhooks/1/a");
+    });
 });
 
 describe("warning store remote sync", () => {

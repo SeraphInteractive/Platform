@@ -62,7 +62,6 @@ export const statusCommand: SlashCommand = {
             `Notification stream: ${stream.connected ? "connected" : "disconnected"}${stream.lastEventAt === null ? "" : `, last event ${when(stream.lastEventAt.toISOString())}`}`,
             "",
             `Announcements: ${channel(ChannelPurpose.Announcements)}`,
-            `Rules: ${channel(ChannelPurpose.Rules)}`,
             `Telemetry: ${context.configuration.telemetryWebhookUrl ? "webhook configured" : channel(ChannelPurpose.Telemetry)}`,
             `Moderation logs: ${context.configuration.moderationLogsWebhookUrl ? "webhook configured" : channel(ChannelPurpose.ModerationLogs)}`
         ];

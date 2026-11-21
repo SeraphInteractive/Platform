@@ -27,6 +27,8 @@ import { VerificationService } from "../Modules/Verification/VerificationService
 import { UsersService } from "../Modules/Users/UsersService.js";
 import { AutoModService } from "../Modules/AutoMod/AutoModService.js";
 import { ScriptsService } from "../Modules/Scripts/ScriptsService.js";
+import { ClaService } from "../Modules/Cla/ClaService.js";
+import { PiiCipher } from "../Common/Security/PiiCipher.js";
 import { FeedbackService } from "../Modules/CrewFeedback/FeedbackService.js";
 import { TicketConfigService } from "../Modules/Tickets/TicketConfigService.js";
 import { TicketsService } from "../Modules/Tickets/TicketsService.js";
@@ -68,6 +70,7 @@ export interface ServiceContainer extends Infrastructure {
     readonly documentsService: DocumentsService;
     readonly autoModService: AutoModService;
     readonly scriptsService: ScriptsService;
+    readonly claService: ClaService;
     readonly ticketConfigService: TicketConfigService;
     readonly ticketsService: TicketsService;
     readonly feedbackService: FeedbackService;
@@ -114,6 +117,17 @@ export function createServiceContainer(
         documentsService,
         autoModService: new AutoModService(database),
         scriptsService: new ScriptsService(database, eventBus),
+        claService: new ClaService(
+            database,
+            documentsService,
+            keyValueStore,
+            infrastructure.emailSender,
+            infrastructure.mailDomainChecker,
+            new PiiCipher(configuration.security.piiEncryptionKey, configuration.security.appKey),
+            configuration.security.appKey,
+            configuration.security.corsOrigins[0] ?? configuration.security.appUrl,
+            logger
+        ),
         ticketConfigService,
         ticketsService: new TicketsService(database, notifier, ticketConfigService),
         feedbackService: new FeedbackService(database, notifier, configuration.security.appKey),

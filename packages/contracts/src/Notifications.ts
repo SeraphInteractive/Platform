@@ -96,10 +96,15 @@ export const platformNotificationSchema = z.discriminatedUnion("type", [
     notification(NotificationType.UserRoleChanged, {
         user: notificationPersonSchema,
         role: z.enum(Role),
+        previousRole: z.enum(Role).optional(),
         specialties: z.array(z.enum(Specialty)),
         actor: notificationPersonSchema
     }),
-    notification(NotificationType.ContributorPromoted, { user: notificationPersonSchema, actor: notificationPersonSchema }),
+    notification(NotificationType.ContributorPromoted, {
+        user: notificationPersonSchema,
+        actor: notificationPersonSchema,
+        specialties: z.array(z.enum(Specialty)).default([])
+    }),
     notification(NotificationType.RaidAlert, {
         round: roundReference,
         entry: entryReference,

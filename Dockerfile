@@ -15,6 +15,7 @@ COPY apps/api/package.json apps/api/
 COPY apps/discord/package.json apps/discord/
 COPY apps/web/package.json apps/web/
 COPY apps/script/package.json apps/script/
+COPY apps/landing/package.json apps/landing/
 
 FROM base AS build
 RUN npm ci --ignore-scripts
@@ -41,6 +42,12 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
     NODE_ENV=production
 COPY apps/script apps/script
 RUN npm run build -w @platform/script
+
+FROM build AS landing-build
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NODE_ENV=production
+COPY apps/landing apps/landing
+RUN npm run build -w @platform/landing
 
 FROM base AS api-dependencies
 RUN npm ci --omit=dev --ignore-scripts --workspace @platform/api
@@ -110,3 +117,16 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --start-interval=2s --retries=3 \
     CMD ["node", "-e", "fetch(`http://127.0.0.1:${process.env.PORT}/studio/script`).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
 CMD ["node", "apps/script/server.js"]
+
+FROM runtime AS landing
+ENV HOSTNAME=0.0.0.0 \
+    PORT=3000 \
+    NEXT_TELEMETRY_DISABLED=1
+COPY --from=landing-build /app/apps/landing/.next/standalone ./
+COPY --from=landing-build /app/apps/landing/public apps/landing/public
+COPY --from=landing-build /app/apps/landing/.next/static apps/landing/.next/static
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --start-interval=2s --retries=3 \
+    CMD ["node", "-e", "fetch(`http://127.0.0.1:${process.env.PORT}/`).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+CMD ["node", "apps/landing/server.js"]
