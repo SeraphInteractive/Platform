@@ -94,10 +94,6 @@ export const studioRoles: readonly StudioRole[] = Object.freeze([
 
 export const contributorRoleName = "General Contributors";
 export const legacyStudioRoleNames: readonly string[] = Object.freeze([
-    "Observer",
-    "observer",
-    "Unverified",
-    "unverified",
     "Modelling Supervisor",
     "modelling supervisor",
     "Surfacing / LookDev Lead",
@@ -105,11 +101,7 @@ export const legacyStudioRoleNames: readonly string[] = Object.freeze([
     "CFX and VFX Supervisor",
     "cfx and vfx supervisor",
     "Lighting and Compositing Supervisor",
-    "lighting and compositing supervisor",
-    "Moderator",
-    "moderator",
-    "Mod",
-    "mod"
+    "lighting and compositing supervisor"
 ]);
 
 export const roleAliases: Readonly<Record<string, string>> = {
@@ -117,7 +109,6 @@ export const roleAliases: Readonly<Record<string, string>> = {
     supervisor: "Supervisor",
     mediateam: "Media Team",
     mediateams: "Media Team",
-    media: "Media Team",
     contributors: "General Contributors",
     contributor: "General Contributors",
     generalcontributors: "General Contributors",
@@ -343,11 +334,16 @@ export function studioRoleAndSpecialtiesOf(member: GuildMember): { role: Role; s
     return { role, specialties };
 }
 
+export interface SyncMemberStudioRolesOptions {
+    readonly preserveAssignedRoles?: boolean;
+}
+
 export async function syncMemberStudioRoles(
     member: GuildMember,
     role: Role,
     specialties: readonly Specialty[],
-    reason = "Platform role sync"
+    reason = "Platform role sync",
+    options?: SyncMemberStudioRolesOptions
 ): Promise<MemberRoleSyncResult> {
     const targetNames = targetStudioRoleNames(role, specialties);
     const guildRoles = await member.guild.roles.fetch();
@@ -384,18 +380,21 @@ export async function syncMemberStudioRoles(
         }
     }
 
-    // strip obsolete studio roles and legacy roles
-    for (const guildRole of rolesList) {
-        if (!isStudioOrLegacyRole(guildRole.name)) {
-            continue;
-        }
+    // strip obsolete studio roles and legacy roles when not preserving assigned roles
+    if (!options?.preserveAssignedRoles) {
+        for (const guildRole of rolesList) {
+            // skip managed roles like nitro booster or non-studio roles
+            if (guildRole.managed || !isStudioOrLegacyRole(guildRole.name)) {
+                continue;
+            }
 
-        const studio = findStudioRole(guildRole.name);
-        const shouldHave = studio !== undefined && targetNames.has(studio.name);
-        const hasRole = member.roles.cache.has(guildRole.id);
+            const studio = findStudioRole(guildRole.name);
+            const shouldHave = studio !== undefined && targetNames.has(studio.name);
+            const hasRole = member.roles.cache.has(guildRole.id);
 
-        if (!shouldHave && hasRole) {
-            toRemove.push(guildRole.id);
+            if (!shouldHave && hasRole) {
+                toRemove.push(guildRole.id);
+            }
         }
     }
 

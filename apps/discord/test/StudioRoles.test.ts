@@ -204,16 +204,18 @@ describe("syncMemberStudioRoles", () => {
         expect(heldRoles.has("99")).toBe(true);
     });
 
-    it("strips legacy Observer role and supports alias matching", async () => {
+    it("strips legacy department role and supports alias matching while preserving custom roles", async () => {
         const guildRoles = new Map<string, DiscordRole>([
-            ["10", createMockDiscordRole("10", "Observer")],
+            ["10", createMockDiscordRole("10", "Modelling Supervisor")],
             ["20", createMockDiscordRole("20", "Supervisors")],
             ["30", createMockDiscordRole("30", "Art Director")],
+            ["98", createMockDiscordRole("98", "Moderator")],
             ["99", createMockDiscordRole("99", "VIP")]
         ]);
 
         const heldRoles = new Map<string, DiscordRole>([
             ["10", guildRoles.get("10")!],
+            ["98", guildRoles.get("98")!],
             ["99", guildRoles.get("99")!]
         ]);
 
@@ -223,7 +225,34 @@ describe("syncMemberStudioRoles", () => {
 
         expect(removed).toEqual(["10"]);
         expect(new Set(added)).toEqual(new Set(["20", "30"]));
+        expect(heldRoles.has("98")).toBe(true);
         expect(heldRoles.has("99")).toBe(true);
+    });
+
+    it("preserves assigned studio roles when preserveAssignedRoles is true", async () => {
+        const guildRoles = new Map<string, DiscordRole>([
+            ["1", createMockDiscordRole("1", "Supervisor")],
+            ["2", createMockDiscordRole("2", "General Contributors")],
+            ["3", createMockDiscordRole("3", "Animators")],
+            ["98", createMockDiscordRole("98", "Moderator")]
+        ]);
+
+        const heldRoles = new Map<string, DiscordRole>([
+            ["1", guildRoles.get("1")!],
+            ["98", guildRoles.get("98")!]
+        ]);
+
+        const { member, added, removed } = createMockMember(heldRoles, guildRoles);
+
+        const result = await syncMemberStudioRoles(member, Role.Contributor, [Specialty.Animator], "Platform sync", {
+            preserveAssignedRoles: true
+        });
+
+        expect(result.removed).toEqual([]);
+        expect(removed).toEqual([]);
+        expect(new Set(added)).toEqual(new Set(["2", "3"]));
+        expect(heldRoles.has("1")).toBe(true);
+        expect(heldRoles.has("98")).toBe(true);
     });
 
     it("strips craft and contributor roles on demotion from Contributor to Voter", async () => {
