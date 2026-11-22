@@ -517,26 +517,19 @@
     }
 }
 
-/* Dark Minimalist Scrollbars (No jarring white scrollbars) */
+/* remove scrollbar globally across all pages and elements */
+html,
+body,
 * {
-    scrollbar-width: thin;
-    scrollbar-color: #272a38 transparent;
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
 }
 
-::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-
-::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-    background: #272a38;
-    border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #373b4d;
+::-webkit-scrollbar,
+*::-webkit-scrollbar,
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
 }

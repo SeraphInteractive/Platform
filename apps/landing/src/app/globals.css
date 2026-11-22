@@ -138,3 +138,20 @@ section[id] {
     bottom: 0;
     background: linear-gradient(to bottom, transparent 0, rgb(5 7 12 / 0.55) var(--ramp));
 }
+
+/* remove scrollbar globally across all pages and elements */
+html,
+body,
+* {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+}
+
+::-webkit-scrollbar,
+*::-webkit-scrollbar,
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
