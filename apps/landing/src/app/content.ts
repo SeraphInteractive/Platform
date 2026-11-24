@@ -5,7 +5,7 @@ export const YOUTUBE_URL = "https://www.youtube.com/@ProjectStairwayMovie";
 
 export const SITE_TITLE = "Project Stairway";
 export const SITE_DESCRIPTION =
-    "Project Stairway is an independent, community-made Minecraft animated film. Claim a shot, animate it, and vote on the story. The finished film is free on YouTube.";
+    "A community-driven Minecraft animated feature film built in the open. Claim shots, animate in Blender, and vote on the master cut.";
 
 export interface SectionLink {
     readonly id: string;

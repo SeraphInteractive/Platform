@@ -72,6 +72,9 @@
     --sidebar-accent-foreground: oklch(0.24 0.02 265);
     --sidebar-border: oklch(0.91 0.004 265);
     --sidebar-ring: oklch(0.56 0.19 259);
+    --scrollbar-thumb: rgba(0, 0, 0, 0.28);
+    --scrollbar-thumb-hover: #2563eb;
+    --scrollbar-thumb-active: #1d4ed8;
 }
 
 .dark {
@@ -104,6 +107,9 @@
     --sidebar-accent-foreground: oklch(0.95 0.005 265);
     --sidebar-border: oklch(0.3 0.008 265);
     --sidebar-ring: oklch(0.64 0.16 259);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.32);
+    --scrollbar-thumb-hover: #3b82f6;
+    --scrollbar-thumb-active: #60a5fa;
 }
 
 .oled,
@@ -137,11 +143,15 @@
     --sidebar-accent-foreground: oklch(0.94 0.004 265);
     --sidebar-border: oklch(0.2 0.005 265);
     --sidebar-ring: oklch(0.62 0.14 259);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.32);
+    --scrollbar-thumb-hover: #3b82f6;
+    --scrollbar-thumb-active: #60a5fa;
 }
 
 @layer base {
     html {
         scroll-behavior: smooth;
+        overflow-y: scroll;
     }
     @media (prefers-reduced-motion: reduce) {
         html {
@@ -153,6 +163,7 @@
     }
     body {
         @apply bg-background text-foreground font-sans text-[13px] antialiased;
+        min-height: calc(100vh + 1px);
         overflow-wrap: anywhere;
     }
     code,
@@ -284,19 +295,37 @@
     background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0%, rgba(255, 255, 255, 0.005) 50%, transparent 100%);
 }
 
-/* remove scrollbar globally across all pages and elements */
-html,
-body,
+/* custom minimalist floating scrollbar */
 * {
-    -ms-overflow-style: none !important;
-    scrollbar-width: none !important;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
-::-webkit-scrollbar,
-*::-webkit-scrollbar,
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
+*::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 9999px;
+    border: 1px solid transparent;
+    background-clip: padding-box;
+    transition: background-color 0.15s ease;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+
+*::-webkit-scrollbar-thumb:active {
+    background: var(--scrollbar-thumb-active);
+}
+
+*::-webkit-scrollbar-corner {
+    background: transparent;
 }

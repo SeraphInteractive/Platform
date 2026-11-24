@@ -11,7 +11,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
 export const metadata: Metadata = {
     metadataBase: new URL(SITE_URL),
     title: {
-        default: `${SITE_TITLE}: a community-made Minecraft animated film`,
+        default: `${SITE_TITLE}: A Community Collaboration Project`,
         template: `%s · ${SITE_TITLE}`
     },
     description: SITE_DESCRIPTION,
@@ -29,14 +29,14 @@ export const metadata: Metadata = {
         type: "website",
         url: "/",
         siteName: SITE_TITLE,
-        title: `${SITE_TITLE}: a community effort`,
+        title: `${SITE_TITLE}: A Community Collaboration Project`,
         description: SITE_DESCRIPTION,
         locale: "en_US",
-        images: [{ url: "/og-image.jpg", width: 1200, height: 630, alt: "Project Stairway. A community effort." }]
+        images: [{ url: "/og-image.jpg", width: 1200, height: 630, alt: "Project Stairway. A community collaboration project." }]
     },
     twitter: {
         card: "summary_large_image",
-        title: `${SITE_TITLE}: a community effort`,
+        title: `${SITE_TITLE}: A Community Collaboration Project`,
         description: SITE_DESCRIPTION,
         images: ["/og-image.jpg"]
     },

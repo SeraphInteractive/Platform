@@ -88,6 +88,9 @@
     --page-text: #f4f4f5;
     --courier-font: var(--font-courier-prime), "Courier Prime", "Courier New", Courier, monospace;
     --ui-font: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
+    --scrollbar-thumb: rgba(255, 255, 255, 0.32);
+    --scrollbar-thumb-hover: #3b82f6;
+    --scrollbar-thumb-active: #60a5fa;
 }
 
 .dark {
@@ -133,6 +136,9 @@
     --accent-hover: #3b7be0;
     --page-bg: #212326;
     --page-text: #f4f4f5;
+    --scrollbar-thumb: rgba(255, 255, 255, 0.32);
+    --scrollbar-thumb-hover: #3b82f6;
+    --scrollbar-thumb-active: #60a5fa;
 }
 
 @layer base {
@@ -517,19 +523,37 @@
     }
 }
 
-/* remove scrollbar globally across all pages and elements */
-html,
-body,
+/* custom minimalist floating scrollbar */
 * {
-    -ms-overflow-style: none !important;
-    scrollbar-width: none !important;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
-::-webkit-scrollbar,
-*::-webkit-scrollbar,
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
+*::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 9999px;
+    border: 1px solid transparent;
+    background-clip: padding-box;
+    transition: background-color 0.15s ease;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+
+*::-webkit-scrollbar-thumb:active {
+    background: var(--scrollbar-thumb-active);
+}
+
+*::-webkit-scrollbar-corner {
+    background: transparent;
 }
