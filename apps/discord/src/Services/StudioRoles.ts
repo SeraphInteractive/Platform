@@ -20,11 +20,15 @@ export const memberPermissions = [
     PermissionFlagsBits.ReadMessageHistory,
     PermissionFlagsBits.SendMessages,
     PermissionFlagsBits.AddReactions,
-    PermissionFlagsBits.UseApplicationCommands
+    PermissionFlagsBits.UseApplicationCommands,
+    PermissionFlagsBits.Connect
 ];
 
 export const voterPermissions = [
     ...memberPermissions,
+    PermissionFlagsBits.Speak,
+    PermissionFlagsBits.Stream,
+    PermissionFlagsBits.UseVAD,
     PermissionFlagsBits.AttachFiles,
     PermissionFlagsBits.EmbedLinks,
     PermissionFlagsBits.UseExternalEmojis,
@@ -90,10 +94,6 @@ export const studioRoles: readonly StudioRole[] = Object.freeze([
 
 export const contributorRoleName = "General Contributors";
 export const legacyStudioRoleNames: readonly string[] = Object.freeze([
-    "Observer",
-    "observer",
-    "Unverified",
-    "unverified",
     "Modelling Supervisor",
     "modelling supervisor",
     "Surfacing / LookDev Lead",
@@ -101,11 +101,7 @@ export const legacyStudioRoleNames: readonly string[] = Object.freeze([
     "CFX and VFX Supervisor",
     "cfx and vfx supervisor",
     "Lighting and Compositing Supervisor",
-    "lighting and compositing supervisor",
-    "Moderator",
-    "moderator",
-    "Mod",
-    "mod"
+    "lighting and compositing supervisor"
 ]);
 
 export const roleAliases: Readonly<Record<string, string>> = {
@@ -113,7 +109,6 @@ export const roleAliases: Readonly<Record<string, string>> = {
     supervisor: "Supervisor",
     mediateam: "Media Team",
     mediateams: "Media Team",
-    media: "Media Team",
     contributors: "General Contributors",
     contributor: "General Contributors",
     generalcontributors: "General Contributors",
@@ -182,8 +177,8 @@ export const roleAliases: Readonly<Record<string, string>> = {
     productionmanagers: "Production Manager"
 };
 
-export function normalizeName(name: string): string {
-    return name.toLowerCase().replace(/[^a-z0-9]/gu, "");
+export function normalizeName(name?: string | null): string {
+    return (name ?? "").toLowerCase().replace(/[^a-z0-9]/gu, "");
 }
 
 export function findStudioRole(name: string): StudioRole | undefined {
@@ -257,25 +252,39 @@ export function permissionsFor(tier: StudioTier): readonly bigint[] {
 export function targetStudioRoleNames(role: Role, specialties: readonly Specialty[]): Set<string> {
     const names = new Set<string>();
 
+    if (role === Role.Member) {
+        names.add("Members");
+        return names;
+    }
+
+    if (role === Role.Voter) {
+        names.add("Voters");
+        return names;
+    }
+
     if (role === Role.SuperAdmin || role === Role.Admin) {
         names.add("Admin");
     } else if (role === Role.Supervisor) {
         names.add("Supervisor");
+    } else if (role === Role.Contributor || role === Role.SeniorContributor) {
+        names.add(contributorRoleName);
     }
 
     for (const specialty of specialties) {
         const studio = studioRoles.find((r) => r.specialty === specialty);
         if (studio !== undefined) {
+            // enforce role-tier specialty isolation on discord
+            if (role === Role.Supervisor && studio.tier !== StudioTier.Department) {
+                continue;
+            }
+            if ((role === Role.Contributor || role === Role.SeniorContributor) && studio.tier !== StudioTier.Contributor) {
+                continue;
+            }
+            if ((role === Role.Admin || role === Role.SuperAdmin) && studio.tier !== StudioTier.Executive) {
+                continue;
+            }
             names.add(studio.name);
         }
-    }
-
-    if (role === Role.Contributor || role === Role.SeniorContributor) {
-        names.add(contributorRoleName);
-    } else if (role === Role.Voter) {
-        names.add("Voters");
-    } else if (role === Role.Member) {
-        names.add("Members");
     }
 
     return names;
@@ -287,11 +296,54 @@ export interface MemberRoleSyncResult {
     readonly removed: readonly string[];
 }
 
+// track members recently modified by bot to suppress echo events in guildMemberUpdate
+export const recentlyManagedMemberIds = new Map<string, number>();
+
+export function studioRoleAndSpecialtiesOf(member: GuildMember): { role: Role; specialties: Specialty[] } {
+    const heldStudio = member.roles.cache.map((r) => findStudioRole(r.name)).filter((r): r is StudioRole => r !== undefined);
+
+    let role = Role.Member;
+    if (heldStudio.some((r) => r.tier === StudioTier.Executive)) {
+        role = Role.Admin;
+    } else if (heldStudio.some((r) => r.tier === StudioTier.Department)) {
+        role = Role.Supervisor;
+    } else if (heldStudio.some((r) => r.tier === StudioTier.Contributor)) {
+        role = Role.Contributor;
+    } else if (heldStudio.some((r) => r.name === "Voters")) {
+        role = Role.Voter;
+    }
+
+    const targetTier =
+        role === Role.Admin
+            ? StudioTier.Executive
+            : role === Role.Supervisor
+              ? StudioTier.Department
+              : role === Role.Contributor
+                ? StudioTier.Contributor
+                : null;
+
+    const specialties: Specialty[] = [];
+    if (targetTier !== null) {
+        for (const held of heldStudio) {
+            if (held.tier === targetTier && held.specialty !== undefined && !specialties.includes(held.specialty)) {
+                specialties.push(held.specialty);
+            }
+        }
+    }
+
+    return { role, specialties };
+}
+
+export interface SyncMemberStudioRolesOptions {
+    readonly preserveAssignedRoles?: boolean;
+}
+
 export async function syncMemberStudioRoles(
     member: GuildMember,
     role: Role,
     specialties: readonly Specialty[],
-    reason = "Platform role sync"
+    reason = "Platform role sync",
+    options?: SyncMemberStudioRolesOptions
 ): Promise<MemberRoleSyncResult> {
     const targetNames = targetStudioRoleNames(role, specialties);
     const guildRoles = await member.guild.roles.fetch();
@@ -328,31 +380,47 @@ export async function syncMemberStudioRoles(
         }
     }
 
-    // strip obsolete studio roles and legacy roles
-    for (const guildRole of rolesList) {
-        if (!isStudioOrLegacyRole(guildRole.name)) {
-            continue;
-        }
+    // strip obsolete studio roles and legacy roles when not preserving assigned roles
+    if (!options?.preserveAssignedRoles) {
+        for (const guildRole of rolesList) {
+            // skip managed roles like nitro booster or non-studio roles
+            if (guildRole.managed || !isStudioOrLegacyRole(guildRole.name)) {
+                continue;
+            }
 
-        const studio = findStudioRole(guildRole.name);
-        const shouldHave = studio !== undefined && targetNames.has(studio.name);
-        const hasRole = member.roles.cache.has(guildRole.id);
+            const studio = findStudioRole(guildRole.name);
+            const shouldHave = studio !== undefined && targetNames.has(studio.name);
+            const hasRole = member.roles.cache.has(guildRole.id);
 
-        if (!shouldHave && hasRole) {
-            toRemove.push(guildRole.id);
+            if (!shouldHave && hasRole) {
+                toRemove.push(guildRole.id);
+            }
         }
     }
 
     if (toRemove.length > 0) {
-        await member.roles.remove(toRemove, reason.slice(0, 400));
+        await member.roles.remove(toRemove, reason.slice(0, 400)).catch(async () => {
+            // fallback: remove roles individually if batch removal fails due to role hierarchy
+            for (const roleId of toRemove) {
+                await member.roles.remove(roleId, reason.slice(0, 400)).catch(() => undefined);
+            }
+        });
     }
     if (toAdd.length > 0) {
-        await member.roles.add(toAdd, reason.slice(0, 400));
+        await member.roles.add(toAdd, reason.slice(0, 400)).catch(async () => {
+            for (const roleId of toAdd) {
+                await member.roles.add(roleId, reason.slice(0, 400)).catch(() => undefined);
+            }
+        });
     }
 
-    return {
+    const result: MemberRoleSyncResult = {
         modified: toAdd.length > 0 || toRemove.length > 0,
         added: toAdd,
         removed: toRemove
     };
+    if (result.modified) {
+        recentlyManagedMemberIds.set(member.id, Date.now());
+    }
+    return result;
 }

@@ -87,6 +87,14 @@ export const pipelinePhases: readonly PipelinePhase[] = [
             { id: "6.3", title: "Music", description: "Final score." },
             { id: "6.4", title: "Mixdown", description: "Surround master mixdown." }
         ]
+    },
+    {
+        number: 7,
+        title: "Phase 7: Release",
+        steps: [
+            { id: "7.1", title: "Marketing", description: "Promotional trailers, festival submissions, press kits and campaigns." },
+            { id: "7.2", title: "Release", description: "Official film premiere and free public release on YouTube." }
+        ]
     }
 ];
 

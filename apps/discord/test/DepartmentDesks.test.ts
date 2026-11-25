@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { departmentStaffRoleIds } from "../src/Services/DepartmentDesks.js";
 
 function role(id: string, name: string): Role {
-    return { id, name } as Role;
+    return { id, name } as unknown as Role;
 }
 
 describe("department desk staff", () => {

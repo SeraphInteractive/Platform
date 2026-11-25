@@ -22,10 +22,10 @@ const profanityPatterns: readonly RegExp[] = Object.freeze([
     /\bm+o+t+h+e+r+f+[u_*\-.\s04]+c+k+(?:e+r+|i+n+g+|s+|e+d+)?\b/iu,
     /\bf+u+q+\b/iu,
     /\bf+k+n+\b/iu,
-    // s-word variants
-    /\bs+[h_*\-.\s]+i+t+(?:t+e+r+|t+y+|s+|e+d+|i+n+g+|h+e+a+d+)?\b/iu,
-    /\bb+u+l+l+s+[h_*\-.\s]+i+t+\b/iu,
-    /\bd+i+p+s+[h_*\-.\s]+i+t+\b/iu,
+    // s-word variants (require s+h to prevent false positives on 'let's hit' or 'it's hit')
+    /\bs+h+[i1!|*_.\-\s0]+t+(?:t+e+r+|t+y+|s+|e+d+|i+n+g+|h+e+a+d+)?\b/iu,
+    /\bb+u+l+l+s+h+[i1!|*_.\-\s0]+t+\b/iu,
+    /\bd+i+p+s+h+[i1!|*_.\-\s0]+t+\b/iu,
     // b-word variants
     /\bb+[i1!|*_.\-\s]+t+c+h+(?:e+s+|i+n+g+|y+)?\b/iu,
     /\bb+a+s+t+a+r+d+(?:s+)?\b/iu,
@@ -133,15 +133,6 @@ export function detectProfanity(content: string, customPatterns: readonly RegExp
         }
     }
 
-    // also check collapsed spaced text (e.g. "f u c k" -> "fuck")
-    const collapsed = normalized.replace(/\s+/gu, "");
-    for (const pattern of allPatterns) {
-        const match = collapsed.match(pattern);
-        if (match !== null) {
-            matchedTerms.add(match[0].toLowerCase());
-        }
-    }
-
     return {
         matched: matchedTerms.size > 0,
         terms: Array.from(matchedTerms)
@@ -218,6 +209,10 @@ export class ProfanityFilter {
                     const studio = studioRoles.find((r) => r.name === role.name);
                     return studio !== undefined && isLeadership(studio.tier);
                 }));
+
+        if (isStaff) {
+            return;
+        }
 
         const check = detectProfanity(messageInstance.content, this.customPatterns);
         if (!check.matched) {

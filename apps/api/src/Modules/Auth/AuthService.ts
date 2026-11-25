@@ -129,7 +129,7 @@ export class AuthService {
 
     public async syncUser(profile: DiscordProfile): Promise<UserRecord> {
         const assignedRole = this.assignedRoleFor(profile.id);
-        const retainedRole = sql<Role>`CASE WHEN ${users.role} = ${Role.SuperAdmin} THEN (CASE WHEN ${users.emailVerifiedAt} IS NULL THEN ${Role.Member} ELSE ${Role.Voter} END)::user_role ELSE ${users.role} END`;
+        const retainedRole = sql<Role>`CASE WHEN ${users.role} = ${Role.SuperAdmin} THEN (CASE WHEN ${users.emailVerifiedAt} IS NULL THEN ${Role.Member} ELSE ${Role.Voter} END)::user_role WHEN ${users.role} = ${Role.Member} AND ${users.emailVerifiedAt} IS NOT NULL THEN ${Role.Voter}::user_role ELSE ${users.role} END`;
         const [user] = await this.database
             .insert(users)
             .values({

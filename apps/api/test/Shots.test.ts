@@ -38,6 +38,7 @@ describe("shot grab-box", () => {
     it("runs claim, upload, submit and review", async () => {
         const shotId = await createShot("SC01-010");
         const voter = await context.createUser(Role.Voter);
+        await context.signCla(voter);
 
         // users without contributor role cannot claim tasks
         const nonContributorClaim = await context.application.inject({
@@ -52,6 +53,7 @@ describe("shot grab-box", () => {
         const wrongSpecialtyUser = await context.createUser(Role.Contributor, {
             specialties: [Specialty.Rigger]
         });
+        await context.signCla(wrongSpecialtyUser);
         const wrongClaim = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${shotId}/claim`,
@@ -63,6 +65,7 @@ describe("shot grab-box", () => {
         const contributor = await context.createUser(Role.Contributor, {
             specialties: [Specialty.Animator]
         });
+        await context.signCla(contributor);
         const claim = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${shotId}/claim`,
@@ -177,6 +180,7 @@ describe("shot grab-box", () => {
     it("promotes approved submission deliverables from Pending to Affirmed vault", async () => {
         const shotId = await createShot("SC01-099");
         const contributor = await context.createUser(Role.Contributor, { specialties: [Specialty.Animator] });
+        await context.signCla(contributor);
         await context.application.inject({ method: "POST", url: `/api/v1/shots/${shotId}/claim`, headers: contributor.headers });
 
         const upload = await context.application.inject({
@@ -240,6 +244,7 @@ describe("shot grab-box", () => {
         const worker = await context.createUser(Role.Supervisor, {
             specialties: [Specialty.AnimationSupervisor, Specialty.Animator]
         });
+        await context.signCla(worker);
         await context.application.inject({ method: "POST", url: `/api/v1/shots/${shotId}/claim`, headers: worker.headers });
         const upload = json<Envelope<{ key: string }>>(
             await context.application.inject({
@@ -279,7 +284,9 @@ describe("shot grab-box", () => {
     it("enforces the senior priority window", async () => {
         const shotId = await createShot("SC03-010", DifficultyTier.Complex, 24);
         const contributor = await context.createUser(Role.Contributor, { specialties: [Specialty.Animator] });
+        await context.signCla(contributor);
         const senior = await context.createUser(Role.SeniorContributor, { specialties: [Specialty.Animator] });
+        await context.signCla(senior);
         const listed = await context.application.inject({
             method: "GET",
             url: "/api/v1/shots?difficultyTier=complex",
@@ -301,6 +308,7 @@ describe("shot grab-box", () => {
     it("reclaims expired claims", async () => {
         const shotId = await createShot("SC04-010");
         const contributor = await context.createUser(Role.Contributor, { specialties: [Specialty.Animator] });
+        await context.signCla(contributor);
         await context.application.inject({ method: "POST", url: `/api/v1/shots/${shotId}/claim`, headers: contributor.headers });
         await context.database
             .update(shots)
@@ -401,6 +409,7 @@ describe("shot grab-box", () => {
     it("scans task deliverables for AI video signatures and notifies supervisors", async () => {
         const shotId = await createShot("SC07-010");
         const worker = await context.createUser(Role.Contributor, { specialties: [Specialty.Animator] });
+        await context.signCla(worker);
 
         await context.application.inject({
             method: "POST",
@@ -444,6 +453,7 @@ describe("shot grab-box", () => {
     it("prevents blacklisted users from claiming or submitting tasks", async () => {
         const shotId = await createShot("SC08-010");
         const worker = await context.createUser(Role.Contributor, { specialties: [Specialty.Animator] });
+        await context.signCla(worker);
         await context.database.update(users).set({ isBlacklisted: true }).where(eq(users.id, worker.record.id));
 
         const claimAttempt = await context.application.inject({
@@ -468,6 +478,7 @@ describe("shot grab-box", () => {
         const assetsSupervisor = await context.createUser(Role.Supervisor, {
             specialties: [Specialty.ModelingAndSurfacingLead]
         });
+        await context.signCla(assetsSupervisor);
 
         // assets supervisor cannot create animation shot
         const wrongDeptCreate = await context.application.inject({
@@ -505,6 +516,7 @@ describe("shot grab-box", () => {
         const animator = await context.createUser(Role.Contributor, {
             specialties: [Specialty.Animator]
         });
+        await context.signCla(animator);
         const animatorClaim = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${modelingShotId}/claim`,
@@ -517,6 +529,7 @@ describe("shot grab-box", () => {
         const modeler = await context.createUser(Role.Contributor, {
             specialties: [Specialty.Modeler3d]
         });
+        await context.signCla(modeler);
         const modelerClaim = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${modelingShotId}/claim`,
@@ -575,6 +588,7 @@ describe("shot grab-box", () => {
         const editorialSupervisor = await context.createUser(Role.Supervisor, {
             specialties: [Specialty.EditorialSupervisor]
         });
+        await context.signCla(editorialSupervisor);
 
         // editorial supervisor can create video editing task
         const createVideoShot = await context.application.inject({
@@ -596,6 +610,7 @@ describe("shot grab-box", () => {
         const animator = await context.createUser(Role.Contributor, {
             specialties: [Specialty.Animator]
         });
+        await context.signCla(animator);
         const invalidClaim = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${postShotId}/claim`,
@@ -608,6 +623,7 @@ describe("shot grab-box", () => {
         const videoEditor = await context.createUser(Role.Contributor, {
             specialties: [Specialty.VideoEditor]
         });
+        await context.signCla(videoEditor);
         const validClaim = await context.application.inject({
             method: "POST",
             url: `/api/v1/shots/${postShotId}/claim`,

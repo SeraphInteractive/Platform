@@ -57,6 +57,12 @@ const environmentObject = z.object({
         .regex(/^\/[A-Za-z0-9/_-]{0,127}$/u)
         .default("/auth/callback"),
     SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+    PII_ENCRYPTION_KEY: optionalString.pipe(
+        z
+            .string()
+            .refine((value) => Buffer.from(value, "base64").length === 32, "must be 32 bytes encoded as base64")
+            .optional()
+    ),
     SERVICE_TOKEN: z
         .string()
         .min(32, "must be at least 32 characters")
@@ -136,7 +142,7 @@ export const environmentSchema = environmentObject.superRefine((value, context) 
     if (value.REDIS_HOST === "memory") {
         context.addIssue({ code: "custom", path: ["REDIS_HOST"], message: "in-memory state is for development only" });
     }
-    for (const key of ["REDIS_PASSWORD", "RESEND_API_KEY", "EMAIL_FROM", "TURNSTILE_SECRET_KEY"] as const) {
+    for (const key of ["REDIS_PASSWORD", "RESEND_API_KEY", "EMAIL_FROM", "TURNSTILE_SECRET_KEY", "PII_ENCRYPTION_KEY"] as const) {
         if (value[key] === undefined) {
             context.addIssue({ code: "custom", path: [key], message: "is required in production" });
         }

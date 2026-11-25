@@ -122,6 +122,7 @@ export class UsersService {
     public async changeRole(actor: Actor, reference: UserReference, change: RoleChange, createIfMissing: boolean): Promise<UserRecord> {
         const transferredHolders: UserRecord[] = [];
         let isDemoted = false;
+        let previousRole: Role | undefined;
         const user = await this.database.transaction(async (transaction) => {
             const { actor: current, target } = await this.lockParticipants(transaction, actor, reference);
             if (target === null) {
@@ -149,6 +150,7 @@ export class UsersService {
                 return created;
             }
 
+            previousRole = target.role;
             if (change.role !== target.role) {
                 this.assertCanGrant(current, change.role);
                 this.assertCanManage(current, target);
@@ -159,7 +161,10 @@ export class UsersService {
             if (rankOf(role) < rankOf(target.role)) {
                 isDemoted = true;
             }
-            const specialties = normalizeSpecialties(role, change.specialties ?? target.specialties);
+            // on any downward demotion, reset specialties to empty unless explicitly provided
+            const fallbackSpecialties = isDemoted ? [] : target.specialties;
+            const requestedSpecialties = isDemoted && change.specialties === undefined ? [] : change.specialties;
+            const specialties = normalizeSpecialties(role, requestedSpecialties ?? fallbackSpecialties);
             this.assertCanGrantSpecialties(current, target.specialties, specialties);
             await this.enforceSpecialtyExclusivity(transaction, target.id, specialties, change.transfer, transferredHolders);
             const [updated] = await transaction
@@ -183,6 +188,7 @@ export class UsersService {
                 type: NotificationType.UserRoleChanged,
                 user: personOfUser(transferred),
                 role: transferred.role,
+                previousRole: transferred.role,
                 specialties: transferred.specialties,
                 actor: personOfActor(actor)
             });
@@ -192,6 +198,7 @@ export class UsersService {
             type: NotificationType.UserRoleChanged,
             user: personOfUser(user),
             role: user.role,
+            previousRole,
             specialties: user.specialties,
             actor: personOfActor(actor)
         });
@@ -230,6 +237,7 @@ export class UsersService {
             type: NotificationType.UserRoleChanged,
             user: personOfUser(user),
             role: user.role,
+            previousRole: user.role,
             specialties: user.specialties,
             actor: personOfUser(user)
         });
@@ -303,7 +311,12 @@ export class UsersService {
                 .returning();
             return this.required(updated);
         });
-        this.notifier.notify({ type: NotificationType.ContributorPromoted, user: personOfUser(user), actor: personOfActor(actor) });
+        this.notifier.notify({
+            type: NotificationType.ContributorPromoted,
+            user: personOfUser(user),
+            actor: personOfActor(actor),
+            specialties: user.specialties
+        });
         return user;
     }
 
