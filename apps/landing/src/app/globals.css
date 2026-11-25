@@ -6,38 +6,32 @@
 
 :root {
     color-scheme: dark;
-    --background: #0b0d12;
-    --foreground: #f4f4f5;
-    --scrollbar-thumb: rgba(255, 255, 255, 0.32);
-    --scrollbar-thumb-hover: #3b82f6;
-    --scrollbar-thumb-active: #60a5fa;
+    --background: #0d0512;
+    --foreground: #eef6fa;
+    --accent-cyan: #2cd7f1;
+    --accent-teal: #2f87aa;
+    --accent-indigo: #464f98;
+    --accent-plum: #180119;
+    --scrollbar-thumb: rgba(208, 224, 240, 0.28);
+    --scrollbar-thumb-hover: #2caecc;
+    --scrollbar-thumb-active: #2cd7f1;
 }
 
 html {
+    height: 100%;
+    overflow: hidden;
     background: var(--background);
     color: var(--foreground);
-    overflow-y: scroll;
 }
 
 body {
-    min-height: calc(100vh + 1px);
+    height: 100%;
+    overflow: hidden;
+    color: var(--foreground);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    html {
-        scroll-behavior: smooth;
-    }
-}
-
-/* sections land below the mobile sticky bar when jumped to */
 section[id] {
-    scroll-margin-top: 6rem;
-}
-
-@media (min-width: 48rem) {
-    section[id] {
-        scroll-margin-top: 0;
-    }
+    scroll-margin-top: 0;
 }
 
 .focus-ring {
@@ -46,105 +40,199 @@ section[id] {
 }
 
 .focus-ring:focus-visible {
-    outline-color: #38bdf8;
+    outline-color: #2cd7f1;
+}
+
+@keyframes scroll-step-cascade {
+    0%,
+    100% {
+        opacity: 0.25;
+        transform: translateY(-2px);
+    }
+    40% {
+        opacity: 0.95;
+        transform: translateY(1px);
+    }
+    70% {
+        opacity: 0.3;
+        transform: translateY(3px);
+    }
+}
+
+@keyframes scroll-stem-trace {
+    0%,
+    100% {
+        opacity: 0.2;
+        transform: scaleY(0.65);
+    }
+    35% {
+        opacity: 0.85;
+        transform: scaleY(1);
+    }
+}
+
+.scroll-stem {
+    opacity: 0.55;
+    transform-origin: top center;
+}
+
+.scroll-chevron-1,
+.scroll-chevron-2 {
+    opacity: 0.65;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .scroll-stem {
+        animation: scroll-stem-trace 2.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+    }
+
+    .scroll-chevron-1 {
+        animation: scroll-step-cascade 2.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+    }
+
+    .scroll-chevron-2 {
+        animation: scroll-step-cascade 2.6s cubic-bezier(0.45, 0, 0.55, 1) 0.24s infinite;
+    }
 }
 
 .text-legible {
     text-shadow:
-        0 1px 2px rgb(0 0 0 / 0.55),
-        0 0 18px rgb(0 0 0 / 0.35);
+        0 1px 2px rgb(0 0 0 / 0.65),
+        0 2px 16px rgb(0 0 0 / 0.55);
 }
 
-/*
- * progressive blur: stacked backdrop blurs, each masked to a band so the blur
- * ramps up smoothly in the direction of --pb-dir. --pb-max scales every layer,
- * so the same stack works for the strong hero band and the subtle depth layer.
- */
-.progressive-blur {
-    position: absolute;
-    pointer-events: none;
-    --pb-dir: to bottom;
-    --pb-max: 20px;
+.blueprint-line {
+    stroke-dasharray: 100;
+    stroke-dashoffset: 0;
 }
 
-.progressive-blur > div {
-    position: absolute;
-    inset: 0;
-}
+@media (prefers-reduced-motion: no-preference) {
+    .blueprint-line {
+        stroke-dashoffset: 100;
+        transition: stroke-dashoffset 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.14s;
+    }
 
-.progressive-blur > div:nth-child(1) {
-    backdrop-filter: blur(calc(var(--pb-max) * 0.05));
-    mask-image: linear-gradient(var(--pb-dir), transparent 0%, #000 12.5%, #000 25%, transparent 37.5%);
-}
-.progressive-blur > div:nth-child(2) {
-    backdrop-filter: blur(calc(var(--pb-max) * 0.15));
-    mask-image: linear-gradient(var(--pb-dir), transparent 12.5%, #000 25%, #000 37.5%, transparent 50%);
-}
-.progressive-blur > div:nth-child(3) {
-    backdrop-filter: blur(calc(var(--pb-max) * 0.3));
-    mask-image: linear-gradient(var(--pb-dir), transparent 25%, #000 37.5%, #000 50%, transparent 62.5%);
-}
-.progressive-blur > div:nth-child(4) {
-    backdrop-filter: blur(calc(var(--pb-max) * 0.6));
-    mask-image: linear-gradient(var(--pb-dir), transparent 37.5%, #000 50%, #000 62.5%, transparent 75%);
-}
-.progressive-blur > div:nth-child(5) {
-    backdrop-filter: blur(var(--pb-max));
-    mask-image: linear-gradient(var(--pb-dir), transparent 50%, #000 62.5%, #000 100%);
-}
-
-/*
- * blur stage: one continuous element from the middle of the hero to the end of
- * the page. it ramps up over --ramp (the lower half of the hero) and then holds
- * a uniform "total" blur, so there is no seam between sections. the live ramp
- * layers are only as tall as the ramp; the full-strength layer spans the stage.
- */
-.blur-stage {
-    --ramp: calc((100dvh - 6rem) / 2);
-    position: absolute;
-    inset: var(--ramp) 0 0 0;
-    z-index: -10;
-    pointer-events: none;
-}
-
-@media (min-width: 48rem) {
-    .blur-stage {
-        --ramp: 50dvh;
+    [data-active="true"] .blueprint-line {
+        stroke-dashoffset: 0;
     }
 }
 
-.blur-stage > div {
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: var(--ramp);
+.pipeline-glitch-sunset {
+    opacity: 0;
 }
 
-.blur-stage > div:nth-child(1) {
-    backdrop-filter: blur(1px);
-    mask-image: linear-gradient(to bottom, transparent 0%, #000 12.5%, #000 25%, transparent 37.5%);
+.pipeline-glitch-slice {
+    opacity: 0;
 }
-.blur-stage > div:nth-child(2) {
-    backdrop-filter: blur(3px);
-    mask-image: linear-gradient(to bottom, transparent 12.5%, #000 25%, #000 37.5%, transparent 50%);
+
+.pipeline-glitch-wireframe {
+    opacity: 1;
 }
-.blur-stage > div:nth-child(3) {
-    backdrop-filter: blur(6px);
-    mask-image: linear-gradient(to bottom, transparent 25%, #000 37.5%, #000 50%, transparent 62.5%);
-}
-.blur-stage > div:nth-child(4) {
-    backdrop-filter: blur(12px);
-    mask-image: linear-gradient(to bottom, transparent 37.5%, #000 50%, #000 62.5%, transparent 75%);
-}
-.blur-stage > div:nth-child(5) {
-    height: auto;
-    bottom: 0;
-    backdrop-filter: blur(20px);
-    mask-image: linear-gradient(to bottom, transparent calc(var(--ramp) * 0.5), #000 calc(var(--ramp) * 0.625));
-}
-.blur-stage > div:nth-child(6) {
-    height: auto;
-    bottom: 0;
-    background: linear-gradient(to bottom, transparent 0, rgb(5 7 12 / 0.55) var(--ramp));
+
+@media (prefers-reduced-motion: no-preference) {
+    @keyframes pipeline-sunset-out {
+        0%,
+        26% {
+            opacity: 1;
+            transform: translate3d(0, 0, 0);
+            clip-path: inset(0 0 0 0);
+        }
+        32% {
+            opacity: 1;
+            transform: translate3d(-10px, 0, 0);
+            clip-path: inset(16% 0 44% 0);
+        }
+        40% {
+            opacity: 0.9;
+            transform: translate3d(12px, 0, 0);
+            clip-path: inset(52% 0 12% 0);
+        }
+        48% {
+            opacity: 0.55;
+            transform: translate3d(-7px, 0, 0);
+            clip-path: inset(8% 0 26% 0);
+        }
+        58% {
+            opacity: 0.3;
+            transform: translate3d(9px, 0, 0);
+            clip-path: inset(36% 0 34% 0);
+        }
+        68%,
+        100% {
+            opacity: 0;
+            transform: translate3d(0, 0, 0);
+            clip-path: inset(0 0 0 0);
+        }
+    }
+
+    @keyframes pipeline-slice-tear {
+        0%,
+        29% {
+            opacity: 0;
+        }
+        33% {
+            opacity: 0.8;
+            transform: translate3d(14px, 0, 0);
+            clip-path: inset(28% 0 54% 0);
+        }
+        43% {
+            opacity: 0.85;
+            transform: translate3d(-12px, 0, 0);
+            clip-path: inset(60% 0 22% 0);
+        }
+        55% {
+            opacity: 0.6;
+            transform: translate3d(8px, 0, 0);
+            clip-path: inset(14% 0 68% 0);
+        }
+        65%,
+        100% {
+            opacity: 0;
+            transform: translate3d(0, 0, 0);
+        }
+    }
+
+    @keyframes pipeline-wireframe-in {
+        0%,
+        30% {
+            opacity: 0;
+            transform: translate3d(0, 0, 0);
+            clip-path: inset(0 0 0 0);
+        }
+        35% {
+            opacity: 0.75;
+            transform: translate3d(10px, 0, 0);
+            clip-path: inset(22% 0 42% 0);
+        }
+        45% {
+            opacity: 0.4;
+            transform: translate3d(-9px, 0, 0);
+            clip-path: inset(58% 0 10% 0);
+        }
+        56% {
+            opacity: 0.92;
+            transform: translate3d(6px, 0, 0);
+            clip-path: inset(10% 0 20% 0);
+        }
+        66%,
+        100% {
+            opacity: 1;
+            transform: translate3d(0, 0, 0);
+            clip-path: inset(0 0 0 0);
+        }
+    }
+
+    .pipeline-glitch-active .pipeline-glitch-sunset {
+        animation: pipeline-sunset-out 1.05s steps(1, end) forwards;
+    }
+
+    .pipeline-glitch-active .pipeline-glitch-slice {
+        animation: pipeline-slice-tear 1.05s steps(1, end) forwards;
+    }
+
+    .pipeline-glitch-active .pipeline-glitch-wireframe {
+        animation: pipeline-wireframe-in 1.05s steps(1, end) forwards;
+    }
 }
 
 /* custom minimalist floating scrollbar */

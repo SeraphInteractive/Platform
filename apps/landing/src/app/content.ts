@@ -10,44 +10,78 @@ export const SITE_DESCRIPTION =
 export interface SectionLink {
     readonly id: string;
     readonly label: string;
+    readonly bgSrc: string;
+    readonly scrimClass: string;
+    readonly mobileBgSrc?: string;
+}
+
+export interface InfographicStation {
+    readonly id: string;
+    readonly label: string;
+    readonly tag: string;
 }
 
 export const SECTIONS: readonly SectionLink[] = [
-    { id: "home", label: "Home" },
-    { id: "goal", label: "The Goal" },
-    { id: "pipeline", label: "Pipeline" },
-    { id: "contribute", label: "Contribute" }
-];
-
-export const GOALS: readonly { readonly title: string; readonly body: string }[] = [
     {
-        title: "Made in the open",
-        body: "Anyone can pick up a scene, submit an animation pass, and help build a feature film where everyone can watch it come together."
+        id: "home",
+        label: "Home",
+        bgSrc: "/hero.webp",
+        scrimClass: ""
     },
     {
-        title: "Shaped by votes",
-        body: "Verified contributors vote on key story decisions, script elements, and community animation cuts to decide what makes the film."
+        id: "goal",
+        label: "Goal",
+        bgSrc: "/backgrounds/1.png",
+        scrimClass: "bg-linear-to-r from-[#0d0512]/84 via-[#12091c]/42 to-transparent"
     },
     {
-        title: "Free to watch",
-        body: "The entire film will be released for free on our official YouTube channel."
+        id: "pipeline",
+        label: "Pipeline",
+        bgSrc: "/backgrounds/2.webp",
+        scrimClass:
+            "bg-linear-to-r from-[#0d0512]/88 via-[#0d0512]/62 to-[#0d0512]/25 md:bg-linear-to-t md:from-[#0d0512]/90 md:via-[#0d0512]/16 md:to-[#12091c]/52",
+        mobileBgSrc: "/backgrounds/cogi.png"
+    },
+    {
+        id: "register",
+        label: "Register",
+        bgSrc: "/backgrounds/3.png",
+        scrimClass: "bg-linear-to-r from-[#0b0410]/60 via-transparent to-[#0b0410]/35"
+    },
+    {
+        id: "apply",
+        label: "Apply",
+        bgSrc: "/backgrounds/4.jpg",
+        scrimClass: "bg-linear-to-t from-[#0d0512]/92 via-[#12091c]/42 to-[#0d0512]/30"
     }
 ];
 
-export const PIPELINE_STEPS: readonly { readonly title: string; readonly body: string }[] = [
-    { title: "Claim a scene", body: "Pick an open shot in the Grab-box on the studio platform." },
-    { title: "Animate", body: "Download the blend files and rigs, then animate your shot." },
-    { title: "Submit for review", body: "Upload your pass. Supervisors and the community review it." },
-    { title: "Into the master cut", body: "Once a pass reaches consensus, it goes straight into the master cut." }
+export const GOAL_STATIONS: readonly InfographicStation[] = [
+    { id: "blender", label: "Open Blender Film", tag: "Built in public" },
+    { id: "votes", label: "Community Voted", tag: "Members steer story" },
+    { id: "youtube", label: "Free Release", tag: "YouTube + full credits" }
 ];
 
-export const ROLES: readonly string[] = [
-    "Blender animators",
-    "Blockbench modelers",
-    "Voice actors",
-    "2D artists",
-    "Video editors",
-    "Sound designers"
+export const PIPELINE_STATIONS: readonly InfographicStation[] = [
+    { id: "vote", label: "Vote", tag: "Pick direction" },
+    { id: "brief", label: "Grab Box", tag: "Leads split tasks" },
+    { id: "animate", label: "Animate", tag: ".blend + preview" },
+    { id: "edit", label: "Edit", tag: "Lighting, FX & sound" },
+    { id: "cut", label: "Master Cut", tag: "QA merged in" },
+    { id: "release", label: "Release", tag: "Free on YouTube" }
+];
+
+export const REGISTER_STATIONS: readonly InfographicStation[] = [
+    { id: "discord", label: "Join Discord", tag: "Crew & channels" },
+    { id: "studio", label: "Studio Login", tag: "Connect at app" },
+    { id: "verify", label: "Verify + CLA", tag: "Unlocks voting" }
+];
+
+export const APPLY_STATIONS: readonly InfographicStation[] = [
+    { id: "craft", label: "Pick Craft", tag: "5 departments" },
+    { id: "ticket", label: "Discord Ticket", tag: "Send portfolio" },
+    { id: "grant", label: "Lead Approval", tag: "Manual role grant" },
+    { id: "contribute", label: "Contribute", tag: "And get credited" }
 ];
 
 export const PARTNERS: readonly {

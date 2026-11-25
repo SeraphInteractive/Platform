@@ -1,114 +1,92 @@
 "use client";
 
-import { Pause, Play } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-
-// the poster is the video's first frame, so the hand-off from image to video is invisible
-const POSTER_SRC = "/hero.jpg";
-const PAUSED_KEY = "stairway:bg-paused";
-
-interface NetworkInformationLike {
-    readonly saveData?: boolean;
-}
-
-// the video is decoration: skip it entirely for reduced motion or data saver, and let anyone pause it
-function shouldLoadVideo(): boolean {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        return false;
-    }
-    const connection = (navigator as Navigator & { connection?: NetworkInformationLike }).connection;
-    return connection?.saveData !== true;
-}
-
-function readPausedPreference(): boolean {
-    try {
-        return window.localStorage.getItem(PAUSED_KEY) === "1";
-    } catch {
-        return false;
-    }
-}
-
-function writePausedPreference(paused: boolean): void {
-    try {
-        window.localStorage.setItem(PAUSED_KEY, paused ? "1" : "0");
-    } catch {
-        // storage can be unavailable (private mode, blocked site data); the toggle still works for this visit
-    }
-}
+import type { ReactNode } from "react";
+import { SECTIONS } from "./content";
+import { useStage } from "./stage";
 
 export function BackgroundMedia(): ReactNode {
-    const videoRef = useRef<HTMLVideoElement | null>(null);
-    const [enabled, setEnabled] = useState(false);
-    const [paused, setPaused] = useState(false);
-
-    useEffect(() => {
-        if (shouldLoadVideo()) {
-            setPaused(readPausedPreference());
-            setEnabled(true);
-        }
-    }, []);
-
-    useEffect(() => {
-        const video = videoRef.current;
-        if (video === null) {
-            return;
-        }
-        if (paused) {
-            video.pause();
-        } else {
-            // autoplay can still be refused by the browser; the poster stays visible in that case
-            video.play().catch(() => undefined);
-        }
-    }, [paused, enabled]);
-
-    const toggle = (): void => {
-        setPaused((current) => {
-            writePausedPreference(!current);
-            return !current;
-        });
-    };
+    const { activeIndex } = useStage();
 
     return (
-        <>
-            <div aria-hidden="true" className="fixed inset-0 -z-20">
-                <Image src={POSTER_SRC} alt="" fill priority sizes="100vw" className="object-cover" />
-                {enabled && (
-                    <video
-                        ref={videoRef}
-                        className="absolute inset-0 size-full object-cover"
-                        poster={POSTER_SRC}
-                        muted
-                        loop
-                        playsInline
-                        autoPlay={!paused}
-                        preload="auto"
-                    >
-                        <source src="/media/sakura-720.mp4" type="video/mp4" media="(max-width: 767px)" />
-                        <source src="/media/sakura-1080.mp4" type="video/mp4" />
-                    </video>
-                )}
-                {/* static depth-of-field: the lower part of the frame softens slightly */}
-                <div className="progressive-blur inset-x-0 bottom-0 h-1/2 [--pb-max:8px]">
-                    <div />
-                    <div />
-                    <div />
-                    <div />
-                    <div />
-                </div>
-            </div>
+        <div aria-hidden="true" className="fixed inset-0 z-0 overflow-hidden bg-[#0d0512]">
+            {SECTIONS.map((section, index) => {
+                const isActive = index === activeIndex;
+                const isPast = index < activeIndex;
 
-            {enabled && (
-                <button
-                    type="button"
-                    onClick={toggle}
-                    aria-pressed={paused}
-                    className="focus-ring fixed right-4 bottom-4 z-40 flex size-10 items-center justify-center rounded-full border border-white/30 bg-black/45 text-white backdrop-blur-md transition-colors hover:bg-black/60 md:right-6 md:bottom-6"
-                >
-                    {paused ? <Play aria-hidden="true" className="size-4" /> : <Pause aria-hidden="true" className="size-4" />}
-                    <span className="sr-only">Pause background video</span>
-                </button>
-            )}
-        </>
+                return (
+                    <div
+                        key={section.id}
+                        className={`absolute inset-0 transition-[opacity,transform] duration-[850ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-opacity motion-reduce:duration-300 ${
+                            isActive
+                                ? "z-10 translate-y-0 scale-100 opacity-100"
+                                : isPast
+                                  ? "z-0 opacity-0 motion-safe:-translate-y-4 motion-safe:scale-[1.035]"
+                                  : "z-0 opacity-0 motion-safe:translate-y-4 motion-safe:scale-100"
+                        }`}
+                    >
+                        {section.mobileBgSrc ? (
+                            <>
+                                <Image
+                                    src={section.bgSrc}
+                                    alt=""
+                                    fill
+                                    priority={index === 0}
+                                    loading="eager"
+                                    unoptimized
+                                    sizes="100vw"
+                                    className="hidden object-cover object-center md:block"
+                                />
+                                {/* mobile: brief horizontal glitch tear from sunset art into full-bleed wireframe */}
+                                <div
+                                    key={isActive ? "pipeline-active" : "pipeline-idle"}
+                                    className={`absolute inset-0 md:hidden ${isActive ? "pipeline-glitch-active" : ""}`}
+                                >
+                                    <Image
+                                        src={section.mobileBgSrc}
+                                        alt=""
+                                        fill
+                                        loading="eager"
+                                        unoptimized
+                                        sizes="100vw"
+                                        className="pipeline-glitch-wireframe object-cover object-center"
+                                    />
+                                    <Image
+                                        src={section.bgSrc}
+                                        alt=""
+                                        fill
+                                        loading="eager"
+                                        unoptimized
+                                        sizes="100vw"
+                                        className="pipeline-glitch-sunset object-cover object-center"
+                                    />
+                                    <Image
+                                        src={section.mobileBgSrc}
+                                        alt=""
+                                        fill
+                                        loading="eager"
+                                        unoptimized
+                                        sizes="100vw"
+                                        className="pipeline-glitch-slice object-cover object-center brightness-125 contrast-125"
+                                    />
+                                </div>
+                            </>
+                        ) : (
+                            <Image
+                                src={section.bgSrc}
+                                alt=""
+                                fill
+                                priority={index === 0}
+                                loading="eager"
+                                unoptimized
+                                sizes="100vw"
+                                className="object-cover object-center"
+                            />
+                        )}
+                        {section.scrimClass && <div className={`pointer-events-none absolute inset-0 ${section.scrimClass}`} />}
+                    </div>
+                );
+            })}
+        </div>
     );
 }

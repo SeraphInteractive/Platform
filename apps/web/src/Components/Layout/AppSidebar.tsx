@@ -87,8 +87,8 @@ export function AppSidebar(): ReactNode {
                     <Image
                         src="/branding/title.png"
                         alt="Project Stairway"
-                        width={780}
-                        height={78}
+                        width={2021}
+                        height={203}
                         className="h-4 w-auto object-contain group-data-[collapsible=icon]:hidden"
                         priority
                     />

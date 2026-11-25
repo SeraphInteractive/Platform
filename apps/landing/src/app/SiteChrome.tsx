@@ -1,224 +1,228 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState, type ReactNode } from "react";
-import { DISCORD_URL, LEGAL_LINKS, SECTIONS, YOUTUBE_URL } from "./content";
+import type { MouseEvent, ReactNode } from "react";
+import { DISCORD_URL, LEGAL_LINKS, PARTNERS, SECTIONS, YOUTUBE_URL } from "./content";
+import { useStage } from "./stage";
 
-const HOME_ID = SECTIONS[0]?.id ?? "home";
-
-// tracks which section sits in the middle band of the viewport
-function useActiveSection(): string {
-    const [active, setActive] = useState(HOME_ID);
-
-    useEffect(() => {
-        const targets = SECTIONS.map((section) => document.getElementById(section.id)).filter(
-            (element): element is HTMLElement => element !== null
-        );
-        const observer = new IntersectionObserver(
-            (entries) => {
-                for (const entry of entries) {
-                    if (entry.isIntersecting) {
-                        setActive(entry.target.id);
-                    }
-                }
-            },
-            { rootMargin: "-45% 0px -50% 0px" }
-        );
-        for (const target of targets) {
-            observer.observe(target);
-        }
-        return () => {
-            observer.disconnect();
-        };
-    }, []);
-
-    return active;
-}
-
-function SocialLinks({ className }: { readonly className: string }): ReactNode {
-    return (
-        <ul className={`flex items-center gap-3 ${className}`}>
-            <li>
-                <a
-                    href={DISCORD_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="focus-ring block rounded-sm p-1 transition-colors"
-                >
-                    <svg aria-hidden="true" className="size-4 fill-current" viewBox="0 0 24 24">
-                        <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
-                    </svg>
-                    <span className="sr-only">Discord (opens in a new tab)</span>
-                </a>
-            </li>
-            <li>
-                <a
-                    href={YOUTUBE_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="focus-ring block rounded-sm p-1 transition-colors"
-                >
-                    <svg aria-hidden="true" className="size-4 fill-current" viewBox="0 0 24 24">
-                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
-                    </svg>
-                    <span className="sr-only">YouTube (opens in a new tab)</span>
-                </a>
-            </li>
-        </ul>
-    );
-}
-
-export function LegalBlock({ tone }: { readonly tone: "light" | "dark" }): ReactNode {
-    const muted = tone === "light" ? "text-zinc-600 hover:text-zinc-950" : "text-zinc-300 hover:text-white";
-    return (
-        <div className="space-y-3 text-xs leading-relaxed">
-            <SocialLinks
-                className={
-                    tone === "light" ? "-ml-1 text-zinc-700 [&_a:hover]:text-zinc-950" : "-ml-1 text-zinc-300 [&_a:hover]:text-white"
-                }
-            />
-            <ul className="flex flex-wrap gap-x-3 gap-y-1">
-                {LEGAL_LINKS.map((link) => (
-                    <li key={link.href}>
-                        <a href={link.href} className={`focus-ring rounded-sm underline-offset-2 hover:underline ${muted}`}>
-                            {link.label}
-                        </a>
-                    </li>
-                ))}
-            </ul>
-            <div className="flex items-center gap-1.5">
-                <svg
-                    viewBox="0 0 821 786"
-                    fill="currentColor"
-                    className={`size-3.5 shrink-0 ${tone === "light" ? "text-zinc-600" : "text-zinc-300"}`}
-                    aria-hidden="true"
-                >
-                    <path d="M339.125 261.937C341.977 270.746 352.015 274.888 360.211 270.636L804.011 40.4393C815.427 34.5176 826.182 49.393 817.038 58.4578L414.651 457.373C409.328 462.65 408.708 471.064 413.198 477.071L629.613 766.583C636.563 775.881 626.253 789.341 615.417 785.244C548.267 759.857 434.815 721.462 376.873 702.058C356.131 695.112 343.886 673.616 346.647 651.837C355.714 580.306 361.701 429.84 259.317 394.121C201.088 373.807 167.637 381.607 148.42 397.117C136.172 407.003 101.85 410.08 94.8771 395.94L1.22598 206.007C-3.86475 195.683 7.94116 185.253 17.4923 191.637L131.415 267.78C139.658 273.289 150.863 269.378 153.924 259.921L235.532 7.78086C238.889 -2.59359 253.507 -2.59363 256.865 7.78082L339.125 261.937Z" />
-                </svg>
-                <p className={`text-[11px] whitespace-nowrap ${tone === "light" ? "text-zinc-600" : "text-zinc-300"}`}>
-                    © {new Date().getFullYear()} Seraph Interactive, Inc.
-                </p>
-            </div>
-        </div>
-    );
-}
+const NAV_SECTIONS = SECTIONS.filter((section) => section.id !== "home");
+const HOME_ID = "home";
 
 export function SiteChrome(): ReactNode {
-    const active = useActiveSection();
-    const onHome = active === HOME_ID;
+    const { activeIndex, activeId, goTo } = useStage();
+    const pastHero = activeIndex > 0;
+    const isEndScreen = activeId === "apply";
+
+    const handleNavClick = (event: MouseEvent<HTMLAnchorElement>, targetId: string) => {
+        event.preventDefault();
+        goTo(targetId);
+    };
 
     return (
         <>
-            {/* desktop: light sidebar rail */}
-            <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col justify-between bg-zinc-200 px-3 py-6 text-zinc-800 md:flex">
-                <div className="px-3 pt-1">
-                    <a href={`#${HOME_ID}`} className="focus-ring flex items-center gap-2.5 rounded-sm">
-                        <Image src="/brand/logo.png" alt="" width={32} height={32} className="size-8 rounded-sm object-contain" />
-                        <Image
-                            src="/brand/title.png"
-                            alt="Project Stairway"
-                            width={780}
-                            height={78}
-                            className="h-4.5 w-auto object-contain"
-                            priority
-                        />
-                    </a>
-                </div>
-                <nav aria-label="Sections" className="my-auto">
-                    <ul className="space-y-1">
-                        {SECTIONS.map((section) => {
-                            const isActive = section.id === active;
-                            return (
-                                <li key={section.id}>
-                                    <a
-                                        href={`#${section.id}`}
-                                        aria-current={isActive ? "location" : undefined}
-                                        className={`focus-ring block rounded-sm px-3 py-2 text-sm font-medium transition-colors ${
-                                            isActive ? "bg-zinc-700 text-white" : "text-zinc-700 hover:bg-zinc-300 hover:text-zinc-950"
+            {/* right-edge luminance buffer past hero so cascade links stay crisp */}
+            <div
+                aria-hidden="true"
+                className={`pointer-events-none fixed inset-y-0 right-0 z-20 hidden w-72 bg-linear-to-l from-[#0d0512]/60 via-[#12081c]/22 to-transparent transition-opacity duration-500 md:block ${
+                    pastHero ? "opacity-100" : "opacity-0"
+                }`}
+            />
+
+            {/* desktop: cascading right-side chapter index revealed past the hero */}
+            <nav
+                aria-label="Page sections"
+                aria-hidden={!pastHero}
+                className={`fixed top-1/2 right-7 z-30 hidden -translate-y-1/2 flex-col items-end gap-2.5 lg:right-12 md:flex ${
+                    pastHero ? "pointer-events-auto" : "pointer-events-none"
+                }`}
+            >
+                <ul className="flex flex-col items-end gap-2">
+                    {NAV_SECTIONS.map((section, index) => {
+                        const isActive = pastHero && activeId === section.id;
+                        const delayMs = pastHero ? index * 80 : (NAV_SECTIONS.length - 1 - index) * 40;
+
+                        return (
+                            <li
+                                key={section.id}
+                                style={{ transitionDelay: `${delayMs}ms` }}
+                                className={`transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-opacity ${
+                                    pastHero ? "translate-x-0 opacity-100" : "motion-safe:translate-x-8 opacity-0"
+                                }`}
+                            >
+                                <a
+                                    href={`#${section.id}`}
+                                    onClick={(e) => handleNavClick(e, section.id)}
+                                    tabIndex={pastHero ? 0 : -1}
+                                    aria-current={isActive ? "location" : undefined}
+                                    className="group focus-ring flex items-center justify-end gap-3.5 rounded-sm py-1 pl-4 text-right"
+                                >
+                                    <span
+                                        className={`origin-right text-2xl leading-none font-black tracking-[0.06em] uppercase transition-[color,transform,opacity] duration-300 ease-out lg:text-[28px] ${
+                                            isActive
+                                                ? "text-white motion-safe:-translate-x-1.5 [text-shadow:0_2px_16px_rgba(13,5,18,0.95)]"
+                                                : "text-[#c4cbe6]/45 group-hover:text-white/85 motion-safe:group-hover:-translate-x-0.5 [text-shadow:0_1px_10px_rgba(13,5,18,0.85)]"
                                         }`}
                                     >
                                         {section.label}
-                                    </a>
-                                </li>
-                            );
-                        })}
-                    </ul>
-                </nav>
-                <div className="absolute inset-x-0 bottom-0 px-4 pb-6">
-                    <LegalBlock tone="light" />
-                </div>
-            </aside>
-
-            {/* desktop: soft blur band so the compact title stays legible over scrolling content */}
-            <div
-                aria-hidden="true"
-                className={`progressive-blur pointer-events-none fixed inset-x-0 top-0 z-20 hidden h-32 transition-opacity duration-300 [--pb-dir:to_top] [--pb-max:14px] motion-reduce:transition-none md:block ${
-                    onHome ? "opacity-0" : "opacity-100"
-                }`}
-            >
-                <div />
-                <div />
-                <div />
-                <div />
-                <div />
-                <div className="bg-linear-to-b from-[rgb(5_7_12/0.6)] to-transparent" />
-            </div>
-
-            {/* desktop: compact title and section index, shown once past the hero */}
-            <div
-                aria-hidden="true"
-                className={`pointer-events-none fixed inset-x-0 top-0 z-20 hidden items-start justify-between py-6 pr-8 pl-64 transition-opacity duration-300 motion-reduce:transition-none md:flex ${
-                    onHome ? "opacity-0" : "opacity-100"
-                }`}
-            >
-                <div className="w-64">
-                    <Image
-                        src="/brand/title.png"
-                        alt=""
-                        width={780}
-                        height={78}
-                        className="h-auto w-full drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]"
-                    />
-                    <Image src="/brand/tagline.png" alt="" width={270} height={23} className="mt-1 ml-auto h-auto w-[35%]" />
-                </div>
-                <ul className="space-y-0.5 text-right text-xs leading-5 font-bold tracking-wider uppercase [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
-                    {SECTIONS.map((section) => (
-                        <li key={section.id} className={section.id === active ? "text-white" : "text-white/60"}>
-                            {section.label}
-                        </li>
-                    ))}
+                                    </span>
+                                    <span className="flex w-7 shrink-0 items-center justify-end" aria-hidden="true">
+                                        <span
+                                            className={`block rounded-full transition-[width,background-color] duration-300 ease-out ${
+                                                isActive
+                                                    ? "h-[2.5px] w-7 bg-[#3a9cb8]"
+                                                    : "h-[1.5px] w-2.5 bg-[#6e7ba6]/45 group-hover:w-4 group-hover:bg-white/75"
+                                            }`}
+                                        />
+                                    </span>
+                                </a>
+                            </li>
+                        );
+                    })}
                 </ul>
-            </div>
+            </nav>
 
-            {/* mobile: sticky top bar with section links */}
-            <header className="sticky top-0 z-30 bg-zinc-200/95 text-zinc-800 backdrop-blur md:hidden">
-                <div className="flex items-center gap-2 px-4 pt-3">
-                    <a href={`#${HOME_ID}`} className="focus-ring inline-flex items-center gap-2 rounded-sm">
-                        <Image src="/brand/logo.png" alt="" width={28} height={28} className="size-7 rounded-sm object-contain" />
-                        <Image src="/brand/title.png" alt="Project Stairway, back to top" width={780} height={78} className="h-auto w-40" />
-                    </a>
-                </div>
-                <nav aria-label="Sections">
-                    <ul className="flex gap-1 overflow-x-auto px-3 py-2">
-                        {SECTIONS.map((section) => {
-                            const isActive = section.id === active;
-                            return (
-                                <li key={section.id} className="shrink-0">
-                                    <a
-                                        href={`#${section.id}`}
-                                        aria-current={isActive ? "location" : undefined}
-                                        className={`focus-ring block rounded-sm px-3 py-1.5 text-sm font-medium ${
-                                            isActive ? "bg-zinc-700 text-white" : "text-zinc-700"
+            {/* mobile: clean bare chapter strip pinned subtly at top past hero */}
+            <nav
+                aria-label="Page sections"
+                aria-hidden={!pastHero}
+                className={`fixed inset-x-0 top-0 z-30 flex justify-center bg-linear-to-b from-[#0d0512]/80 via-[#0d0512]/35 to-transparent px-4 pt-3.5 pb-4 transition-[opacity,transform] duration-400 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-opacity md:hidden ${
+                    pastHero ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none motion-safe:-translate-y-3 opacity-0"
+                }`}
+            >
+                <ul className="flex items-center justify-center gap-5">
+                    {NAV_SECTIONS.map((section) => {
+                        const isActive = pastHero && activeId === section.id;
+                        return (
+                            <li key={section.id}>
+                                <a
+                                    href={`#${section.id}`}
+                                    onClick={(e) => handleNavClick(e, section.id)}
+                                    tabIndex={pastHero ? 0 : -1}
+                                    aria-current={isActive ? "location" : undefined}
+                                    className="focus-ring relative flex flex-col items-center pb-1.5 text-[11px] font-bold tracking-[0.14em] uppercase [text-shadow:0_1px_6px_rgba(0,0,0,0.8)] transition-colors"
+                                >
+                                    <span className={isActive ? "text-white" : "text-white/40 hover:text-white/80"}>{section.label}</span>
+                                    <span
+                                        aria-hidden="true"
+                                        className={`mt-1 h-[2px] rounded-full transition-all duration-300 ${
+                                            isActive ? "w-full bg-[#3a9cb8]" : "w-0 bg-transparent"
                                         }`}
+                                    />
+                                </a>
+                            </li>
+                        );
+                    })}
+                </ul>
+            </nav>
+
+            {/* persistent bottom anchor with exclusive partner footer band on the final APPLY view */}
+            <footer className="pointer-events-none fixed inset-x-0 bottom-0 z-30 bg-linear-to-t from-[#09030d]/92 via-[#0d0512]/55 to-transparent px-4 pt-6 pb-3 sm:px-6 sm:pb-4">
+                <div
+                    aria-hidden={!isEndScreen}
+                    className={`grid transition-[grid-template-rows,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-opacity ${
+                        isEndScreen ? "pointer-events-auto grid-rows-[1fr] opacity-100" : "pointer-events-none grid-rows-[0fr] opacity-0"
+                    }`}
+                >
+                    <div className="overflow-hidden">
+                        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-white/12 pb-2.5 sm:mb-3 sm:pb-3">
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 sm:gap-x-5">
+                                <span className="font-mono text-[10px] font-semibold tracking-[0.2em] text-white/55 uppercase">
+                                    Partnered by
+                                </span>
+                                <ul className="flex flex-wrap items-center gap-4 sm:gap-5">
+                                    {PARTNERS.map((partner) => (
+                                        <li key={partner.name}>
+                                            <a
+                                                href={partner.href}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                tabIndex={isEndScreen ? 0 : -1}
+                                                className="focus-ring block rounded-sm opacity-85 transition-opacity hover:opacity-100"
+                                            >
+                                                <Image
+                                                    src={partner.src}
+                                                    alt={partner.name}
+                                                    width={partner.width}
+                                                    height={partner.height}
+                                                    className="h-4.5 w-auto sm:h-6"
+                                                />
+                                                <span className="sr-only"> (opens in a new tab)</span>
+                                            </a>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+
+                            <ul className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[10px] font-medium text-white/60 sm:gap-x-4 sm:text-[11px]">
+                                <li>
+                                    <a
+                                        href={DISCORD_URL}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        tabIndex={isEndScreen ? 0 : -1}
+                                        className="focus-ring rounded-sm transition-colors hover:text-white"
                                     >
-                                        {section.label}
+                                        Discord
+                                        <span className="sr-only"> (opens in a new tab)</span>
                                     </a>
                                 </li>
-                            );
-                        })}
-                    </ul>
-                </nav>
-            </header>
+                                <li>
+                                    <a
+                                        href={YOUTUBE_URL}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        tabIndex={isEndScreen ? 0 : -1}
+                                        className="focus-ring rounded-sm transition-colors hover:text-white"
+                                    >
+                                        YouTube
+                                        <span className="sr-only"> (opens in a new tab)</span>
+                                    </a>
+                                </li>
+                                {LEGAL_LINKS.map((link) => (
+                                    <li key={link.href}>
+                                        <a
+                                            href={link.href}
+                                            tabIndex={isEndScreen ? 0 : -1}
+                                            className="focus-ring rounded-sm transition-colors hover:text-white"
+                                        >
+                                            {link.label}
+                                        </a>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                    <a
+                        href={`#${HOME_ID}`}
+                        onClick={(e) => handleNavClick(e, HOME_ID)}
+                        className="pointer-events-auto focus-ring flex select-none items-center gap-2 rounded-sm transition-opacity hover:opacity-90 sm:gap-2.5"
+                        aria-label="Back to top"
+                    >
+                        <svg
+                            viewBox="0 0 821 786"
+                            fill="currentColor"
+                            className="size-6 shrink-0 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] sm:size-7"
+                            aria-hidden="true"
+                        >
+                            <path d="M339.125 261.937C341.977 270.746 352.015 274.888 360.211 270.636L804.011 40.4393C815.427 34.5176 826.182 49.393 817.038 58.4578L414.651 457.373C409.328 462.65 408.708 471.064 413.198 477.071L629.613 766.583C636.563 775.881 626.253 789.341 615.417 785.244C548.267 759.857 434.815 721.462 376.873 702.058C356.131 695.112 343.886 673.616 346.647 651.837C355.714 580.306 361.701 429.84 259.317 394.121C201.088 373.807 167.637 381.607 148.42 397.117C136.172 407.003 101.85 410.08 94.8771 395.94L1.22598 206.007C-3.86475 195.683 7.94116 185.253 17.4923 191.637L131.415 267.78C139.658 273.289 150.863 269.378 153.924 259.921L235.532 7.78086C238.889 -2.59359 253.507 -2.59363 256.865 7.78082L339.125 261.937Z" />
+                        </svg>
+                        <div className="flex flex-col text-left leading-none tracking-tight">
+                            <span className="text-[12px] font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] sm:text-[13px]">
+                                Seraph
+                            </span>
+                            <span className="text-[10px] font-medium text-white/90 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] sm:text-[11px]">
+                                Interactive
+                            </span>
+                        </div>
+                    </a>
+                    <p className="select-none text-[9.5px] leading-tight font-normal tracking-wide text-white/65 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] sm:text-[11px]">
+                        Copyright 2026, Project Stairway, Seraph Interactive - All rights Reserved.
+                    </p>
+                </div>
+            </footer>
         </>
     );
 }

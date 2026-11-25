@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { DISCORD_URL, SITE_DESCRIPTION, SITE_TITLE, SITE_URL, YOUTUBE_URL } from "./content";
 import { BackgroundMedia } from "./BackgroundMedia";
 import { SiteChrome } from "./SiteChrome";
+import { StageProvider } from "./stage";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
@@ -48,7 +49,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-    themeColor: "#0b0d12",
+    themeColor: "#0d0512",
     colorScheme: "dark"
 };
 
@@ -78,16 +79,18 @@ const structuredData = {
 export default function RootLayout({ children }: { readonly children: ReactNode }): ReactNode {
     return (
         <html lang="en" className={inter.variable}>
-            <body className="min-h-dvh font-sans antialiased">
+            <body className="h-dvh overflow-hidden font-sans antialiased">
                 <a
                     href="#main"
                     className="focus-ring sr-only z-50 rounded-md bg-white px-4 py-2 text-sm font-semibold text-zinc-900 focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
                 >
                     Skip to content
                 </a>
-                <BackgroundMedia />
-                <SiteChrome />
-                {children}
+                <StageProvider>
+                    <BackgroundMedia />
+                    <SiteChrome />
+                    {children}
+                </StageProvider>
                 <script
                     type="application/ld+json"
                     // json-ld must be inline; escape "<" so the payload can never close the script tag
